@@ -1,0 +1,13 @@
+fastapi>=0.111,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.7,<3.0
+pytest>=8.0,<9.0
+httpx>=0.27,<1.0
+
+# Optional extras — KARAJAN runs fully offline (simulated backend) without these.
+# Install only the ones for the backends/providers you actually use.
+# pyyaml>=6.0            # pro-mode YAML config (karajan.yaml)
+# keyring>=25.0          # OS keychain credential storage
+# anthropic>=0.40        # Anthropic (Claude) API backend
+# openai>=1.40           # OpenAI / Groq / Mistral (OpenAI-compatible) API backend
+# google-genai>=0.3      # Google (Gemini) API backend
