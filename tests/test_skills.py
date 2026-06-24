@@ -19,5 +19,6 @@ def test_installed_skills_are_recommended(monkeypatch, tmp_path) -> None:
 def test_codex_in_catalog() -> None:
     cli = {p.name for p in catalog.providers_for_backend(Backend.CLI)}
     assert "codex" in cli
+    assert "aider" not in cli
     codex = catalog.get_provider("codex")
     assert codex.cli_command == "codex exec {model}"

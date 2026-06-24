@@ -26,14 +26,19 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         probe_command="ollama list",
     ),
     ProviderInfo(
-        name="aider",
-        label="Aider (local pair-programming CLI)",
-        is_free=True,
+        name="codex",
+        label="OpenAI Codex CLI (local)",
+        is_free=False,
         auth_method=AuthMethod.CLI_LOGIN,
         backend=Backend.CLI,
-        tiers={RM.MEDIUM_MODEL: "aider", RM.STRONG_MODEL: "aider"},
-        signup_url="https://aider.chat",
-        cli_command="aider --message {model}",
+        tiers={
+            RM.MEDIUM_MODEL: "gpt-5-codex",
+            RM.STRONG_MODEL: "gpt-5-codex",
+            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "gpt-5-codex",
+        },
+        signup_url="https://developers.openai.com/codex/cli",
+        cli_command="codex exec {model}",
+        login_command="codex login",
     ),
     ProviderInfo(
         name="claude-cli",
@@ -49,21 +54,6 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         signup_url="https://claude.com/claude-code",
         cli_command="claude -p {model}",
         login_command="claude /login",
-    ),
-    ProviderInfo(
-        name="codex",
-        label="OpenAI Codex CLI (local)",
-        is_free=False,
-        auth_method=AuthMethod.CLI_LOGIN,
-        backend=Backend.CLI,
-        tiers={
-            RM.MEDIUM_MODEL: "gpt-5-codex",
-            RM.STRONG_MODEL: "gpt-5-codex",
-            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "gpt-5-codex",
-        },
-        signup_url="https://developers.openai.com/codex/cli",
-        cli_command="codex exec {model}",
-        login_command="codex login",
     ),
     # --- Cloud API (paid, some free tiers) ---
     ProviderInfo(

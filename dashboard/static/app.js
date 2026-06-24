@@ -37,6 +37,10 @@ const CRITERIA = [
   "operational_risk",
   "validation_difficulty",
 ];
+const DIAGRAM_BASE_WIDTH = 1500;
+const DIAGRAM_BASE_HEIGHT = 1050;
+const DIAGRAM_PAD_X = 520;
+const DIAGRAM_PAD_Y = 300;
 
 const state = {
   config: null,
@@ -50,6 +54,10 @@ const state = {
   modelDrawerOpen: true,
   drawerWidth: 320,
   resizingDrawer: false,
+  diagramZoom: 1,
+  panningDiagram: false,
+  diagramCentered: false,
+  openSkillPanels: new Set(),
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -78,6 +86,7 @@ let routingSaveTimer = null;
 let flowSaveTimer = null;
 let activeModelDrag = null;
 let activeEntityMove = null;
+let activeDiagramPan = null;
 function scheduleRoutingSave(message = "Cambio detectado. Guardando enrutado…") {
   persistEntityState();
   toast(message, 1400);
@@ -320,10 +329,9 @@ function normalizeEntityPositions() {
     entity.levels ||= [];
     entity.skills ||= [];
     if (entity.role === "skill") {
-      entity.levels = [];
-      return;
+      entity.role = "child";
     }
-    entity.levels = entity.levels.filter((level) => {
+    entity.levels = [...new Set(entity.levels)].filter((level) => {
       if (usedLevels.has(level)) return false;
       usedLevels.add(level);
       return true;
@@ -360,7 +368,7 @@ function renderDiagram() {
       if (!entity) return;
       entity.provider = event.currentTarget.dataset.provider;
       const provider = state.catalog.find((item) => item.name === entity.provider);
-      entity.name = provider?.label || (entity.role === "parent" ? "Padre" : entity.role === "skill" ? "Skill" : "Hijo");
+      entity.name = provider?.label || (entity.role === "parent" ? "Padre" : "Hijo");
       renderDiagram();
       scheduleRoutingSave("Modelo actualizado. Guardando…");
     })
@@ -374,10 +382,6 @@ function renderDiagram() {
         state.entities.forEach((item) => {
           if (item.id !== entity.id && item.role === "parent") item.role = "child";
         });
-        entity.parentId = "";
-      }
-      if (entity.role === "skill") {
-        entity.levels = [];
         entity.parentId = "";
       }
       renderDiagram();
@@ -414,8 +418,15 @@ function renderDiagram() {
       entity.skills ||= [];
       if (event.target.checked && !entity.skills.includes(event.target.value)) entity.skills.push(event.target.value);
       if (!event.target.checked) entity.skills = entity.skills.filter((item) => item !== event.target.value);
+      state.openSkillPanels.add(entity.id);
       renderDiagram();
       scheduleRoutingSave("Skills actualizadas. Guardando…");
+    })
+  );
+  $$("#diagramNodes .skill-picker").forEach((panel) =>
+    panel.addEventListener("toggle", () => {
+      if (panel.open) state.openSkillPanels.add(panel.dataset.entity);
+      else state.openSkillPanels.delete(panel.dataset.entity);
     })
   );
   $$("#diagramNodes .node-x").forEach((btn) =>
@@ -429,15 +440,18 @@ function renderDiagram() {
   bindCanvasDropTarget();
   bindDiagramDropTargets();
   bindEntityMove();
+  applyDiagramZoom();
 
   requestAnimationFrame(drawWires);
 }
 
 function entityCard(entity) {
-  const roleLabel = entity.role === "parent" ? "Padre" : entity.role === "skill" ? "Skill" : "Hijo";
+  if (entity.role === "skill") entity.role = "child";
+  const roleLabel = entity.role === "parent" ? "Padre" : "Hijo";
   const remove = entity.id !== "entity-parent" ? `<button class="node-x" data-remove="${entity.id}" title="Quitar entidad">✕</button>` : "";
   const title = entity.provider ? modelTitle(entity.provider) : roleLabel;
   const model = modelMeta(entity);
+  const accent = entityAccent(entity);
   const parentOptions = state.entities
     .filter((item) => item.role === "parent" && item.id !== entity.id)
     .map((item) => `<option value="${item.id}" ${entity.parentId === item.id ? "selected" : ""}>${escapeHtml(item.name || "Padre")}</option>`)
@@ -469,14 +483,13 @@ function entityCard(entity) {
           <select class="entity-role" data-entity="${entity.id}">
             <option value="parent" ${entity.role === "parent" ? "selected" : ""}>Padre</option>
             <option value="child" ${entity.role === "child" ? "selected" : ""}>Hijo</option>
-            <option value="skill" ${entity.role === "skill" ? "selected" : ""}>Skill</option>
           </select>
         </label>
         ${connection}
         ${levelControls}
         ${skills}
       </div>
-    </div>`.replace('<div class="node entity', `<div style="left:${Math.max(0, entity.x || 0)}px; top:${Math.max(0, entity.y || 0)}px" class="node entity`);
+    </div>`.replace('<div class="node entity', `<div style="left:${screenX(entity.x || 0)}px; top:${screenY(entity.y || 0)}px; --entity-accent:${accent.color}; --entity-ink:${accent.ink}" class="node entity`);
 }
 
 function findEntity(id) {
@@ -486,6 +499,18 @@ function findEntity(id) {
 function modelTitle(providerName) {
   const provider = state.catalog.find((p) => p.name === providerName);
   return provider?.label || providerName || "Modelo";
+}
+
+function entityAccent(entity) {
+  const key = `${entity.provider || entity.role || ""}`.toLowerCase();
+  if (entity.role === "parent") return { color: "var(--accent)", ink: "var(--accent-ink)" };
+  if (key.includes("google") || key.includes("gemini")) return { color: "#65d6ad", ink: "#08241b" };
+  if (key.includes("groq")) return { color: "#7cb7ff", ink: "#071827" };
+  if (key.includes("openai")) return { color: "#69d2ff", ink: "#071923" };
+  if (key.includes("anthropic") || key.includes("claude")) return { color: "#d5a36a", ink: "#251507" };
+  if (key.includes("mistral")) return { color: "#ff9c74", ink: "#2a1009" };
+  if (key.includes("ollama")) return { color: "#8ddf8f", ink: "#071f0b" };
+  return { color: "var(--accent)", ink: "var(--accent-ink)" };
 }
 
 function modelMeta(entity) {
@@ -519,23 +544,26 @@ function relatedEntityIds(entity) {
   return [entity.id];
 }
 
-function levelOwner(level, entity) {
-  return state.entities.find((item) => item.id !== entity.id && item.role !== "skill" && item.levels?.includes(level));
+function levelOwner(level) {
+  return state.entities.find((item) => item.role !== "skill" && item.levels?.includes(level));
 }
 
 function levelChip(entity, level, short) {
-  const owner = levelOwner(level, entity);
+  const owner = levelOwner(level);
   const selected = entity.levels?.includes(level);
-  const disabled = !!owner;
-  return `<button class="level-chip ${selected ? "on" : ""}" ${disabled ? "disabled" : ""} data-entity="${entity.id}" data-level="${level}" title="${disabled ? `Asignado a ${owner.name || "otra entidad"}` : LEVEL_FULL[level]}">
-      <span>${short}</span><small>${disabled ? owner.name || modelTitle(owner.provider) || "ocupado" : LEVEL_FULL[level].replace(`${short} · `, "")}</small>
+  const occupied = !!owner && owner.id !== entity.id;
+  const ownerAccent = owner ? entityAccent(owner) : entityAccent(entity);
+  const ownerName = owner ? owner.name || modelTitle(owner.provider) || "otra entidad" : "";
+  return `<button class="level-chip ${selected ? "on" : ""} ${occupied ? "occupied" : ""}" style="--level-accent:${ownerAccent.color}; --level-ink:${ownerAccent.ink}" ${occupied ? "disabled" : ""} data-entity="${entity.id}" data-level="${level}" title="${occupied ? `Asignado a ${ownerName}` : LEVEL_FULL[level]}">
+      <span>${short}</span><small>${occupied ? ownerName : LEVEL_FULL[level].replace(`${short} · `, "")}</small>
     </button>`;
 }
 
 function skillPicker(entity) {
   if (!state.skills.length) return "";
   const selected = new Set(entity.skills || []);
-  return `<details class="skill-picker">
+  const open = state.openSkillPanels.has(entity.id) ? "open" : "";
+  return `<details class="skill-picker" data-entity="${entity.id}" ${open}>
       <summary>Skills <span>${selected.size}</span></summary>
       <div class="skill-options">
         ${state.skills
@@ -580,9 +608,47 @@ function diagramPointFromClient(clientX, clientY) {
   const diagram = $("#diagram");
   const rect = diagram.getBoundingClientRect();
   return {
-    x: Math.max(0, clientX - rect.left + diagram.scrollLeft - 120),
-    y: Math.max(0, clientY - rect.top + diagram.scrollTop - 30),
+    x: Math.max(0, (clientX - rect.left + diagram.scrollLeft) / state.diagramZoom - DIAGRAM_PAD_X - 120),
+    y: Math.max(0, (clientY - rect.top + diagram.scrollTop) / state.diagramZoom - DIAGRAM_PAD_Y - 30),
   };
+}
+
+function scaled(value) {
+  return Math.round(Math.max(0, Number(value) || 0) * state.diagramZoom);
+}
+
+function screenX(value) {
+  return scaled(DIAGRAM_PAD_X + (Number(value) || 0));
+}
+
+function screenY(value) {
+  return scaled(DIAGRAM_PAD_Y + (Number(value) || 0));
+}
+
+function clampZoom(value) {
+  return Math.min(1.65, Math.max(0.55, value));
+}
+
+function applyDiagramZoom() {
+  const diagram = $("#diagram");
+  const layer = $("#diagramLayer");
+  if (!diagram || !layer) return;
+  const zoom = state.diagramZoom;
+  diagram.style.setProperty("--diagram-zoom", String(zoom));
+  layer.style.width = `${scaled(DIAGRAM_BASE_WIDTH + DIAGRAM_PAD_X * 2)}px`;
+  layer.style.height = `${scaled(DIAGRAM_BASE_HEIGHT + DIAGRAM_PAD_Y * 2)}px`;
+  $$("#diagramNodes .node.entity").forEach((node) => {
+    const entity = findEntity(node.dataset.entity);
+    if (!entity) return;
+    node.style.left = `${screenX(entity.x)}px`;
+    node.style.top = `${screenY(entity.y)}px`;
+  });
+  if (!state.diagramCentered && $("#view-decision").classList.contains("active")) {
+    diagram.scrollLeft = Math.max(0, screenX(0) - Math.round(diagram.clientWidth * 0.18));
+    diagram.scrollTop = Math.max(0, screenY(0) - Math.round(diagram.clientHeight * 0.18));
+    state.diagramCentered = true;
+  }
+  requestAnimationFrame(drawWires);
 }
 
 function bindCanvasDropTarget() {
@@ -619,25 +685,79 @@ function bindDiagramDropTargets() {
 
 function drawWires() {
   const svg = $("#wires");
-  const container = $("#diagram");
   const parent = $(".node.entity.parent");
   if (svg) svg.innerHTML = "";
-  if (!svg || !parent || !container) return;
-  const base = container.getBoundingClientRect();
-  const from = parent.getBoundingClientRect();
-  const x1 = from.right - base.left;
-  const y1 = from.top - base.top + from.height / 2;
+  if (!svg || !parent) return;
+  $$("#diagramNodes .node.entity").forEach((node) => {
+    node.style.removeProperty("--port-x");
+    node.style.removeProperty("--port-y");
+  });
+  const layer = $("#diagramLayer");
+  if (layer) {
+    svg.setAttribute("width", String(layer.offsetWidth));
+    svg.setAttribute("height", String(layer.offsetHeight));
+    svg.setAttribute("viewBox", `0 0 ${layer.offsetWidth} ${layer.offsetHeight}`);
+  }
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
   svg.innerHTML = $$("#diagramNodes .node.entity.child")
     .filter((node) => node.dataset.entity && findEntity(node.dataset.entity)?.parentId)
     .map((node) => {
-      const r = node.getBoundingClientRect();
-      const x2 = r.left - base.left;
-      const y2 = r.top - base.top + r.height / 2;
-      const mid = (x1 + x2) / 2;
-      return `<path d="M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}" fill="none" stroke="${accent}" stroke-width="1.5" opacity="0.7"/>`;
+      const route = connectionRoute(parent, node);
+      setNodePort(parent, route.from);
+      setNodePort(node, route.to);
+      return `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${accent}" stroke-width="1.5" opacity="0.7"/>`;
     })
     .join("");
+}
+
+function nodeBox(node) {
+  const zoom = state.diagramZoom;
+  return {
+    left: node.offsetLeft,
+    top: node.offsetTop,
+    width: node.offsetWidth * zoom,
+    height: node.offsetHeight * zoom,
+  };
+}
+
+function sidePoint(box, side) {
+  if (side === "left") return { x: box.left, y: box.top + box.height / 2 };
+  if (side === "right") return { x: box.left + box.width, y: box.top + box.height / 2 };
+  if (side === "top") return { x: box.left + box.width / 2, y: box.top };
+  return { x: box.left + box.width / 2, y: box.top + box.height };
+}
+
+function connectionRoute(fromNode, toNode) {
+  const fromBox = nodeBox(fromNode);
+  const toBox = nodeBox(toNode);
+  const fromCenter = { x: fromBox.left + fromBox.width / 2, y: fromBox.top + fromBox.height / 2 };
+  const toCenter = { x: toBox.left + toBox.width / 2, y: toBox.top + toBox.height / 2 };
+  const dx = toCenter.x - fromCenter.x;
+  const dy = toCenter.y - fromCenter.y;
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const fromSide = horizontal ? (dx >= 0 ? "right" : "left") : dy >= 0 ? "bottom" : "top";
+  const toSide = horizontal ? (dx >= 0 ? "left" : "right") : dy >= 0 ? "top" : "bottom";
+  return { from: fromSide, to: toSide, start: sidePoint(fromBox, fromSide), end: sidePoint(toBox, toSide) };
+}
+
+function setNodePort(node, side) {
+  const point = sidePoint({ left: 0, top: 0, width: node.offsetWidth, height: node.offsetHeight }, side);
+  node.style.setProperty("--port-x", `${point.x}px`);
+  node.style.setProperty("--port-y", `${point.y}px`);
+}
+
+function wirePath(start, end, fromSide, toSide) {
+  const gap = Math.max(58, Math.min(180, Math.hypot(end.x - start.x, end.y - start.y) * 0.32));
+  const c1 = controlPoint(start, fromSide, gap);
+  const c2 = controlPoint(end, toSide, gap);
+  return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`;
+}
+
+function controlPoint(point, side, distance) {
+  if (side === "left") return { x: point.x - distance, y: point.y };
+  if (side === "right") return { x: point.x + distance, y: point.y };
+  if (side === "top") return { x: point.x, y: point.y - distance };
+  return { x: point.x, y: point.y + distance };
 }
 
 function bindEntityMove() {
@@ -668,10 +788,10 @@ function onEntityMove(event) {
   if (!activeEntityMove) return;
   const entity = findEntity(activeEntityMove.id);
   if (!entity) return;
-  entity.x = Math.max(0, activeEntityMove.originX + event.clientX - activeEntityMove.startX);
-  entity.y = Math.max(0, activeEntityMove.originY + event.clientY - activeEntityMove.startY);
-  activeEntityMove.node.style.left = `${entity.x}px`;
-  activeEntityMove.node.style.top = `${entity.y}px`;
+  entity.x = Math.max(0, activeEntityMove.originX + (event.clientX - activeEntityMove.startX) / state.diagramZoom);
+  entity.y = Math.max(0, activeEntityMove.originY + (event.clientY - activeEntityMove.startY) / state.diagramZoom);
+  activeEntityMove.node.style.left = `${screenX(entity.x)}px`;
+  activeEntityMove.node.style.top = `${screenY(entity.y)}px`;
   requestAnimationFrame(drawWires);
 }
 
@@ -682,6 +802,66 @@ function stopEntityMove() {
   document.removeEventListener("pointermove", onEntityMove);
   persistEntityState();
   scheduleRoutingSave("Posición actualizada. Guardando…");
+}
+
+function initDiagramViewport() {
+  const storedZoom = Number(localStorage.getItem("karajan-diagram-zoom"));
+  if (Number.isFinite(storedZoom)) state.diagramZoom = clampZoom(storedZoom);
+  bindDiagramPanZoom();
+  applyDiagramZoom();
+}
+
+function bindDiagramPanZoom() {
+  const diagram = $("#diagram");
+  if (!diagram || diagram.dataset.viewportBound) return;
+  diagram.dataset.viewportBound = "1";
+  diagram.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest(".node, .model-menu")) return;
+    event.preventDefault();
+    activeDiagramPan = {
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: diagram.scrollLeft,
+      scrollTop: diagram.scrollTop,
+    };
+    state.panningDiagram = true;
+    diagram.classList.add("panning");
+    document.addEventListener("pointermove", onDiagramPan);
+    document.addEventListener("pointerup", stopDiagramPan, { once: true });
+  });
+  diagram.addEventListener(
+    "wheel",
+    (event) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const rect = diagram.getBoundingClientRect();
+      const beforeX = (event.clientX - rect.left + diagram.scrollLeft) / state.diagramZoom;
+      const beforeY = (event.clientY - rect.top + diagram.scrollTop) / state.diagramZoom;
+      const direction = event.deltaY > 0 ? -1 : 1;
+      state.diagramZoom = clampZoom(state.diagramZoom + direction * 0.08);
+      localStorage.setItem("karajan-diagram-zoom", String(state.diagramZoom));
+      applyDiagramZoom();
+      diagram.scrollLeft = beforeX * state.diagramZoom - (event.clientX - rect.left);
+      diagram.scrollTop = beforeY * state.diagramZoom - (event.clientY - rect.top);
+      requestAnimationFrame(drawWires);
+    },
+    { passive: false }
+  );
+}
+
+function onDiagramPan(event) {
+  if (!activeDiagramPan) return;
+  const diagram = $("#diagram");
+  diagram.scrollLeft = activeDiagramPan.scrollLeft - (event.clientX - activeDiagramPan.startX);
+  diagram.scrollTop = activeDiagramPan.scrollTop - (event.clientY - activeDiagramPan.startY);
+  requestAnimationFrame(drawWires);
+}
+
+function stopDiagramPan() {
+  activeDiagramPan = null;
+  state.panningDiagram = false;
+  $("#diagram")?.classList.remove("panning");
+  document.removeEventListener("pointermove", onDiagramPan);
 }
 
 function applyDrawerState() {
@@ -998,6 +1178,7 @@ function init() {
     if ($("#view-decision").classList.contains("active")) drawWires();
   });
   initDrawerControls();
+  initDiagramViewport();
 
   loadConfig()
     .then(() => Promise.all([api("/catalog").then((c) => (state.catalog = c)), refreshMonitor()]))
