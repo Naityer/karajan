@@ -1,0 +1,23 @@
+{
+  "entities": [
+    {
+      "id": "entity-parent",
+      "name": "Padre",
+      "role": "parent",
+      "provider": "openai",
+      "parentId": "",
+      "levels": [
+        "level_4_complex"
+      ],
+      "skills": [
+        "security-review"
+      ],
+      "capabilities": [],
+      "x": 10.0,
+      "y": 20.0
+    }
+  ],
+  "zoom": 1.1,
+  "drawer_width": 360,
+  "updated_at": "2026-06-25T19:07:08.505923Z"
+}

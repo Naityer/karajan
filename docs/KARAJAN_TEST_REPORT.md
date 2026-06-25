@@ -15,4 +15,4 @@ Resumen:
 - N1 completado como tarea simple.
 - N2/N3 completado como tarea intermedia.
 - N4/N5 delegado y bloqueado por puerta de revision humana, comportamiento esperado para tarea critica.
-- Bug importante detectado: `data/routing_layout.json` aparece corrupto o relleno de bytes nulos, por lo que la persistencia del diagrama debe endurecerse antes de depender de esa jerarquia como fuente real de decision.
+- Mejoras aplicadas despues del reporte: persistencia atomica del layout, fallback a backup si el JSON se corrompe, estado `policy_waiting` para bloqueos esperados por revision humana y coste de observabilidad alineado con `/metrics`.

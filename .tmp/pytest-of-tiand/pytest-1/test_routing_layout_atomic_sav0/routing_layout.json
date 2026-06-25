@@ -1,0 +1,19 @@
+{
+  "entities": [
+    {
+      "id": "entity-parent",
+      "name": "Second",
+      "role": "parent",
+      "provider": null,
+      "parentId": "",
+      "levels": [],
+      "skills": [],
+      "capabilities": [],
+      "x": 0.0,
+      "y": 0.0
+    }
+  ],
+  "zoom": 1.1,
+  "drawer_width": 360,
+  "updated_at": "2026-06-25T19:07:08.565592Z"
+}

@@ -95,6 +95,8 @@ def compute_observability(
         agent.model_tier = classification.recommended_model.value
         agent.confidence = _confidence(classification.complexity_score)
         agent.last_activity = record.updated_at.isoformat()
+        if record.status == TaskStatus.DELEGATED and classification.requires_human_review:
+            agent.extra["blocked_by_policy"] = int(agent.extra.get("blocked_by_policy", 0)) + 1
         agent.extra["received_prompts"] = int(agent.extra.get("received_prompts", 0)) + 1
         agent.extra["classified_tasks"] = int(agent.extra.get("classified_tasks", 0)) + 1
         agent.extra["delegated_tasks"] = int(agent.extra.get("delegated_tasks", 0)) + int(record.delegation is not None)
@@ -194,14 +196,36 @@ def compute_observability(
 
     events = sorted(flow, key=lambda item: item.timestamp, reverse=True)
     timeline = sorted(audit + flow, key=lambda item: item.timestamp, reverse=True)
-    total_cost = round(sum(node.estimated_cost for node in nodes.values()), 5)
+    # Node costs are intentionally useful for attribution, but the Agent may
+    # also carry orchestration-level totals. Use task delegation totals for the
+    # system KPI so `/observability` and `/metrics` do not double count.
+    total_cost = round(
+        sum(record.delegation.total_estimated_cost_usd for record in records if record.delegation),
+        5,
+    )
     latencies = [node.latency_ms for node in nodes.values() if node.latency_ms]
     failed_tasks = sum(1 for record in records if record.status == TaskStatus.FAILED)
     blocked_tasks = sum(1 for record in records if record.status == TaskStatus.DELEGATED)
     active_tasks = sum(1 for record in records if record.status in {TaskStatus.CLASSIFIED, TaskStatus.DELEGATED})
     error_nodes = sum(1 for node in nodes.values() if node.error_count)
-    warning_nodes = sum(1 for node in nodes.values() if node.status in {"delegated", "waiting"})
-    health_status = "error" if error_nodes or failed_tasks else "warning" if warning_nodes or blocked_tasks else "healthy"
+    policy_waiting = sum(
+        1
+        for record in records
+        if record.status == TaskStatus.DELEGATED and record.classification.requires_human_review
+    )
+    warning_nodes = sum(1 for node in nodes.values() if node.status in {"waiting", "policy_waiting"})
+    operational_blocks = max(0, blocked_tasks - policy_waiting)
+    health_status = (
+        "error"
+        if error_nodes or failed_tasks
+        else "warning"
+        if operational_blocks
+        else "policy_waiting"
+        if policy_waiting
+        else "warning"
+        if warning_nodes
+        else "healthy"
+    )
     last_activity = max((record.updated_at for record in records), default=datetime.now(timezone.utc)).isoformat()
 
     return ObservabilitySnapshot(
@@ -268,10 +292,23 @@ def _execution_owner(
     for node in nodes.values():
         if node.active_model and node.active_model.lower() in model:
             return node
+    level_aliases = _level_aliases(level)
     for node in nodes.values():
-        if level in node.levels:
+        if level_aliases.intersection(node.levels):
             return node
     return nodes[agent_id]
+
+
+def _level_aliases(level: str) -> set[str]:
+    """Accept both API level ids and the UI's compact N1-N5 labels."""
+    aliases = {
+        "level_1_simple": "N1",
+        "level_2_moderate": "N2",
+        "level_3_intermediate": "N3",
+        "level_4_complex": "N4",
+        "level_5_critical": "N5",
+    }
+    return {level, aliases.get(level, level)}
 
 
 def _role_label(role: str) -> str:
@@ -305,6 +342,8 @@ def _node_status(record: TaskRecord) -> str:
     if record.status == TaskStatus.FAILED:
         return "error"
     if record.status == TaskStatus.DELEGATED:
+        if record.classification.requires_human_review:
+            return "policy_waiting"
         return "waiting"
     return "running"
 

@@ -221,6 +221,14 @@ async function refreshMonitor() {
     renderExecutionFlow(observability.execution_flow || []);
     renderProcessingNodeTabs(observability.nodes || []);
     _renderAgentPanels(observability.nodes || [], observability.model_usage || [], observability.execution_flow || [], observability.audit_timeline || []);
+    renderAuditTimeline(observability.audit_timeline || []);
+    renderModelUsage(observability.model_usage || []);
+    renderTaskRows(tasks);
+    const selected = tasks.find((t) => t.task_id === state.selected) || tasks[0];
+    if (selected) {
+      state.selected = selected.task_id;
+      await renderDetail(selected);
+    }
     return;
   }
   renderKpis(metrics);

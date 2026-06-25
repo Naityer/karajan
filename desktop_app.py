@@ -6,14 +6,20 @@ import threading
 import time
 from contextlib import closing
 
-import uvicorn
-
 
 HOST = "127.0.0.1"
+PREFERRED_PORT = 8001
 APP_IMPORT = "app.main:app"
 
 
+def _port_is_free(port: int) -> bool:
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        return sock.connect_ex((HOST, port)) != 0
+
+
 def find_free_port() -> int:
+    if _port_is_free(PREFERRED_PORT):
+        return PREFERRED_PORT
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         sock.bind((HOST, 0))
         return int(sock.getsockname()[1])
@@ -31,6 +37,17 @@ def wait_until_ready(port: int, timeout_s: float = 8.0) -> None:
 
 
 def main() -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print(
+            "uvicorn is required to run the local FastAPI backend.\n"
+            "Install project requirements with:\n"
+            "  python -m pip install -r requirements.txt",
+            file=sys.stderr,
+        )
+        return 1
+
     try:
         import webview
     except ImportError:

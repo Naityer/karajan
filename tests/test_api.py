@@ -66,6 +66,44 @@ def test_routing_layout_roundtrip(tmp_path: Path) -> None:
     assert response.json()["drawer_width"] == 360
 
 
+def test_routing_layout_recovers_from_corrupt_primary(tmp_path: Path) -> None:
+    path = tmp_path / "routing_layout.json"
+    backup = tmp_path / "routing_layout.json.bak"
+    backup.write_text(
+        '{"entities":[{"id":"entity-parent","name":"Backup Agent","role":"parent"}],"zoom":1,"drawer_width":320}',
+        encoding="utf-8",
+    )
+    path.write_bytes(b"\x00\x00\x00")
+
+    store = RoutingLayoutStore(path)
+    layout = store.load()
+
+    assert layout.entities[0].name == "Backup Agent"
+
+
+def test_routing_layout_atomic_save_keeps_backup(tmp_path: Path) -> None:
+    path = tmp_path / "routing_layout.json"
+    store = RoutingLayoutStore(path)
+    first = {
+        "entities": [{"id": "entity-parent", "name": "First", "role": "parent"}],
+        "zoom": 1,
+        "drawer_width": 320,
+    }
+    second = {
+        "entities": [{"id": "entity-parent", "name": "Second", "role": "parent"}],
+        "zoom": 1.1,
+        "drawer_width": 360,
+    }
+
+    main.layout_store = store
+    client = TestClient(main.app)
+    assert client.put("/routing-layout", json=first).status_code == 200
+    assert client.put("/routing-layout", json=second).status_code == 200
+
+    assert store.load().entities[0].name == "Second"
+    assert store.backup_path.exists()
+
+
 def test_approve_human_review(tmp_path: Path) -> None:
     main.store = TaskStore(tmp_path / "api.db")
     main.active_config = KarajanConfig(backend=Backend.SIMULATED)
