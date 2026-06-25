@@ -58,7 +58,74 @@ const state = {
   panningDiagram: false,
   diagramCentered: false,
   openSkillPanels: new Set(),
+  monitorTab: "agents",
+  selectedNodeId: "",
+  lastObservability: null,
+  monitorSideOpen: true,
+  monitorSideWidth: 380,
+  resizingMonitorSide: false,
+  monitorBlockOrder: ["summary", "health", "flow"],
 };
+
+const ROLE_DEFS = {
+  parent: {
+    label: "Agent",
+    summary: "Orquesta, clasifica, planifica, enruta y delega.",
+    kind: "agent",
+    canOwnLevels: true,
+    canConnectToAgent: false,
+  },
+  child: {
+    label: "Worker",
+    summary: "Ejecuta tareas concretas asignadas por el Agent.",
+    kind: "worker",
+    canOwnLevels: true,
+    canConnectToAgent: true,
+  },
+  backup: {
+    label: "Backup",
+    summary: "Reserva en standby; puede asumir Agent si falla el principal.",
+    kind: "backup",
+    canOwnLevels: true,
+    canConnectToAgent: true,
+  },
+  guardian: {
+    label: "Guardian",
+    summary: "Apoya o revisa un Worker concreto.",
+    kind: "guardian",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+  },
+  validator: {
+    label: "Validator",
+    summary: "Valida salidas parciales o finales de otros nodos.",
+    kind: "validator",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+  },
+  memory: {
+    label: "Memory",
+    summary: "Mantiene estado, checkpoints y contexto.",
+    kind: "memory",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+  },
+  monitor: {
+    label: "Monitor",
+    summary: "Vigila salud, timeouts, errores y disponibilidad.",
+    kind: "monitor",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+  },
+};
+
+const AGENT_INTERNAL_CAPABILITIES = ["Classifier", "Planner", "Router"];
+const AGENT_OPTIONAL_CAPABILITIES = [
+  ["Reallocator", "Reasigna roles, tareas y enlaces cuando la jerarquía se rompe."],
+  ["Aggregator", "Consolida respuestas de varios nodos."],
+  ["Policy", "Aplica permisos, límites y reglas críticas."],
+  ["Recovery", "Gestiona reintentos y recuperación operativa."],
+];
 
 // ---- helpers ---------------------------------------------------------------
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -84,6 +151,7 @@ function toast(message, ms = 2400) {
 
 let routingSaveTimer = null;
 let flowSaveTimer = null;
+let layoutSaveTimer = null;
 let activeModelDrag = null;
 let activeEntityMove = null;
 let activeDiagramPan = null;
@@ -142,10 +210,22 @@ function setActiveViewActions(view) {
 
 // ---- MONITOR ---------------------------------------------------------------
 async function refreshMonitor() {
-  const [metrics, tasks] = await Promise.all([api("/metrics"), api("/tasks")]);
+  if (!$("#monitorMainContent") && !$("#kpis")) return;
+  const [metrics, tasks, observability] = await Promise.all([api("/metrics"), api("/tasks"), api("/observability")]);
   state.tasks = tasks;
+  state.lastObservability = observability;
+  if (!state.selectedNodeId && observability.nodes?.length) state.selectedNodeId = observability.nodes[0].id;
+  if ($("#monitorMainContent")) {
+    renderSummaryMetrics(metrics, tasks, observability);
+    renderSystemHealth(observability.health);
+    renderExecutionFlow(observability.execution_flow || []);
+    renderProcessingNodeTabs(observability.nodes || []);
+    _renderAgentPanels(observability.nodes || [], observability.model_usage || [], observability.execution_flow || [], observability.audit_timeline || []);
+    return;
+  }
   renderKpis(metrics);
   renderCharts(metrics);
+  renderObservability(observability);
   renderTaskRows(tasks);
   const selected = tasks.find((t) => t.task_id === state.selected) || tasks[0];
   if (selected) {
@@ -154,17 +234,591 @@ async function refreshMonitor() {
   }
 }
 
+function renderObservability(snapshot) {
+  state.lastObservability = snapshot;
+  if (!state.selectedNodeId && snapshot.nodes?.length) state.selectedNodeId = snapshot.nodes[0].id;
+  renderSystemHealth(snapshot.health);
+  renderNodeMetrics(snapshot.nodes || []);
+  renderModelBubbles(snapshot.nodes || [], snapshot.model_usage || []);
+  renderExecutionFlow(snapshot.execution_flow || []);
+  renderAuditTimeline(snapshot.audit_timeline || []);
+  renderModelUsage(snapshot.model_usage || []);
+  _renderAgentPanels(snapshot.nodes || [], snapshot.model_usage || [], snapshot.execution_flow || [], snapshot.audit_timeline || []);
+}
+
+function _renderAgentPanels(nodes, usage, flow, audit) {
+  const node = nodes.find((n) => n.id === state.selectedNodeId) || nodes[0];
+  const usageByModel = new Map((usage || []).map((u) => [u.model, u]));
+  renderAgentDetailPanel(node, usageByModel);
+  renderMonitorSidePanel(node, flow, audit);
+}
+
+function renderSystemHealth(health) {
+  if (!health) {
+    $("#systemHealth").innerHTML = `<div class="chart-empty">sin datos</div>`;
+    return;
+  }
+  const status = health.status === "healthy" ? "ok" : health.status === "error" ? "bad" : "warn";
+  const healthPct = health.observed_nodes ? Math.round((health.healthy_nodes / health.observed_nodes) * 100) : 0;
+  $("#systemHealth").innerHTML = `<div class="health-hero ${status}">
+      <div>
+        <span class="pill ${status}">${escapeHtml(health.status)}</span>
+        <b>${healthPct}%</b>
+        <small>salud operativa</small>
+      </div>
+      <div class="health-orbit" style="--pct:${healthPct}%"><span>${health.observed_nodes}</span><small>nodos</small></div>
+    </div>
+    <div class="health-strip">
+      <span><b>${health.healthy_nodes}</b><small>healthy</small></span>
+      <span><b>${health.warning_nodes}</b><small>warn</small></span>
+      <span><b>${health.error_nodes}</b><small>err</small></span>
+      <span><b>${health.active_tasks}</b><small>act.</small></span>
+      <span><b>${health.blocked_tasks}</b><small>block</small></span>
+      <span><b>${health.avg_latency_ms || 0}ms</b><small>lat.</small></span>
+    </div>
+    <div class="health-foot"><span>$${Number(health.total_cost || 0).toFixed(4)} coste</span><span>${formatTime(health.last_activity)}</span></div>`;
+}
+
+function renderNodeMetrics(nodes) {
+  $("#nodeMetrics").innerHTML = nodes.length
+    ? nodes
+        .map((node) => {
+          const status = node.status === "completed" || node.status === "idle" ? "ok" : node.status === "error" ? "bad" : "warn";
+          const selected = node.id === state.selectedNodeId ? "selected" : "";
+          const levels = (node.levels || []).map((level) => LEVEL_FULL[level] || level).join(" · ") || "sin niveles";
+          const caps = (node.active_capabilities || []).length
+            ? `<div class="node-caps">${node.active_capabilities.map((cap) => `<span>${escapeHtml(cap)}</span>`).join("")}</div>`
+            : "";
+          const skills = (node.skills || []).slice(0, 4).join(" · ") || "sin skills";
+          return `<button class="node-metric ${selected}" data-node="${escapeHtml(node.id)}">
+              <div class="node-metric-head"><b>${escapeHtml(node.name)}</b><span class="pill ${status}">${escapeHtml(node.status)}</span></div>
+              <div class="node-role">${escapeHtml(node.role)} · ${escapeHtml(node.provider)} · ${escapeHtml(node.active_model)}</div>
+              ${caps}
+              <div class="node-stats">
+                <span><b>${node.task_count}</b><small>tasks</small></span>
+                <span><b>${node.error_count}</b><small>errors</small></span>
+                <span><b>${node.latency_ms || 0}ms</b><small>lat.</small></span>
+                <span><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b><small>coste</small></span>
+              </div>
+              <div class="node-role">${escapeHtml(levels)}</div>
+              <div class="node-role">${escapeHtml(skills)}</div>
+            </button>`;
+        })
+        .join("")
+    : `<div class="chart-empty">sin nodos</div>`;
+  $$("#nodeMetrics .node-metric").forEach((button) =>
+    button.addEventListener("click", () => {
+      state.selectedNodeId = button.dataset.node;
+      setMonitorSide(true);
+      renderNodeMetrics(state.lastObservability?.nodes || []);
+      renderModelBubbles(state.lastObservability?.nodes || [], state.lastObservability?.model_usage || []);
+      _renderAgentPanels(
+        state.lastObservability?.nodes || [],
+        state.lastObservability?.model_usage || [],
+        state.lastObservability?.execution_flow || [],
+        state.lastObservability?.audit_timeline || []
+      );
+    })
+  );
+}
+
+function renderModelBubbles(nodes, usage) {
+  const usageByModel = new Map((usage || []).map((item) => [item.model, item]));
+  $("#modelBubbles").innerHTML = nodes.length
+    ? nodes
+        .map((node) => {
+          const selected = node.id === state.selectedNodeId ? "selected" : "";
+          const status = node.status === "error" ? "bad" : node.status === "completed" || node.status === "idle" ? "ok" : "warn";
+          const label = node.active_model && node.active_model !== "auto / simulado" ? node.active_model : node.name;
+          return `<button class="model-bubble ${selected} ${status}" data-node="${escapeHtml(node.id)}">
+              <span class="bubble-dot"></span>
+              <b>${escapeHtml(node.name)}</b>
+              <small>${escapeHtml(node.role)} · ${escapeHtml(label)}</small>
+            </button>`;
+        })
+        .join("")
+    : `<div class="chart-empty">sin modelos implicados</div>`;
+  $$("#modelBubbles .model-bubble").forEach((button) =>
+    button.addEventListener("click", () => {
+      state.selectedNodeId = button.dataset.node;
+      setMonitorSide(true);
+      renderNodeMetrics(nodes);
+      renderModelBubbles(nodes, usage);
+      _renderAgentPanels(nodes, usage, state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
+    })
+  );
+  renderBubbleMetricPanel(nodes.find((node) => node.id === state.selectedNodeId) || nodes[0], usageByModel);
+}
+
+function renderBubbleMetricPanel(node, usageByModel) {
+  if (!node) {
+    $("#modelBubblePanel").innerHTML = "";
+    return;
+  }
+  const usage = usageByModel.get(node.active_model);
+  const chips = [
+    ["Rol", node.role],
+    ["Modelo", node.active_model || "auto"],
+    ["Provider", node.provider],
+    ["Llamadas", usage?.calls ?? node.task_count],
+    ["Coste", `$${Number(usage?.estimated_cost ?? node.estimated_cost ?? 0).toFixed(4)}`],
+    ["Latencia", `${usage?.latency_ms ?? node.latency_ms ?? 0}ms`],
+  ];
+  $("#modelBubblePanel").innerHTML = `<div class="bubble-window">
+      <header><b>${escapeHtml(node.name)}</b><span>${escapeHtml(node.status)}</span></header>
+      <div class="bubble-window-grid">
+        ${chips.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></span>`).join("")}
+      </div>
+      <div class="node-caps">${(node.active_capabilities || []).map((cap) => `<span>${escapeHtml(cap)}</span>`).join("") || "<span>sin capacidades</span>"}</div>
+    </div>`;
+}
+
+function setMonitorSide(open) {
+  state.monitorSideOpen = open;
+  const shell = $(".monitor-shell");
+  const side = $("#monitorSide");
+  const button = $("#toggleMonitorSide");
+  shell?.classList.toggle("side-collapsed", !open);
+  side?.classList.toggle("collapsed", !open);
+  if (button) {
+    button.textContent = open ? "◧" : "◨";
+    button.setAttribute("aria-pressed", String(open));
+    button.setAttribute("title", open ? "Ocultar panel lateral" : "Mostrar panel lateral");
+  }
+}
+
+function applyMonitorSplit() {
+  document.documentElement.style.setProperty("--monitor-side-width", `${state.monitorSideWidth}px`);
+}
+
+function initMonitorSplitter() {
+  const stored = Number(localStorage.getItem("karajan-monitor-side-width"));
+  if (Number.isFinite(stored)) state.monitorSideWidth = Math.min(560, Math.max(300, stored));
+  applyMonitorSplit();
+  const splitter = $("#monitorSplitter");
+  if (!splitter || splitter.dataset.bound) return;
+  splitter.dataset.bound = "1";
+  splitter.addEventListener("pointerdown", (event) => {
+    if (!state.monitorSideOpen) return;
+    event.preventDefault();
+    state.resizingMonitorSide = true;
+    splitter.classList.add("dragging");
+    document.body.classList.add("resizing-monitor");
+    document.addEventListener("pointermove", onMonitorResize);
+    document.addEventListener("pointerup", stopMonitorResize, { once: true });
+  });
+}
+
+function onMonitorResize(event) {
+  if (!state.resizingMonitorSide) return;
+  const shell = $(".monitor-shell");
+  if (!shell) return;
+  const rect = shell.getBoundingClientRect();
+  const maxWidth = Math.min(640, rect.width * 0.48);
+  state.monitorSideWidth = Math.round(Math.min(maxWidth, Math.max(300, rect.right - event.clientX)));
+  localStorage.setItem("karajan-monitor-side-width", String(state.monitorSideWidth));
+  applyMonitorSplit();
+}
+
+function stopMonitorResize() {
+  state.resizingMonitorSide = false;
+  $("#monitorSplitter")?.classList.remove("dragging");
+  document.body.classList.remove("resizing-monitor");
+  document.removeEventListener("pointermove", onMonitorResize);
+}
+
+function applyMonitorBlockOrder() {
+  const stack = $("#monitorBlockStack");
+  if (!stack) return;
+  const stored = localStorage.getItem("karajan-monitor-block-order");
+  if (stored) {
+    const order = stored.split(",").filter(Boolean);
+    if (order.length) state.monitorBlockOrder = order;
+  }
+  state.monitorBlockOrder.forEach((key) => {
+    const block = stack.querySelector(`[data-monitor-block="${key}"]`);
+    if (block) stack.appendChild(block);
+  });
+}
+
+function saveMonitorBlockOrder() {
+  const order = $$("#monitorBlockStack [data-monitor-block]").map((block) => block.dataset.monitorBlock);
+  state.monitorBlockOrder = order;
+  localStorage.setItem("karajan-monitor-block-order", order.join(","));
+}
+
+function clearMonitorDropState() {
+  $$("#monitorBlockStack .monitor-block").forEach((block) => {
+    block.classList.remove("drop-before", "drop-after");
+  });
+}
+
+function initMonitorBlocks() {
+  const stack = $("#monitorBlockStack");
+  if (!stack || stack.dataset.bound) return;
+  stack.dataset.bound = "1";
+  applyMonitorBlockOrder();
+  stack.addEventListener("dragstart", (event) => {
+    const block = event.target.closest("[data-monitor-block]");
+    if (!block) return;
+    block.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", block.dataset.monitorBlock);
+  });
+  stack.addEventListener("dragover", (event) => {
+    const dragging = stack.querySelector(".dragging");
+    const target = event.target.closest("[data-monitor-block]");
+    if (!dragging || !target || target === dragging) return;
+    event.preventDefault();
+    clearMonitorDropState();
+    const rect = target.getBoundingClientRect();
+    target.classList.add(event.clientX < rect.left + rect.width / 2 ? "drop-before" : "drop-after");
+  });
+  stack.addEventListener("drop", (event) => {
+    const dragging = stack.querySelector(".dragging");
+    const target = event.target.closest("[data-monitor-block]");
+    if (!dragging || !target || target === dragging) return;
+    event.preventDefault();
+    const rect = target.getBoundingClientRect();
+    if (event.clientX < rect.left + rect.width / 2) {
+      stack.insertBefore(dragging, target);
+    } else {
+      stack.insertBefore(dragging, target.nextSibling);
+    }
+    clearMonitorDropState();
+    saveMonitorBlockOrder();
+  });
+  stack.addEventListener("dragend", () => {
+    stack.querySelector(".dragging")?.classList.remove("dragging");
+    clearMonitorDropState();
+  });
+}
+
+function renderSelectedAgentUsage(nodes, flow, audit) {
+  const node = nodes.find((item) => item.id === state.selectedNodeId) || nodes[0];
+  if (!node) {
+    $("#selectedAgentUsage").innerHTML = `<div class="chart-empty">sin agente seleccionado</div>`;
+    return;
+  }
+  const related = [...flow, ...audit]
+    .filter((event) => event.source_node === node.name || event.target_node === node.name || event.summary?.includes(node.name))
+    .slice(0, 5);
+  const caps = (node.active_capabilities || []).map((cap) => `<span>${escapeHtml(cap)}</span>`).join("");
+  const levels = (node.levels || []).map((level) => LEVEL_FULL[level] || level).join(" · ") || "sin niveles";
+  $("#selectedAgentUsage").innerHTML = `<div class="selected-agent-head">
+      <div><b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.role)} · ${escapeHtml(node.status)}</small></div>
+      <span class="pill ${node.status === "error" ? "bad" : node.status === "idle" || node.status === "completed" ? "ok" : "warn"}">${escapeHtml(node.provider)}</span>
+    </div>
+    <div class="selected-agent-model">${escapeHtml(node.active_model)}</div>
+    <div class="selected-agent-stats">
+      <span><b>${node.task_count}</b><small>tasks</small></span>
+      <span><b>${node.error_count}</b><small>errors</small></span>
+      <span><b>${node.latency_ms || 0}ms</b><small>lat.</small></span>
+      <span><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b><small>coste</small></span>
+    </div>
+    <div class="node-role">${escapeHtml(levels)}</div>
+    <div class="node-caps">${caps || "<span>sin capacidades</span>"}</div>
+    <div class="selected-agent-log">
+      ${related.length ? eventList(related, "") : `<div class="chart-empty">sin eventos directos recientes</div>`}
+    </div>`;
+}
+
+// ---- Agent detail panel (role-specific metrics) ----------------------------
+
+const ROLE_METRIC_DEFS = {
+  agent: [
+    { key: "extra.classified_tasks", label: "Clasificadas", fmt: (n) => n ?? 0 },
+    { key: "extra.delegated_tasks",  label: "Delegadas",    fmt: (n) => n ?? 0 },
+    { key: "_delegation_rate",       label: "Tasa deleg.",  fmt: (n) => `${n}%` },
+    { key: "confidence",             label: "Confianza",    fmt: (n) => n != null ? `${Math.round(n * 100)}%` : "—" },
+    { key: "_caps",                  label: "Capacidades",  fmt: (n) => n },
+    { key: "model_tier",             label: "Tier",         fmt: (n) => TIER_LABEL[n] || n || "—" },
+  ],
+  worker: [
+    { key: "task_count",    label: "Subtareas",   fmt: (n) => n ?? 0 },
+    { key: "_error_rate",  label: "Tasa error",  fmt: (n) => `${n}%` },
+    { key: "latency_ms",   label: "Latencia",    fmt: (n) => `${n || 0}ms` },
+    { key: "estimated_cost", label: "Coste",     fmt: (n) => `$${Number(n || 0).toFixed(4)}` },
+    { key: "model_tier",   label: "Tier",        fmt: (n) => TIER_LABEL[n] || n || "—" },
+    { key: "_levels",      label: "Niveles",     fmt: (n) => n || "sin niveles" },
+  ],
+  backup: "worker",
+  guardian: [
+    { key: "task_count",   label: "Revisiones",  fmt: (n) => n ?? 0 },
+    { key: "error_count",  label: "Detectados",  fmt: (n) => n ?? 0 },
+    { key: "_approval_rate", label: "Aprobación", fmt: (n) => `${n}%` },
+    { key: "latency_ms",   label: "Latencia",    fmt: (n) => `${n || 0}ms` },
+    { key: "_skills",      label: "Skills",      fmt: (n) => n || "—" },
+    { key: "provider",     label: "Provider",    fmt: (n) => n || "—" },
+  ],
+  validator: "guardian",
+  memory: [
+    { key: "task_count",   label: "Eventos",     fmt: (n) => n ?? 0 },
+    { key: "error_count",  label: "Errores",     fmt: (n) => n ?? 0 },
+    { key: "latency_ms",   label: "Latencia",    fmt: (n) => `${n || 0}ms` },
+    { key: "status",       label: "Estado",      fmt: (n) => n || "idle" },
+    { key: "_skills",      label: "Skills",      fmt: (n) => n || "—" },
+    { key: "provider",     label: "Provider",    fmt: (n) => n || "—" },
+  ],
+  monitor: "memory",
+};
+
+function _nodeMetricValue(node, usage, key) {
+  if (key === "_delegation_rate") {
+    const classified = Number(node.extra?.classified_tasks || 0);
+    const delegated = Number(node.extra?.delegated_tasks || 0);
+    return classified ? Math.round((delegated / classified) * 100) : 0;
+  }
+  if (key === "_error_rate") {
+    const total = Number(node.task_count || 0);
+    return total ? Math.round((Number(node.error_count || 0) / total) * 100) : 0;
+  }
+  if (key === "_approval_rate") {
+    const total = Number(node.task_count || 0);
+    const errors = Number(node.error_count || 0);
+    return total ? Math.round(((total - errors) / total) * 100) : 100;
+  }
+  if (key === "_caps") return (node.active_capabilities || []).join(", ") || "—";
+  if (key === "_levels") return (node.levels || []).map((l) => LEVEL_FULL[l] || l).join(", ") || "sin niveles";
+  if (key === "_skills") return (node.skills || []).slice(0, 3).join(", ") || "—";
+  if (key.startsWith("extra.")) return node.extra?.[key.slice(6)];
+  return node[key];
+}
+
+function renderAgentDetailPanel(node, usageByModel) {
+  const el = $("#agentDetailPanel");
+  if (!el) return;
+  if (!node) { el.innerHTML = `<div class="agent-detail-empty">Selecciona un nodo para ver sus métricas</div>`; return; }
+
+  const usage = usageByModel.get(node.active_model);
+  const roleKey = (node.role || "").toLowerCase();
+  let defs = ROLE_METRIC_DEFS[roleKey];
+  if (typeof defs === "string") defs = ROLE_METRIC_DEFS[defs];
+  if (!defs) defs = ROLE_METRIC_DEFS.memory;
+
+  const statusCls = node.status === "error" ? "bad" : (node.status === "idle" || node.status === "completed") ? "ok" : "warn";
+
+  // Common base row: tasks, errors, latency, cost (from usage if available, else node)
+  const baseCells = [
+    ["Tasks", node.task_count ?? 0],
+    ["Errores", node.error_count ?? 0],
+    ["Latencia", `${usage?.latency_ms ?? node.latency_ms ?? 0}ms`],
+    ["Coste", `$${Number(usage?.estimated_cost ?? node.estimated_cost ?? 0).toFixed(4)}`],
+    ["Llamadas", usage?.calls ?? node.task_count ?? 0],
+    ["Tokens", node.total_tokens || (node.input_tokens || 0) + (node.output_tokens || 0) || 0],
+  ];
+
+  const roleGrid = defs.map(({ key, label, fmt }) => {
+    const raw = _nodeMetricValue(node, usage, key);
+    return `<div class="agent-role-cell"><small>${escapeHtml(label)}</small><b>${escapeHtml(fmt(raw))}</b></div>`;
+  }).join("");
+
+  const caps = (node.active_capabilities || []).map((c) => `<span>${escapeHtml(c)}</span>`).join("");
+  const skills = (node.skills || []).map((s) => `<span>${escapeHtml(s)}</span>`).join("");
+
+  el.innerHTML = `
+    <div class="agent-detail-identity">
+      <div class="agent-detail-name">
+        <span class="bubble-dot ${statusCls}"></span>
+        <b>${escapeHtml(node.name)}</b>
+        <span class="pill ${statusCls}">${escapeHtml(node.role)}</span>
+        <small>${escapeHtml(node.active_model || "auto")}</small>
+      </div>
+    </div>
+    <div class="agent-detail-base">
+      ${baseCells.map(([l, v]) => `<div class="agent-base-cell"><small>${escapeHtml(l)}</small><b>${escapeHtml(String(v))}</b></div>`).join("")}
+    </div>
+    <div class="agent-detail-section-label">Métricas de rol · ${escapeHtml(node.role)}</div>
+    <div class="agent-role-grid">${roleGrid}</div>
+    ${caps ? `<div class="agent-detail-tags"><span class="agent-detail-tag-label">Capacidades</span>${caps}</div>` : ""}
+    ${skills ? `<div class="agent-detail-tags"><span class="agent-detail-tag-label">Skills</span>${skills}</div>` : ""}
+  `;
+}
+
+// ---- Monitor side panel (workflow events for selected agent) ----------------
+
+function renderMonitorSidePanel(node, flow, audit) {
+  const headerEl = $("#sideAgentHeader");
+  const activityEl = $("#sideActivityList");
+  if (!headerEl) return;
+
+  if (!node) {
+    headerEl.innerHTML = `<div class="side-empty">Sin nodo seleccionado</div>`;
+    if (activityEl) activityEl.innerHTML = "";
+    return;
+  }
+
+  const statusCls = node.status === "error" ? "bad" : (node.status === "idle" || node.status === "completed") ? "ok" : "warn";
+  headerEl.innerHTML = `
+    <div class="side-identity-card">
+      <div class="side-identity-top">
+        <span class="bubble-dot ${statusCls}"></span>
+        <div class="side-identity-name">
+          <b>${escapeHtml(node.name)}</b>
+          <span class="pill ${statusCls}">${escapeHtml(node.status)}</span>
+        </div>
+      </div>
+      <div class="side-identity-row"><small>Rol</small><span>${escapeHtml(node.role)}</span></div>
+      <div class="side-identity-row"><small>Modelo</small><span class="mono">${escapeHtml(node.active_model || "auto")}</span></div>
+      <div class="side-identity-row"><small>Provider</small><span>${escapeHtml(node.provider || "—")}</span></div>
+      ${(node.levels || []).length ? `<div class="side-identity-row"><small>Niveles</small><span>${node.levels.map((l) => LEVEL_FULL[l] || l).join(" · ")}</span></div>` : ""}
+      <div class="side-identity-stats">
+        <span><b>${node.task_count ?? 0}</b><small>tasks</small></span>
+        <span><b>${node.error_count ?? 0}</b><small>err.</small></span>
+        <span><b>${node.latency_ms || 0}ms</b><small>lat.</small></span>
+        <span><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b><small>coste</small></span>
+      </div>
+    </div>
+  `;
+
+  const relatedActivity = [...(flow || []), ...(audit || [])]
+    .filter((ev) => ev.source_node === node.name || ev.target_node === node.name || ev.summary?.includes(node.name))
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+    .slice(0, 18);
+  if (activityEl) activityEl.innerHTML = eventList(relatedActivity, "Sin actividad para este nodo.");
+}
+
+function setMonitorTab(tab) {
+  state.monitorTab = tab;
+  $$("#monitorTabs button").forEach((button) => button.classList.toggle("active", button.dataset.monitorTab === tab));
+  $$(".monitor-tab").forEach((panel) => panel.classList.toggle("active", panel.id === `monitor-tab-${tab}`));
+}
+
+function renderExecutionFlow(events) {
+  $("#executionFlow").innerHTML = eventList(events.slice(0, 4), "Sin flujo de ejecución.");
+}
+
+function renderProcessingNodeTabs(nodes) {
+  const target = $("#processingNodeTabs");
+  if (!target) return;
+  const fallback = [
+    { id: "fallback-agent", name: "Claude", role: "Agent", status: "idle", active_model: "auto / simulado", provider: "simulated", levels: [], skills: [], active_capabilities: [], task_count: 0, error_count: 0, latency_ms: 0, estimated_cost: 0, confidence: null, extra: {} },
+    { id: "fallback-worker-1", name: "Gemini", role: "Worker", status: "idle", active_model: "auto / simulado", provider: "simulated", levels: [], skills: [], active_capabilities: [], task_count: 0, error_count: 0, latency_ms: 0, estimated_cost: 0, confidence: null, extra: {} },
+    { id: "fallback-worker-2", name: "Groq", role: "Worker", status: "idle", active_model: "auto / simulado", provider: "simulated", levels: [], skills: [], active_capabilities: [], task_count: 0, error_count: 0, latency_ms: 0, estimated_cost: 0, confidence: null, extra: {} },
+  ];
+  const visibleNodes = nodes.length ? nodes : fallback;
+  if (!state.selectedNodeId && visibleNodes.length) state.selectedNodeId = visibleNodes[0].id;
+  target.innerHTML = [
+    `<button class="${!state.selectedNodeId || state.selectedNodeId === "__all__" ? "active" : ""}" type="button" data-tab-node="__all__">ALL NODES</button>`,
+    ...visibleNodes.map((node) => {
+      const role = node.role || "Node";
+      const name = node.name || node.active_model || "Modelo";
+      const selected = node.id === state.selectedNodeId ? "active" : "";
+      return `<button type="button" class="${selected}" data-tab-node="${escapeHtml(node.id)}">${escapeHtml(name)} (${escapeHtml(role)})</button>`;
+    }),
+  ].join("");
+  target.querySelectorAll("button[data-tab-node]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nodeId = btn.dataset.tabNode;
+      if (nodeId === "__all__") {
+        state.selectedNodeId = visibleNodes[0]?.id || "";
+      } else {
+        state.selectedNodeId = nodeId;
+      }
+      target.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn || (nodeId === "__all__" && b.dataset.tabNode === "__all__")));
+      setMonitorSide(true);
+      _renderAgentPanels(
+        visibleNodes,
+        state.lastObservability?.model_usage || [],
+        state.lastObservability?.execution_flow || [],
+        state.lastObservability?.audit_timeline || []
+      );
+    });
+  });
+}
+
+function renderSummaryMetrics(metrics, tasks, observability) {
+  const nodes = observability.nodes || [];
+  const usage = observability.model_usage || [];
+  const totalCalls = usage.reduce((acc, item) => acc + Number(item.calls || 0), 0);
+  const avgLatency = observability.health?.avg_latency_ms || 0;
+  const blocked = observability.health?.blocked_tasks || 0;
+  const completed = metrics.by_status?.completed || 0;
+  const delegated = metrics.by_status?.delegated || metrics.delegated_tasks || 0;
+  const items = [
+    ["Nodos", nodes.length || observability.health?.observed_nodes || 0],
+    ["Llamadas", totalCalls],
+    ["Completadas", completed],
+    ["Delegadas", delegated],
+    ["Latencia media", `${avgLatency}ms`],
+    ["Coste total", `$${Number(metrics.total_estimated_cost_usd || 0).toFixed(4)}`],
+  ];
+  $("#summaryMetrics").innerHTML = `<div class="summary-hero">
+      <span>Actividad total</span>
+      <b>${metrics.total_subtasks || totalCalls || tasks.length}</b>
+      <small>${delegated} delegadas · ${completed} completadas</small>
+    </div>
+    <div class="summary-grid">
+      ${items
+        .map(([label, value]) => `<div class="summary-item"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`)
+        .join("")}
+    </div>`;
+}
+
+function renderAuditTimeline(events) {
+  $("#auditTimeline").innerHTML = eventList(events.slice(0, 18), "Sin eventos de auditoría.");
+}
+
+function eventList(events, emptyText) {
+  return events.length
+    ? events
+        .map(
+          (event) => `<div class="event-row ${escapeHtml(event.status || "")}">
+            <span class="event-dot" aria-hidden="true"></span>
+            <div class="event-main">
+              <div class="event-line">
+                <time>${formatTime(event.timestamp)}</time>
+                <b>${escapeHtml(event.event_type)}</b>
+                <em>${event.cost ? `$${Number(event.cost).toFixed(4)}` : event.latency_ms ? `${event.latency_ms}ms` : ""}</em>
+              </div>
+              <span>${escapeHtml(event.summary)}</span>
+              <small>${escapeHtml(event.source_node || "Agent")}${event.target_node ? ` → ${escapeHtml(event.target_node)}` : ""} · ${escapeHtml(event.task_id)}${event.model ? ` · ${escapeHtml(event.model)}` : ""}</small>
+            </div>
+          </div>`
+        )
+        .join("")
+    : `<div class="chart-empty">${emptyText}</div>`;
+}
+
+function renderModelUsage(items) {
+  $("#modelUsage").innerHTML = items.length
+    ? items
+        .map(
+          (item) => `<div class="usage-row">
+            <div><b>${escapeHtml(item.model)}</b><span>${escapeHtml(item.provider)}</span></div>
+            <span>${item.calls} llamadas</span>
+            <span>${item.latency_ms || 0}ms</span>
+            <strong>$${Number(item.estimated_cost || 0).toFixed(4)}</strong>
+          </div>`
+        )
+        .join("")
+    : `<div class="chart-empty">sin llamadas a modelo</div>`;
+}
+
+function formatTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
 function renderKpis(metrics) {
   const topModel = Object.entries(metrics.by_model).sort((a, b) => b[1] - a[1])[0];
   const cells = [
-    ["Tareas", metrics.total_tasks],
-    ["Score medio", metrics.average_complexity_score.toFixed(2)],
-    ["Revisión humana", metrics.human_review_required],
-    ["Coste est.", `$${metrics.total_estimated_cost_usd.toFixed(4)}`],
-    ["Modelo top", topModel ? TIER_LABEL[topModel[0]] || topModel[0] : "—"],
+    ["Tareas", metrics.total_tasks, "M0,15 L20,12 L40,18 L60,8 L80,14 L100,10"],
+    ["Delegadas", metrics.delegated_tasks ?? 0, "M0,18 L20,15 L40,10 L60,12 L80,5 L100,8"],
+    ["Subtareas", metrics.total_subtasks ?? 0, "M0,15 L20,15 L40,15 L60,5 L80,10 L100,5"],
+    ["Score medio", metrics.average_complexity_score.toFixed(2), "M0,15 L20,13 L40,11 L60,10 L80,9 L100,10"],
+    ["Revisión humana", metrics.human_review_required, "M0,18 L70,18 L100,5"],
+    ["Coste est.", `$${metrics.total_estimated_cost_usd.toFixed(4)}`, "M0,15 L20,16 L40,17 L60,14 L80,12 L100,10"],
+    ["Modelo top", topModel ? TIER_LABEL[topModel[0]] || topModel[0] : "—", "M0,10 L100,10"],
   ];
   $("#kpis").innerHTML = cells
-    .map(([label, value]) => `<div class="kpi"><span>${label}</span><b>${escapeHtml(value)}</b></div>`)
+    .map(
+      ([label, value, path]) => `<div class="kpi"><span>${label}</span><b>${escapeHtml(value)}</b>
+        <svg viewBox="0 0 100 22" aria-hidden="true"><path d="${path}" vector-effect="non-scaling-stroke"></path></svg>
+      </div>`
+    )
     .join("");
 }
 
@@ -182,7 +836,7 @@ function barCard(title, entries, labelMap) {
         })
         .join("")
     : `<div class="chart-empty">sin datos</div>`;
-  return `<section class="card chart-card"><header class="card-h">${title}</header><div class="chart-body">${rows}</div></section>`;
+  return `<section class="chart-card"><header class="card-h">${title}</header><div class="chart-body">${rows}</div></section>`;
 }
 
 function renderCharts(metrics) {
@@ -190,7 +844,7 @@ function renderCharts(metrics) {
   const reviewRatio = metrics.total_tasks
     ? Math.round((metrics.human_review_required / metrics.total_tasks) * 100)
     : 0;
-  const gauge = `<section class="card chart-card"><header class="card-h">Revisión humana</header>
+  const gauge = `<section class="chart-card"><header class="card-h">Revisión humana</header>
     <div class="gauge"><div class="gauge-num">${reviewRatio}%</div>
       <div class="gauge-track"><div class="gauge-fill" style="width:${reviewRatio}%"></div></div>
       <div class="gauge-sub">${metrics.human_review_required}/${metrics.total_tasks} tareas · score medio ${metrics.average_complexity_score.toFixed(
@@ -200,6 +854,8 @@ function renderCharts(metrics) {
     barCard("Por nivel de complejidad", byLevel, LEVEL_FULL) +
     barCard("Por modelo / tier", Object.entries(metrics.by_model), TIER_LABEL) +
     barCard("Por backend", Object.entries(metrics.by_backend)) +
+    barCard("Por estado", Object.entries(metrics.by_status || {})) +
+    barCard("Por skill", Object.entries(metrics.by_skill || {})) +
     gauge;
 }
 
@@ -268,6 +924,9 @@ async function renderDetail(task) {
 
   try {
     const decisions = await api(`/tasks/${task.task_id}/decisions`);
+    const approval = task.status === "delegated" && c.requires_human_review
+      ? `<button class="approve-review" data-approve="${task.task_id}">Aprobar revisión humana</button>`
+      : "";
     $("#dDecisions").innerHTML =
       decisions
         .map(
@@ -276,7 +935,7 @@ async function renderDetail(task) {
               d.reason ? ` — ${escapeHtml(d.reason)}` : ""
             }</div>`
         )
-        .join("") || `<div class="row">Sin decisiones registradas.</div>`;
+        .join("") + approval || `<div class="row">Sin decisiones registradas.</div>${approval}`;
   } catch {
     $("#dDecisions").innerHTML = `<div class="row">No disponible.</div>`;
   }
@@ -319,6 +978,40 @@ function loadEntityState() {
 
 function persistEntityState() {
   localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
+  clearTimeout(layoutSaveTimer);
+  layoutSaveTimer = setTimeout(saveRoutingLayout, 500);
+}
+
+async function loadRoutingLayout() {
+  try {
+    const layout = await api("/routing-layout");
+    if (layout.entities?.length) {
+      state.entities = layout.entities;
+      state.diagramZoom = layout.zoom || state.diagramZoom;
+      state.drawerWidth = layout.drawer_width || state.drawerWidth;
+      localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
+      localStorage.setItem("karajan-diagram-zoom", String(state.diagramZoom));
+      localStorage.setItem("karajan-model-drawer-width", String(state.drawerWidth));
+      normalizeEntityPositions();
+    }
+  } catch {
+    // LocalStorage remains the offline fallback for the diagram.
+  }
+}
+
+async function saveRoutingLayout() {
+  try {
+    await api("/routing-layout", {
+      method: "PUT",
+      body: JSON.stringify({
+        entities: state.entities,
+        zoom: state.diagramZoom,
+        drawer_width: state.drawerWidth,
+      }),
+    });
+  } catch {
+    // Keep UI edits responsive even if the backend is temporarily unavailable.
+  }
 }
 
 function normalizeEntityPositions() {
@@ -328,8 +1021,16 @@ function normalizeEntityPositions() {
     entity.y = Number.isFinite(Number(entity.y)) ? Number(entity.y) : 36;
     entity.levels ||= [];
     entity.skills ||= [];
-    if (entity.role === "skill") {
+    entity.capabilities ||= [];
+    if (entity.role === "skill" || entity.role === "worker") {
       entity.role = "child";
+    }
+    if (entity.role === "agent") entity.role = "parent";
+    if (!ROLE_DEFS[entity.role]) entity.role = "child";
+    if (!canOwnLevels(entity.role)) entity.levels = [];
+    if (!isAgentRole(entity.role)) {
+      entity.capabilities = [];
+      entity.parentId ||= state.entities.find((item) => isAgentRole(item.role))?.id || "";
     }
     entity.levels = [...new Set(entity.levels)].filter((level) => {
       if (usedLevels.has(level)) return false;
@@ -368,7 +1069,7 @@ function renderDiagram() {
       if (!entity) return;
       entity.provider = event.currentTarget.dataset.provider;
       const provider = state.catalog.find((item) => item.name === entity.provider);
-      entity.name = provider?.label || (entity.role === "parent" ? "Padre" : "Hijo");
+      entity.name = provider?.label || roleDef(entity.role).label;
       renderDiagram();
       scheduleRoutingSave("Modelo actualizado. Guardando…");
     })
@@ -378,14 +1079,31 @@ function renderDiagram() {
       const entity = findEntity(event.target.dataset.entity);
       if (!entity) return;
       entity.role = event.target.value;
-      if (entity.role === "parent") {
+      if (isAgentRole(entity.role)) {
         state.entities.forEach((item) => {
-          if (item.id !== entity.id && item.role === "parent") item.role = "child";
+          if (item.id !== entity.id && isAgentRole(item.role)) item.role = "child";
         });
         entity.parentId = "";
+      } else {
+        entity.parentId ||= state.entities.find((item) => isAgentRole(item.role))?.id || "";
+        entity.capabilities = [];
+      }
+      if (!canOwnLevels(entity.role)) {
+        entity.levels = [];
       }
       renderDiagram();
       scheduleRoutingSave("Rol actualizado. Guardando…");
+    })
+  );
+  $$("#diagramNodes .agent-capability").forEach((box) =>
+    box.addEventListener("change", (event) => {
+      const entity = findEntity(event.target.dataset.entity);
+      if (!entity || !isAgentRole(entity.role)) return;
+      entity.capabilities ||= [];
+      if (event.target.checked && !entity.capabilities.includes(event.target.value)) entity.capabilities.push(event.target.value);
+      if (!event.target.checked) entity.capabilities = entity.capabilities.filter((item) => item !== event.target.value);
+      renderDiagram();
+      scheduleRoutingSave("Capacidades del Agent actualizadas. Guardando…");
     })
   );
   $$("#diagramNodes .entity-parent-link").forEach((sel) =>
@@ -446,32 +1164,36 @@ function renderDiagram() {
 }
 
 function entityCard(entity) {
-  if (entity.role === "skill") entity.role = "child";
-  const roleLabel = entity.role === "parent" ? "Padre" : "Hijo";
+  if (entity.role === "skill" || entity.role === "worker") entity.role = "child";
+  if (entity.role === "agent") entity.role = "parent";
+  const role = roleDef(entity.role);
+  const roleLabel = role.label;
   const remove = entity.id !== "entity-parent" ? `<button class="node-x" data-remove="${entity.id}" title="Quitar entidad">✕</button>` : "";
   const title = entity.provider ? modelTitle(entity.provider) : roleLabel;
   const model = modelMeta(entity);
   const accent = entityAccent(entity);
   const parentOptions = state.entities
-    .filter((item) => item.role === "parent" && item.id !== entity.id)
-    .map((item) => `<option value="${item.id}" ${entity.parentId === item.id ? "selected" : ""}>${escapeHtml(item.name || "Padre")}</option>`)
+    .filter((item) => isAgentRole(item.role) && item.id !== entity.id)
+    .map((item) => `<option value="${item.id}" ${entity.parentId === item.id ? "selected" : ""}>${escapeHtml(item.name || "Agent")}</option>`)
     .join("");
   const levelControls =
-    entity.role === "parent" || entity.role === "child"
+    canOwnLevels(entity.role)
       ? `<div class="level-picker">
           ${LEVELS.map(([level, short]) => levelChip(entity, level, short)).join("")}
         </div>`
       : "";
   const connection =
-    entity.role === "child"
+    canConnectToAgent(entity.role)
       ? `<label>Conexión padre
           <select class="entity-parent-link" data-entity="${entity.id}">
             <option value="">Sin conexión</option>${parentOptions}
           </select>
         </label>`
       : "";
+  const capabilities = agentCapabilities(entity);
   const skills = skillPicker(entity);
-  return `<div class="node entity ${entity.role}" data-entity="${entity.id}">
+  const classRole = isAgentRole(entity.role) ? "parent" : "child";
+  return `<div class="node entity ${classRole} role-${escapeHtml(entity.role)}" data-entity="${entity.id}">
       <div class="drop-hint">Suelta modelo aquí</div>
       ${remove}
       <div class="node-port" title="Punto de conexión"></div>
@@ -481,15 +1203,38 @@ function entityCard(entity) {
       <div class="entity-controls">
         <label>Rol
           <select class="entity-role" data-entity="${entity.id}">
-            <option value="parent" ${entity.role === "parent" ? "selected" : ""}>Padre</option>
-            <option value="child" ${entity.role === "child" ? "selected" : ""}>Hijo</option>
+            ${roleOptions(entity.role)}
           </select>
+          <small>${escapeHtml(role.summary)}</small>
         </label>
         ${connection}
         ${levelControls}
+        ${capabilities}
         ${skills}
       </div>
     </div>`.replace('<div class="node entity', `<div style="left:${screenX(entity.x || 0)}px; top:${screenY(entity.y || 0)}px; --entity-accent:${accent.color}; --entity-ink:${accent.ink}" class="node entity`);
+}
+
+function roleDef(role) {
+  return ROLE_DEFS[role] || ROLE_DEFS.child;
+}
+
+function roleOptions(current) {
+  return Object.entries(ROLE_DEFS)
+    .map(([value, role]) => `<option value="${value}" ${value === current ? "selected" : ""}>${role.label}</option>`)
+    .join("");
+}
+
+function isAgentRole(role) {
+  return role === "parent" || role === "agent";
+}
+
+function canOwnLevels(role) {
+  return !!roleDef(role).canOwnLevels;
+}
+
+function canConnectToAgent(role) {
+  return !!roleDef(role).canConnectToAgent;
 }
 
 function findEntity(id) {
@@ -503,7 +1248,12 @@ function modelTitle(providerName) {
 
 function entityAccent(entity) {
   const key = `${entity.provider || entity.role || ""}`.toLowerCase();
-  if (entity.role === "parent") return { color: "var(--accent)", ink: "var(--accent-ink)" };
+  if (isAgentRole(entity.role)) return { color: "var(--accent)", ink: "var(--accent-ink)" };
+  if (key.includes("backup")) return { color: "#f2c84b", ink: "#201600" };
+  if (key.includes("guardian")) return { color: "#b9a7ff", ink: "#15102b" };
+  if (key.includes("validator")) return { color: "#ffb25f", ink: "#261303" };
+  if (key.includes("memory")) return { color: "#a8ddff", ink: "#061929" };
+  if (key.includes("monitor")) return { color: "#f08cc3", ink: "#250719" };
   if (key.includes("google") || key.includes("gemini")) return { color: "#65d6ad", ink: "#08241b" };
   if (key.includes("groq")) return { color: "#7cb7ff", ink: "#071827" };
   if (key.includes("openai")) return { color: "#69d2ff", ink: "#071923" };
@@ -535,17 +1285,17 @@ function modelMeta(entity) {
 }
 
 function relatedEntityIds(entity) {
-  if (entity.role === "parent") {
+  if (isAgentRole(entity.role)) {
     return state.entities.filter((item) => item.parentId === entity.id || item.id === entity.id).map((item) => item.id);
   }
-  if (entity.role === "child" && entity.parentId) {
+  if (canConnectToAgent(entity.role) && entity.parentId) {
     return state.entities.filter((item) => item.id === entity.parentId || item.parentId === entity.parentId).map((item) => item.id);
   }
   return [entity.id];
 }
 
 function levelOwner(level) {
-  return state.entities.find((item) => item.role !== "skill" && item.levels?.includes(level));
+  return state.entities.find((item) => canOwnLevels(item.role) && item.levels?.includes(level));
 }
 
 function levelChip(entity, level, short) {
@@ -575,6 +1325,20 @@ function skillPicker(entity) {
     </details>`;
 }
 
+function agentCapabilities(entity) {
+  if (!isAgentRole(entity.role)) return "";
+  const selected = new Set(entity.capabilities || []);
+  const base = AGENT_INTERNAL_CAPABILITIES.map((name) => `<span title="Capacidad interna del Agent">${name}</span>`).join("");
+  const optional = AGENT_OPTIONAL_CAPABILITIES.map(
+    ([name, description]) =>
+      `<label title="${escapeHtml(description)}"><input class="agent-capability" data-entity="${entity.id}" type="checkbox" value="${name}" ${selected.has(name) ? "checked" : ""}/> ${name}</label>`
+  ).join("");
+  return `<div class="agent-capabilities">
+      <div class="cap-row fixed">${base}</div>
+      <div class="cap-row optional">${optional}</div>
+    </div>`;
+}
+
 function assignProviderToNode(target, providerName) {
   const entity = state.entities.find((item) => item.id === target);
   if (entity) {
@@ -594,9 +1358,10 @@ function addEntityFromProvider(providerName, role = "child", position = null) {
     name: provider?.label || providerName,
     role,
     provider: providerName,
-    parentId: role === "child" ? state.entities.find((item) => item.role === "parent")?.id || "" : "",
+    parentId: canConnectToAgent(role) ? state.entities.find((item) => isAgentRole(item.role))?.id || "" : "",
     levels: [],
     skills: [],
+    capabilities: [],
     x: Math.max(0, position?.x ?? 360 + nextIndex * 28),
     y: Math.max(0, position?.y ?? 48 + nextIndex * 28),
   });
@@ -840,6 +1605,7 @@ function bindDiagramPanZoom() {
       const direction = event.deltaY > 0 ? -1 : 1;
       state.diagramZoom = clampZoom(state.diagramZoom + direction * 0.08);
       localStorage.setItem("karajan-diagram-zoom", String(state.diagramZoom));
+      persistEntityState();
       applyDiagramZoom();
       diagram.scrollLeft = beforeX * state.diagramZoom - (event.clientX - rect.left);
       diagram.scrollTop = beforeY * state.diagramZoom - (event.clientY - rect.top);
@@ -899,6 +1665,7 @@ function onDrawerResize(event) {
   state.drawerWidth = nextWidth;
   document.documentElement.style.setProperty("--drawer-width", `${nextWidth}px`);
   localStorage.setItem("karajan-model-drawer-width", String(nextWidth));
+  persistEntityState();
   requestAnimationFrame(drawWires);
 }
 
@@ -913,7 +1680,7 @@ async function saveRouting(auto = false) {
   if (!state.config) return;
   persistEntityState();
   const prefs = { ...state.config.provider_preferences };
-  const parent = state.entities.find((item) => item.role === "parent" && item.provider);
+  const parent = state.entities.find((item) => isAgentRole(item.role) && item.provider);
   Object.values(state.config.level_to_model).forEach((tier) => delete prefs[tier]);
   if (parent) {
     prefs.strong_model = parent.provider;
@@ -923,7 +1690,7 @@ async function saveRouting(auto = false) {
     delete prefs.strong_model_with_human_review;
   }
   state.entities
-    .filter((item) => item.role !== "skill" && item.provider)
+    .filter((item) => canOwnLevels(item.role) && item.provider)
     .forEach((entity) => {
       (entity.levels || []).forEach((level) => {
         const tier = state.config.level_to_model[level];
@@ -1160,10 +1927,28 @@ async function putConfig(message) {
 function init() {
   initTheme();
   initViews();
+  $("#monitorTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-monitor-tab]");
+    if (button) setMonitorTab(button.dataset.monitorTab);
+  });
+  $("#toggleMonitorSide")?.addEventListener("click", () => setMonitorSide(!state.monitorSideOpen));
+  initMonitorSplitter();
+  initMonitorBlocks();
   $("#refreshMonitor").addEventListener("click", () => refreshMonitor().catch((e) => toast(e.message)));
   $("#saveRouting").addEventListener("click", () => saveRouting(false));
   $("#modelsAdvanced").addEventListener("change", renderModels);
   document.addEventListener("click", (event) => {
+    const approve = event.target.closest("[data-approve]");
+    if (approve) {
+      api(`/tasks/${approve.dataset.approve}/approve-review`, { method: "POST" })
+        .then((task) => {
+          state.selected = task.task_id;
+          toast("Revisión humana aprobada.");
+          return refreshMonitor();
+        })
+        .catch((error) => toast(error.message));
+      return;
+    }
     if (!event.target.closest(".model-chip-picker")) {
       $$(".model-chip-picker.open").forEach((item) => item.classList.remove("open"));
     }
@@ -1181,7 +1966,11 @@ function init() {
   initDiagramViewport();
 
   loadConfig()
-    .then(() => Promise.all([api("/catalog").then((c) => (state.catalog = c)), refreshMonitor()]))
+    .then(() => Promise.all([api("/catalog").then((c) => (state.catalog = c)), loadRoutingLayout(), refreshMonitor()]))
+    .then(() => {
+      applyDrawerState();
+      applyDiagramZoom();
+    })
     .catch((error) => toast(error.message));
 }
 

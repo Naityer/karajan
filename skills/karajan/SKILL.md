@@ -29,6 +29,30 @@ auditoría; tú eres quien recibe el prompt y decide.
 6. **(Opcional) Reporta** cada decisión real de ejecución con un POST a
    `/tasks/{task_id}/decisions` para enriquecer la auditoría en vivo.
 
+## Roles del diagrama
+
+El padre del harness se modela como `Agent`. `Agent` ya incluye clasificación,
+planificación, routing, agregación ligera y recuperación básica. No crees
+`Classifier`, `Planner` o `Router` como nodos separados salvo que haya alta
+complejidad, mucha carga, varias rutas o necesidad fuerte de trazabilidad.
+
+Roles visibles:
+
+- `Agent`: autoridad estructural; clasifica, decide, enruta y delega.
+- `Worker`: ejecuta tareas concretas asignadas por el `Agent`.
+- `Backup`: reserva en standby; solo asume autoridad si se promueve a `Agent`.
+- `Guardian`: apoya o revisa un `Worker` concreto.
+- `Validator`: valida salidas de otros nodos.
+- `Memory`: conserva estado, checkpoints y contexto.
+- `Monitor`: detecta salud, timeouts, errores y saturación.
+
+Capacidad especial:
+
+- `Reallocator` solo puede existir dentro de un `Agent`. Permite reasignar
+  roles, tareas, prioridades y relaciones cuando la jerarquía se rompe o se
+  vuelve ineficiente. `Worker`, `Guardian`, `Validator`, `Memory` y `Monitor`
+  pueden informar problemas, pero no pueden reasignar roles globales.
+
 ## Registro en el harness
 
 `KARAJAN_API` por defecto es `http://127.0.0.1:8000` (si sirves la app en otro

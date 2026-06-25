@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# SQLite WAL sidecar files (transient; the .db itself is intentionally tracked)
+*.db-wal
+*.db-shm
+
+# Runtime config override written by PUT /config
+data/active_config.json
+
+# Trial reports
+data/trial_reports/

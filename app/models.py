@@ -168,9 +168,92 @@ class Metrics(BaseModel):
     by_level: dict[str, int]
     by_model: dict[str, int]
     by_backend: dict[str, int]
+    by_status: dict[str, int] = Field(default_factory=dict)
+    by_skill: dict[str, int] = Field(default_factory=dict)
+    total_subtasks: int = 0
+    delegated_tasks: int = 0
     human_review_required: int
     total_estimated_cost_usd: float
     average_complexity_score: float
+
+
+class NodeMetrics(BaseModel):
+    id: str
+    name: str
+    role: str
+    status: str = "idle"
+    active_model: str = "auto / simulado"
+    provider: str = "simulated"
+    model_tier: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost: float = 0.0
+    latency_ms: int = 0
+    task_count: int = 0
+    error_count: int = 0
+    last_activity: str = ""
+    confidence: float | None = None
+    active_capabilities: list[str] = Field(default_factory=list)
+    levels: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class FlowEvent(BaseModel):
+    timestamp: datetime
+    event_type: str
+    source_node: str = "Agent"
+    target_node: str | None = None
+    task_id: str
+    summary: str
+    model: str | None = None
+    cost: float = 0.0
+    latency_ms: int = 0
+    status: str = "completed"
+
+
+class ModelUsage(BaseModel):
+    model: str
+    provider: str
+    calls: int = 0
+    estimated_cost: float = 0.0
+    latency_ms: int = 0
+    errors: int = 0
+
+
+class SystemHealth(BaseModel):
+    status: str
+    observed_nodes: int
+    healthy_nodes: int
+    warning_nodes: int
+    error_nodes: int
+    active_tasks: int
+    failed_tasks: int
+    blocked_tasks: int
+    total_cost: float
+    avg_latency_ms: int
+    last_activity: str = ""
+
+
+class ObservabilitySnapshot(BaseModel):
+    health: SystemHealth
+    nodes: list[NodeMetrics] = Field(default_factory=list)
+    execution_flow: list[FlowEvent] = Field(default_factory=list)
+    audit_timeline: list[FlowEvent] = Field(default_factory=list)
+    model_usage: list[ModelUsage] = Field(default_factory=list)
+
+
+class HealthStatus(BaseModel):
+    """Cheap liveness/readiness probe for production monitoring."""
+
+    status: str  # "ok" | "degraded"
+    version: str
+    backend: str
+    profile: str
+    auth_enabled: bool
+    db_ok: bool
+    total_tasks: int
 
 
 # --- Provider catalog & credentials -----------------------------------------
@@ -217,6 +300,26 @@ class SkillInfo(BaseModel):
     install_command: str | None = None
 
 
+class RoutingEntity(BaseModel):
+    id: str
+    name: str | None = None
+    role: str
+    provider: str | None = None
+    parentId: str | None = ""
+    levels: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    x: float = 0
+    y: float = 0
+
+
+class RoutingLayout(BaseModel):
+    entities: list[RoutingEntity] = Field(default_factory=list)
+    zoom: float = Field(default=1.0, ge=0.4, le=2.0)
+    drawer_width: int = Field(default=320, ge=220, le=680)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 # --- Configuration -----------------------------------------------------------
 
 
@@ -226,6 +329,9 @@ class OrchestrationConfig(BaseModel):
     subtask_timeout_s: int = Field(default=120, ge=1)
     max_retries: int = Field(default=1, ge=0, le=5)
     require_human_review_gate: bool = True
+    # Cost guardrails evaluated BEFORE any subtask runs. 0 disables the cap.
+    max_cost_per_task_usd: float = Field(default=0.0, ge=0.0)
+    max_daily_cost_usd: float = Field(default=0.0, ge=0.0)
 
 
 class KarajanConfig(BaseModel):

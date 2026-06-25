@@ -43,6 +43,38 @@ Puntúa cada criterio de 0 a 5:
 - `level_4_complex`: `strong_model`
 - `level_5_critical`: `strong_model_with_human_review`
 
+## Roles Del Harness
+
+El nodo principal es `Agent`. `Agent` ya implica clasificación, planificación,
+routing, agregación ligera y recuperación básica; no propongas `Classifier`,
+`Planner` o `Router` como nodos separados salvo que la complejidad lo justifique.
+
+Roles visibles:
+
+- `Agent`: orquesta, decide, clasifica, planifica, enruta y delega.
+- `Worker`: ejecuta tareas concretas asignadas.
+- `Backup`: reserva en standby; solo asume autoridad al ser promovido a `Agent`.
+- `Guardian`: apoya o revisa un `Worker`.
+- `Validator`: valida salidas parciales o finales de otros nodos.
+- `Memory`: conserva estado, checkpoints y contexto.
+- `Monitor`: observa salud, timeouts, errores y disponibilidad.
+
+Capacidades internas del `Agent`:
+
+- `Classifier`
+- `Planner`
+- `Router`
+- `Aggregator`
+- `Policy`
+- `Recovery`
+- `Reallocator`
+
+`Reallocator` es una capacidad exclusiva de `Agent`. Permite reasignar roles,
+tareas, prioridades y relaciones cuando la jerarquía se rompe, se degrada o es
+ineficiente. Un `Worker`, `Guardian`, `Validator`, `Memory` o `Monitor` puede
+informar problemas, pero no reasignar roles globales. Un `Backup` solo hereda
+`Reallocator` después de asumir formalmente el rol activo de `Agent`.
+
 ## Recomendación De Skills
 
 Sugiere las skills/estrategias del agente principal según el ámbito:

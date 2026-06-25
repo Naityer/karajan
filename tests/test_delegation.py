@@ -1,0 +1,89 @@
+"""Delegation engine: execution, failure propagation, parallelism, retries."""
+
+from app import delegation
+from app.delegation import delegate
+from app.models import Backend, KarajanConfig, OrchestrationConfig
+from app.providers.base import ModelProvider, ProviderRun
+from app.providers.registry import Resolution
+from app.router import classify_prompt
+
+PROMPT = "Corrige un bug en una API y valida con tests de integracion."
+
+
+class _FailingProvider(ModelProvider):
+    backend = Backend.API
+
+    def run(self, instruction: str, model_id: str, timeout_s: int) -> ProviderRun:
+        return ProviderRun(output="", model_used=f"fake:{model_id}", latency_ms=10, error="boom")
+
+
+class _FlakyProvider(ModelProvider):
+    """Fails on the first attempt, succeeds on retry."""
+
+    backend = Backend.API
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, instruction: str, model_id: str, timeout_s: int) -> ProviderRun:
+        self.calls += 1
+        if self.calls == 1:
+            return ProviderRun(output="", model_used=f"fake:{model_id}", latency_ms=5, error="transient")
+        return ProviderRun(output="ok", model_used=f"fake:{model_id}", latency_ms=8, error=None)
+
+
+def _patch_resolve(monkeypatch, provider_factory) -> None:
+    monkeypatch.setattr(
+        delegation,
+        "resolve",
+        lambda tier, config: Resolution(provider_factory(), Backend.API, tier.value, "fake"),
+    )
+
+
+def test_delegate_runs_every_subtask_on_simulated() -> None:
+    classification = classify_prompt(PROMPT)
+    result, decisions = delegate(classification, KarajanConfig(backend=Backend.SIMULATED))
+
+    assert result.status.value == "completed"
+    assert len(result.executions) == len(classification.subtasks)
+    assert len(decisions) == len(classification.subtasks)
+    assert all(ex.backend == Backend.SIMULATED for ex in result.executions)
+    assert result.total_estimated_cost_usd > 0
+
+
+def test_delegate_marks_failed_when_provider_errors(monkeypatch) -> None:
+    _patch_resolve(monkeypatch, _FailingProvider)
+    classification = classify_prompt(PROMPT)
+    config = KarajanConfig(backend=Backend.API, orchestration=OrchestrationConfig(max_retries=0))
+
+    result, _ = delegate(classification, config)
+
+    assert result.status.value == "failed"
+    assert all(ex.status.value == "failed" for ex in result.executions)
+    assert all(ex.error == "boom" for ex in result.executions)
+
+
+def test_delegate_parallel_executes_all_subtasks(monkeypatch) -> None:
+    classification = classify_prompt(PROMPT)
+    assert len(classification.subtasks) > 1  # guard: parallelism only kicks in with >1
+    config = KarajanConfig(
+        backend=Backend.SIMULATED,
+        orchestration=OrchestrationConfig(parallel=True, max_parallel=4),
+    )
+
+    result, _ = delegate(classification, config)
+
+    assert len(result.executions) == len(classification.subtasks)
+    assert {ex.subtask_id for ex in result.executions} == {s.id for s in classification.subtasks}
+
+
+def test_delegate_retries_transient_failure(monkeypatch) -> None:
+    _patch_resolve(monkeypatch, _FlakyProvider)
+    classification = classify_prompt(PROMPT)
+    config = KarajanConfig(backend=Backend.API, orchestration=OrchestrationConfig(max_retries=1))
+
+    result, _ = delegate(classification, config)
+
+    # Each subtask's provider failed once then succeeded on retry.
+    assert result.status.value == "completed"
+    assert all(ex.status.value == "completed" for ex in result.executions)

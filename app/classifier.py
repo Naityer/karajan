@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
 
+from app.logging_config import get_logger, log_event
 from app.models import (
     Backend,
     ClassificationResult,
@@ -22,6 +24,7 @@ from app.router import (
 )
 
 SKILL_PATH = Path(__file__).resolve().parent.parent / "skills" / "task-router" / "SKILL.md"
+logger = get_logger("classifier")
 
 
 def classify(prompt: str, config: KarajanConfig | None = None) -> ClassificationResult:
@@ -38,7 +41,16 @@ def classify(prompt: str, config: KarajanConfig | None = None) -> Classification
 
     try:
         return _llm_classify(prompt, config)
-    except Exception:  # noqa: BLE001 - any LLM/parse failure degrades to heuristic
+    except Exception as exc:  # noqa: BLE001 - any LLM/parse failure degrades to heuristic
+        # Make the silent degradation observable: routing keeps working, but an
+        # operator can see the LLM path failed and the heuristic took over.
+        log_event(
+            logger,
+            logging.WARNING,
+            "llm_classify_fallback",
+            backend=config.backend.value,
+            error=f"{type(exc).__name__}: {exc}",
+        )
         return classify_prompt(prompt, config)
 
 
