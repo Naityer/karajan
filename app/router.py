@@ -107,7 +107,7 @@ def classify_prompt(prompt: str, config: KarajanConfig | None = None) -> Classif
     strategy = _strategy_for_level(level)
     skills = _recommend_skills(domains, intent, level)
     subtasks = _build_subtasks(intent, domains, level, mapping, strategy)
-    requires_review = level == ComplexityLevel.LEVEL_5_CRITICAL or criteria.operational_risk >= 4
+    requires_review = _requires_human_review(level, criteria, domains, intent, config)
 
     return ClassificationResult(
         original_prompt=prompt,
@@ -124,6 +124,25 @@ def classify_prompt(prompt: str, config: KarajanConfig | None = None) -> Classif
         reason=_build_reason(domains, intent, criteria, level),
         validation_plan=_validation_plan(level, domains),
         classified_by="heuristic",
+    )
+
+
+def _requires_human_review(
+    level: ComplexityLevel,
+    criteria: CriteriaScores,
+    domains: list[str],
+    intent: str,
+    config: KarajanConfig | None = None,
+) -> bool:
+    if config is None:
+        return level == ComplexityLevel.LEVEL_5_CRITICAL or criteria.operational_risk >= 4
+    level_index = _LEVELS_ASC.index(level) + 1
+    policy = config.policy
+    return (
+        level_index >= policy.human_review_min_level
+        or criteria.operational_risk >= policy.operational_risk_review_threshold
+        or any(domain in policy.sensitive_domains for domain in domains)
+        or intent in policy.critical_intents
     )
 
 

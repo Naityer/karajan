@@ -6,7 +6,35 @@ Este documento define el contrato de roles para el diagrama de decisión de KARA
 Agent gobierna la estructura. Worker ejecuta. El resto apoya, valida, recuerda o monitoriza.
 ```
 
-`Classifier`, `Planner` y `Router` no son nodos obligatorios. En el MVP viven como capacidades internas del `Agent` y solo deben separarse como nodos cuando la complejidad, la carga o la necesidad de trazabilidad lo justifique.
+## Resumen Operativo Para Agentes
+
+Usa esta tabla como lectura rápida antes de modificar el diagrama:
+
+| Nivel | Etiquetas | Restricción | Puede poseer N1-N5 | Regla mental |
+| --- | --- | --- | --- | --- |
+| `R0` | `Agent` | Único rol de autoridad global. Solo debe existir un Agent activo. | Sí | Decide, clasifica, planifica, enruta y puede delegar. |
+| `R1` | `Worker`, `Backup` | Roles primarios de ejecución. Mutuamente excluyentes con `Agent` y entre sí. | Sí | Ejecuta o queda en reserva; no gobierna la jerarquía. |
+| `R2` | `Guardian`, `Validator` | Etiquetas auxiliares. Se pueden combinar como etiquetas, pero no convierten el nodo en dueño de niveles. | No | Critica, apoya o valida; no reclama complejidad. |
+| `R3` | `Memory`, `Monitor` | Etiquetas de estado/observabilidad. No ejecutan negocio ni reasignan. | No | Recuerda o vigila; informa al Agent. |
+
+Regla de interfaz:
+
+```text
+role = rol primario compatible con el backend.
+role_tags = etiquetas visibles tipo multiselect.
+capabilities = etiquetas de capacidad visibles dentro del mismo selector Rol.
+```
+
+El multiselect de la pantalla Decisión permite varias etiquetas, pero las ordena por restricción:
+
+1. Primero debe haber un rol primario (`Agent`, `Worker` o `Backup`).
+2. `Agent`, `Worker` y `Backup` se sustituyen entre sí; no se apilan.
+3. `Guardian`, `Validator`, `Memory` y `Monitor` pueden añadirse como etiquetas auxiliares.
+4. Solo el rol primario decide si el nodo puede reclamar niveles `N1-N5`.
+5. `Classifier`, `Planner`, `Router`, `Reallocator`, `Aggregator`, `Policy` y `Recovery` aparecen en el mismo selector visual, pero se guardan como `capabilities`, no como `role_tags`.
+6. Las capacidades de Agent solo se muestran cuando el rol primario activo es `Agent`.
+
+`Classifier`, `Planner` y `Router` no son nodos obligatorios. En el MVP viven como capacidades internas fijas del `Agent` y solo deben separarse como nodos cuando la complejidad, la carga o la necesidad de trazabilidad lo justifique.
 
 ## Roles Visibles
 
@@ -36,7 +64,7 @@ En la interfaz, la propiedad `role` conserva compatibilidad con el layout anteri
 
 ## Capacidades Internas
 
-Estas capacidades no tienen por qué ser nodos independientes. Por defecto viven dentro del `Agent`:
+Estas capacidades no tienen por qué ser nodos independientes. En la interfaz aparecen como etiquetas dentro del selector `Rol`, pero su significado operativo sigue siendo de capacidad:
 
 | Capacidad | Vive normalmente en | Cuándo separarla |
 | --- | --- | --- |
@@ -64,7 +92,7 @@ Estas capacidades no tienen por qué ser nodos independientes. Por defecto viven
 Solo un Agent con Reallocator activo puede reasignar roles globales, tareas, prioridades o relaciones.
 ```
 
-No es un rol visual independiente. No se asigna a `Worker`, `Guardian`, `Validator`, `Memory`, `Monitor` ni `Backup` en standby. Un `Backup` solo puede usar `Reallocator` después de ser promovido formalmente a `Agent` activo.
+No es un rol primario independiente. En la UI se selecciona como etiqueta de capacidad dentro de `Rol`, pero no se asigna a `Worker`, `Guardian`, `Validator`, `Memory`, `Monitor` ni `Backup` en standby. Un `Backup` solo puede usar `Reallocator` después de ser promovido formalmente a `Agent` activo.
 
 Acciones permitidas por `Agent[Reallocator]`:
 

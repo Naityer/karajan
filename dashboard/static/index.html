@@ -4,16 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KARAJAN</title>
-    <link rel="stylesheet" href="/static/styles.css?v=monitor-rebuild-1" />
+    <link rel="icon" type="image/png" href="/static/icons/karajan_v2.png" />
+    <link rel="stylesheet" href="/static/styles.css?v=split-bot-prompt-index-1" />
   </head>
   <body>
     <!-- Compact tool frame: brand · view switch · live status · theme — not a generic web shell -->
     <header class="bar">
-      <div class="brand"><span class="dot"></span>KARAJAN</div>
+      <div class="brand"><img src="/static/icons/karajan_v2.png" alt="" class="brand-icon" /><span>KARAJAN</span></div>
 
       <nav class="views" id="viewNav">
-        <button class="view-tab active" data-view="monitor">Monitor</button>
+        <button class="view-tab active" data-view="human">Control humano</button>
+        <button class="view-tab" data-view="monitor">Monitor</button>
         <button class="view-tab" data-view="decision">Decisión</button>
+        <button class="view-tab" data-view="agents">Agentes</button>
         <button class="view-tab" data-view="flow">Configuración</button>
       </nav>
 
@@ -23,12 +26,44 @@
           <button data-theme="light" class="sw light" aria-label="Claro"></button>
           <button data-theme="dark" class="sw dark active" aria-label="Oscuro"></button>
         </div>
+        <div class="notification-wrap" id="notificationWrap">
+          <button id="notificationBell" class="icon-btn notification-bell" type="button" title="Decisiones y notificaciones" aria-label="Decisiones y notificaciones" aria-expanded="false">
+            <span class="bell-glyph" aria-hidden="true"></span>
+            <b id="notificationBadge">0</b>
+          </button>
+          <section class="notification-panel" id="notificationPanel" hidden>
+            <header>
+              <span>Notificaciones</span>
+              <b id="notificationPanelCount">0</b>
+            </header>
+            <div id="notificationSummary"></div>
+          </section>
+        </div>
+        <div class="notification-wrap" id="agentNotificationWrap">
+          <button id="agentNotificationBot" class="icon-btn bot-bell" type="button" title="Agentes y conexiones" aria-label="Agentes y conexiones" aria-expanded="false">
+            <span class="bot-glyph" aria-hidden="true"></span>
+            <b id="agentNotificationBadge">0</b>
+          </button>
+          <section class="notification-panel agent-notification-panel" id="agentNotificationPanel" hidden>
+            <header>
+              <span>Agentes y conexiones</span>
+              <b id="agentNotificationPanelCount">0</b>
+            </header>
+            <div id="agentNotificationSummary"></div>
+          </section>
+        </div>
         <div class="window-actions">
-          <div class="action-set active" data-action-view="monitor">
+          <div class="action-set" data-action-view="monitor">
             <button id="refreshMonitor">Actualizar</button>
           </div>
           <div class="action-set" data-action-view="decision">
             <button id="saveRouting" class="primary">Guardar ahora</button>
+          </div>
+          <div class="action-set" data-action-view="agents">
+            <button id="refreshAgents">Comprobar conexiones</button>
+          </div>
+          <div class="action-set active" data-action-view="human">
+            <button id="refreshHuman">Actualizar</button>
           </div>
           <div class="action-set" data-action-view="flow">
             <button id="reloadConfig">Recargar</button>
@@ -39,8 +74,45 @@
     </header>
 
     <main class="stage">
-      <!-- VIEW 1 · MONITOR (at-a-glance default) -->
-      <section class="view active" id="view-monitor">
+      <!-- VIEW 1 · HUMAN CONTROL HOME -->
+      <section class="view active" id="view-human">
+        <div class="human-home">
+          <section class="human-hero-panel">
+            <div>
+              <span class="eyebrow">Human control</span>
+              <h1>Centro de control humano</h1>
+              <p>Decisiones, aprobaciones, conexiones de agentes IA, proveedores locales/API y control de costes antes de liberar ejecución real.</p>
+            </div>
+            <div class="human-hero-right">
+              <div id="humanHomeStatus" class="human-home-status"></div>
+            </div>
+          </section>
+
+          <section class="human-home-grid" id="humanHomeGrid">
+            <div class="human-home-main">
+              <section class="human-home-card decision-card">
+                <header><span>Decisiones pendientes</span><b id="humanDecisionCount">0</b></header>
+                <div id="humanDecisionQueue"></div>
+              </section>
+
+              <div class="human-bottom-grid">
+                <section class="human-home-card">
+                  <header><span>Pagos y coste</span></header>
+                  <div id="humanCostPanel"></div>
+                </section>
+
+                <section class="human-home-card">
+                  <header><span>Acciones humanas</span></header>
+                  <div id="humanActionPanel"></div>
+                </section>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- VIEW 2 · MONITOR (at-a-glance default) -->
+      <section class="view" id="view-monitor">
         <div class="monitor-shell" id="monitorShell">
           <section class="monitor-main" id="monitorMain">
             <div class="monitor-toolbar">
@@ -80,18 +152,18 @@
 
             <div id="monitorMainContent" class="monitor-tabs-shell">
               <div class="monitor-tabs" id="monitorTabs">
-                <button class="active" data-monitor-tab="agents">Agentes</button>
-                <button data-monitor-tab="graphs">Vista gráficas</button>
-                <button data-monitor-tab="tasks">Tareas</button>
+                <button class="active" data-monitor-tab="agents">Nodos</button>
+                <button data-monitor-tab="graphs">Rendimiento</button>
               </div>
               <div class="monitor-tab active" id="monitor-tab-agents">
                 <div class="legacy-metrics" id="nodeMetrics" hidden></div>
                 <div id="selectedAgentUsage" hidden></div>
+                <div id="nodeOverview"></div>
               </div>
               <div class="monitor-tab" id="monitor-tab-graphs">
+                <div id="monitorGraphs"></div>
                 <div id="modelUsage"></div>
               </div>
-              <div class="monitor-tab" id="monitor-tab-tasks"></div>
             </div>
 
             <div class="monitor-grid monitor-bottom">
@@ -138,15 +210,11 @@
               <header>Flujo de ejecución</header>
               <div id="sideActivityList"></div>
             </section>
-            <section class="side-card">
-              <header>Timeline operacional</header>
-              <div id="auditTimeline"></div>
-            </section>
           </aside>
         </div>
       </section>
 
-      <!-- VIEW 2 · DECISION DIAGRAM (parent + submodels) -->
+      <!-- VIEW 3 · DECISION DIAGRAM (parent + submodels) -->
       <section class="view" id="view-decision">
         <div class="diagram-head">
           <p>Define el <b>padre de decisiones</b> (router que clasifica y pondera) y los <b>submodelos</b>. Asigna a cada hijo los niveles de complejidad de los que se responsabiliza.</p>
@@ -174,16 +242,53 @@
         </div>
       </section>
 
-      <!-- VIEW 4 · CONFIGURATION / PARAMETERS / RULES -->
+      <!-- VIEW 4 · AGENTS / PROVIDERS -->
+      <section class="view" id="view-agents">
+        <div class="agents-window" id="agentsWindow">
+          <section class="agents-main">
+            <div class="agents-head">
+              <div>
+                <span class="eyebrow">Agent registry</span>
+                <h1>Agentes y restricciones</h1>
+                <p>Catálogo local/API, conexión, coste y reglas de revisión integradas por agente.</p>
+              </div>
+            </div>
+            <div id="agentsMainPanel"></div>
+          </section>
+
+          <div class="agents-splitter" id="agentsSplitter" role="separator" aria-orientation="vertical" title="Ajustar detalle de agente"></div>
+
+          <aside class="agents-side" id="agentsSide">
+            <section class="agents-side-card">
+              <header>
+                <span>Detalle del agente</span>
+                <button id="toggleAgentsSide" class="icon-btn" title="Mostrar u ocultar detalle" aria-label="Mostrar u ocultar detalle">◧</button>
+              </header>
+              <div id="agentsSidePanel"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <!-- VIEW 5 · CONFIGURATION / PARAMETERS -->
       <section class="view" id="view-flow">
         <div class="flow-head">
-          <p>Configuración del harness: parámetros, control de ejecución y reglas de decisión.</p>
+          <p>Configuración del harness: parámetros tradicionales o plantillas guiadas para autoconfigurar la skill mediante prompting.</p>
         </div>
-        <div class="flow-grid" id="flowGrid"></div>
+        <div class="config-mode-tabs" id="configModeTabs">
+          <button type="button" data-config-mode="traditional">Configuración tradicional</button>
+          <button class="active" type="button" data-config-mode="prompting">Prompting configuration</button>
+        </div>
+        <section class="config-mode-panel" id="config-mode-traditional">
+          <div class="flow-grid" id="flowGrid"></div>
+        </section>
+        <section class="config-mode-panel active" id="config-mode-prompting">
+          <div id="promptConfigPanel"></div>
+        </section>
       </section>
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/static/app.js?v=monitor-rebuild-1"></script>
+    <script src="/static/app.js?v=split-bot-prompt-index-1"></script>
   </body>
 </html>

@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.providers import resolve
 from app.router import (
+    _requires_human_review,
     calculate_complexity_score,
     classify_prompt,
     level_for_score,
@@ -97,7 +98,13 @@ def reconcile(data: dict, config: KarajanConfig, source: str) -> ClassificationR
     data.setdefault("recommended_strategy", "divide_and_delegate")
     data.setdefault("recommended_skills", [])
     data.setdefault("validation_plan", "Confirm output matches the original request.")
-    data.setdefault("requires_human_review", level.value == "level_5_critical")
+    data["requires_human_review"] = bool(data.get("requires_human_review")) or _requires_human_review(
+        level,
+        criteria,
+        data.get("domain") or ["general"],
+        data.get("intent") or "classify_and_plan",
+        config,
+    )
     data.setdefault("reason", "Score reconciled deterministically by the KARAJAN harness.")
     data["classified_by"] = source
     return ClassificationResult.model_validate(data)

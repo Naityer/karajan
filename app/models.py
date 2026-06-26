@@ -304,6 +304,7 @@ class RoutingEntity(BaseModel):
     id: str
     name: str | None = None
     role: str
+    role_tags: list[str] = Field(default_factory=list)
     provider: str | None = None
     parentId: str | None = ""
     levels: list[str] = Field(default_factory=list)
@@ -332,6 +333,15 @@ class OrchestrationConfig(BaseModel):
     # Cost guardrails evaluated BEFORE any subtask runs. 0 disables the cap.
     max_cost_per_task_usd: float = Field(default=0.0, ge=0.0)
     max_daily_cost_usd: float = Field(default=0.0, ge=0.0)
+
+
+class PolicyConfig(BaseModel):
+    sensitive_domains: list[str] = Field(default_factory=lambda: ["security", "operations", "devops"])
+    critical_intents: list[str] = Field(default_factory=lambda: ["security_architecture_review", "security_review"])
+    human_review_min_level: int = Field(default=5, ge=1, le=5)
+    operational_risk_review_threshold: float = Field(default=4.0, ge=0.0, le=5.0)
+    require_review_for_paid_providers: bool = False
+    require_review_for_missing_credentials: bool = True
 
 
 class KarajanConfig(BaseModel):
@@ -378,6 +388,7 @@ class KarajanConfig(BaseModel):
         }
     )
     orchestration: OrchestrationConfig = Field(default_factory=OrchestrationConfig)
+    policy: PolicyConfig = Field(default_factory=PolicyConfig)
     # tier -> preferred provider name (filled by auto-detect in simple mode)
     provider_preferences: dict[str, str] = Field(default_factory=dict)
     prefer_free: bool = True

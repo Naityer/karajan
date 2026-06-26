@@ -65,12 +65,31 @@ const state = {
   monitorSideWidth: 380,
   resizingMonitorSide: false,
   monitorBlockOrder: ["summary", "health", "flow"],
+  lastMetrics: null,
+  humanSideOpen: true,
+  humanSideWidth: 430,
+  resizingHumanSide: false,
+  configTab: "params",
+  configMode: "prompting",
+  selectedPromptTemplate: "hierarchy",
+  promptLibraryOpen: true,
+  promptLibraryQuery: "",
+  selectedConfigAgent: "",
+  agentsSideOpen: true,
+  agentsSideWidth: 420,
+  resizingAgentsSide: false,
+  notificationsOpen: false,
+  agentNotificationsOpen: false,
+  promptSideMode: "templates",
+  selectedPromptResourceId: "",
 };
 
 const ROLE_DEFS = {
   parent: {
     label: "Agent",
     summary: "Orquesta, clasifica, planifica, enruta y delega.",
+    group: "Autoridad",
+    restriction: "R0",
     kind: "agent",
     canOwnLevels: true,
     canConnectToAgent: false,
@@ -78,6 +97,8 @@ const ROLE_DEFS = {
   child: {
     label: "Worker",
     summary: "Ejecuta tareas concretas asignadas por el Agent.",
+    group: "Ejecución",
+    restriction: "R1",
     kind: "worker",
     canOwnLevels: true,
     canConnectToAgent: true,
@@ -85,6 +106,8 @@ const ROLE_DEFS = {
   backup: {
     label: "Backup",
     summary: "Reserva en standby; puede asumir Agent si falla el principal.",
+    group: "Ejecución",
+    restriction: "R1",
     kind: "backup",
     canOwnLevels: true,
     canConnectToAgent: true,
@@ -92,6 +115,8 @@ const ROLE_DEFS = {
   guardian: {
     label: "Guardian",
     summary: "Apoya o revisa un Worker concreto.",
+    group: "Soporte",
+    restriction: "R2",
     kind: "guardian",
     canOwnLevels: false,
     canConnectToAgent: true,
@@ -99,6 +124,8 @@ const ROLE_DEFS = {
   validator: {
     label: "Validator",
     summary: "Valida salidas parciales o finales de otros nodos.",
+    group: "Soporte",
+    restriction: "R2",
     kind: "validator",
     canOwnLevels: false,
     canConnectToAgent: true,
@@ -106,6 +133,8 @@ const ROLE_DEFS = {
   memory: {
     label: "Memory",
     summary: "Mantiene estado, checkpoints y contexto.",
+    group: "Estado",
+    restriction: "R3",
     kind: "memory",
     canOwnLevels: false,
     canConnectToAgent: true,
@@ -113,11 +142,17 @@ const ROLE_DEFS = {
   monitor: {
     label: "Monitor",
     summary: "Vigila salud, timeouts, errores y disponibilidad.",
+    group: "Estado",
+    restriction: "R3",
     kind: "monitor",
     canOwnLevels: false,
     canConnectToAgent: true,
   },
 };
+
+const PRIMARY_ROLES = ["parent", "child", "backup"];
+const SUPPORT_ROLES = ["guardian", "validator", "memory", "monitor"];
+const ROLE_GROUPS = ["Autoridad", "Ejecución", "Soporte", "Estado"];
 
 const AGENT_INTERNAL_CAPABILITIES = ["Classifier", "Planner", "Router"];
 const AGENT_OPTIONAL_CAPABILITIES = [
@@ -125,6 +160,10 @@ const AGENT_OPTIONAL_CAPABILITIES = [
   ["Aggregator", "Consolida respuestas de varios nodos."],
   ["Policy", "Aplica permisos, límites y reglas críticas."],
   ["Recovery", "Gestiona reintentos y recuperación operativa."],
+];
+const AGENT_CAPABILITY_DEFS = [
+  ...AGENT_INTERNAL_CAPABILITIES.map((name) => [name, "Base Agent", "Capacidad base del Agent."]),
+  ...AGENT_OPTIONAL_CAPABILITIES.map(([name, description]) => [name, "Agent avanzado", description]),
 ];
 
 // ---- helpers ---------------------------------------------------------------
@@ -171,6 +210,13 @@ function scheduleFlowSave() {
 const escapeHtml = (value) =>
   String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+function entityLabel(id) {
+  const entity = (state.entities || []).find((item) => item.id === id);
+  if (!entity) return id || "entidad";
+  const provider = (state.catalog || []).find((item) => item.name === entity.providerName);
+  return entity.name || provider?.label || entity.providerName || entity.id;
+}
+
 // ---- theme -----------------------------------------------------------------
 function initTheme() {
   applyTheme(localStorage.getItem("karajan-theme") || "dark");
@@ -188,7 +234,7 @@ function applyTheme(theme) {
 
 // ---- view switching --------------------------------------------------------
 function initViews() {
-  setActiveViewActions("monitor");
+  setActiveViewActions("human");
   $("#viewNav").addEventListener("click", (event) => {
     const tab = event.target.closest(".view-tab");
     if (!tab) return;
@@ -201,6 +247,8 @@ function initViews() {
       renderModels();
     }
     if (view === "flow") renderFlow();
+    if (view === "agents") renderAgentsView();
+    if (view === "human") renderHumanHome();
   });
 }
 
@@ -208,18 +256,147 @@ function setActiveViewActions(view) {
   $$(".action-set").forEach((set) => set.classList.toggle("active", set.dataset.actionView === view));
 }
 
+function setNotificationsOpen(open) {
+  state.notificationsOpen = open;
+  const panel = $("#notificationPanel");
+  const button = $("#notificationBell");
+  if (panel) panel.hidden = !open;
+  if (button) button.setAttribute("aria-expanded", String(open));
+  if (open) renderNotifications();
+}
+
+function setAgentNotificationsOpen(open) {
+  state.agentNotificationsOpen = open;
+  const panel = $("#agentNotificationPanel");
+  const button = $("#agentNotificationBot");
+  if (panel) panel.hidden = !open;
+  if (button) button.setAttribute("aria-expanded", String(open));
+  if (open) renderAgentNotifications();
+}
+
+function buildNotificationItems() {
+  const tasks = state.tasks || [];
+  const pending = tasks.filter((task) => task.classification?.requires_human_review || task.status === "delegated");
+  const health = state.lastObservability?.health || {};
+  return [
+    ...pending.slice(0, 4).map((task) => ({
+      kind: "decision",
+      tone: "warn",
+      title: task.classification?.intent || "Decisión pendiente",
+      meta: `${task.classification?.domain?.slice(0, 2).join(", ") || "sin dominio"} · ${Number(task.classification?.complexity_score || 0).toFixed(2)}`,
+      action: task.status === "delegated" && task.classification?.requires_human_review ? "Aprobar" : "Revisar",
+      taskId: task.task_id,
+    })),
+    ...(health.blocked_tasks
+      ? [{
+          kind: "health",
+          tone: "warn",
+          title: `${health.blocked_tasks} tareas bloqueadas`,
+          meta: "Revisar coste, credenciales o aprobación humana.",
+          action: "Ver Monitor",
+        }]
+      : []),
+  ];
+}
+
+function buildAgentNotificationItems() {
+  const providers = state.catalog || [];
+  const statusByProvider = new Map((state.providers || []).map((item) => [item.provider, item]));
+  return providers
+    .filter((provider) => !statusByProvider.get(provider.name)?.ready)
+    .slice(0, 8)
+    .map((provider) => ({
+      kind: "provider",
+      tone: statusByProvider.get(provider.name)?.available ? "warn" : "bad",
+      title: provider.label,
+      meta: provider.auth_method === "api_key" ? provider.env_var || "API key pendiente" : provider.login_command || "conexión pendiente",
+      action: "Configurar",
+      provider: provider.name,
+      cost: provider.is_free ? "Gratis" : "Pago",
+    }));
+}
+
+function renderNotifications() {
+  const items = buildNotificationItems();
+  const badge = $("#notificationBadge");
+  const count = $("#notificationPanelCount");
+  const body = $("#notificationSummary");
+  const actionable = items.filter((item) => item.kind !== "health").length;
+  if (badge) {
+    badge.textContent = String(actionable);
+    badge.hidden = actionable === 0;
+  }
+  if (count) count.textContent = String(actionable);
+  if (!body) return;
+  if (!items.length) {
+    body.innerHTML = `<div class="notification-empty"><b>Todo despejado</b><span>No hay aprobaciones ni avisos de ejecución pendientes.</span></div>`;
+    return;
+  }
+  body.innerHTML = items
+    .map((item) => `<article class="notification-item ${item.tone}">
+      <span class="status-dot ${item.tone === "bad" ? "bad" : item.tone === "ok" ? "ok" : "warn"}"></span>
+      <div>
+        <b>${escapeHtml(item.title)}</b>
+        <small>${escapeHtml(item.meta)}</small>
+      </div>
+      ${
+        item.taskId
+          ? `<button type="button" data-notification-task="${escapeHtml(item.taskId)}" ${item.action === "Aprobar" ? `data-approve="${escapeHtml(item.taskId)}"` : ""}>${escapeHtml(item.action)}</button>`
+          : item.provider
+            ? `<button type="button" data-notification-provider="${escapeHtml(item.provider)}">${escapeHtml(item.action)}</button>`
+            : `<button type="button" data-notification-monitor>${escapeHtml(item.action)}</button>`
+      }
+    </article>`)
+    .join("");
+}
+
+function renderAgentNotifications() {
+  const items = buildAgentNotificationItems();
+  const badge = $("#agentNotificationBadge");
+  const count = $("#agentNotificationPanelCount");
+  const body = $("#agentNotificationSummary");
+  if (badge) {
+    badge.textContent = String(items.length);
+    badge.hidden = items.length === 0;
+  }
+  if (count) count.textContent = String(items.length);
+  if (!body) return;
+  if (!items.length) {
+    body.innerHTML = `<div class="notification-empty"><b>Agentes listos</b><span>No hay conexiones pendientes.</span></div>`;
+    return;
+  }
+  body.innerHTML = items
+    .map((item) => `<article class="notification-item ${item.tone}">
+      <span class="status-dot ${item.tone === "bad" ? "bad" : "warn"}"></span>
+      <div>
+        <b>${escapeHtml(item.title)}</b>
+        <small>${escapeHtml(item.meta)} · ${escapeHtml(item.cost)}</small>
+      </div>
+      <button type="button" data-notification-provider="${escapeHtml(item.provider)}">${escapeHtml(item.action)}</button>
+    </article>`)
+    .join("");
+}
+
 // ---- MONITOR ---------------------------------------------------------------
 async function refreshMonitor() {
   if (!$("#monitorMainContent") && !$("#kpis")) return;
-  const [metrics, tasks, observability] = await Promise.all([api("/metrics"), api("/tasks"), api("/observability")]);
+  const [metrics, tasks, observability, providers] = await Promise.all([api("/metrics"), api("/tasks"), api("/observability"), api("/providers")]);
   state.tasks = tasks;
   state.lastObservability = observability;
+  state.lastMetrics = metrics;
+  state.providers = providers;
+  renderNotifications();
+  renderAgentNotifications();
   if (!state.selectedNodeId && observability.nodes?.length) state.selectedNodeId = observability.nodes[0].id;
   if ($("#monitorMainContent")) {
     renderSummaryMetrics(metrics, tasks, observability);
     renderSystemHealth(observability.health);
     renderExecutionFlow(observability.execution_flow || []);
     renderProcessingNodeTabs(observability.nodes || []);
+    renderNodeOverview(observability.nodes || []);
+    renderMonitorGraphs(metrics, observability);
+    renderHumanReviewQueue(tasks);
+    renderHumanHome(metrics, tasks, observability);
     _renderAgentPanels(observability.nodes || [], observability.model_usage || [], observability.execution_flow || [], observability.audit_timeline || []);
     renderAuditTimeline(observability.audit_timeline || []);
     renderModelUsage(observability.model_usage || []);
@@ -251,6 +428,7 @@ function renderObservability(snapshot) {
   renderExecutionFlow(snapshot.execution_flow || []);
   renderAuditTimeline(snapshot.audit_timeline || []);
   renderModelUsage(snapshot.model_usage || []);
+  renderNodeOverview(snapshot.nodes || []);
   _renderAgentPanels(snapshot.nodes || [], snapshot.model_usage || [], snapshot.execution_flow || [], snapshot.audit_timeline || []);
 }
 
@@ -268,7 +446,7 @@ function renderSystemHealth(health) {
   }
   const status = health.status === "healthy" ? "ok" : health.status === "error" ? "bad" : "warn";
   const healthPct = health.observed_nodes ? Math.round((health.healthy_nodes / health.observed_nodes) * 100) : 0;
-  $("#systemHealth").innerHTML = `<div class="health-hero ${status}">
+  $("#systemHealth").innerHTML = `<div class="health-compact ${status}">
       <div>
         <span class="pill ${status}">${escapeHtml(health.status)}</span>
         <b>${healthPct}%</b>
@@ -283,8 +461,7 @@ function renderSystemHealth(health) {
       <span><b>${health.active_tasks}</b><small>act.</small></span>
       <span><b>${health.blocked_tasks}</b><small>block</small></span>
       <span><b>${health.avg_latency_ms || 0}ms</b><small>lat.</small></span>
-    </div>
-    <div class="health-foot"><span>$${Number(health.total_cost || 0).toFixed(4)} coste</span><span>${formatTime(health.last_activity)}</span></div>`;
+    </div>`;
 }
 
 function renderNodeMetrics(nodes) {
@@ -433,6 +610,127 @@ function stopMonitorResize() {
   $("#monitorSplitter")?.classList.remove("dragging");
   document.body.classList.remove("resizing-monitor");
   document.removeEventListener("pointermove", onMonitorResize);
+}
+
+function setHumanSide(open) {
+  state.humanSideOpen = open;
+  const grid = $("#humanHomeGrid");
+  const button = $("#toggleHumanSide");
+  grid?.classList.toggle("side-collapsed", !open);
+  if (button) {
+    button.textContent = open ? "◧" : "◨";
+    button.setAttribute("aria-pressed", String(open));
+    button.setAttribute("title", open ? "Ocultar conexiones de agentes" : "Mostrar conexiones de agentes");
+  }
+}
+
+function syncHumanSideOffset() {
+  const grid = $("#humanHomeGrid");
+  if (!grid) return;
+  document.documentElement.style.setProperty("--human-side-offset", "0px");
+  requestAnimationFrame(syncHumanSideHeight);
+}
+
+function syncHumanSideHeight() {
+  const main = $(".human-home-main");
+  if (!main) return;
+  const height = Math.max(360, Math.round(main.getBoundingClientRect().height));
+  document.documentElement.style.setProperty("--human-side-height", `${height}px`);
+}
+
+function applyHumanSplit() {
+  document.documentElement.style.setProperty("--human-side-width", `${state.humanSideWidth}px`);
+}
+
+function setAgentsSide(open) {
+  state.agentsSideOpen = open;
+  const windowEl = $("#agentsWindow");
+  const side = $("#agentsSide");
+  const button = $("#toggleAgentsSide");
+  windowEl?.classList.toggle("side-collapsed", !open);
+  side?.classList.toggle("collapsed", !open);
+  if (button) {
+    button.textContent = open ? "◧" : "◨";
+    button.setAttribute("aria-pressed", String(open));
+    button.setAttribute("title", open ? "Ocultar detalle del agente" : "Mostrar detalle del agente");
+  }
+}
+
+function applyAgentsSplit() {
+  document.documentElement.style.setProperty("--agents-side-width", `${state.agentsSideWidth}px`);
+  $("#agentsWindow")?.style.setProperty("--agents-side-width", `${state.agentsSideWidth}px`);
+}
+
+function initAgentsSplitter() {
+  const stored = Number(localStorage.getItem("karajan-agents-side-width"));
+  if (Number.isFinite(stored)) state.agentsSideWidth = Math.min(640, Math.max(340, stored));
+  applyAgentsSplit();
+  const splitter = $("#agentsSplitter");
+  if (!splitter || splitter.dataset.bound) return;
+  splitter.dataset.bound = "1";
+  splitter.addEventListener("pointerdown", (event) => {
+    if (!state.agentsSideOpen) return;
+    event.preventDefault();
+    state.resizingAgentsSide = true;
+    splitter.classList.add("dragging");
+    document.body.classList.add("resizing-agents");
+    document.addEventListener("pointermove", onAgentsResize);
+    document.addEventListener("pointerup", stopAgentsResize, { once: true });
+  });
+}
+
+function onAgentsResize(event) {
+  if (!state.resizingAgentsSide) return;
+  const shell = $("#agentsWindow");
+  if (!shell) return;
+  const rect = shell.getBoundingClientRect();
+  const maxWidth = Math.min(720, rect.width * 0.48);
+  state.agentsSideWidth = Math.round(Math.min(maxWidth, Math.max(340, rect.right - event.clientX)));
+  localStorage.setItem("karajan-agents-side-width", String(state.agentsSideWidth));
+  applyAgentsSplit();
+}
+
+function stopAgentsResize() {
+  state.resizingAgentsSide = false;
+  $("#agentsSplitter")?.classList.remove("dragging");
+  document.body.classList.remove("resizing-agents");
+  document.removeEventListener("pointermove", onAgentsResize);
+}
+
+function initHumanSplitter() {
+  const stored = Number(localStorage.getItem("karajan-human-side-width"));
+  if (Number.isFinite(stored)) state.humanSideWidth = Math.min(620, Math.max(340, stored));
+  applyHumanSplit();
+  const splitter = $("#humanSplitter");
+  if (!splitter || splitter.dataset.bound) return;
+  splitter.dataset.bound = "1";
+  splitter.addEventListener("pointerdown", (event) => {
+    if (!state.humanSideOpen) return;
+    event.preventDefault();
+    state.resizingHumanSide = true;
+    splitter.classList.add("dragging");
+    document.body.classList.add("resizing-human");
+    document.addEventListener("pointermove", onHumanResize);
+    document.addEventListener("pointerup", stopHumanResize, { once: true });
+  });
+}
+
+function onHumanResize(event) {
+  if (!state.resizingHumanSide) return;
+  const grid = $("#humanHomeGrid");
+  if (!grid) return;
+  const rect = grid.getBoundingClientRect();
+  const maxWidth = Math.min(720, rect.width * 0.55);
+  state.humanSideWidth = Math.round(Math.min(maxWidth, Math.max(340, rect.right - event.clientX)));
+  localStorage.setItem("karajan-human-side-width", String(state.humanSideWidth));
+  applyHumanSplit();
+}
+
+function stopHumanResize() {
+  state.resizingHumanSide = false;
+  $("#humanSplitter")?.classList.remove("dragging");
+  document.body.classList.remove("resizing-human");
+  document.removeEventListener("pointermove", onHumanResize);
 }
 
 function applyMonitorBlockOrder() {
@@ -682,7 +980,7 @@ function renderMonitorSidePanel(node, flow, audit) {
   const relatedActivity = [...(flow || []), ...(audit || [])]
     .filter((ev) => ev.source_node === node.name || ev.target_node === node.name || ev.summary?.includes(node.name))
     .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
-    .slice(0, 18);
+    .slice(0, 8);
   if (activityEl) activityEl.innerHTML = eventList(relatedActivity, "Sin actividad para este nodo.");
 }
 
@@ -735,6 +1033,323 @@ function renderProcessingNodeTabs(nodes) {
   });
 }
 
+function renderNodeOverview(nodes) {
+  const target = $("#nodeOverview");
+  if (!target) return;
+  if (!nodes.length) {
+    target.innerHTML = `<div class="chart-empty">Sin nodos observados todavía.</div>`;
+    return;
+  }
+  target.innerHTML = `<div class="node-overview-grid">
+    ${nodes
+      .map((node) => {
+        const selected = node.id === state.selectedNodeId ? "selected" : "";
+        const status = node.status === "error" ? "bad" : node.status === "completed" || node.status === "idle" ? "ok" : "warn";
+        const levels = (node.levels || []).map((level) => LEVEL_FULL[level]?.split(" · ")[0] || level).join(" · ") || "sin niveles";
+        const skills = (node.skills || []).slice(0, 3).join(" · ") || "sin skills";
+        return `<button type="button" class="node-overview-card ${selected}" data-node="${escapeHtml(node.id)}">
+          <span class="bubble-dot ${status}"></span>
+          <b>${escapeHtml(node.name)}</b>
+          <small>${escapeHtml(node.role)} · ${escapeHtml(levels)}</small>
+          <div class="node-overview-kpis">
+            <span><strong>${node.task_count || 0}</strong><em>tareas</em></span>
+            <span><strong>${node.latency_ms || 0}ms</strong><em>lat.</em></span>
+            <span><strong>$${Number(node.estimated_cost || 0).toFixed(4)}</strong><em>coste</em></span>
+          </div>
+          <i>${escapeHtml(skills)}</i>
+        </button>`;
+      })
+      .join("")}
+  </div>`;
+  $$("#nodeOverview .node-overview-card").forEach((button) =>
+    button.addEventListener("click", () => {
+      state.selectedNodeId = button.dataset.node;
+      setMonitorSide(true);
+      renderProcessingNodeTabs(nodes);
+      renderNodeOverview(nodes);
+      _renderAgentPanels(
+        nodes,
+        state.lastObservability?.model_usage || [],
+        state.lastObservability?.execution_flow || [],
+        state.lastObservability?.audit_timeline || []
+      );
+    })
+  );
+}
+
+function renderMonitorGraphs(metrics, observability) {
+  const target = $("#monitorGraphs");
+  if (!target) return;
+  const statusEntries = Object.entries(metrics.by_status || {});
+  const skillEntries = Object.entries(metrics.by_skill || {}).slice(0, 6);
+  const modelEntries = Object.entries(metrics.by_model || {}).slice(0, 6);
+  target.innerHTML = `<div class="monitor-graph-grid">
+    ${miniBarPanel("Estado de tareas", statusEntries)}
+    ${miniBarPanel("Skills implicadas", skillEntries)}
+    ${miniBarPanel("Modelo / tier", modelEntries, TIER_LABEL)}
+    ${latencyPanel(observability.health)}
+  </div>`;
+}
+
+function miniBarPanel(title, entries, labelMap = {}) {
+  const max = Math.max(1, ...entries.map(([, value]) => Number(value || 0)));
+  const rows = entries.length
+    ? entries
+        .map(([key, value]) => {
+          const pct = Math.max(4, Math.round((Number(value || 0) / max) * 100));
+          return `<div class="mini-bar-row"><span>${escapeHtml(labelMap[key] || key)}</span><b>${value}</b><i style="width:${pct}%"></i></div>`;
+        })
+        .join("")
+    : `<div class="chart-empty">sin datos</div>`;
+  return `<section class="mini-graph-card"><h4>${escapeHtml(title)}</h4>${rows}</section>`;
+}
+
+function latencyPanel(health) {
+  const latency = Number(health?.avg_latency_ms || 0);
+  const pct = Math.min(100, Math.round((latency / 2000) * 100));
+  return `<section class="mini-graph-card latency-card">
+    <h4>Latencia media</h4>
+    <div class="latency-ring" style="--pct:${pct}%"><b>${latency}ms</b><span>media</span></div>
+    <p>${health?.blocked_tasks || 0} bloqueadas · $${Number(health?.total_cost || 0).toFixed(4)} coste</p>
+  </section>`;
+}
+
+function renderHumanReviewQueue(tasks) {
+  const target = $("#humanReviewQueue");
+  if (!target) return;
+  const queue = tasks.filter((task) => task.classification?.requires_human_review || task.status === "delegated");
+  if (!queue.length) {
+    target.innerHTML = `<div class="human-empty">
+      <b>Sin aprobaciones pendientes</b>
+      <span>Las tareas actuales no requieren credenciales, login, API externa ni firma humana.</span>
+    </div>`;
+    return;
+  }
+  target.innerHTML = `<div class="human-queue">
+    ${queue
+      .map((task) => {
+        const c = task.classification;
+        const why = c.requires_human_review
+          ? "Requiere confirmación antes de ejecutar o delegar."
+          : "Delegada: pendiente de seguimiento operativo.";
+        const approvals = [
+          c.requires_human_review ? "aprobación humana" : "",
+          c.recommended_strategy?.includes("human") ? "estrategia con control" : "",
+          c.reason || "",
+        ].filter(Boolean);
+        return `<article class="human-card">
+          <header><b>${escapeHtml(c.intent || "Tarea")}</b>${statusPill(task.status)}</header>
+          <p>${escapeHtml(why)}</p>
+          <div class="human-meta">
+            <span><small>Riesgo</small><b>${escapeHtml(c.complexity_level.replace("level_", "N").replace(/_.*/, ""))} · ${Number(c.complexity_score).toFixed(2)}</b></span>
+            <span><small>Modelo</small><b>${escapeHtml(TIER_LABEL[c.recommended_model] || c.recommended_model)}</b></span>
+            <span><small>Dominio</small><b>${escapeHtml((c.domain || []).slice(0, 2).join(", "))}</b></span>
+          </div>
+          <ul>${approvals.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+          ${task.status === "delegated" && c.requires_human_review ? `<button class="approve-review" data-approve="${task.task_id}">Aprobar y liberar ejecución</button>` : ""}
+        </article>`;
+      })
+      .join("")}
+  </div>`;
+}
+
+function renderHumanHome(metrics = state.lastMetrics, tasks = state.tasks, observability = state.lastObservability) {
+  if (!$("#view-human")) return;
+  metrics ||= {};
+  tasks ||= [];
+  observability ||= {};
+  const providers = state.catalog || [];
+  const statusByProvider = new Map((state.providers || []).map((item) => [item.provider, item]));
+  const pending = tasks.filter((task) => task.classification?.requires_human_review || task.status === "delegated");
+  const paid = providers.filter((item) => !item.is_free);
+  const ready = providers.filter((item) => statusByProvider.get(item.name)?.ready);
+  const needsSetup = providers.filter((item) => !statusByProvider.get(item.name)?.ready);
+  const totalCost = Number(metrics.total_estimated_cost_usd || observability.health?.total_cost || 0);
+
+  $("#humanHomeStatus").innerHTML = `
+    <span><b>${pending.length}</b><small>decisiones</small></span>
+    <span><b>${ready.length}/${providers.length}</b><small>agentes listos</small></span>
+    <span><b>$${totalCost.toFixed(4)}</b><small>coste estimado</small></span>
+  `;
+
+  $("#humanDecisionCount").textContent = pending.length;
+  const providerCount = $("#humanProviderCount");
+  if (providerCount) providerCount.textContent = providers.length;
+  renderHumanDecisionQueue(pending);
+  renderHumanProviderGrid(providers, statusByProvider);
+  renderHumanCostPanel({ providers, paid, ready, needsSetup, metrics, totalCost });
+  renderHumanActionPanel({ pending, needsSetup, paid, observability });
+  requestAnimationFrame(syncHumanSideOffset);
+}
+
+function renderHumanDecisionQueue(tasks) {
+  const target = $("#humanDecisionQueue");
+  if (!target) return;
+  if (!tasks.length) {
+    target.innerHTML = `<div class="human-home-empty">
+      <b>Sin bloqueos humanos</b>
+      <span>No hay tareas esperando aprobación, login, API key o confirmación de coste.</span>
+    </div>`;
+    return;
+  }
+  target.innerHTML = tasks
+    .map((task) => {
+      const c = task.classification;
+      const level = c.complexity_level.replace("level_", "N").replace(/_.*/, "");
+      const blockers = [
+        c.requires_human_review ? "Aprobación humana" : "",
+        c.recommended_strategy?.includes("human") ? "Estrategia con puerta humana" : "",
+        c.recommended_model?.includes("human") ? "Modelo crítico" : "",
+      ].filter(Boolean);
+      return `<article class="human-decision-item">
+        <div class="human-decision-title">
+          <span class="status-dot ${task.status === "completed" ? "ok" : "warn"}"></span>
+          <div><b>${escapeHtml(c.intent || "Decisión pendiente")}</b><small>${escapeHtml((c.domain || []).join(", ") || "sin dominio")}</small></div>
+          ${statusPill(task.status)}
+        </div>
+        ${decisionRoadmap(task)}
+        <p>${escapeHtml(c.reason || "Requiere revisión antes de continuar.")}</p>
+        <div class="human-decision-meta">
+          <span><small>Nivel</small><b>${escapeHtml(level)} · ${Number(c.complexity_score || 0).toFixed(2)}</b></span>
+          <span><small>Ruta</small><b>${escapeHtml(TIER_LABEL[c.recommended_model] || c.recommended_model)}</b></span>
+          <span><small>Bloqueo</small><b>${escapeHtml(blockers.join(" · ") || "seguimiento")}</b></span>
+        </div>
+        <div class="human-decision-actions">
+          ${task.status === "delegated" && c.requires_human_review ? `<button class="primary approve-review" data-approve="${task.task_id}">Aprobar ejecución</button>` : ""}
+          <button type="button" data-select-task="${escapeHtml(task.task_id)}">Ver en Monitor</button>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+
+function decisionRoadmap(task) {
+  const c = task.classification || {};
+  const blocked = Boolean(c.requires_human_review || task.status === "delegated");
+  const delegatedTo = (task.executions || []).map((execution) => execution.model || execution.provider).filter(Boolean)[0];
+  const stages = [
+    ["Entrada", "Prompt recibido", "request"],
+    ["Router", "clasifica riesgo", "agent"],
+    ["Delegación", delegatedTo || TIER_LABEL[c.recommended_model] || "modelo recomendado", "worker"],
+    ["Control", blocked ? "aprobación humana" : "sin bloqueo", blocked ? "blocker" : "check"],
+    ["Meta", blocked ? "pendiente" : "listo", "goal"],
+  ];
+  return `<div class="decision-roadmap ${blocked ? "blocked" : "clear"}">
+    <div class="roadmap-track">
+      ${stages
+        .map(([label, detail, kind], index) => `<div class="roadmap-step ${kind} ${blocked && kind === "blocker" ? "locked" : ""}">
+          <span class="roadmap-avatar">${roadmapIcon(kind)}</span>
+          <b>${escapeHtml(label)}</b>
+          <small>${escapeHtml(detail)}</small>
+          ${index < stages.length - 1 ? `<i></i>` : ""}
+        </div>`)
+        .join("")}
+      <span class="roadmap-courier" aria-hidden="true"></span>
+    </div>
+    ${blocked ? `<div class="roadmap-obstacle"><b>Bloqueo activo</b><span>Desbloquea la ejecución con aprobación humana.</span></div>` : ""}
+  </div>`;
+}
+
+function roadmapIcon(kind) {
+  return {
+    request: "◆",
+    agent: "A",
+    worker: "W",
+    blocker: "!",
+    check: "✓",
+    goal: "◎",
+  }[kind] || "•";
+}
+
+function renderHumanProviderGrid(providers, statusByProvider) {
+  const target = $("#humanProviderGrid");
+  if (!target) return;
+  if (!providers.length) {
+    target.innerHTML = `<div class="human-home-empty">Sin catálogo de proveedores.</div>`;
+    return;
+  }
+  target.innerHTML = providers
+    .map((provider) => {
+      const status = statusByProvider.get(provider.name) || {};
+      const cls = status.ready ? "ready" : status.available ? "available" : "missing";
+      const auth = provider.auth_method === "api_key" ? provider.env_var || "API key" : provider.login_command || provider.auth_method;
+      const tiers = Object.keys(provider.tiers || {}).length;
+      return `<article class="human-provider-card ${cls}">
+        <header>
+          <span><i class="status-dot ${status.ready ? "ok" : status.available ? "warn" : "bad"}"></i><b>${escapeHtml(provider.label)}</b></span>
+          <em class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</em>
+        </header>
+        <p>${escapeHtml(status.detail || "sin estado detectado")}</p>
+        <div class="human-provider-meta">
+          <span><small>Tipo</small><b>${escapeHtml(provider.backend)}</b></span>
+          <span><small>Auth</small><b>${escapeHtml(auth)}</b></span>
+          <span><small>Tiers</small><b>${tiers}</b></span>
+        </div>
+        <div class="human-provider-actions">
+          <button type="button" data-refresh-providers>Comprobar</button>
+          <button type="button" data-provider-setup="${escapeHtml(provider.name)}">Configurar</button>
+          ${provider.signup_url ? `<a href="${escapeHtml(provider.signup_url)}" target="_blank" rel="noreferrer">Abrir consola</a>` : ""}
+          ${provider.login_command ? `<code>${escapeHtml(provider.login_command)}</code>` : provider.env_var ? `<code>${escapeHtml(provider.env_var)}</code>` : ""}
+        </div>
+        <div class="provider-setup" data-provider-setup-target="${escapeHtml(provider.name)}" hidden></div>
+      </article>`;
+    })
+    .join("");
+}
+
+async function showProviderSetup(name) {
+  const targets = $$(`[data-provider-setup-target="${CSS.escape(name)}"]`);
+  if (!targets.length) return;
+  targets.forEach((target) => {
+    target.hidden = false;
+    target.innerHTML = `<div class="human-home-empty">Cargando pasos de configuración…</div>`;
+  });
+  try {
+    const setup = await api(`/providers/${encodeURIComponent(name)}/setup`);
+    const html = `<div class="provider-setup-box">
+      ${(setup.steps || []).map((step) => `<div><span>${escapeHtml(step)}</span></div>`).join("") || "<div><span>Sin pasos disponibles.</span></div>"}
+    </div>`;
+    targets.forEach((target) => (target.innerHTML = html));
+  } catch (error) {
+    const html = `<div class="provider-setup-box"><div><span>${escapeHtml(error.message)}</span></div></div>`;
+    targets.forEach((target) => (target.innerHTML = html));
+  }
+}
+
+function renderHumanCostPanel({ providers, paid, ready, needsSetup, metrics, totalCost }) {
+  const target = $("#humanCostPanel");
+  if (!target) return;
+  const paidReady = paid.filter((item) => ready.some((readyItem) => readyItem.name === item.name)).length;
+  const freeProviders = providers.length - paid.length;
+  const paidPct = providers.length ? Math.round((paid.length / providers.length) * 100) : 0;
+  target.innerHTML = `<div class="cost-home-hero">
+      <span>Gasto estimado</span>
+      <b>$${totalCost.toFixed(4)}</b>
+      <small>${paidReady} proveedores de pago listos · ${freeProviders} gratis disponibles</small>
+    </div>
+    <div class="cost-meter"><i style="width:${paidPct}%"></i></div>
+    <div class="human-side-grid">
+      <span><b>${paid.length}</b><small>Pago</small></span>
+      <span><b>${freeProviders}</b><small>Gratis</small></span>
+      <span><b>${metrics.human_review_required || 0}</b><small>Revisión</small></span>
+      <span><b>${needsSetup.length}</b><small>Por conectar</small></span>
+    </div>`;
+}
+
+function renderHumanActionPanel({ pending, needsSetup, paid, observability }) {
+  const target = $("#humanActionPanel");
+  if (!target) return;
+  const actions = [
+    pending.length ? [`${pending.length} aprobaciones pendientes`, "Revisa intención, coste y riesgo antes de liberar ejecución."] : null,
+    needsSetup.length ? [`${needsSetup.length} proveedores por conectar`, "Configura API key, login CLI o servicio local antes de delegar tareas reales."] : null,
+    paid.length ? [`${paid.length} proveedores de pago`, "Mantén el uso bajo control antes de activar modelos fuertes o revisión humana."] : null,
+    observability?.health?.blocked_tasks ? [`${observability.health.blocked_tasks} tareas bloqueadas`, "Puede requerir firma, credenciales o intervención manual."] : null,
+  ].filter(Boolean);
+  target.innerHTML = actions.length
+    ? `<div class="human-action-list">${actions.map(([title, body]) => `<div><b>${escapeHtml(title)}</b><span>${escapeHtml(body)}</span></div>`).join("")}</div>`
+    : `<div class="human-home-empty"><b>Todo despejado</b><span>No hay acciones humanas obligatorias ahora mismo.</span></div>`;
+}
+
 function renderSummaryMetrics(metrics, tasks, observability) {
   const nodes = observability.nodes || [];
   const usage = observability.model_usage || [];
@@ -764,7 +1379,31 @@ function renderSummaryMetrics(metrics, tasks, observability) {
 }
 
 function renderAuditTimeline(events) {
-  $("#auditTimeline").innerHTML = eventList(events.slice(0, 18), "Sin eventos de auditoría.");
+  const target = $("#auditTimeline");
+  if (!target) return;
+  const node = (state.lastObservability?.nodes || []).find((item) => item.id === state.selectedNodeId);
+  if (!node) {
+    target.innerHTML = `<div class="chart-empty">Selecciona un agente.</div>`;
+    return;
+  }
+  const total = Math.max(1, node.task_count || 0);
+  const errors = Math.min(total, node.error_count || 0);
+  const ok = Math.max(0, total - errors);
+  const cost = Number(node.estimated_cost || 0);
+  const latency = Number(node.latency_ms || 0);
+  target.innerHTML = `<div class="agent-usage-panel">
+    <div class="usage-split">
+      <span style="--w:${Math.round((ok / total) * 100)}%"><b>${ok}</b><small>ok</small></span>
+      <span style="--w:${Math.round((errors / total) * 100)}%"><b>${errors}</b><small>err.</small></span>
+    </div>
+    <div class="side-mini-grid">
+      <span><b>${latency}ms</b><small>latencia</small></span>
+      <span><b>$${cost.toFixed(4)}</b><small>coste</small></span>
+      <span><b>${(node.active_capabilities || []).length}</b><small>capacidades</small></span>
+      <span><b>${(node.skills || []).length}</b><small>skills</small></span>
+    </div>
+    <div class="side-tags">${(node.active_capabilities || []).map((cap) => `<em>${escapeHtml(cap)}</em>`).join("") || "<em>sin capacidades</em>"}</div>
+  </div>`;
 }
 
 function eventList(events, emptyText) {
@@ -776,16 +1415,37 @@ function eventList(events, emptyText) {
             <div class="event-main">
               <div class="event-line">
                 <time>${formatTime(event.timestamp)}</time>
-                <b>${escapeHtml(event.event_type)}</b>
+                <b>${escapeHtml(friendlyEventType(event.event_type))}</b>
                 <em>${event.cost ? `$${Number(event.cost).toFixed(4)}` : event.latency_ms ? `${event.latency_ms}ms` : ""}</em>
               </div>
-              <span>${escapeHtml(event.summary)}</span>
-              <small>${escapeHtml(event.source_node || "Agent")}${event.target_node ? ` → ${escapeHtml(event.target_node)}` : ""} · ${escapeHtml(event.task_id)}${event.model ? ` · ${escapeHtml(event.model)}` : ""}</small>
+              <span>${escapeHtml(cleanEventSummary(event.summary))}</span>
+              <small>${escapeHtml(event.source_node || "Agent")}${event.target_node ? ` → ${escapeHtml(event.target_node)}` : ""}${event.model ? ` · ${escapeHtml(TIER_LABEL[event.model] || event.model)}` : ""}</small>
             </div>
           </div>`
         )
         .join("")
     : `<div class="chart-empty">${emptyText}</div>`;
+}
+
+function friendlyEventType(type = "") {
+  const map = {
+    prompt_received: "Solicitud recibida",
+    task_classified: "Clasificación",
+    task_delegated: "Delegación",
+    validation: "Validación",
+    execution: "Ejecución",
+  };
+  return map[type] || type.replace(/_/g, " ");
+}
+
+function cleanEventSummary(summary = "") {
+  return String(summary)
+    .replace(/\bsub_\d+\s*[:·-]?\s*/gi, "")
+    .replace(/\bmodel=[^;\s]+;?/gi, "")
+    .replace(/\bstrategy=[^;\s]+;?/gi, "")
+    .replace(/\bts(?:k)?_[a-z0-9]+/gi, "")
+    .replace(/\s*[·;]\s*$/g, "")
+    .trim();
 }
 
 function renderModelUsage(items) {
@@ -1035,6 +1695,7 @@ function normalizeEntityPositions() {
     }
     if (entity.role === "agent") entity.role = "parent";
     if (!ROLE_DEFS[entity.role]) entity.role = "child";
+    entity.role_tags = normalizeRoleTags(entity);
     if (!canOwnLevels(entity.role)) entity.levels = [];
     if (!isAgentRole(entity.role)) {
       entity.capabilities = [];
@@ -1082,36 +1743,28 @@ function renderDiagram() {
       scheduleRoutingSave("Modelo actualizado. Guardando…");
     })
   );
-  $$("#diagramNodes .entity-role").forEach((sel) =>
-    sel.addEventListener("change", (event) => {
-      const entity = findEntity(event.target.dataset.entity);
-      if (!entity) return;
-      entity.role = event.target.value;
-      if (isAgentRole(entity.role)) {
-        state.entities.forEach((item) => {
-          if (item.id !== entity.id && isAgentRole(item.role)) item.role = "child";
-        });
-        entity.parentId = "";
-      } else {
-        entity.parentId ||= state.entities.find((item) => isAgentRole(item.role))?.id || "";
-        entity.capabilities = [];
-      }
-      if (!canOwnLevels(entity.role)) {
-        entity.levels = [];
-      }
-      renderDiagram();
-      scheduleRoutingSave("Rol actualizado. Guardando…");
+  $$("#diagramNodes .role-tag-toggle").forEach((button) =>
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const picker = button.closest(".role-tag-picker");
+      const isOpen = picker.classList.contains("open");
+      $$(".role-tag-picker.open").forEach((item) => item.classList.remove("open"));
+      picker.classList.toggle("open", !isOpen);
     })
   );
-  $$("#diagramNodes .agent-capability").forEach((box) =>
-    box.addEventListener("change", (event) => {
-      const entity = findEntity(event.target.dataset.entity);
-      if (!entity || !isAgentRole(entity.role)) return;
-      entity.capabilities ||= [];
-      if (event.target.checked && !entity.capabilities.includes(event.target.value)) entity.capabilities.push(event.target.value);
-      if (!event.target.checked) entity.capabilities = entity.capabilities.filter((item) => item !== event.target.value);
+  $$("#diagramNodes .role-tag-option").forEach((button) =>
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const entity = findEntity(event.currentTarget.dataset.entity);
+      if (!entity) return;
+      if (event.currentTarget.dataset.capability) {
+        toggleAgentCapability(entity, event.currentTarget.dataset.capability);
+      } else {
+        toggleRoleTag(entity, event.currentTarget.dataset.role);
+      }
+      applyRoleSideEffects(entity);
       renderDiagram();
-      scheduleRoutingSave("Capacidades del Agent actualizadas. Guardando…");
+      scheduleRoutingSave("Etiquetas de rol actualizadas. Guardando…");
     })
   );
   $$("#diagramNodes .entity-parent-link").forEach((sel) =>
@@ -1174,8 +1827,9 @@ function renderDiagram() {
 function entityCard(entity) {
   if (entity.role === "skill" || entity.role === "worker") entity.role = "child";
   if (entity.role === "agent") entity.role = "parent";
+  entity.role_tags = normalizeRoleTags(entity);
   const role = roleDef(entity.role);
-  const roleLabel = role.label;
+  const roleLabel = roleLabels(entity).join(" · ");
   const remove = entity.id !== "entity-parent" ? `<button class="node-x" data-remove="${entity.id}" title="Quitar entidad">✕</button>` : "";
   const title = entity.provider ? modelTitle(entity.provider) : roleLabel;
   const model = modelMeta(entity);
@@ -1198,7 +1852,6 @@ function entityCard(entity) {
           </select>
         </label>`
       : "";
-  const capabilities = agentCapabilities(entity);
   const skills = skillPicker(entity);
   const classRole = isAgentRole(entity.role) ? "parent" : "child";
   return `<div class="node entity ${classRole} role-${escapeHtml(entity.role)}" data-entity="${entity.id}">
@@ -1209,15 +1862,9 @@ function entityCard(entity) {
       <div class="node-title">${escapeHtml(title)}</div>
       <div class="model-meta">${model}</div>
       <div class="entity-controls">
-        <label>Rol
-          <select class="entity-role" data-entity="${entity.id}">
-            ${roleOptions(entity.role)}
-          </select>
-          <small>${escapeHtml(role.summary)}</small>
-        </label>
+        ${roleTagPicker(entity)}
         ${connection}
         ${levelControls}
-        ${capabilities}
         ${skills}
       </div>
     </div>`.replace('<div class="node entity', `<div style="left:${screenX(entity.x || 0)}px; top:${screenY(entity.y || 0)}px; --entity-accent:${accent.color}; --entity-ink:${accent.ink}" class="node entity`);
@@ -1227,10 +1874,162 @@ function roleDef(role) {
   return ROLE_DEFS[role] || ROLE_DEFS.child;
 }
 
+function roleLabels(entity) {
+  return normalizeRoleTags(entity).map((role) => roleDef(role).label);
+}
+
+function normalizeRoleTags(entity) {
+  let tags = Array.isArray(entity.role_tags) ? entity.role_tags.filter((role) => ROLE_DEFS[role]) : [];
+  const legacyRole = entity.role === "agent" ? "parent" : entity.role === "worker" ? "child" : entity.role;
+  if (!tags.length && ROLE_DEFS[legacyRole]) tags = [legacyRole];
+
+  const primary = tags.find((role) => PRIMARY_ROLES.includes(role)) || (PRIMARY_ROLES.includes(legacyRole) ? legacyRole : "child");
+  const support = [...new Set(tags.filter((role) => SUPPORT_ROLES.includes(role)))];
+  const normalized = [primary, ...support];
+  entity.role = primary;
+  entity.role_tags = normalized;
+  syncAgentCapabilities(entity);
+  return normalized;
+}
+
+function toggleRoleTag(entity, role) {
+  if (!ROLE_DEFS[role]) return;
+  const tags = new Set(normalizeRoleTags(entity));
+  if (PRIMARY_ROLES.includes(role)) {
+    PRIMARY_ROLES.forEach((item) => tags.delete(item));
+    tags.add(role);
+  } else if (tags.has(role)) {
+    tags.delete(role);
+  } else {
+    tags.add(role);
+  }
+  entity.role_tags = [...tags];
+  normalizeRoleTags(entity);
+}
+
+function syncAgentCapabilities(entity) {
+  const known = new Set(AGENT_CAPABILITY_DEFS.map(([name]) => name));
+  if (!isAgentRole(entity.role)) {
+    entity.capabilities = [];
+    return [];
+  }
+  const selected = new Set((entity.capabilities || []).filter((name) => known.has(name)));
+  AGENT_INTERNAL_CAPABILITIES.forEach((name) => selected.add(name));
+  entity.capabilities = [...selected];
+  return entity.capabilities;
+}
+
+function toggleAgentCapability(entity, capability) {
+  if (!isAgentRole(entity.role)) return;
+  if (AGENT_INTERNAL_CAPABILITIES.includes(capability)) return;
+  const known = new Set(AGENT_CAPABILITY_DEFS.map(([name]) => name));
+  if (!known.has(capability)) return;
+  const selected = new Set(syncAgentCapabilities(entity));
+  if (selected.has(capability)) selected.delete(capability);
+  else selected.add(capability);
+  entity.capabilities = [...selected];
+  syncAgentCapabilities(entity);
+}
+
+function applyRoleSideEffects(entity) {
+  normalizeRoleTags(entity);
+  if (isAgentRole(entity.role)) {
+    syncAgentCapabilities(entity);
+    state.entities.forEach((item) => {
+      if (item.id !== entity.id && isAgentRole(item.role)) {
+        item.role = "child";
+        item.role_tags = ["child", ...(item.role_tags || []).filter((role) => SUPPORT_ROLES.includes(role))];
+        normalizeRoleTags(item);
+      }
+    });
+    entity.parentId = "";
+  } else {
+    entity.parentId ||= state.entities.find((item) => isAgentRole(item.role))?.id || "";
+    entity.capabilities = [];
+  }
+  if (!canOwnLevels(entity.role)) entity.levels = [];
+}
+
 function roleOptions(current) {
   return Object.entries(ROLE_DEFS)
     .map(([value, role]) => `<option value="${value}" ${value === current ? "selected" : ""}>${role.label}</option>`)
     .join("");
+}
+
+function roleTagPicker(entity) {
+  const tags = normalizeRoleTags(entity);
+  const selected = new Set(tags);
+  const capabilities = isAgentRole(entity.role) ? syncAgentCapabilities(entity) : [];
+  const chips = [
+    ...tags.map((role) => `<span class="role-chip role-chip-${roleDef(role).restriction.toLowerCase()}">${escapeHtml(roleDef(role).label)}</span>`),
+    ...capabilities.map((name) => `<span class="role-chip role-chip-cap">${escapeHtml(name)}</span>`),
+  ].join("");
+  const groups = ROLE_GROUPS.map((group) => {
+    const roles = Object.entries(ROLE_DEFS).filter(([, def]) => def.group === group);
+    return `<div class="role-tag-group">
+      <div class="role-tag-group-title">${escapeHtml(group)}</div>
+      ${roles.map(([value, def]) => roleTagOption(entity, value, def, selected)).join("")}
+    </div>`;
+  }).join("") + capabilityTagGroup(entity, new Set(capabilities));
+  const summary = roleSummary(entity);
+  return `<div class="role-tag-field">
+      <div class="role-tag-label">Rol</div>
+      <div class="role-tag-picker">
+        <button type="button" class="role-tag-toggle" data-entity="${entity.id}">
+          <span class="role-chip-list">${chips}</span>
+          <span class="role-tag-caret"></span>
+        </button>
+        <div class="role-tag-menu">${groups}</div>
+      </div>
+      <small>${escapeHtml(summary)}</small>
+    </div>`;
+}
+
+function capabilityTagGroup(entity, selected) {
+  if (!isAgentRole(entity.role)) return "";
+  const options = AGENT_CAPABILITY_DEFS.map(([name, group, description]) =>
+    capabilityTagOption(entity, name, group, description, selected)
+  ).join("");
+  return `<div class="role-tag-group role-tag-capabilities">
+      <div class="role-tag-group-title">Capacidades Agent</div>
+      ${options}
+    </div>`;
+}
+
+function capabilityTagOption(entity, name, group, description, selected) {
+  const isSelected = selected.has(name);
+  const isLocked = AGENT_INTERNAL_CAPABILITIES.includes(name);
+  return `<button type="button" class="role-tag-option capability ${isSelected ? "selected" : ""} ${isLocked ? "locked" : ""}" data-entity="${entity.id}" data-capability="${escapeHtml(name)}" title="${escapeHtml(description)}">
+      <span class="role-option-check">${isSelected ? "✓" : ""}</span>
+      <span><b>${escapeHtml(name)}</b><small>${escapeHtml(group)}${isLocked ? " · base" : ""}</small></span>
+    </button>`;
+}
+
+function roleTagOption(entity, value, def, selected) {
+  const isSelected = selected.has(value);
+  const isPrimary = PRIMARY_ROLES.includes(value);
+  const otherPrimary = isPrimary && [...selected].some((role) => PRIMARY_ROLES.includes(role) && role !== value);
+  const note = isPrimary ? "primario" : def.restriction === "R2" ? "auxiliar" : "estado";
+  return `<button type="button" class="role-tag-option ${isSelected ? "selected" : ""} ${otherPrimary ? "will-replace" : ""}" data-entity="${entity.id}" data-role="${value}">
+      <span class="role-option-check">${isSelected ? "✓" : ""}</span>
+      <span><b>${escapeHtml(def.label)}</b><small>${escapeHtml(def.restriction)} · ${note}</small></span>
+    </button>`;
+}
+
+function roleSummary(entity) {
+  const tags = normalizeRoleTags(entity);
+  const capabilities = isAgentRole(entity.role) ? syncAgentCapabilities(entity) : [];
+  const hasAgent = tags.includes("parent");
+  const hasWorker = tags.includes("child");
+  const hasBackup = tags.includes("backup");
+  const supports = tags.filter((role) => SUPPORT_ROLES.includes(role)).map((role) => roleDef(role).label);
+  if (hasAgent) {
+    const capSummary = capabilities.length ? ` Capacidades: ${capabilities.join(", ")}.` : "";
+    return `R0 autoridad global.${supports.length ? ` Complementos: ${supports.join(", ")}.` : ""}${capSummary}`;
+  }
+  if (hasBackup) return `R1 fallback. Reclama niveles solo cuando actúa como reserva o promoción controlada.`;
+  if (hasWorker) return `R1 ejecución. ${supports.length ? `Con etiquetas auxiliares: ${supports.join(", ")}.` : "Puede recibir niveles N1-N5."}`;
+  return supports.length ? `R2/R3 soporte sin ownership de niveles: ${supports.join(", ")}.` : "Selecciona una etiqueta primaria.";
 }
 
 function isAgentRole(role) {
@@ -1331,20 +2130,6 @@ function skillPicker(entity) {
           .join("")}
       </div>
     </details>`;
-}
-
-function agentCapabilities(entity) {
-  if (!isAgentRole(entity.role)) return "";
-  const selected = new Set(entity.capabilities || []);
-  const base = AGENT_INTERNAL_CAPABILITIES.map((name) => `<span title="Capacidad interna del Agent">${name}</span>`).join("");
-  const optional = AGENT_OPTIONAL_CAPABILITIES.map(
-    ([name, description]) =>
-      `<label title="${escapeHtml(description)}"><input class="agent-capability" data-entity="${entity.id}" type="checkbox" value="${name}" ${selected.has(name) ? "checked" : ""}/> ${name}</label>`
-  ).join("");
-  return `<div class="agent-capabilities">
-      <div class="cap-row fixed">${base}</div>
-      <div class="cap-row optional">${optional}</div>
-    </div>`;
 }
 
 function assignProviderToNode(target, providerName) {
@@ -1835,10 +2620,27 @@ function checkbox(id, checked) {
   return `<label class="toggle"><input type="checkbox" id="${id}" ${checked ? "checked" : ""} /><span></span></label>`;
 }
 
+function setConfigTab(tab) {
+  state.configTab = tab;
+  $$(".config-tab").forEach((button) => button.classList.toggle("active", button.dataset.configTab === tab));
+  $$(".config-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `config-panel-${tab}`));
+}
+
+function setConfigMode(mode) {
+  state.configMode = mode;
+  const view = $("#view-flow");
+  view?.classList.toggle("mode-traditional", mode === "traditional");
+  view?.classList.toggle("mode-prompting", mode === "prompting");
+  $$("#configModeTabs button").forEach((button) => button.classList.toggle("active", button.dataset.configMode === mode));
+  $$(".config-mode-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `config-mode-${mode}`));
+  if (mode === "prompting") renderPromptConfiguration();
+}
+
 function renderFlow() {
   const c = state.config;
   if (!c) return;
   const o = c.orchestration;
+  c.policy ||= defaultPolicyConfig();
 
   const general = `<div class="fcard fcard-general"><h3>General</h3>
     ${field("Perfil", selectInput("cfg-profile", c.profile, ["simple", "pro", "offline"]))}
@@ -1864,6 +2666,9 @@ function renderFlow() {
     ${LEVELS.map(([level]) => field(LEVEL_FULL[level], selectInput(`cfg-l2m-${level}`, c.level_to_model[level], TIERS, TIER_LABEL))).join("")}</div>`;
 
   const tables = `<div class="fcard fcard-cost"><h3>Coste y latencia (avanzado)</h3>
+    <h4>Guardrails de coste</h4>
+    ${field("Máx. coste por tarea ($)", numberInput("cfg-max_cost_per_task_usd", o.max_cost_per_task_usd ?? 0, "0.0001", "0"))}
+    ${field("Máx. coste diario ($)", numberInput("cfg-max_daily_cost_usd", o.max_daily_cost_usd ?? 0, "0.0001", "0"))}
     <h4>Coste por modelo ($)</h4>
     ${TIERS.map((tier) => field(TIER_LABEL[tier], numberInput(`cfg-cost-${tier}`, c.cost_table[tier] ?? 0, "0.0001", "0"))).join("")}
     <h4>Latencia base (ms)</h4>
@@ -1873,6 +2678,642 @@ function renderFlow() {
   updateWeightsSum();
   CRITERIA.forEach((name) => $(`#cfg-w-${name}`).addEventListener("input", updateWeightsSum));
   bindFlowAutosave();
+  renderPromptConfiguration();
+  setConfigMode(state.configMode);
+}
+
+function renderPromptConfiguration() {
+  const target = $("#promptConfigPanel");
+  if (!target || !state.config) return;
+  const prompts = buildConfigPrompts();
+  if (!prompts.some((prompt) => prompt.id === state.selectedPromptTemplate)) state.selectedPromptTemplate = prompts[0]?.id || "hierarchy";
+  const selected = prompts.find((prompt) => prompt.id === state.selectedPromptTemplate) || prompts[0];
+  const allResources = buildPromptResourceLibrary();
+  const resources = filterPromptResources(allResources, state.promptLibraryQuery);
+  if (!state.selectedPromptResourceId || !allResources.some((resource) => resource.id === state.selectedPromptResourceId)) {
+    state.selectedPromptResourceId = resources[0]?.id || allResources[0]?.id || "";
+  }
+  const selectedResource = allResources.find((resource) => resource.id === state.selectedPromptResourceId) || resources[0] || null;
+  target.innerHTML = `<div class="prompt-config-shell ${state.promptLibraryOpen ? "" : "library-collapsed"}">
+    <section class="prompt-config-main">
+      <div class="prompt-config-intro compact">
+        <div>
+          <span class="eyebrow">Prompting configuration</span>
+          <h2>Editor de plantilla</h2>
+          <p>Carga una plantilla, edítala y copia el prompt final. La biblioteca lateral contiene piezas documentadas para construir jerarquías, reglas y proveedores.</p>
+        </div>
+      </div>
+      <div class="prompt-template-tabs compact-template-index">
+        ${prompts.map((prompt) => `<button type="button" class="${prompt.id === selected.id ? "active" : ""}" data-select-prompt="${escapeHtml(prompt.id)}"><span>${escapeHtml(prompt.scope)}</span>${escapeHtml(prompt.title)}</button>`).join("")}
+      </div>
+      <article class="prompt-editor-card">
+        <header>
+          <div>
+            <span>${escapeHtml(selected.scope)}</span>
+            <h3>${escapeHtml(selected.title)}</h3>
+            <p>${escapeHtml(selected.description)}</p>
+          </div>
+          <div class="prompt-editor-actions">
+            <button type="button" data-reset-prompt="${escapeHtml(selected.id)}">Recargar plantilla</button>
+            <button type="button" data-copy-prompt="${escapeHtml(selected.id)}" class="primary">Copiar prompt</button>
+            <button type="button" data-apply-prompt="${escapeHtml(selected.id)}">Aplicar con agente</button>
+          </div>
+        </header>
+        <textarea data-prompt-template="${escapeHtml(selected.id)}">${escapeHtml(selected.body)}</textarea>
+      </article>
+    </section>
+    <aside class="prompt-library-panel">
+      <header>
+        <div>
+          <span class="eyebrow">Resource library</span>
+          <h3>${state.promptSideMode === "templates" ? "Plantillas" : "Biblioteca de recursos"}</h3>
+        </div>
+        <button type="button" class="icon-btn" data-toggle-prompt-library title="Mostrar u ocultar biblioteca">◧</button>
+      </header>
+      <div class="prompt-library-body">
+        <div class="prompt-library-switch">
+          <button type="button" class="${state.promptSideMode === "templates" ? "active" : ""}" data-prompt-side-mode="templates">Plantillas</button>
+          <button type="button" class="${state.promptSideMode === "library" ? "active" : ""}" data-prompt-side-mode="library">Biblioteca</button>
+        </div>
+        ${state.promptSideMode === "templates" ? promptTemplateSidebar(prompts, selected) : promptResourceSidebar(resources, selectedResource)}
+      </div>
+    </aside>
+  </div>`;
+}
+
+function renderPromptResourceGrid() {
+  renderPromptConfiguration();
+}
+
+function promptTemplateSidebar(prompts, selected) {
+  return `<div class="prompt-side-actions">
+      <button type="button" data-new-prompt-template>Nueva</button>
+      <button type="button" data-edit-prompt-template="${escapeHtml(selected.id)}">Modificar</button>
+      <button type="button" data-delete-prompt-template="${escapeHtml(selected.id)}">Eliminar</button>
+    </div>
+    <div class="prompt-side-list">
+      ${prompts.map((prompt) => `<button type="button" class="prompt-side-item ${prompt.id === selected.id ? "active" : ""}" data-select-prompt="${escapeHtml(prompt.id)}">
+        <span>${escapeHtml(prompt.scope)}</span>
+        <b>${escapeHtml(prompt.title)}</b>
+        <small>${escapeHtml(prompt.description)}</small>
+      </button>`).join("")}
+    </div>`;
+}
+
+function promptResourceSidebar(resources, selectedResource) {
+  const grouped = resources.reduce((acc, resource) => {
+    (acc[resource.group] ||= []).push(resource);
+    return acc;
+  }, {});
+  const detail = selectedResource ? `<article class="prompt-resource-detail">
+      <span>${escapeHtml(selectedResource.group)}</span>
+      <h4>${escapeHtml(selectedResource.title)}</h4>
+      <p>${escapeHtml(selectedResource.description)}</p>
+      <code>${escapeHtml(selectedResource.example)}</code>
+      <button type="button" data-insert-prompt-resource="${escapeHtml(selectedResource.id)}">Insertar en plantilla</button>
+    </article>` : `<div class="config-empty">Selecciona un recurso para ver el detalle.</div>`;
+  return `<input type="search" id="promptResourceSearch" placeholder="Buscar roles, niveles, restricciones..." value="${escapeHtml(state.promptLibraryQuery)}" />
+    <div class="prompt-resource-layout">
+      <div class="prompt-resource-index">
+        ${Object.entries(grouped).map(([group, items]) => `<section>
+          <h4>${escapeHtml(group)}</h4>
+          ${items.map((resource) => `<button type="button" class="${resource.id === selectedResource?.id ? "active" : ""}" data-select-prompt-resource="${escapeHtml(resource.id)}">
+            ${escapeHtml(resource.title)}
+          </button>`).join("")}
+        </section>`).join("") || `<div class="config-empty">Sin recursos para esa búsqueda.</div>`}
+      </div>
+      ${detail}
+    </div>`;
+}
+
+function promptTemplateCard(template) {
+  return `<article class="prompt-template-card">
+    <header>
+      <div>
+        <span>${escapeHtml(template.scope)}</span>
+        <h3>${escapeHtml(template.title)}</h3>
+      </div>
+      <button type="button" data-copy-prompt="${escapeHtml(template.id)}">Copiar</button>
+    </header>
+    <p>${escapeHtml(template.description)}</p>
+    <textarea readonly data-prompt-template="${escapeHtml(template.id)}">${escapeHtml(template.body)}</textarea>
+  </article>`;
+}
+
+function promptResourceCard(resource) {
+  return `<article class="prompt-resource-card">
+    <header>
+      <span>${escapeHtml(resource.group)}</span>
+      <b>${escapeHtml(resource.title)}</b>
+    </header>
+    <p>${escapeHtml(resource.description)}</p>
+    <code>${escapeHtml(resource.example)}</code>
+    <button type="button" data-insert-prompt-resource="${escapeHtml(resource.id)}">Insertar en plantilla</button>
+  </article>`;
+}
+
+function buildPromptResourceLibrary() {
+  const roleResources = Object.entries(ROLE_DEFS).map(([key, role]) => ({
+    id: `role:${key}`,
+    group: "Roles",
+    title: role.label,
+    description: `${role.restriction || "R?"} · ${role.group || "Rol"} · ${role.summary}`,
+    example: `Usa ${role.label} para ${role.summary.toLowerCase()}`,
+    snippet: `\n\n## Rol sugerido: ${role.label}\n- Restricción: ${role.restriction || "R?"}\n- Uso: ${role.summary}\n- Prompt breve: asigna este rol solo si aporta valor operativo claro.`,
+  }));
+  const levelResources = LEVELS.map(([key, label], index) => ({
+    id: `level:${key}`,
+    group: "Niveles",
+    title: LEVEL_FULL[key],
+    description: `Nivel de actuación ${label}. Úsalo para repartir propiedad de complejidad sin solapes.`,
+    example: `${label}: asignar a un único agente responsable.`,
+    snippet: `\n\n## Nivel de actuación: ${LEVEL_FULL[key]}\n- Propietario único recomendado.\n- No permitir solape con otros Workers.\n- Criterio: complejidad aproximada ${index + 1}/5.`,
+  }));
+  const criteriaResources = CRITERIA.map((name) => ({
+    id: `criterion:${name}`,
+    group: "Criterios",
+    title: name,
+    description: `Criterio ponderado para calcular complejidad y decidir modelo/ruta.`,
+    example: `Ajusta ${name} de 0 a 5 según el prompt.`,
+    snippet: `\n\n## Criterio: ${name}\n- Evalúa este criterio en escala 0-5.\n- Justifica por qué sube o baja la complejidad.\n- Mantén consistencia con el resto de criterios.`,
+  }));
+  const policyResources = [
+    ["policy:sensitive", "Restricciones", "Dominio sensible", "Bloquea o pide revisión si hay seguridad, operaciones, credenciales, legal o despliegue real.", "Si domain incluye security u operations, requiere revisión humana."],
+    ["policy:intent", "Restricciones", "Intención crítica", "Usa critical_intents para tareas que pueden modificar producción, coste, permisos o seguridad.", "Si intent=security_architecture_review, aplicar puerta humana."],
+    ["policy:paid", "Coste", "Proveedor de pago", "Marca proveedores de pago como sujetos a aprobación cuando activen modelos fuertes.", "No habilitar proveedor de pago sin aprobación explícita."],
+    ["policy:credentials", "Credenciales", "Credenciales pendientes", "Cuando falte API key, login CLI o servicio local, el sistema debe bloquear ejecución real.", "Si falta API key, generar setup_action y no delegar ejecución real."],
+  ].map(([id, group, title, description, example]) => ({
+    id, group, title, description, example,
+    snippet: `\n\n## ${title}\n- ${description}\n- Prompt breve: ${example}`,
+  }));
+  const providerResources = (state.catalog || []).slice(0, 8).map((provider) => ({
+    id: `provider:${provider.name}`,
+    group: "Proveedores",
+    title: provider.label,
+    description: `${provider.backend} · ${provider.is_free ? "Gratis" : "Pago"} · auth=${provider.env_var || provider.login_command || provider.auth_method}`,
+    example: `Usar ${provider.label} para tiers compatibles si está disponible.`,
+    snippet: `\n\n## Proveedor: ${provider.label}\n- Backend: ${provider.backend}\n- Coste: ${provider.is_free ? "Gratis" : "Pago"}\n- Auth: ${provider.env_var || provider.login_command || provider.auth_method}\n- Prompt breve: úsalo solo si está listo o genera acción de configuración.`,
+  }));
+  return [...roleResources, ...levelResources, ...criteriaResources, ...policyResources, ...providerResources];
+}
+
+function filterPromptResources(resources, query) {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return resources;
+  return resources.filter((resource) => `${resource.group} ${resource.title} ${resource.description} ${resource.example}`.toLowerCase().includes(q));
+}
+
+function insertPromptResource(id) {
+  const resource = buildPromptResourceLibrary().find((item) => item.id === id);
+  const textarea = $(`[data-prompt-template="${CSS.escape(state.selectedPromptTemplate)}"]`);
+  if (!resource || !textarea) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  textarea.value = `${textarea.value.slice(0, start)}${resource.snippet}${textarea.value.slice(end)}`;
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = start + resource.snippet.length;
+  toast("Recurso insertado en la plantilla.");
+}
+
+function buildConfigPrompts() {
+  const c = state.config;
+  const entities = state.entities || [];
+  const hierarchy = entities.length
+    ? entities
+        .map((entity) => {
+          const roles = (entity.roles || []).map((role) => ROLE_DEFS[role]?.label || role).join(", ") || "sin rol";
+          const levels = (entity.levels || []).map((level) => LEVEL_FULL[level] || level).join(", ") || "sin niveles";
+          const parent = entity.parentId ? `padre=${entityLabel(entity.parentId)}` : "sin padre";
+          return `- ${entityLabel(entity.id)} | proveedor=${entity.providerName || "auto"} | roles=${roles} | niveles=${levels} | ${parent}`;
+        })
+        .join("\n")
+    : "- Sin jerarquía definida todavía. Propón Agent principal, Workers y Backup.";
+  const policy = c.policy || defaultPolicyConfig();
+  const levelModels = LEVELS.map(([level]) => `- ${LEVEL_FULL[level]} => ${TIER_LABEL[c.level_to_model[level]] || c.level_to_model[level]}`).join("\n");
+  const weights = CRITERIA.map((name) => `- ${name}: ${c.criteria_weights[name] ?? 0}`).join("\n");
+  const providers = (state.catalog || [])
+    .map((provider) => `- ${provider.label} (${provider.backend}) | ${provider.is_free ? "Gratis" : "Pago"} | auth=${provider.env_var || provider.login_command || provider.auth_method}`)
+    .join("\n") || "- Catálogo no cargado.";
+  const modelCosts = TIERS.map((tier) => `- ${TIER_LABEL[tier]}: coste=$${c.cost_table[tier] ?? 0}, latencia=${c.latency_table[tier] ?? 0}ms`).join("\n");
+
+  return [
+    {
+      id: "hierarchy",
+      scope: "01 · Jerarquía",
+      title: "Diseñar jerarquía de agentes",
+      description: "Define qué agentes intervienen, qué rol tiene cada uno, cómo se conectan y qué niveles cubren.",
+      body: `# Objetivo
+Configura una jerarquía KARAJAN para enrutar tareas entre Agent, Worker, Backup y roles auxiliares.
+
+# Estado actual
+${hierarchy}
+
+# Roles disponibles
+- Agent: autoridad global. Clasifica, planifica, enruta y delega.
+- Worker: ejecuta tareas concretas asignadas por el Agent.
+- Backup: reserva que puede asumir si falla el principal.
+- Guardian: revisa o apoya a un Worker.
+- Validator: valida salidas parciales o finales.
+- Memory: mantiene contexto, checkpoints y estado.
+- Monitor: vigila salud, timeouts y disponibilidad.
+
+# Instrucciones
+1. Propón una jerarquía mínima y clara.
+2. Asigna niveles N1-N5 sin repetir propiedad entre agentes ejecutores.
+3. Indica conexiones padre/hijo y cuándo usar Backup.
+4. Devuelve JSON con: entities[], edges[], level_ownership{}, rationale.
+
+# Restricciones
+- No inventes proveedores que no estén en el catálogo.
+- Si faltan credenciales, marca el nodo como pendiente.
+- Prioriza modelos gratis para N1-N3 si no aumenta el riesgo.`,
+    },
+    {
+      id: "base",
+      scope: "02 · Base",
+      title: "Configurar parámetros base",
+      description: "Ajusta perfil, backend, paralelismo, timeouts, reintentos, pesos y umbrales.",
+      body: `# Objetivo
+Revisa y propone una configuración base para el harness KARAJAN.
+
+# Configuración actual
+- perfil: ${c.profile}
+- backend: ${c.backend}
+- preferir gratis: ${c.prefer_free}
+- paralelo: ${c.orchestration.parallel}
+- máximo paralelo: ${c.orchestration.max_parallel}
+- timeout subtarea: ${c.orchestration.subtask_timeout_s}s
+- reintentos: ${c.orchestration.max_retries}
+- puerta revisión humana: ${c.orchestration.require_human_review_gate}
+
+# Pesos actuales
+${weights}
+
+# Nivel → modelo
+${levelModels}
+
+# Instrucciones
+1. Mantén pesos con suma 1.00.
+2. Explica cada cambio con impacto operativo.
+3. Devuelve JSON patch con: profile, backend, prefer_free, orchestration, criteria_weights, level_thresholds, level_to_model.
+4. No cambies costes ni proveedores en este prompt.`,
+    },
+    {
+      id: "policy",
+      scope: "03 · Restricciones",
+      title: "Definir política de revisión humana",
+      description: "Separa dominios sensibles, intenciones críticas y condiciones que bloquean ejecución real.",
+      body: `# Objetivo
+Configura la política de seguridad y revisión humana de KARAJAN.
+
+# Política actual
+- dominios sensibles: ${(policy.sensitive_domains || []).join(", ")}
+- intenciones críticas: ${(policy.critical_intents || []).join(", ")}
+- nivel mínimo revisión: N${policy.human_review_min_level}
+- umbral riesgo operacional: ${policy.operational_risk_review_threshold}
+- revisar proveedores de pago: ${policy.require_review_for_paid_providers}
+- revisar credenciales pendientes: ${policy.require_review_for_missing_credentials}
+
+# Instrucciones
+1. Propón dominios sensibles y critical_intents realistas.
+2. Define cuándo bloquear, cuándo pedir aprobación y cuándo permitir ejecución.
+3. Diferencia riesgo técnico, coste, credenciales y seguridad operativa.
+4. Devuelve JSON con: policy, examples[], human_approval_reasons[].
+
+# Criterio
+La revisión humana debe explicar claramente qué se aprueba y por qué.`,
+    },
+    {
+      id: "providers",
+      scope: "04 · Proveedores",
+      title: "Conectar agentes y controlar costes",
+      description: "Organiza proveedores locales/API, credenciales, modelos por tier, costes y latencias.",
+      body: `# Objetivo
+Revisa proveedores KARAJAN y su uso por coste, disponibilidad y riesgo.
+
+# Catálogo actual
+${providers}
+
+# Coste / latencia actual por tier
+${modelCosts}
+
+# Instrucciones
+1. Recomienda qué proveedores usar para barato, medio, fuerte y revisión humana.
+2. Separa locales, API, gratis y pago.
+3. Indica qué credenciales o login faltan.
+4. Sugiere límites de coste por tarea y coste diario.
+5. Devuelve JSON con: provider_plan[], tier_mapping{}, cost_guardrails{}, setup_actions[].
+
+# Restricciones
+- No habilites proveedores de pago sin aprobación.
+- Marca como pendiente cualquier proveedor sin API key/login.`,
+    },
+  ];
+}
+
+function defaultPolicyConfig() {
+  return {
+    sensitive_domains: ["security", "operations", "devops"],
+    critical_intents: ["security_architecture_review", "security_review"],
+    human_review_min_level: 5,
+    operational_risk_review_threshold: 4,
+    require_review_for_paid_providers: false,
+    require_review_for_missing_credentials: true,
+  };
+}
+
+async function renderConfigAgentsPanel() {
+  const target = $("#agentsMainPanel") || $("#configAgentsPanel");
+  if (!target) return;
+  let catalog = state.catalog || [];
+  let providers = state.providers || [];
+  if (!catalog.length || !providers.length) {
+    try {
+      [catalog, providers] = await Promise.all([api("/catalog"), api("/providers")]);
+      state.catalog = catalog;
+      state.providers = providers;
+    } catch (error) {
+      target.innerHTML = `<div class="fcard"><h3>Agentes</h3><div class="config-empty">${escapeHtml(error.message)}</div></div>`;
+      return;
+    }
+  }
+  const manual = getManualAgents();
+  const status = new Map(providers.map((p) => [p.provider, p]));
+  const groups = {
+    cli: catalog.filter((p) => p.backend === "cli"),
+    api: catalog.filter((p) => p.backend === "api"),
+    simulated: catalog.filter((p) => p.backend === "simulated"),
+  };
+  const groupLabel = { cli: "Locales / CLI", api: "Nube / API", simulated: "Simulados" };
+  target.innerHTML = `<div class="config-agent-layout">
+    <section class="fcard config-agent-add">
+      <h3>Agregar agente manual</h3>
+      <div class="manual-agent-form">
+        <input id="manual-agent-name" type="text" placeholder="Nombre del agente" />
+        <select id="manual-agent-backend">
+          <option value="cli">Local / CLI</option>
+          <option value="api">API</option>
+          <option value="simulated">Simulado</option>
+        </select>
+        <input id="manual-agent-auth" type="text" placeholder="Auth, comando o variable ENV" />
+        <button type="button" class="primary" id="addManualAgent">Agregar</button>
+      </div>
+      <p class="config-note">Los agentes manuales quedan guardados localmente para diseñar la topología y documentar futuras conexiones.</p>
+    </section>
+    ${Object.entries(groups)
+      .filter(([, list]) => list.length)
+      .map(([backend, list]) => `<section class="fcard config-agent-section">
+        <h3>${groupLabel[backend] || backend}</h3>
+        <div class="config-agent-grid">${list.map((provider) => configAgentCard(provider, status.get(provider.name))).join("")}</div>
+      </section>`)
+      .join("")}
+    <section class="fcard config-agent-section">
+      <h3>Manuales</h3>
+      <div class="config-agent-grid">${
+        manual.length ? manual.map(manualAgentCard).join("") : `<div class="config-empty">Aún no hay agentes manuales.</div>`
+      }</div>
+    </section>
+  </div>`;
+  if (!state.selectedConfigAgent) {
+    state.selectedConfigAgent = catalog[0]?.name || manual[0]?.id || "";
+  }
+  renderAgentsSidePanel();
+}
+
+function configAgentCard(provider, status = {}) {
+  const ready = status.ready;
+  const available = status.available;
+  const dot = ready ? "ok" : available ? "warn" : "bad";
+  const auth = provider.auth_method === "api_key" ? provider.env_var || "API key" : provider.login_command || provider.auth_method;
+  const tiers = Object.entries(provider.tiers || {})
+    .map(([tier, model]) => `<span><small>${escapeHtml(TIER_LABEL[tier] || tier)}</small><b>${escapeHtml(model)}</b></span>`)
+    .join("");
+  const selected = state.selectedConfigAgent === provider.name ? "selected" : "";
+  return `<article class="config-agent-card ${ready ? "ready" : available ? "available" : "missing"} ${selected}" data-agent-card="${escapeHtml(provider.name)}">
+    <header>
+      <div><span class="status-dot ${dot}"></span><b>${escapeHtml(provider.label)}</b><small>${escapeHtml(provider.backend)} · ${escapeHtml(auth)}</small></div>
+      <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span>
+    </header>
+    <p>${escapeHtml(status.detail || "Sin comprobación activa")}</p>
+    <div class="config-tier-grid">${tiers || "<span><small>tiers</small><b>sin niveles</b></span>"}</div>
+    <div class="human-provider-actions">
+      <button type="button" data-refresh-providers>Intentar conectar</button>
+      <button type="button" data-provider-setup="${escapeHtml(provider.name)}">Configurar</button>
+      ${provider.signup_url ? `<a href="${escapeHtml(provider.signup_url)}" target="_blank" rel="noreferrer">Abrir consola</a>` : ""}
+      ${provider.login_command ? `<code>${escapeHtml(provider.login_command)}</code>` : provider.env_var ? `<code>${escapeHtml(provider.env_var)}</code>` : ""}
+    </div>
+    <div class="provider-setup" data-provider-setup-target="${escapeHtml(provider.name)}" hidden></div>
+  </article>`;
+}
+
+function manualAgentCard(agent) {
+  const selected = state.selectedConfigAgent === agent.id ? "selected" : "";
+  return `<article class="config-agent-card manual ${selected}" data-agent-card="${escapeHtml(agent.id)}">
+    <header>
+      <div><span class="status-dot warn"></span><b>${escapeHtml(agent.name)}</b><small>${escapeHtml(agent.backend)} · manual</small></div>
+      <button type="button" class="icon-btn" data-remove-manual-agent="${escapeHtml(agent.id)}">×</button>
+    </header>
+    <p>${escapeHtml(agent.auth || "Pendiente de definir autenticación o comando.")}</p>
+    <div class="config-tier-grid"><span><small>estado</small><b>documentado</b></span><span><small>origen</small><b>manual</b></span></div>
+  </article>`;
+}
+
+function getManualAgents() {
+  try {
+    return JSON.parse(localStorage.getItem("karajan-manual-agents") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveManualAgents(agents) {
+  localStorage.setItem("karajan-manual-agents", JSON.stringify(agents));
+}
+
+function addManualAgent() {
+  const name = $("#manual-agent-name")?.value?.trim();
+  if (!name) return toast("Indica un nombre para el agente.");
+  const agents = getManualAgents();
+  agents.push({
+    id: `manual_${Date.now().toString(36)}`,
+    name,
+    backend: $("#manual-agent-backend")?.value || "cli",
+    auth: $("#manual-agent-auth")?.value?.trim() || "",
+  });
+  saveManualAgents(agents);
+  renderConfigAgentsPanel();
+  toast("Agente manual agregado.");
+}
+
+function removeManualAgent(id) {
+  saveManualAgents(getManualAgents().filter((agent) => agent.id !== id));
+  if (state.selectedConfigAgent === id) state.selectedConfigAgent = "";
+  renderConfigAgentsPanel();
+  toast("Agente manual eliminado.");
+}
+
+async function renderAgentsView() {
+  await renderConfigAgentsPanel();
+  initAgentsSplitter();
+  setAgentsSide(state.agentsSideOpen);
+}
+
+function findConfigAgent(id = state.selectedConfigAgent) {
+  const catalogAgent = (state.catalog || []).find((provider) => provider.name === id);
+  if (catalogAgent) return { type: "catalog", agent: catalogAgent };
+  const manualAgent = getManualAgents().find((agent) => agent.id === id);
+  if (manualAgent) return { type: "manual", agent: manualAgent };
+  const fallback = (state.catalog || [])[0];
+  return fallback ? { type: "catalog", agent: fallback } : null;
+}
+
+function renderAgentsSidePanel() {
+  const target = $("#agentsSidePanel");
+  if (!target) return;
+  const found = findConfigAgent();
+  if (!found) {
+    target.innerHTML = `<div class="config-empty">Selecciona o agrega un agente para ver sus restricciones.</div>`;
+    return;
+  }
+  const { type, agent } = found;
+  const status = new Map((state.providers || []).map((p) => [p.provider, p])).get(type === "catalog" ? agent.name : agent.id) || {};
+  const label = type === "catalog" ? agent.label : agent.name;
+  const backend = type === "catalog" ? agent.backend : agent.backend;
+  const auth = type === "catalog"
+    ? agent.auth_method === "api_key" ? agent.env_var || "API key" : agent.login_command || agent.auth_method
+    : agent.auth || "manual";
+  const policy = state.config?.policy || defaultPolicyConfig();
+  const tiers = type === "catalog"
+    ? Object.entries(agent.tiers || {}).map(([tier, model]) => `<span><small>${escapeHtml(TIER_LABEL[tier] || tier)}</small><b>${escapeHtml(model)}</b></span>`).join("")
+    : `<span><small>origen</small><b>manual</b></span>`;
+  target.innerHTML = `
+    <article class="agent-detail-card">
+      <header>
+        <div>
+          <span class="eyebrow">${escapeHtml(backend)} · ${type === "catalog" ? "catálogo" : "manual"}</span>
+          <h3>${escapeHtml(label)}</h3>
+          <p>${escapeHtml(status.detail || auth || "Pendiente de comprobación")}</p>
+        </div>
+        ${type === "catalog" ? `<span class="cost-tag ${agent.is_free ? "free" : "paid"}">${agent.is_free ? "Gratis" : "Pago"}</span>` : ""}
+      </header>
+      <div class="agent-detail-meta">
+        <span><small>Tipo</small><b>${escapeHtml(backend)}</b></span>
+        <span><small>Auth</small><b>${escapeHtml(auth)}</b></span>
+        <span><small>Estado</small><b>${status.ready ? "listo" : status.available ? "detectado" : "pendiente"}</b></span>
+      </div>
+      <div class="config-tier-grid">${tiers}</div>
+      <div class="human-provider-actions">
+        ${type === "catalog" ? `<button type="button" data-refresh-providers>Intentar conectar</button><button type="button" data-provider-setup="${escapeHtml(agent.name)}">Configurar</button>` : ""}
+        ${type === "catalog" && agent.signup_url ? `<a href="${escapeHtml(agent.signup_url)}" target="_blank" rel="noreferrer">Abrir consola</a>` : ""}
+        ${type === "catalog" && agent.login_command ? `<code>${escapeHtml(agent.login_command)}</code>` : type === "catalog" && agent.env_var ? `<code>${escapeHtml(agent.env_var)}</code>` : ""}
+      </div>
+      ${type === "catalog" ? `<div class="provider-setup" data-provider-setup-target="${escapeHtml(agent.name)}" hidden></div>` : ""}
+    </article>
+    <section class="agent-policy-card">
+      <h3>Restricciones del agente</h3>
+      <p>Estas reglas gobiernan cuándo el router bloquea, pide revisión humana o evita ejecución real con este tipo de proveedor.</p>
+      ${field("Nivel mínimo que exige revisión", selectInput("cfg-policy-human_review_min_level", String(policy.human_review_min_level), ["1", "2", "3", "4", "5"], { 1: "N1", 2: "N2", 3: "N3", 4: "N4", 5: "N5" }))}
+      ${field("Umbral de riesgo operacional", numberInput("cfg-policy-operational_risk_review_threshold", policy.operational_risk_review_threshold, "0.1", "0"))}
+      ${field("Revisar proveedores de pago", checkbox("cfg-policy-require_review_for_paid_providers", policy.require_review_for_paid_providers))}
+      ${field("Revisar credenciales pendientes", checkbox("cfg-policy-require_review_for_missing_credentials", policy.require_review_for_missing_credentials))}
+      <h4>Dominios sensibles</h4>
+      ${policyChipEditor("sensitive_domains", policy.sensitive_domains, "security, operations, legal...")}
+      <h4>Intenciones críticas</h4>
+      ${policyChipEditor("critical_intents", policy.critical_intents, "security_review, deploy_production...")}
+    </section>
+  `;
+  bindPolicyAutosave();
+}
+
+function renderConfigPolicyPanel() {
+  const target = $("#configPolicyPanel");
+  if (!target || !state.config) return;
+  const policy = state.config.policy || defaultPolicyConfig();
+  target.innerHTML = `<div class="policy-layout">
+    <section class="fcard">
+      <h3>Puerta de revisión humana</h3>
+      ${field("Nivel mínimo que exige revisión", selectInput("cfg-policy-human_review_min_level", String(policy.human_review_min_level), ["1", "2", "3", "4", "5"], { 1: "N1", 2: "N2", 3: "N3", 4: "N4", 5: "N5" }))}
+      ${field("Umbral de riesgo operacional", numberInput("cfg-policy-operational_risk_review_threshold", policy.operational_risk_review_threshold, "0.1", "0"))}
+      ${field("Revisar proveedores de pago", checkbox("cfg-policy-require_review_for_paid_providers", policy.require_review_for_paid_providers))}
+      ${field("Revisar credenciales pendientes", checkbox("cfg-policy-require_review_for_missing_credentials", policy.require_review_for_missing_credentials))}
+    </section>
+    <section class="fcard policy-card">
+      <h3>Dominios sensibles</h3>
+      ${policyChipEditor("sensitive_domains", policy.sensitive_domains, "security, operations, legal...")}
+    </section>
+    <section class="fcard policy-card">
+      <h3>Intenciones críticas</h3>
+      ${policyChipEditor("critical_intents", policy.critical_intents, "security_review, deploy_production...")}
+    </section>
+    <section class="fcard policy-summary">
+      <h3>Resumen operativo</h3>
+      <div class="policy-summary-grid">
+        <span><b>N${policy.human_review_min_level}</b><small>nivel mínimo</small></span>
+        <span><b>${Number(policy.operational_risk_review_threshold).toFixed(1)}</b><small>riesgo</small></span>
+        <span><b>${policy.sensitive_domains.length}</b><small>dominios</small></span>
+        <span><b>${policy.critical_intents.length}</b><small>intenciones</small></span>
+      </div>
+      <p>La clasificación queda bloqueada si supera el nivel/riesgo o si coincide con un dominio sensible o intención crítica.</p>
+    </section>
+  </div>`;
+  bindPolicyAutosave();
+}
+
+function policyChipEditor(key, values, placeholder) {
+  return `<div class="policy-chip-editor" data-policy-key="${key}">
+    <div class="policy-chips">${(values || [])
+      .map((value) => `<button type="button" class="policy-chip" data-remove-policy-chip="${key}:${escapeHtml(value)}">${escapeHtml(value)} <span>×</span></button>`)
+      .join("")}</div>
+    <div class="policy-add-row">
+      <input type="text" data-policy-input="${key}" placeholder="${placeholder}" />
+      <button type="button" data-add-policy-chip="${key}">Agregar</button>
+    </div>
+  </div>`;
+}
+
+function bindPolicyAutosave() {
+  $$("#configPolicyPanel input[id^='cfg-policy-'], #configPolicyPanel select[id^='cfg-policy-'], #agentsSidePanel input[id^='cfg-policy-'], #agentsSidePanel select[id^='cfg-policy-']").forEach((control) => {
+    const eventName = control.type === "number" ? "input" : "change";
+    control.addEventListener(eventName, () => {
+      collectPolicyFromPanel();
+      renderConfigPolicyPanel();
+      renderAgentsSidePanel();
+      scheduleFlowSave();
+    });
+  });
+}
+
+function collectPolicyFromPanel() {
+  const policy = (state.config.policy ||= defaultPolicyConfig());
+  const minLevel = $("#cfg-policy-human_review_min_level");
+  const risk = $("#cfg-policy-operational_risk_review_threshold");
+  const paid = $("#cfg-policy-require_review_for_paid_providers");
+  const missing = $("#cfg-policy-require_review_for_missing_credentials");
+  if (minLevel) policy.human_review_min_level = parseInt(minLevel.value, 10) || 5;
+  if (risk) policy.operational_risk_review_threshold = parseFloat(risk.value) || 0;
+  if (paid) policy.require_review_for_paid_providers = paid.checked;
+  if (missing) policy.require_review_for_missing_credentials = missing.checked;
+}
+
+function addPolicyChip(key) {
+  const input = $(`[data-policy-input="${key}"]`);
+  const value = input?.value?.trim();
+  if (!value) return;
+  const policy = (state.config.policy ||= defaultPolicyConfig());
+  const list = new Set(policy[key] || []);
+  list.add(value);
+  policy[key] = [...list];
+  renderConfigPolicyPanel();
+  renderAgentsSidePanel();
+  scheduleFlowSave();
+}
+
+function removePolicyChip(key, value) {
+  const policy = (state.config.policy ||= defaultPolicyConfig());
+  policy[key] = (policy[key] || []).filter((item) => item !== value);
+  renderConfigPolicyPanel();
+  renderAgentsSidePanel();
+  scheduleFlowSave();
 }
 
 function updateWeightsSum() {
@@ -1883,7 +3324,9 @@ function updateWeightsSum() {
 }
 
 function collectConfig() {
+  collectPolicyFromPanel();
   const c = structuredClone(state.config);
+  if (!$("#cfg-profile")) return c;
   c.profile = $("#cfg-profile").value;
   c.backend = $("#cfg-backend").value;
   c.prefer_free = $("#cfg-prefer_free").checked;
@@ -1892,6 +3335,8 @@ function collectConfig() {
   c.orchestration.subtask_timeout_s = parseInt($("#cfg-subtask_timeout_s").value, 10);
   c.orchestration.max_retries = parseInt($("#cfg-max_retries").value, 10);
   c.orchestration.require_human_review_gate = $("#cfg-review_gate").checked;
+  c.orchestration.max_cost_per_task_usd = parseFloat($("#cfg-max_cost_per_task_usd").value) || 0;
+  c.orchestration.max_daily_cost_usd = parseFloat($("#cfg-max_daily_cost_usd").value) || 0;
   CRITERIA.forEach((name) => (c.criteria_weights[name] = parseFloat($(`#cfg-w-${name}`).value) || 0));
   c.level_thresholds = c.level_thresholds.map((_, index) => parseFloat($(`#cfg-th-${index}`).value) || 0);
   LEVELS.forEach(([level]) => (c.level_to_model[level] = $(`#cfg-l2m-${level}`).value));
@@ -1935,30 +3380,187 @@ async function putConfig(message) {
 function init() {
   initTheme();
   initViews();
+  $("#notificationBell")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setNotificationsOpen(!state.notificationsOpen);
+  });
+  $("#agentNotificationBot")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setAgentNotificationsOpen(!state.agentNotificationsOpen);
+  });
   $("#monitorTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-monitor-tab]");
     if (button) setMonitorTab(button.dataset.monitorTab);
   });
+  $("#configModeTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-config-mode]");
+    if (button) setConfigMode(button.dataset.configMode);
+  });
   $("#toggleMonitorSide")?.addEventListener("click", () => setMonitorSide(!state.monitorSideOpen));
+  $("#toggleHumanSide")?.addEventListener("click", () => setHumanSide(!state.humanSideOpen));
+  $("#toggleAgentsSide")?.addEventListener("click", () => setAgentsSide(!state.agentsSideOpen));
   initMonitorSplitter();
+  initHumanSplitter();
+  initAgentsSplitter();
   initMonitorBlocks();
   $("#refreshMonitor").addEventListener("click", () => refreshMonitor().catch((e) => toast(e.message)));
+  $("#refreshHuman")?.addEventListener("click", () => refreshMonitor().then(() => toast("Control humano actualizado.")).catch((e) => toast(e.message)));
+  $("#refreshAgents")?.addEventListener("click", () => refreshProvidersAndAgents());
   $("#saveRouting").addEventListener("click", () => saveRouting(false));
   $("#modelsAdvanced").addEventListener("change", renderModels);
   document.addEventListener("click", (event) => {
+    if (state.notificationsOpen && !event.target.closest("#notificationWrap")) setNotificationsOpen(false);
+    if (state.agentNotificationsOpen && !event.target.closest("#agentNotificationWrap")) setAgentNotificationsOpen(false);
     const approve = event.target.closest("[data-approve]");
     if (approve) {
       api(`/tasks/${approve.dataset.approve}/approve-review`, { method: "POST" })
         .then((task) => {
           state.selected = task.task_id;
           toast("Revisión humana aprobada.");
+          setNotificationsOpen(false);
           return refreshMonitor();
         })
         .catch((error) => toast(error.message));
       return;
     }
+    const notificationTask = event.target.closest("[data-notification-task]");
+    if (notificationTask) {
+      state.selected = notificationTask.dataset.notificationTask;
+      setNotificationsOpen(false);
+      $('[data-view="monitor"]')?.click();
+      refreshMonitor().catch((error) => toast(error.message));
+      return;
+    }
+    const notificationProvider = event.target.closest("[data-notification-provider]");
+    if (notificationProvider) {
+      setNotificationsOpen(false);
+      setAgentNotificationsOpen(false);
+      $('[data-view="agents"]')?.click();
+      state.selectedConfigAgent = notificationProvider.dataset.notificationProvider;
+      renderAgentsView();
+      return;
+    }
+    if (event.target.closest("[data-notification-monitor]")) {
+      setNotificationsOpen(false);
+      $('[data-view="monitor"]')?.click();
+      return;
+    }
+    const taskLink = event.target.closest("[data-select-task]");
+    if (taskLink) {
+      state.selected = taskLink.dataset.selectTask;
+      const monitorTab = $('[data-view="monitor"]');
+      monitorTab?.click();
+      refreshMonitor().catch((error) => toast(error.message));
+      return;
+    }
+    const refreshProviders = event.target.closest("[data-refresh-providers]");
+    if (refreshProviders) {
+      refreshMonitor()
+        .then(() => renderAgentsView())
+        .then(() => toast("Estado de agentes comprobado."))
+        .catch((error) => toast(error.message));
+      return;
+    }
+    const providerSetup = event.target.closest("[data-provider-setup]");
+    if (providerSetup) {
+      showProviderSetup(providerSetup.dataset.providerSetup);
+      return;
+    }
+    if (event.target.closest("#addManualAgent")) {
+      addManualAgent();
+      return;
+    }
+    const agentCard = event.target.closest("[data-agent-card]");
+    if (agentCard && !event.target.closest("button, a, input, select, textarea, code")) {
+      state.selectedConfigAgent = agentCard.dataset.agentCard;
+      setAgentsSide(true);
+      renderConfigAgentsPanel();
+      return;
+    }
+    const removeManual = event.target.closest("[data-remove-manual-agent]");
+    if (removeManual) {
+      removeManualAgent(removeManual.dataset.removeManualAgent);
+      return;
+    }
+    const addPolicy = event.target.closest("[data-add-policy-chip]");
+    if (addPolicy) {
+      addPolicyChip(addPolicy.dataset.addPolicyChip);
+      return;
+    }
+    const removePolicy = event.target.closest("[data-remove-policy-chip]");
+    if (removePolicy) {
+      const [key, ...rest] = removePolicy.dataset.removePolicyChip.split(":");
+      removePolicyChip(key, rest.join(":"));
+      return;
+    }
+    const copyPrompt = event.target.closest("[data-copy-prompt]");
+    if (copyPrompt) {
+      copyConfigPrompt(copyPrompt.dataset.copyPrompt);
+      return;
+    }
+    const selectPrompt = event.target.closest("[data-select-prompt]");
+    if (selectPrompt) {
+      state.selectedPromptTemplate = selectPrompt.dataset.selectPrompt;
+      renderPromptConfiguration();
+      return;
+    }
+    const promptSideMode = event.target.closest("[data-prompt-side-mode]");
+    if (promptSideMode) {
+      state.promptSideMode = promptSideMode.dataset.promptSideMode;
+      renderPromptConfiguration();
+      return;
+    }
+    const selectPromptResource = event.target.closest("[data-select-prompt-resource]");
+    if (selectPromptResource) {
+      state.selectedPromptResourceId = selectPromptResource.dataset.selectPromptResource;
+      renderPromptConfiguration();
+      return;
+    }
+    if (event.target.closest("[data-new-prompt-template]")) {
+      toast("Preparado para crear una plantilla nueva en la siguiente iteración.");
+      return;
+    }
+    if (event.target.closest("[data-edit-prompt-template]")) {
+      toast("Edita la plantilla en el panel principal; los cambios quedan en el texto actual.");
+      return;
+    }
+    if (event.target.closest("[data-delete-prompt-template]")) {
+      toast("Las plantillas base están protegidas por ahora.");
+      return;
+    }
+    const resetPrompt = event.target.closest("[data-reset-prompt]");
+    if (resetPrompt) {
+      state.selectedPromptTemplate = resetPrompt.dataset.resetPrompt;
+      renderPromptConfiguration();
+      toast("Plantilla recargada.");
+      return;
+    }
+    const insertResource = event.target.closest("[data-insert-prompt-resource]");
+    if (insertResource) {
+      insertPromptResource(insertResource.dataset.insertPromptResource);
+      return;
+    }
+    if (event.target.closest("[data-toggle-prompt-library]")) {
+      state.promptLibraryOpen = !state.promptLibraryOpen;
+      renderPromptConfiguration();
+      return;
+    }
+    const applyPrompt = event.target.closest("[data-apply-prompt]");
+    if (applyPrompt) {
+      toast("Primer flujo preparado: copia el prompt o pásalo al agente elegido en la siguiente iteración.");
+      return;
+    }
     if (!event.target.closest(".model-chip-picker")) {
       $$(".model-chip-picker.open").forEach((item) => item.classList.remove("open"));
+    }
+    if (!event.target.closest(".role-tag-picker")) {
+      $$(".role-tag-picker.open").forEach((item) => item.classList.remove("open"));
+    }
+  });
+  document.addEventListener("input", (event) => {
+    if (event.target?.id === "promptResourceSearch") {
+      state.promptLibraryQuery = event.target.value;
+      renderPromptResourceGrid();
     }
   });
   $("#saveConfig").addEventListener("click", () => saveFlow(false));
@@ -1969,6 +3571,10 @@ function init() {
   });
   window.addEventListener("resize", () => {
     if ($("#view-decision").classList.contains("active")) drawWires();
+    if ($("#view-human").classList.contains("active")) {
+      syncHumanSideOffset();
+      syncHumanSideHeight();
+    }
   });
   initDrawerControls();
   initDiagramViewport();
@@ -1982,4 +3588,30 @@ function init() {
     .catch((error) => toast(error.message));
 }
 
+async function copyConfigPrompt(id) {
+  const text = $(`[data-prompt-template="${CSS.escape(id)}"]`)?.value;
+  if (!text) return toast("No se ha encontrado la plantilla.");
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Prompt copiado.");
+  } catch {
+    const textarea = $(`[data-prompt-template="${CSS.escape(id)}"]`);
+    textarea?.select();
+    document.execCommand("copy");
+    toast("Prompt copiado.");
+  }
+}
+
 init();
+
+async function refreshProvidersAndAgents() {
+  try {
+    const [catalog, providers] = await Promise.all([api("/catalog"), api("/providers")]);
+    state.catalog = catalog;
+    state.providers = providers;
+    await renderAgentsView();
+    toast("Conexiones comprobadas.");
+  } catch (error) {
+    toast(error.message);
+  }
+}

@@ -1,4 +1,4 @@
-from app.models import ComplexityLevel, CriteriaScores, RecommendedModel
+from app.models import ComplexityLevel, CriteriaScores, KarajanConfig, PolicyConfig, RecommendedModel
 from app.router import calculate_complexity_score, classify_prompt, level_for_score, model_for_level
 
 
@@ -35,3 +35,12 @@ def test_classification_returns_valid_contract() -> None:
     assert result.domain
     assert result.subtasks
     assert 0 <= result.complexity_score <= 5
+
+
+def test_policy_sensitive_domain_requires_human_review() -> None:
+    config = KarajanConfig(policy=PolicyConfig(sensitive_domains=["product"], human_review_min_level=5, operational_risk_review_threshold=5))
+
+    result = classify_prompt("Revisa el flujo UX de onboarding y propone mejoras menores.", config)
+
+    assert "product" in result.domain
+    assert result.requires_human_review is True
