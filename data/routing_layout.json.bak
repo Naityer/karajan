@@ -1,13 +1,13 @@
 {
   "entities": [
     {
-      "id": "entity-parent",
-      "name": "OpenAI (GPT)",
+      "id": "entity-agent-claude",
+      "name": "Claude (Agent)",
       "role": "parent",
       "role_tags": [
         "parent"
       ],
-      "provider": "openai",
+      "provider": "anthropic",
       "parentId": "",
       "levels": [
         "level_4_complex",
@@ -20,72 +20,106 @@
         "backend-builder",
         "security-review",
         "ponytail",
-        "promptfoo",
-        "aider"
+        "promptfoo"
       ],
       "capabilities": [
         "Classifier",
         "Planner",
-        "Router"
+        "Router",
+        "Reallocator",
+        "Policy",
+        "Recovery"
       ],
-      "x": 230.20539520033725,
-      "y": 0.0
+      "x": 520.0,
+      "y": 40.0
     },
     {
-      "id": "entity-mqsc5dll",
-      "name": "Google (Gemini)",
-      "role": "child",
-      "role_tags": [
-        "child"
-      ],
-      "provider": "google",
-      "parentId": "entity-parent",
-      "levels": [
-        "level_3_intermediate",
-        "level_2_moderate"
-      ],
-      "skills": [
-        "repo-analyzer",
-        "cti-analyst",
-        "frontend-builder",
-        "backend-builder",
-        "security-review",
-        "ponytail",
-        "aider",
-        "promptfoo"
-      ],
-      "capabilities": [],
-      "x": 597.0486838202073,
-      "y": 601.1088502098344
-    },
-    {
-      "id": "entity-mqsc68ht",
-      "name": "Groq (free, fast inference)",
+      "id": "entity-backup-chatgpt",
+      "name": "ChatGPT (Backup)",
       "role": "backup",
       "role_tags": [
         "backup"
       ],
-      "provider": "groq",
-      "parentId": "entity-parent",
+      "provider": "openai",
+      "parentId": "entity-agent-claude",
+      "levels": [],
+      "skills": [
+        "repo-analyzer",
+        "frontend-builder",
+        "backend-builder",
+        "security-review",
+        "promptfoo"
+      ],
+      "capabilities": [],
+      "x": 1044.0000563401443,
+      "y": 203.84615384615387
+    },
+    {
+      "id": "entity-worker-ollama",
+      "name": "Ollama (Worker N1)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama",
+      "parentId": "entity-agent-claude",
       "levels": [
         "level_1_simple"
       ],
       "skills": [
         "repo-analyzer",
-        "cti-analyst",
-        "frontend-builder",
-        "backend-builder",
-        "security-review",
-        "ponytail",
-        "promptfoo",
-        "aider"
+        "ponytail"
       ],
       "capabilities": [],
       "x": 0.0,
-      "y": 594.3288423647184
+      "y": 63.84615384615387
+    },
+    {
+      "id": "entity-worker-groq",
+      "name": "Groq (Worker N2)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "groq",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_2_moderate"
+      ],
+      "skills": [
+        "repo-analyzer",
+        "cti-analyst",
+        "ponytail",
+        "promptfoo"
+      ],
+      "capabilities": [],
+      "x": 74.00000939002405,
+      "y": 639.2307692307693
+    },
+    {
+      "id": "entity-worker-gemini",
+      "name": "Gemini (Worker N3)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "google",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_3_intermediate"
+      ],
+      "skills": [
+        "repo-analyzer",
+        "frontend-builder",
+        "backend-builder",
+        "promptfoo"
+      ],
+      "capabilities": [],
+      "x": 657.2306941105769,
+      "y": 677.3846905048077
     }
   ],
-  "zoom": 0.9499999999999998,
-  "drawer_width": 346,
-  "updated_at": "2026-06-26T16:57:11.205872Z"
+  "zoom": 0.65,
+  "drawer_width": 360,
+  "updated_at": "2026-06-27T02:36:50.093033Z"
 }

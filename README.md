@@ -111,16 +111,17 @@ From PowerShell:
 .\.venv\Scripts\python.exe .\desktop_app.py
 ```
 
-Or double-click:
+Or double-click the launcher to open the web GUI in your browser:
 
 ```text
 KARAJAN Desktop.bat
 ```
 
 The launcher creates `.env` on first run, loads it automatically, creates `.venv`
-when needed, and installs `requirements.txt` before starting the app. This
-requires `pywebview`, included in `requirements.txt`. On Windows, `pywebview`
-uses the installed WebView2 runtime.
+when needed, installs `requirements.txt`, starts FastAPI on
+`http://127.0.0.1:8001/`, and opens that URL in your default browser. The
+browser launcher does not require `pywebview`; the native-window mode remains
+available by running `desktop_app.py` manually.
 
 ## Run Routing Trials
 

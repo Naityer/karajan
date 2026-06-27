@@ -34,7 +34,7 @@ class ApiModelProvider(ModelProvider):
 
         if name == "anthropic":
             return self._anthropic(instruction, model_id, key, timeout_s)
-        if name in ("openai", "groq", "mistral", "openrouter", "huggingface", "deepseek", "zai", "together"):
+        if name in ("openai", "groq", "mistral", "openrouter", "huggingface", "deepseek", "zai", "together", "moonshot"):
             return self._openai_compatible(instruction, model_id, key, timeout_s)
         if name == "google":
             return self._google(instruction, model_id, key, timeout_s)
@@ -84,6 +84,8 @@ def _openai_base_url(provider: ProviderInfo) -> str | None:
         return "https://api.z.ai/api/paas/v4"
     if provider.name == "together":
         return "https://api.together.ai/v1"
+    if provider.name == "moonshot":
+        return "https://api.moonshot.ai/v1"
     return None  # default OpenAI endpoint
 
 

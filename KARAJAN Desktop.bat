@@ -13,7 +13,14 @@ if not exist ".env" (
   >> ".env" echo # OPENAI_API_KEY=
   >> ".env" echo # ANTHROPIC_API_KEY=
   >> ".env" echo # GOOGLE_API_KEY=
+  >> ".env" echo # GEMINI_API_KEY=
   >> ".env" echo # GROQ_API_KEY=
+  >> ".env" echo # DEEPSEEK_API_KEY=
+  >> ".env" echo # ZAI_API_KEY=
+  >> ".env" echo # TOGETHER_API_KEY=
+  >> ".env" echo # OPENROUTER_API_KEY=
+  >> ".env" echo # HF_TOKEN=
+  >> ".env" echo # MOONSHOT_API_KEY=
   >> ".env" echo # MISTRAL_API_KEY=
 )
 
@@ -23,6 +30,9 @@ for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
 
 set "PYTHON_BOOT="
 set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
+set "KARAJAN_HOST=127.0.0.1"
+set "KARAJAN_PORT=8001"
+set "KARAJAN_URL=http://%KARAJAN_HOST%:%KARAJAN_PORT%/"
 
 python -c "import sys" >nul 2>nul
 if not errorlevel 1 set "PYTHON_BOOT=python"
@@ -68,7 +78,7 @@ if errorlevel 1 (
   if errorlevel 1 goto dependency_error
 )
 
-"%PYTHON_EXE%" -c "import fastapi, uvicorn, pydantic, httpx, webview" >nul 2>nul
+"%PYTHON_EXE%" -c "import fastapi, uvicorn, pydantic, httpx" >nul 2>nul
 if errorlevel 1 (
   echo.
   echo Installing KARAJAN dependencies in .venv...
@@ -78,15 +88,29 @@ if errorlevel 1 (
   if errorlevel 1 goto dependency_error
 )
 
-"%PYTHON_EXE%" -c "import fastapi, uvicorn, pydantic, httpx, webview" >nul 2>nul
+"%PYTHON_EXE%" -c "import fastapi, uvicorn, pydantic, httpx" >nul 2>nul
 if errorlevel 1 goto dependency_error
 
 echo.
-echo Starting KARAJAN Desktop with:
+echo Starting KARAJAN web GUI with:
 echo   "%PYTHON_EXE%"
+echo   %KARAJAN_URL%
 echo.
-"%PYTHON_EXE%" desktop_app.py
-if errorlevel 1 goto launch_error
+
+start "KARAJAN API" /min "%PYTHON_EXE%" -m uvicorn app.main:app --host %KARAJAN_HOST% --port %KARAJAN_PORT% --log-level info
+
+echo Waiting for KARAJAN API...
+for /l %%I in (1,1,45) do (
+  "%PYTHON_EXE%" -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('%KARAJAN_URL%health', timeout=1).status == 200 else 1)" >nul 2>nul
+  if not errorlevel 1 goto open_browser
+  timeout /t 1 /nobreak >nul
+)
+
+goto launch_error
+
+:open_browser
+echo Opening %KARAJAN_URL%
+start "" "%KARAJAN_URL%"
 
 exit /b 0
 
@@ -102,9 +126,9 @@ exit /b 1
 
 :launch_error
 echo.
-echo KARAJAN Desktop could not start.
+echo KARAJAN web GUI could not start on %KARAJAN_URL%.
 echo Try running:
-echo   "%PYTHON_EXE%" desktop_app.py
+echo   "%PYTHON_EXE%" -m uvicorn app.main:app --host %KARAJAN_HOST% --port %KARAJAN_PORT%
 echo.
 pause
 exit /b 1

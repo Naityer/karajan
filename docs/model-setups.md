@@ -9,6 +9,7 @@ OpenAI/Anthropic the default path:
 - `google`: Gemini models; set `GOOGLE_API_KEY` or `GEMINI_API_KEY`.
 - `deepseek`: low-cost reasoning/coding models; set `DEEPSEEK_API_KEY`.
 - `zai`: GLM agentic/coding models; set `ZAI_API_KEY`.
+- `moonshot`: Kimi models; set `MOONSHOT_API_KEY`.
 - `together`: hosted open-source models; set `TOGETHER_API_KEY`.
 - `openrouter`: many free/community models behind one API; set `OPENROUTER_API_KEY`.
 - `huggingface`: Inference Providers router; set `HF_TOKEN`.
@@ -46,3 +47,26 @@ Recommended pro config once keys are set:
 
 Keep `enable_runtime_fallback` on. If the selected provider fails, KARAJAN will
 try ready free providers and then the deterministic simulated backend.
+
+## Local operational audit
+
+Last local check:
+
+- Ready now: `codex` CLI. It is the only detected executable provider in PATH.
+- Not ready locally: `ollama`, `gh copilot`, `claude`.
+- Not ready by API key: `openai`, `google/gemini`, `groq`, `deepseek`, `zai/glm`, `moonshot/kimi`, `together`, `openrouter`, `huggingface`, `mistral`.
+- Claude is intentionally ignored for fallback planning when unavailable.
+
+Recommended open/free activation order:
+
+1. Install Ollama and run `ollama serve`.
+2. Pull a usable local pool:
+   - `ollama pull llama3.2:3b`
+   - `ollama pull llama3.1:8b`
+   - `ollama pull qwen2.5:14b`
+   - `ollama pull deepseek-r1:32b` or `ollama pull qwen2.5:32b` for stronger local routing.
+3. Add `GROQ_API_KEY` for fast hosted open models.
+4. Add `ZAI_API_KEY` for GLM.
+5. Add `DEEPSEEK_API_KEY` for DeepSeek reasoning/coding.
+6. Add `MOONSHOT_API_KEY` for Kimi.
+7. Add `OPENROUTER_API_KEY`, `TOGETHER_API_KEY` or `HF_TOKEN` for broader open-model fallback.
