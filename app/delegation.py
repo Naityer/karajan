@@ -4,17 +4,21 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from app.logging_config import get_logger, log_event
+from app import flow_policy
 from app.models import (
     Backend,
     ClassificationResult,
     DecisionLogEntry,
     DelegationResult,
     KarajanConfig,
+    RoutingLayout,
     Subtask,
     SubtaskExecution,
     TaskStatus,
 )
 from app.providers import resolve
+from app.providers.base import ProviderRun
+from app.providers.registry import Resolution, fallback_resolutions
 
 logger = get_logger("delegation")
 
@@ -36,6 +40,7 @@ def delegate(
     config: KarajanConfig | None = None,
     *,
     human_approved: bool = False,
+    layout: RoutingLayout | None = None,
 ) -> tuple[DelegationResult, list[DecisionLogEntry]]:
     """Run every subtask on its resolved backend and record harness decisions.
 
@@ -54,12 +59,13 @@ def delegate(
 
     if config.orchestration.parallel and len(subtasks) > 1:
         with ThreadPoolExecutor(max_workers=config.orchestration.max_parallel) as pool:
-            paired = list(pool.map(lambda item: _run_subtask(classification, item[0], item[1], config), enumerate(subtasks, start=1)))
+            paired = list(pool.map(lambda item: _run_subtask(classification, item[0], item[1], config, layout), enumerate(subtasks, start=1)))
     else:
-        paired = [_run_subtask(classification, index, subtask, config) for index, subtask in enumerate(subtasks, start=1)]
+        paired = [_run_subtask(classification, index, subtask, config, layout) for index, subtask in enumerate(subtasks, start=1)]
 
     executions = [execution for execution, _ in paired]
-    decisions.extend(decision for _, decision in paired)
+    for _, subtask_decisions in paired:
+        decisions.extend(subtask_decisions)
 
     overall = _overall_status(executions)
 
@@ -78,16 +84,61 @@ def _run_subtask(
     index: int,
     subtask: Subtask,
     config: KarajanConfig,
-) -> tuple[SubtaskExecution, DecisionLogEntry]:
+    layout: RoutingLayout | None,
+) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
+    assignment = flow_policy.assign_subtask(classification, subtask, layout)
     resolution = resolve(subtask.recommended_model, config)
     instruction = f"{classification.original_prompt}\n\nSubtarea: {subtask.name}\nValidación: {subtask.validation}"
 
-    retries = config.orchestration.max_retries
-    run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.subtask_timeout_s)
-    attempts = 0
-    while run.error and attempts < retries:
-        attempts += 1
-        run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.subtask_timeout_s)
+    run = _run_with_retries(resolution, instruction, config)
+    attempted = {resolution.provider_name}
+    decisions: list[DecisionLogEntry] = [
+        DecisionLogEntry(
+            task_id=classification.task_id,
+            phase="assign",
+            decision=flow_policy.assignment_summary(subtask, assignment),
+            score=float(subtask.complexity),
+            backend=resolution.backend,
+            reason=f"Role policy selected owner, validator and backup chain for '{subtask.name}'.",
+        )
+    ]
+
+    if run.error and config.orchestration.enable_runtime_fallback:
+        for fallback in fallback_resolutions(subtask.recommended_model, config, attempted):
+            decisions.append(
+                DecisionLogEntry(
+                    task_id=classification.task_id,
+                    phase="fallback",
+                    decision=(
+                        f"{subtask.id}:fallback;"
+                        f"from={resolution.provider_name};to={fallback.provider_name};tier={subtask.recommended_model.value}"
+                    ),
+                    score=float(subtask.complexity),
+                    backend=fallback.backend,
+                    reason=f"primary error: {run.error}",
+                )
+            )
+            decisions.append(
+                DecisionLogEntry(
+                    task_id=classification.task_id,
+                    phase="reassign",
+                    decision=flow_policy.reassign_summary(
+                        subtask,
+                        resolution.provider_name,
+                        fallback.provider_name,
+                        assignment,
+                    ),
+                    score=float(subtask.complexity),
+                    backend=fallback.backend,
+                    reason="Runtime fallback changed the execution target after provider failure.",
+                )
+            )
+            attempted.add(fallback.provider_name)
+            fallback_run = _run_with_retries(fallback, instruction, config)
+            resolution = fallback
+            run = fallback_run
+            if not run.error:
+                break
 
     tier = subtask.recommended_model.value
     cost = round(config.cost_table.get(tier, 0.0) * subtask.complexity, 5)
@@ -105,15 +156,41 @@ def _run_subtask(
         output=run.output or (run.error or ""),
         error=run.error,
     )
-    decision = DecisionLogEntry(
-        task_id=classification.task_id,
-        phase="delegate",
-        decision=f"{subtask.id}:{tier}->{resolution.backend.value}:{resolution.provider_name}",
-        score=float(subtask.complexity),
-        backend=resolution.backend,
-        reason=run.error or f"executed '{subtask.name}'",
+    decisions.append(
+        DecisionLogEntry(
+            task_id=classification.task_id,
+            phase="delegate",
+            decision=f"{subtask.id}:{tier}->{resolution.backend.value}:{resolution.provider_name}",
+            score=float(subtask.complexity),
+            backend=resolution.backend,
+            reason=run.error or f"executed '{subtask.name}'",
+        )
     )
-    return execution, decision
+    decisions.append(
+        DecisionLogEntry(
+            task_id=classification.task_id,
+            phase="validate",
+            decision=flow_policy.validation_summary(subtask, assignment, status),
+            score=float(subtask.complexity),
+            backend=resolution.backend,
+            reason=run.error or subtask.validation,
+        )
+    )
+    return execution, decisions
+
+
+def _run_with_retries(
+    resolution: Resolution,
+    instruction: str,
+    config: KarajanConfig,
+) -> ProviderRun:
+    retries = config.orchestration.max_retries
+    run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.subtask_timeout_s)
+    attempts = 0
+    while run.error and attempts < retries:
+        attempts += 1
+        run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.subtask_timeout_s)
+    return run
 
 
 def _pre_execution_gate(

@@ -19,9 +19,11 @@ def detect(provider: ProviderInfo) -> CredentialStatus:
     so auto-detection never picks a local backend that would stall or auto-pull.
     """
     if provider.auth_method == AuthMethod.API_KEY:
-        available = bool(provider.env_var and os.environ.get(provider.env_var))
+        env_names = _env_names(provider)
+        available = any(bool(os.environ.get(name)) for name in env_names)
         ready = available  # key present ⇒ ready instantly
-        detail = f"{provider.env_var} is set" if available else f"set {provider.env_var} to enable"
+        joined = " or ".join(env_names)
+        detail = f"{joined} is set" if available else f"set {joined} to enable"
     else:  # LOCAL / CLI_LOGIN both need the CLI binary present
         binary = _cli_binary(provider)
         available = bool(binary and shutil.which(binary))
@@ -81,9 +83,9 @@ def guided_setup(name: str) -> ProviderSetup | None:
     if provider.auth_method == AuthMethod.API_KEY:
         if provider.signup_url:
             steps.append(f"Create an account / API key at {provider.signup_url}")
-        if provider.env_var:
-            steps.append(f"Export the key:  setx {provider.env_var} <your-key>  (new shell)")
-            steps.append(f"Or for this session:  $env:{provider.env_var}='<your-key>'")
+        for env_var in _env_names(provider):
+            steps.append(f"Export the key:  setx {env_var} <your-key>  (new shell)")
+            steps.append(f"Or for this session:  $env:{env_var}='<your-key>'")
     elif provider.auth_method == AuthMethod.CLI_LOGIN:
         binary = _cli_binary(provider)
         steps.append(f"Install `{binary}` ({provider.signup_url or 'see docs'})")
@@ -111,3 +113,10 @@ def _cli_binary(provider: ProviderInfo) -> str | None:
         return None
     template = provider.cli_command or provider.login_command or ""
     return template.split()[0] if template else None
+
+
+def _env_names(provider: ProviderInfo) -> list[str]:
+    names = [provider.env_var] if provider.env_var else []
+    if provider.name == "google":
+        names.append("GEMINI_API_KEY")
+    return [name for name in names if name]

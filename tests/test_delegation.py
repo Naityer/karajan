@@ -3,8 +3,10 @@
 from app import delegation
 from app.delegation import delegate
 from app.models import Backend, KarajanConfig, OrchestrationConfig
+from app.models import RoutingEntity, RoutingLayout
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
+from app.providers.simulated import SimulatedModelProvider
 from app.router import classify_prompt
 
 PROMPT = "Corrige un bug en una API y valida con tests de integracion."
@@ -46,7 +48,9 @@ def test_delegate_runs_every_subtask_on_simulated() -> None:
 
     assert result.status.value == "completed"
     assert len(result.executions) == len(classification.subtasks)
-    assert len(decisions) == len(classification.subtasks)
+    assert sum(decision.phase == "assign" for decision in decisions) == len(classification.subtasks)
+    assert sum(decision.phase == "delegate" for decision in decisions) == len(classification.subtasks)
+    assert sum(decision.phase == "validate" for decision in decisions) == len(classification.subtasks)
     assert all(ex.backend == Backend.SIMULATED for ex in result.executions)
     assert result.total_estimated_cost_usd > 0
 
@@ -54,13 +58,35 @@ def test_delegate_runs_every_subtask_on_simulated() -> None:
 def test_delegate_marks_failed_when_provider_errors(monkeypatch) -> None:
     _patch_resolve(monkeypatch, _FailingProvider)
     classification = classify_prompt(PROMPT)
-    config = KarajanConfig(backend=Backend.API, orchestration=OrchestrationConfig(max_retries=0))
+    config = KarajanConfig(
+        backend=Backend.API,
+        orchestration=OrchestrationConfig(max_retries=0, enable_runtime_fallback=False),
+    )
 
     result, _ = delegate(classification, config)
 
     assert result.status.value == "failed"
     assert all(ex.status.value == "failed" for ex in result.executions)
     assert all(ex.error == "boom" for ex in result.executions)
+
+
+def test_delegate_falls_back_to_simulated_when_provider_errors(monkeypatch) -> None:
+    _patch_resolve(monkeypatch, _FailingProvider)
+    monkeypatch.setattr(
+        delegation,
+        "fallback_resolutions",
+        lambda tier, config, tried: [Resolution(SimulatedModelProvider(), Backend.SIMULATED, tier.value, "simulated")],
+    )
+    classification = classify_prompt(PROMPT)
+    config = KarajanConfig(backend=Backend.API, orchestration=OrchestrationConfig(max_retries=0))
+
+    result, decisions = delegate(classification, config)
+
+    assert result.status.value == "completed"
+    assert all(ex.status.value == "completed" for ex in result.executions)
+    assert all(ex.backend == Backend.SIMULATED for ex in result.executions)
+    assert any(decision.phase == "fallback" for decision in decisions)
+    assert any(decision.phase == "reassign" for decision in decisions)
 
 
 def test_delegate_parallel_executes_all_subtasks(monkeypatch) -> None:
@@ -87,3 +113,43 @@ def test_delegate_retries_transient_failure(monkeypatch) -> None:
     # Each subtask's provider failed once then succeeded on retry.
     assert result.status.value == "completed"
     assert all(ex.status.value == "completed" for ex in result.executions)
+
+
+def test_delegate_records_role_flow_from_layout() -> None:
+    classification = classify_prompt(PROMPT)
+    layout = RoutingLayout(
+        entities=[
+            RoutingEntity(
+                id="agent",
+                name="Parent",
+                role="parent",
+                provider="openai",
+                levels=["level_4_complex", "level_5_critical"],
+            ),
+            RoutingEntity(
+                id="worker",
+                name="Worker",
+                role="child",
+                provider="google",
+                parentId="agent",
+                levels=["level_1_simple", "level_2_moderate", "level_3_intermediate"],
+            ),
+            RoutingEntity(
+                id="backup",
+                name="Backup",
+                role="backup",
+                provider="groq",
+                parentId="agent",
+                levels=["level_1_simple"],
+            ),
+        ]
+    )
+
+    _, decisions = delegate(classification, KarajanConfig(backend=Backend.SIMULATED), layout=layout)
+
+    assign_decisions = [decision.decision for decision in decisions if decision.phase == "assign"]
+    validate_decisions = [decision.decision for decision in decisions if decision.phase == "validate"]
+    assert assign_decisions
+    assert any("owner=Worker:Worker" in decision for decision in assign_decisions)
+    assert all("backup=Backup:Backup" in decision for decision in assign_decisions)
+    assert all("validator=" in decision for decision in validate_decisions)

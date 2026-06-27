@@ -10,5 +10,5 @@ pywebview>=6.2,<7.0
 # pyyaml>=6.0            # pro-mode YAML config (karajan.yaml)
 # keyring>=25.0          # OS keychain credential storage
 # anthropic>=0.40        # Anthropic (Claude) API backend
-# openai>=1.40           # OpenAI / Groq / Mistral (OpenAI-compatible) API backend
+# openai>=1.40           # OpenAI / Groq / Mistral / DeepSeek / Z.AI / Together / OpenRouter / HF API backends
 # google-genai>=0.3      # Google (Gemini) API backend

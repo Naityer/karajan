@@ -2694,6 +2694,11 @@ function renderPromptConfiguration() {
     state.selectedPromptResourceId = resources[0]?.id || allResources[0]?.id || "";
   }
   const selectedResource = allResources.find((resource) => resource.id === state.selectedPromptResourceId) || resources[0] || null;
+  const templateHeaderActions = state.promptSideMode === "templates" ? `<div class="prompt-library-header-actions">
+          <button type="button" data-new-prompt-template>Nueva</button>
+          <button type="button" data-edit-prompt-template="${escapeHtml(selected.id)}">Modificar</button>
+          <button type="button" data-delete-prompt-template="${escapeHtml(selected.id)}">Eliminar</button>
+        </div>` : "";
   target.innerHTML = `<div class="prompt-config-shell ${state.promptLibraryOpen ? "" : "library-collapsed"}">
     <section class="prompt-config-main">
       <div class="prompt-config-intro compact">
@@ -2702,9 +2707,6 @@ function renderPromptConfiguration() {
           <h2>Editor de plantilla</h2>
           <p>Carga una plantilla, edítala y copia el prompt final. La biblioteca lateral contiene piezas documentadas para construir jerarquías, reglas y proveedores.</p>
         </div>
-      </div>
-      <div class="prompt-template-tabs compact-template-index">
-        ${prompts.map((prompt) => `<button type="button" class="${prompt.id === selected.id ? "active" : ""}" data-select-prompt="${escapeHtml(prompt.id)}"><span>${escapeHtml(prompt.scope)}</span>${escapeHtml(prompt.title)}</button>`).join("")}
       </div>
       <article class="prompt-editor-card">
         <header>
@@ -2724,11 +2726,14 @@ function renderPromptConfiguration() {
     </section>
     <aside class="prompt-library-panel">
       <header>
-        <div>
+        <div class="prompt-library-title">
           <span class="eyebrow">Resource library</span>
           <h3>${state.promptSideMode === "templates" ? "Plantillas" : "Biblioteca de recursos"}</h3>
         </div>
-        <button type="button" class="icon-btn" data-toggle-prompt-library title="Mostrar u ocultar biblioteca">◧</button>
+        <div class="prompt-library-tools">
+          ${templateHeaderActions}
+          <button type="button" class="icon-btn" data-toggle-prompt-library title="Mostrar u ocultar biblioteca">◧</button>
+        </div>
       </header>
       <div class="prompt-library-body">
         <div class="prompt-library-switch">
@@ -2746,18 +2751,15 @@ function renderPromptResourceGrid() {
 }
 
 function promptTemplateSidebar(prompts, selected) {
-  return `<div class="prompt-side-actions">
-      <button type="button" data-new-prompt-template>Nueva</button>
-      <button type="button" data-edit-prompt-template="${escapeHtml(selected.id)}">Modificar</button>
-      <button type="button" data-delete-prompt-template="${escapeHtml(selected.id)}">Eliminar</button>
-    </div>
+  return `<div class="prompt-template-sidebar">
     <div class="prompt-side-list">
       ${prompts.map((prompt) => `<button type="button" class="prompt-side-item ${prompt.id === selected.id ? "active" : ""}" data-select-prompt="${escapeHtml(prompt.id)}">
         <span>${escapeHtml(prompt.scope)}</span>
         <b>${escapeHtml(prompt.title)}</b>
         <small>${escapeHtml(prompt.description)}</small>
       </button>`).join("")}
-    </div>`;
+    </div>
+  </div>`;
 }
 
 function promptResourceSidebar(resources, selectedResource) {
@@ -2772,7 +2774,8 @@ function promptResourceSidebar(resources, selectedResource) {
       <code>${escapeHtml(selectedResource.example)}</code>
       <button type="button" data-insert-prompt-resource="${escapeHtml(selectedResource.id)}">Insertar en plantilla</button>
     </article>` : `<div class="config-empty">Selecciona un recurso para ver el detalle.</div>`;
-  return `<input type="search" id="promptResourceSearch" placeholder="Buscar roles, niveles, restricciones..." value="${escapeHtml(state.promptLibraryQuery)}" />
+  return `<div class="prompt-resource-sidebar">
+    <input type="search" id="promptResourceSearch" placeholder="Buscar roles, niveles, restricciones..." value="${escapeHtml(state.promptLibraryQuery)}" />
     <div class="prompt-resource-layout">
       <div class="prompt-resource-index">
         ${Object.entries(grouped).map(([group, items]) => `<section>
@@ -2783,7 +2786,8 @@ function promptResourceSidebar(resources, selectedResource) {
         </section>`).join("") || `<div class="config-empty">Sin recursos para esa búsqueda.</div>`}
       </div>
       ${detail}
-    </div>`;
+    </div>
+  </div>`;
 }
 
 function promptTemplateCard(template) {

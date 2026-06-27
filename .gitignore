@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
+.env
 
 # SQLite WAL sidecar files (transient; the .db itself is intentionally tracked)
 *.db-wal
@@ -14,3 +15,4 @@ data/active_config.json
 
 # Trial reports
 data/trial_reports/
+data/audit_reports/

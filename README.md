@@ -117,7 +117,10 @@ Or double-click:
 KARAJAN Desktop.bat
 ```
 
-This requires `pywebview`, included in `requirements.txt`. On Windows, `pywebview` uses the installed WebView2 runtime.
+The launcher creates `.env` on first run, loads it automatically, creates `.venv`
+when needed, and installs `requirements.txt` before starting the app. This
+requires `pywebview`, included in `requirements.txt`. On Windows, `pywebview`
+uses the installed WebView2 runtime.
 
 ## Run Routing Trials
 

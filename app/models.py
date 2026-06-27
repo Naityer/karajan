@@ -329,6 +329,7 @@ class OrchestrationConfig(BaseModel):
     max_parallel: int = Field(default=3, ge=1, le=16)
     subtask_timeout_s: int = Field(default=120, ge=1)
     max_retries: int = Field(default=1, ge=0, le=5)
+    enable_runtime_fallback: bool = True
     require_human_review_gate: bool = True
     # Cost guardrails evaluated BEFORE any subtask runs. 0 disables the cap.
     max_cost_per_task_usd: float = Field(default=0.0, ge=0.0)

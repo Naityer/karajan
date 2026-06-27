@@ -39,6 +39,37 @@ def resolve(tier: RecommendedModel, config: KarajanConfig) -> Resolution:
     return _simulated(tier)
 
 
+def fallback_resolutions(
+    tier: RecommendedModel,
+    config: KarajanConfig,
+    tried_provider_names: set[str] | None = None,
+) -> list[Resolution]:
+    """Return safe fallback providers for a failed runtime execution.
+
+    Only free catalog providers are attempted automatically. The deterministic
+    simulated provider is always last so delegation can still finish and record
+    the fallback chain without spending money or requiring credentials.
+    """
+    tried = tried_provider_names or set()
+    candidates: list[Resolution] = []
+    from app import credentials  # local import avoids cycles and keeps detection lazy
+
+    statuses = {status.provider: status for status in credentials.detect_all()}
+    for info in catalog.all_providers():
+        status = statuses.get(info.name)
+        if not info.is_free or info.name in tried or tier not in info.tiers or not (status and status.ready):
+            continue
+        model_id = info.tiers.get(tier) or next(iter(info.tiers.values()), tier.value)
+        if info.backend == Backend.API:
+            candidates.append(Resolution(ApiModelProvider(info), Backend.API, model_id, info.name))
+        elif info.backend == Backend.CLI:
+            candidates.append(Resolution(CliModelProvider(info), Backend.CLI, model_id, info.name))
+
+    if "simulated" not in tried:
+        candidates.append(_simulated(tier))
+    return candidates
+
+
 def _provider_for_tier(tier: RecommendedModel, config: KarajanConfig) -> ProviderInfo | None:
     # Explicit preference from auto-detect / pro config wins.
     preferred = config.provider_preferences.get(tier.value)

@@ -41,6 +41,7 @@
       "provider": "google",
       "parentId": "entity-parent",
       "levels": [
+        "level_1_simple",
         "level_3_intermediate",
         "level_2_moderate"
       ],
@@ -85,7 +86,7 @@
       "y": 594.3288423647184
     }
   ],
-  "zoom": 0.9499999999999998,
+  "zoom": 0.55,
   "drawer_width": 346,
-  "updated_at": "2026-06-26T16:57:11.864706Z"
+  "updated_at": "2026-06-26T20:08:32.180043Z"
 }

@@ -355,8 +355,14 @@ def _confidence(score: float) -> float:
 def _decision_event_type(decision: DecisionLogEntry) -> str:
     if decision.phase == "classify":
         return "task_classified"
+    if decision.phase == "assign":
+        return "task_assigned"
     if decision.phase == "delegate":
         return "task_delegated"
+    if decision.phase == "fallback":
+        return "provider_fallback"
+    if decision.phase == "reassign":
+        return "task_reassigned"
     if decision.phase == "validate":
         return "validator_approved" if "approved" in decision.decision else "validation"
     if "reassign" in decision.decision:
@@ -367,7 +373,7 @@ def _decision_event_type(decision: DecisionLogEntry) -> str:
 
 
 def _decision_source(phase: str, agent_name: str) -> str:
-    if phase in {"classify", "delegate", "validate"}:
+    if phase in {"classify", "assign", "delegate", "validate", "reassign"}:
         return agent_name
     return "Harness"
 

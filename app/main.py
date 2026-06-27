@@ -9,6 +9,10 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.env import load_project_env
+
+load_project_env()
+
 from app import (
     catalog,
     classifier,
@@ -152,7 +156,7 @@ def delegate_task(request: DelegationRequest, _: None = Depends(require_token)) 
         raise HTTPException(status_code=404, detail="task not found") from exc
 
     _enforce_daily_budget(record.classification)
-    result, decisions = delegation.delegate(record.classification, active_config)
+    result, decisions = delegation.delegate(record.classification, active_config, layout=layout_store.load())
     return store.save_delegation(result, decisions)
 
 
@@ -198,7 +202,12 @@ def approve_review(task_id: str, _: None = Depends(require_token)) -> TaskRecord
         decision="human_review_gate=approved",
         reason="Approved from KARAJAN monitor; releasing withheld execution.",
     )
-    result, decisions = delegation.delegate(record.classification, active_config, human_approved=True)
+    result, decisions = delegation.delegate(
+        record.classification,
+        active_config,
+        human_approved=True,
+        layout=layout_store.load(),
+    )
     return store.save_delegation(result, [approval, *decisions])
 
 

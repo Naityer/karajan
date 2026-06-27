@@ -2,30 +2,34 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-set "PYTHON_BOOT="
-set "PYTHON_EXE="
-set "SYSTEM_PYTHON="
-
-if exist ".venv\Scripts\python.exe" (
-  ".venv\Scripts\python.exe" -m pip --version >nul 2>nul
-  if not errorlevel 1 set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
+if not exist ".env" (
+  echo.
+  echo Creating local configuration: .env
+  > ".env" echo # KARAJAN local environment
+  >> ".env" echo # Leave KARAJAN_TOKEN empty to keep local mutation auth disabled.
+  >> ".env" echo KARAJAN_TOKEN=
+  >> ".env" echo KARAJAN_LOG_LEVEL=INFO
+  >> ".env" echo # Optional provider keys:
+  >> ".env" echo # OPENAI_API_KEY=
+  >> ".env" echo # ANTHROPIC_API_KEY=
+  >> ".env" echo # GOOGLE_API_KEY=
+  >> ".env" echo # GROQ_API_KEY=
+  >> ".env" echo # MISTRAL_API_KEY=
 )
+
+for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
+  if not "%%~A"=="" if not defined %%A set "%%~A=%%~B"
+)
+
+set "PYTHON_BOOT="
+set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
 
 python -c "import sys" >nul 2>nul
-if not errorlevel 1 (
-  set "PYTHON_BOOT=python"
-  python -c "import fastapi, uvicorn, pydantic, httpx, webview" >nul 2>nul
-  if not errorlevel 1 set "SYSTEM_PYTHON=python"
-)
+if not errorlevel 1 set "PYTHON_BOOT=python"
 
 if not defined PYTHON_BOOT (
   py -3.12 -c "import sys" >nul 2>nul
   if not errorlevel 1 set "PYTHON_BOOT=py -3.12"
-)
-
-if not defined SYSTEM_PYTHON (
-  py -3.12 -c "import fastapi, uvicorn, pydantic, httpx, webview" >nul 2>nul
-  if not errorlevel 1 set "SYSTEM_PYTHON=py -3.12"
 )
 
 if not defined PYTHON_BOOT (
@@ -33,31 +37,7 @@ if not defined PYTHON_BOOT (
   if not errorlevel 1 set "PYTHON_BOOT=py -3"
 )
 
-if not defined SYSTEM_PYTHON (
-  py -3 -c "import fastapi, uvicorn, pydantic, httpx, webview" >nul 2>nul
-  if not errorlevel 1 set "SYSTEM_PYTHON=py -3"
-)
-
-if not defined PYTHON_EXE if defined SYSTEM_PYTHON (
-  set "PYTHON_EXE=%SYSTEM_PYTHON%"
-)
-
-if not defined PYTHON_BOOT if not defined PYTHON_EXE (
-  python -c "import sys" >nul 2>nul
-  if not errorlevel 1 set "PYTHON_BOOT=python"
-)
-
-if not defined PYTHON_BOOT if not defined PYTHON_EXE (
-  py -3.12 -c "import sys" >nul 2>nul
-  if not errorlevel 1 set "PYTHON_BOOT=py -3.12"
-)
-
-if not defined PYTHON_BOOT if not defined PYTHON_EXE (
-  py -3 -c "import sys" >nul 2>nul
-  if not errorlevel 1 set "PYTHON_BOOT=py -3"
-)
-
-if not defined PYTHON_BOOT if not defined PYTHON_EXE (
+if not defined PYTHON_BOOT if not exist "%PYTHON_EXE%" (
   echo.
   echo KARAJAN Desktop could not find Python.
   echo Install Python 3.11+ and run this launcher again.
@@ -66,13 +46,9 @@ if not defined PYTHON_BOOT if not defined PYTHON_EXE (
   exit /b 1
 )
 
-if not defined PYTHON_EXE (
+if not exist "%PYTHON_EXE%" (
   echo.
-  echo Creating local environment: .venv
-  if exist ".venv" (
-    echo Removing incomplete .venv...
-    rmdir /s /q ".venv"
-  )
+  echo Creating local Python environment: .venv
   %PYTHON_BOOT% -m venv .venv
   if errorlevel 1 (
     echo.
@@ -82,14 +58,20 @@ if not defined PYTHON_EXE (
     pause
     exit /b 1
   )
-  set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
+)
+
+"%PYTHON_EXE%" -m pip --version >nul 2>nul
+if errorlevel 1 (
+  echo.
+  echo Preparing pip in .venv...
+  "%PYTHON_EXE%" -m ensurepip --upgrade
+  if errorlevel 1 goto dependency_error
 )
 
 "%PYTHON_EXE%" -c "import fastapi, uvicorn, pydantic, httpx, webview" >nul 2>nul
 if errorlevel 1 (
   echo.
   echo Installing KARAJAN dependencies in .venv...
-  "%PYTHON_EXE%" -m ensurepip --upgrade >nul 2>nul
   "%PYTHON_EXE%" -m pip install --upgrade pip
   if errorlevel 1 goto dependency_error
   "%PYTHON_EXE%" -m pip install -r requirements.txt

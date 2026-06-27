@@ -1,15 +1,47 @@
 from __future__ import annotations
 
 import socket
+import importlib
+import subprocess
 import sys
 import threading
 import time
 from contextlib import closing
 
+from app.env import PROJECT_ROOT, ensure_project_env, load_project_env
+
 
 HOST = "127.0.0.1"
 PREFERRED_PORT = 8001
 APP_IMPORT = "app.main:app"
+REQUIRED_MODULES = ("fastapi", "uvicorn", "pydantic", "httpx", "webview")
+REQUIREMENTS_FILE = PROJECT_ROOT / "requirements.txt"
+
+
+def missing_modules() -> list[str]:
+    missing: list[str] = []
+    for module in REQUIRED_MODULES:
+        try:
+            importlib.import_module(module)
+        except ImportError:
+            missing.append(module)
+    return missing
+
+
+def ensure_dependencies() -> None:
+    missing = missing_modules()
+    if not missing:
+        return
+
+    print("Installing KARAJAN dependencies:", ", ".join(missing), file=sys.stderr)
+    subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], check=False)
+    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"], check=True)
+    subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)], check=True)
+
+    missing_after_install = missing_modules()
+    if missing_after_install:
+        joined = ", ".join(missing_after_install)
+        raise RuntimeError(f"Missing dependencies after install: {joined}")
 
 
 def _port_is_free(port: int) -> bool:
@@ -37,6 +69,10 @@ def wait_until_ready(port: int, timeout_s: float = 8.0) -> None:
 
 
 def main() -> int:
+    ensure_project_env()
+    load_project_env()
+    ensure_dependencies()
+
     try:
         import uvicorn
     except ImportError:

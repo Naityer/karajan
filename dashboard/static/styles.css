@@ -125,9 +125,9 @@ code, .mono { font-family: var(--mono); }
   border: 1px solid var(--line); padding: 0;
 }
 .sw.active { outline: 2px solid var(--accent); outline-offset: 1px; }
-.sw.amber { background: #cf9d1f; }
-.sw.light { background: #ffffff; }
-.sw.dark { background: #1a1d22; }
+.sw.amber { background: linear-gradient(135deg, #233d4c 0 38%, #619c8a 38% 68%, #ffc857 68%); }
+.sw.light { background: linear-gradient(135deg, #ffffff 0 30%, #e7f2e3 30% 52%, #9cc79a 52% 75%, #ffe36a 75%); }
+.sw.dark { background: linear-gradient(135deg, #0f1014 0 42%, #2a2f35 42% 66%, #f9c650 66%); }
 
 /* ---- Stage / views --------------------------------------------------- */
 .stage { height: calc(100dvh - 46px); overflow: hidden; }
@@ -5177,68 +5177,146 @@ body.resizing-human {
 
 /* Theme polish v7: stronger palettes, clearer data hierarchy and richer tags. */
 html[data-theme="dark"] {
-  --bg: #0e1116;
-  --panel: #171b22;
-  --panel-2: #202630;
-  --line: #313946;
-  --text: #f0f3f7;
-  --muted: #a4afbd;
-  --accent: #f0c64a;
-  --accent-ink: #171207;
-  --ok: #68d391;
-  --warn: #f6c84f;
-  --bad: #ff7a76;
-  --track: #11161d;
-  --surface-soft: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
-  --surface-data: color-mix(in srgb, var(--accent) 7%, var(--panel-2));
+  --bg: #0f1014;
+  --panel: #17191f;
+  --panel-2: #242932;
+  --line: #3b4350;
+  --text: #f3f5f7;
+  --muted: #b9c0c8;
+  --accent: #f9c650;
+  --accent-ink: #16130a;
+  --ok: #7dbb8a;
+  --warn: #f9c650;
+  --bad: #ef7b6d;
+  --track: #111319;
+  --surface-soft: #20242c;
+  --surface-data: color-mix(in srgb, #5d6773 26%, var(--panel-2));
 }
 
 html[data-theme="light"] {
-  --bg: #eef2f6;
+  --bg: #ffffff;
   --panel: #ffffff;
-  --panel-2: #f6f8fb;
-  --line: #d4dce7;
-  --text: #17202b;
-  --muted: #536070;
-  --accent: #b47a09;
+  --panel-2: #f6f8f5;
+  --line: #dfe7dc;
+  --text: #1f2a24;
+  --muted: #637064;
+  --accent: #4a7a57;
   --accent-ink: #ffffff;
-  --ok: #1d8f57;
-  --warn: #b87900;
-  --bad: #c7443f;
-  --track: #e9eef5;
-  --surface-soft: #f9fbfd;
-  --surface-data: #fff6df;
+  --ok: #4a7a57;
+  --warn: #b79200;
+  --bad: #b94e3f;
+  --track: #edf2eb;
+  --surface-soft: #f8faf7;
+  --surface-data: color-mix(in srgb, #ffe36a 26%, #ffffff);
 }
 
 html[data-theme="amber"] {
   color-scheme: dark;
   --bg: #0f1114;
   --panel: #181b20;
-  --panel-2: #20242b;
-  --line: #343947;
-  --text: #f7f1df;
-  --muted: #aeb5bf;
-  --accent: #f3bd24;
-  --accent-ink: #171300;
-  --ok: #58c886;
-  --warn: #f3bd24;
-  --bad: #ee7467;
-  --track: #101318;
-  --surface-soft: #1c2027;
-  --surface-data: color-mix(in srgb, var(--accent) 6%, var(--panel-2));
+  --panel-2: #22262d;
+  --line: #343b44;
+  --text: #f5f7f2;
+  --muted: #aab3ad;
+  --accent: #ffc857;
+  --accent-ink: #1b1a14;
+  --ok: #a1c180;
+  --warn: #ffc857;
+  --bad: #f07b65;
+  --track: #111419;
+  --surface-soft: #20252b;
+  --surface-data: color-mix(in srgb, #619c8a 10%, var(--panel-2));
 }
 
 html[data-theme="amber"] body {
-  background:
-    radial-gradient(circle at 16% -14%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 30%),
-    radial-gradient(circle at 86% 8%, color-mix(in srgb, #49617f 12%, transparent), transparent 28%),
-    var(--bg);
+  background: var(--bg);
 }
 
 html[data-theme="light"] body {
-  background:
-    radial-gradient(circle at 16% -16%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 30%),
-    var(--bg);
+  background: var(--bg);
+}
+
+html[data-theme="dark"] body {
+  background: var(--bg);
+}
+
+html[data-theme="amber"] .bar {
+  background: #181b20;
+  border-bottom-color: color-mix(in srgb, #619c8a 28%, var(--line));
+}
+
+html[data-theme="amber"] .view-tab.active {
+  color: #ffc857;
+  border-color: color-mix(in srgb, #ffc857 52%, #619c8a);
+  background: color-mix(in srgb, #619c8a 14%, var(--panel-2));
+}
+
+html[data-theme="amber"] .card,
+html[data-theme="amber"] .prompt-config-intro,
+html[data-theme="amber"] .prompt-editor-card,
+html[data-theme="amber"] .prompt-library-panel,
+html[data-theme="amber"] #view-flow .config-mode-tabs {
+  border-color: color-mix(in srgb, #619c8a 30%, var(--line));
+  background: var(--panel);
+}
+
+html[data-theme="amber"] .prompt-side-item.active,
+html[data-theme="amber"] .prompt-resource-index button.active,
+html[data-theme="amber"] #view-flow .config-mode-tabs button.active,
+html[data-theme="amber"] .prompt-library-switch button.active {
+  color: #ffc857;
+  border-color: color-mix(in srgb, #ffc857 62%, #619c8a);
+  background: color-mix(in srgb, #619c8a 16%, var(--panel-2));
+}
+
+html[data-theme="amber"] .eyebrow,
+html[data-theme="amber"] .prompt-side-item span,
+html[data-theme="amber"] .prompt-resource-detail span,
+html[data-theme="amber"] .prompt-resource-index h4,
+html[data-theme="amber"] .prompt-editor-card header span {
+  color: #ffc857;
+}
+
+html[data-theme="amber"] .prompt-resource-detail,
+html[data-theme="amber"] .prompt-resource-sidebar input[type="search"]:focus {
+  border-color: color-mix(in srgb, #619c8a 58%, #ffc857);
+  box-shadow: 0 0 0 2px color-mix(in srgb, #619c8a 18%, transparent);
+}
+
+html[data-theme="amber"] h1,
+html[data-theme="amber"] h2,
+html[data-theme="amber"] h3,
+html[data-theme="amber"] .brand span,
+html[data-theme="amber"] .prompt-editor-card h3,
+html[data-theme="amber"] .prompt-side-item b,
+html[data-theme="amber"] .prompt-resource-detail h4 {
+  color: #fff3c3;
+}
+
+html[data-theme="amber"] .brand span {
+  text-shadow: 0 0 18px color-mix(in srgb, #ffc857 20%, transparent);
+}
+
+html[data-theme="amber"] button:not(.primary):not(.view-tab):not(.sw):hover,
+html[data-theme="amber"] .prompt-side-item:hover,
+html[data-theme="amber"] .prompt-resource-index button:hover {
+  border-color: color-mix(in srgb, #619c8a 52%, var(--line));
+  background: color-mix(in srgb, #619c8a 10%, var(--panel-2));
+}
+
+html[data-theme="amber"] input:focus,
+html[data-theme="amber"] textarea:focus,
+html[data-theme="amber"] select:focus {
+  border-color: #619c8a;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #619c8a 18%, transparent);
+}
+
+html[data-theme="amber"] .primary,
+html[data-theme="amber"] #saveConfig {
+  background: linear-gradient(180deg, #ffd56f, #ffc857);
+  border-color: #ffc857;
+  color: #1b1a14;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #ffc857 24%, transparent);
 }
 
 .bar {
@@ -6025,12 +6103,38 @@ html[data-theme="amber"] .pill.warn {
   border-bottom: 1px solid var(--line);
 }
 
+.prompt-library-title {
+  min-width: 0;
+}
+
+.prompt-library-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prompt-library-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.prompt-library-header-actions button {
+  min-height: 34px;
+  padding: 6px 9px !important;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .prompt-library-panel h3 {
   margin: 3px 0 0;
   font-size: 18px;
 }
 
-.prompt-config-shell.library-collapsed .prompt-library-panel > header div,
+.prompt-config-shell.library-collapsed .prompt-library-title,
 .prompt-config-shell.library-collapsed .prompt-library-body {
   display: none;
 }
@@ -6236,7 +6340,7 @@ html[data-theme="amber"] .pill.warn {
 #view-flow .prompt-config-main {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 #view-flow .prompt-editor-card {
@@ -6257,6 +6361,7 @@ html[data-theme="amber"] .pill.warn {
 
 #view-flow .prompt-library-body {
   min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 1100px) {
@@ -6817,6 +6922,92 @@ html[data-theme="amber"] .pill.warn {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
+}
+
+.prompt-template-sidebar,
+.prompt-resource-sidebar {
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.prompt-template-sidebar {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.prompt-resource-sidebar {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.prompt-resource-sidebar input[type="search"] {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel-2);
+  color: var(--text);
+  font: 700 14px/1 var(--sans);
+  outline: none;
+}
+
+.prompt-resource-sidebar input[type="search"]::placeholder {
+  color: var(--muted);
+}
+
+.prompt-resource-sidebar input[type="search"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Palette usage: keep page backgrounds neutral; apply presets to controls and semantic accents. */
+.eyebrow,
+.prompt-side-item span,
+.prompt-resource-detail span,
+.prompt-resource-index h4,
+.prompt-editor-card header span {
+  color: color-mix(in srgb, var(--accent) 92%, var(--text));
+}
+
+.view-tab.active,
+#view-flow .config-mode-tabs button.active,
+.prompt-library-switch button.active,
+.prompt-side-item.active,
+.prompt-resource-index button.active {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+}
+
+.prompt-side-item.active,
+.prompt-resource-detail,
+.prompt-editor-card,
+.prompt-config-intro,
+.prompt-library-panel {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.primary,
+.prompt-editor-actions .primary,
+#saveConfig {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #fff 8%), var(--accent));
+  border-color: color-mix(in srgb, var(--accent) 84%, var(--line));
+  color: var(--accent-ink);
+}
+
+.pill.ok,
+.cost-tag.free {
+  color: color-mix(in srgb, var(--ok) 82%, var(--text));
+  border-color: color-mix(in srgb, var(--ok) 44%, var(--line));
+  background: color-mix(in srgb, var(--ok) 10%, var(--panel-2));
+}
+
+.pill.warn,
+.cost-tag.paid {
+  color: color-mix(in srgb, var(--warn) 88%, var(--text));
+  border-color: color-mix(in srgb, var(--warn) 46%, var(--line));
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel-2));
 }
 
 .prompt-side-list,

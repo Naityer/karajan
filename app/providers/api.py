@@ -28,13 +28,13 @@ class ApiModelProvider(ModelProvider):
 
     def _dispatch(self, instruction: str, model_id: str, timeout_s: int) -> str:
         name = self.provider.name
-        key = os.environ.get(self.provider.env_var or "", "")
+        key = _api_key(self.provider)
         if not key:
-            raise RuntimeError(f"missing API key ({self.provider.env_var})")
+            raise RuntimeError(f"missing API key ({_key_hint(self.provider)})")
 
         if name == "anthropic":
             return self._anthropic(instruction, model_id, key, timeout_s)
-        if name in ("openai", "groq", "mistral"):
+        if name in ("openai", "groq", "mistral", "openrouter", "huggingface", "deepseek", "zai", "together"):
             return self._openai_compatible(instruction, model_id, key, timeout_s)
         if name == "google":
             return self._google(instruction, model_id, key, timeout_s)
@@ -74,4 +74,31 @@ def _openai_base_url(provider: ProviderInfo) -> str | None:
         return "https://api.groq.com/openai/v1"
     if provider.name == "mistral":
         return "https://api.mistral.ai/v1"
+    if provider.name == "openrouter":
+        return "https://openrouter.ai/api/v1"
+    if provider.name == "huggingface":
+        return "https://router.huggingface.co/v1"
+    if provider.name == "deepseek":
+        return "https://api.deepseek.com"
+    if provider.name == "zai":
+        return "https://api.z.ai/api/paas/v4"
+    if provider.name == "together":
+        return "https://api.together.ai/v1"
     return None  # default OpenAI endpoint
+
+
+def _api_key(provider: ProviderInfo) -> str:
+    keys = [provider.env_var] if provider.env_var else []
+    if provider.name == "google":
+        keys.append("GEMINI_API_KEY")
+    for key in keys:
+        value = os.environ.get(key or "", "")
+        if value:
+            return value
+    return ""
+
+
+def _key_hint(provider: ProviderInfo) -> str:
+    if provider.name == "google":
+        return "GOOGLE_API_KEY or GEMINI_API_KEY"
+    return provider.env_var or "provider API key"
