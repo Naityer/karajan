@@ -92,6 +92,12 @@ if errorlevel 1 (
 if errorlevel 1 goto dependency_error
 
 echo.
+echo Stopping any previous KARAJAN API on port %KARAJAN_PORT% (so the latest code always runs)...
+for /f "tokens=5" %%P in ('netstat -aon ^| findstr ":%KARAJAN_PORT% " ^| findstr "LISTENING"') do (
+  taskkill /PID %%P /F >nul 2>nul
+)
+
+echo.
 echo Starting KARAJAN web GUI with:
 echo   "%PYTHON_EXE%"
 echo   %KARAJAN_URL%

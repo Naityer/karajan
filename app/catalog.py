@@ -26,6 +26,111 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         probe_command="ollama list",
     ),
     ProviderInfo(
+        # Production low-tier worker: best local-friendly size + community
+        # track record for N1/N2 (cheap, cheap_or_medium) among open weights.
+        name="ollama-qwen",
+        label="Qwen (local)",
+        is_free=True,
+        auth_method=AuthMethod.LOCAL,
+        backend=Backend.CLI,
+        tiers={
+            RM.CHEAP_MODEL: "qwen2.5:7b",
+            RM.CHEAP_OR_MEDIUM_MODEL: "qwen2.5:7b",
+        },
+        endpoint="http://127.0.0.1:11434",
+        signup_url="https://ollama.com/download",
+        cli_command="ollama run {model}",
+        login_command="ollama serve",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
+        # Production low-tier worker: strongest local reasoning per GB for N3
+        # (medium/intermediate) among open weights.
+        name="ollama-deepseek",
+        label="DeepSeek (local)",
+        is_free=True,
+        auth_method=AuthMethod.LOCAL,
+        backend=Backend.CLI,
+        tiers={
+            RM.MEDIUM_MODEL: "deepseek-r1:8b",
+        },
+        endpoint="http://127.0.0.1:11434",
+        signup_url="https://ollama.com/download",
+        cli_command="ollama run {model}",
+        login_command="ollama serve",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
+        # Coding-focused local worker. MiniMax M3 is a ~450B-parameter MoE
+        # (no Ollama distribution and impractical on local hardware), so this
+        # uses Qwen2.5-Coder instead: code-tuned, actively maintained, and the
+        # best-regarded locally-runnable coding model in the Ollama community.
+        name="ollama-qwen-coder",
+        label="Qwen Coder (local)",
+        is_free=True,
+        auth_method=AuthMethod.LOCAL,
+        backend=Backend.CLI,
+        tiers={
+            RM.CHEAP_OR_MEDIUM_MODEL: "qwen2.5-coder:7b",
+            RM.MEDIUM_MODEL: "qwen2.5-coder:7b",
+        },
+        endpoint="http://127.0.0.1:11434",
+        signup_url="https://ollama.com/download",
+        cli_command="ollama run {model}",
+        login_command="ollama serve",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
+        # N3-N4 bridge worker: best locally-runnable general-reasoning model
+        # in the 10-14B range. Covers intermediate and complex tasks locally,
+        # reducing OpenAI/cloud calls for N4 when VRAM allows (~7 GB needed).
+        name="ollama-mistral-nemo",
+        label="Mistral Nemo (local)",
+        is_free=True,
+        auth_method=AuthMethod.LOCAL,
+        backend=Backend.CLI,
+        tiers={
+            RM.MEDIUM_MODEL: "mistral-nemo:12b",
+            RM.STRONG_MODEL: "mistral-nemo:12b",
+        },
+        endpoint="http://127.0.0.1:11434",
+        signup_url="https://ollama.com/download",
+        cli_command="ollama run {model}",
+        login_command="ollama serve",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
+        # General-purpose N2-N3 worker: Google's Gemma 2 9B ranks above most
+        # 7B models on reasoning benchmarks while staying within 6 GB VRAM.
+        # Good complement to Qwen Coder when the task is not code-specific.
+        name="ollama-gemma2",
+        label="Gemma 2 (local)",
+        is_free=True,
+        auth_method=AuthMethod.LOCAL,
+        backend=Backend.CLI,
+        tiers={
+            RM.CHEAP_OR_MEDIUM_MODEL: "gemma2:9b",
+            RM.MEDIUM_MODEL: "gemma2:9b",
+        },
+        endpoint="http://127.0.0.1:11434",
+        signup_url="https://ollama.com/download",
+        cli_command="ollama run {model}",
+        login_command="ollama serve",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
+        name="openclaw",
+        label="OpenClaw Gateway (add-on)",
+        is_free=True,
+        auth_method=AuthMethod.CLI_LOGIN,
+        backend=Backend.CLI,
+        tiers={},
+        endpoint="http://127.0.0.1:8765",
+        signup_url="https://github.com/openclaw/openclaw",
+        cli_command="openclaw gateway status --json",
+        login_command="openclaw configure --section models",
+    ),
+    ProviderInfo(
         name="codex",
         label="OpenAI Codex CLI (local)",
         is_free=False,
@@ -107,6 +212,23 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         endpoint="https://api.openai.com",
         signup_url="https://platform.openai.com",
         env_var="OPENAI_API_KEY",
+    ),
+    ProviderInfo(
+        name="qwen",
+        label="Qwen",
+        is_free=False,
+        auth_method=AuthMethod.API_KEY,
+        backend=Backend.API,
+        tiers={
+            RM.CHEAP_MODEL: "qwen-turbo",
+            RM.CHEAP_OR_MEDIUM_MODEL: "qwen-plus",
+            RM.MEDIUM_MODEL: "qwen-plus",
+            RM.STRONG_MODEL: "qwen-max",
+            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "qwen-max",
+        },
+        endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        signup_url="https://dashscope.console.aliyun.com/apiKey",
+        env_var="QWEN_API_KEY",
     ),
     ProviderInfo(
         name="google",

@@ -1,0 +1,75 @@
+{
+  "profile": "simple",
+  "backend": "api",
+  "criteria_weights": {
+    "ambiguity": 0.2,
+    "context_required": 0.2,
+    "reasoning_depth": 0.2,
+    "autonomy_required": 0.15,
+    "operational_risk": 0.15,
+    "validation_difficulty": 0.1
+  },
+  "level_thresholds": [
+    1.5,
+    2.5,
+    3.5,
+    4.3
+  ],
+  "level_to_model": {
+    "level_1_simple": "cheap_model",
+    "level_2_moderate": "cheap_or_medium_model",
+    "level_3_intermediate": "medium_model",
+    "level_4_complex": "strong_model",
+    "level_5_critical": "strong_model_with_human_review"
+  },
+  "cost_table": {
+    "cheap_model": 0.0004,
+    "cheap_or_medium_model": 0.001,
+    "medium_model": 0.0025,
+    "strong_model": 0.009,
+    "strong_model_with_human_review": 0.0125
+  },
+  "latency_table": {
+    "cheap_model": 180,
+    "cheap_or_medium_model": 320,
+    "medium_model": 650,
+    "strong_model": 1300,
+    "strong_model_with_human_review": 1700
+  },
+  "orchestration": {
+    "parallel": false,
+    "max_parallel": 3,
+    "subtask_timeout_s": 120,
+    "max_retries": 1,
+    "enable_runtime_fallback": true,
+    "require_human_review_gate": true,
+    "max_cost_per_task_usd": 0.0,
+    "max_daily_cost_usd": 0.0
+  },
+  "policy": {
+    "sensitive_domains": [],
+    "critical_intents": [
+      "security_architecture_review",
+      "security_review"
+    ],
+    "human_review_min_level": 5,
+    "operational_risk_review_threshold": 4.0,
+    "require_review_for_paid_providers": true,
+    "require_review_for_missing_credentials": true
+  },
+  "provider_preferences": {
+    "strong_model": "openai",
+    "strong_model_with_human_review": "anthropic",
+    "cheap_model": "ollama-qwen",
+    "cheap_or_medium_model": "ollama-qwen",
+    "medium_model": "ollama-deepseek"
+  },
+  "prefer_free": true,
+  "openclaw": {
+    "enabled": true,
+    "cli_path": "openclaw",
+    "gateway_url": "http://127.0.0.1:18789",
+    "auth_token_env": "OPENCLAW_GATEWAY_TOKEN",
+    "prefer_admin_http_rpc": false
+  }
+}

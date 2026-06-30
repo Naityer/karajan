@@ -18,8 +18,7 @@
         "backend-builder",
         "security-review",
         "ponytail",
-        "promptfoo",
-        "cti-analyst"
+        "promptfoo"
       ],
       "capabilities": [
         "Classifier",
@@ -30,20 +29,21 @@
         "Recovery",
         "Aggregator"
       ],
-      "x": 549.632001087026,
-      "y": 13.807989324180827
+      "x": 551.3580516028027,
+      "y": 0.0
     },
     {
       "id": "entity-backup-chatgpt",
       "name": "ChatGPT (backup + tareas medias)",
       "role": "backup",
       "role_tags": [
-        "backup",
-        "validator"
+        "backup"
       ],
       "provider": "openai",
       "parentId": "entity-agent-claude",
-      "levels": [],
+      "levels": [
+        "level_4_complex"
+      ],
       "skills": [
         "repo-analyzer",
         "frontend-builder",
@@ -73,8 +73,8 @@
         "ponytail"
       ],
       "capabilities": [],
-      "x": 126.13405641845858,
-      "y": 613.4905017421953
+      "x": 0.0,
+      "y": 805.2777777777778
     },
     {
       "id": "entity-worker-deepseek",
@@ -95,33 +95,11 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 542.9780665052499,
-      "y": 628.7756280002117
-    },
-    {
-      "id": "entity-worker-mistral-nemo",
-      "name": "Mistral Nemo (local, bridge N4)",
-      "role": "child",
-      "role_tags": [
-        "child"
-      ],
-      "provider": "ollama-mistral-nemo",
-      "parentId": "entity-agent-claude",
-      "levels": [
-        "level_4_complex"
-      ],
-      "skills": [
-        "repo-analyzer",
-        "backend-builder",
-        "frontend-builder",
-        "ponytail"
-      ],
-      "capabilities": [],
-      "x": 965.2940511006625,
-      "y": 627.8843404997358
+      "x": 1228.6111111111109,
+      "y": 812.5
     }
   ],
   "zoom": 0.63,
-  "drawer_width": 375,
-  "updated_at": "2026-06-29T23:41:48.615176Z"
+  "drawer_width": 360,
+  "updated_at": "2026-06-29T19:40:54.709546Z"
 }

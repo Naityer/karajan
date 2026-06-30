@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app import catalog
-from app.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel
+from app.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel, RoutingLayout
 from app.providers.api import ApiModelProvider
 from app.providers.base import ModelProvider
 from app.providers.cli import CliModelProvider
@@ -43,18 +43,42 @@ def fallback_resolutions(
     tier: RecommendedModel,
     config: KarajanConfig,
     tried_provider_names: set[str] | None = None,
+    layout: RoutingLayout | None = None,
 ) -> list[Resolution]:
     """Return safe fallback providers for a failed runtime execution.
 
-    Only free catalog providers are attempted automatically. The deterministic
+    Providers explicitly marked `role="backup"` in the routing layout (e.g. an
+    OpenAI node backing up the Claude parent) are tried first, paid or not —
+    that's an explicit operator decision, not an automatic one. After that,
+    only free catalog providers are attempted automatically. The deterministic
     simulated provider is always last so delegation can still finish and record
     the fallback chain without spending money or requiring credentials.
     """
-    tried = tried_provider_names or set()
+    tried = set(tried_provider_names or set())
     candidates: list[Resolution] = []
     from app import credentials  # local import avoids cycles and keeps detection lazy
 
     statuses = {status.provider: status for status in credentials.detect_all()}
+
+    backup_names = [
+        entity.provider
+        for entity in (layout.entities if layout else [])
+        if entity.provider and entity.role.strip().lower() == "backup"
+    ]
+    for name in backup_names:
+        if name in tried:
+            continue
+        info = catalog.get_provider(name)
+        status = statuses.get(name)
+        if not info or tier not in info.tiers or not (status and status.ready):
+            continue
+        model_id = info.tiers.get(tier) or next(iter(info.tiers.values()), tier.value)
+        if info.backend == Backend.API:
+            candidates.append(Resolution(ApiModelProvider(info), Backend.API, model_id, info.name))
+        elif info.backend == Backend.CLI:
+            candidates.append(Resolution(CliModelProvider(info), Backend.CLI, model_id, info.name))
+        tried.add(name)
+
     for info in catalog.all_providers():
         status = statuses.get(info.name)
         if not info.is_free or info.name in tried or tier not in info.tiers or not (status and status.ready):

@@ -104,7 +104,7 @@ def _run_subtask(
     ]
 
     if run.error and config.orchestration.enable_runtime_fallback:
-        for fallback in fallback_resolutions(subtask.recommended_model, config, attempted):
+        for fallback in fallback_resolutions(subtask.recommended_model, config, attempted, layout):
             decisions.append(
                 DecisionLogEntry(
                     task_id=classification.task_id,

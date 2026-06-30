@@ -75,7 +75,7 @@ def test_delegate_falls_back_to_simulated_when_provider_errors(monkeypatch) -> N
     monkeypatch.setattr(
         delegation,
         "fallback_resolutions",
-        lambda tier, config, tried: [Resolution(SimulatedModelProvider(), Backend.SIMULATED, tier.value, "simulated")],
+        lambda tier, config, tried, layout=None: [Resolution(SimulatedModelProvider(), Backend.SIMULATED, tier.value, "simulated")],
     )
     classification = classify_prompt(PROMPT)
     config = KarajanConfig(backend=Backend.API, orchestration=OrchestrationConfig(max_retries=0))

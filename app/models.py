@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -291,6 +291,31 @@ class ProviderSetup(BaseModel):
     signup_url: str | None = None
 
 
+class ProviderRunRequest(BaseModel):
+    slot: Literal["login_command", "probe_command"]
+
+
+class ProviderRunResult(BaseModel):
+    ok: bool
+    provider: str
+    slot: str
+    command: str
+    stdout: str
+    stderr: str
+    returncode: int
+    detail: str
+
+
+class DefaultConfigApplyResult(BaseModel):
+    ok: bool
+    restored: list[str] = Field(default_factory=list)
+    backups: list[str] = Field(default_factory=list)
+    ollama_installed: list[str] = Field(default_factory=list)
+    ollama_missing: list[str] = Field(default_factory=list)
+    credentials: dict[str, CredentialStatus] = Field(default_factory=dict)
+    next_steps: list[str] = Field(default_factory=list)
+
+
 class SkillInfo(BaseModel):
     name: str
     description: str
@@ -298,6 +323,74 @@ class SkillInfo(BaseModel):
     recommended: bool
     applies_to: list[str] = Field(default_factory=list)
     install_command: str | None = None
+    repo_url: str | None = None
+
+
+class OpenClawConfig(BaseModel):
+    enabled: bool = True
+    cli_path: str = "openclaw"
+    gateway_url: str = "http://127.0.0.1:18789"
+    auth_token_env: str = "OPENCLAW_GATEWAY_TOKEN"
+    prefer_admin_http_rpc: bool = False
+
+
+class OpenClawSetupCommand(BaseModel):
+    section: str
+    command: str
+    description: str
+
+
+class OpenClawStatus(BaseModel):
+    enabled: bool
+    cli_path: str
+    cli_available: bool
+    ready: bool
+    gateway_url: str | None = None
+    version: str | None = None
+    gateway_status: str | None = None
+    detail: str
+    raw: dict[str, Any] = Field(default_factory=dict)
+    setup_commands: list[OpenClawSetupCommand] = Field(default_factory=list)
+
+
+class OpenClawSkillInfo(BaseModel):
+    name: str
+    description: str = ""
+    installed: bool = True
+    source: str = "openclaw"
+    agent: str | None = None
+    spec: str | None = None
+
+
+class OpenClawChannelInfo(BaseModel):
+    id: str
+    label: str
+    status: str
+    ready: bool = False
+    detail: str = ""
+
+
+class OpenClawInstallRequest(BaseModel):
+    spec: str = Field(min_length=1, max_length=400)
+    agent: str | None = Field(default=None, max_length=120)
+    global_install: bool = False
+    force: bool = False
+    acknowledge_clawhub_risk: bool = False
+
+
+class OpenClawUpdateRequest(BaseModel):
+    spec: str | None = Field(default=None, max_length=400)
+    all: bool = False
+    agent: str | None = Field(default=None, max_length=120)
+    global_install: bool = False
+    acknowledge_clawhub_risk: bool = False
+
+
+class OpenClawOperationResult(BaseModel):
+    ok: bool
+    command: str
+    detail: str
+    returncode: int | None = None
 
 
 class RoutingEntity(BaseModel):
@@ -393,6 +486,7 @@ class KarajanConfig(BaseModel):
     # tier -> preferred provider name (filled by auto-detect in simple mode)
     provider_preferences: dict[str, str] = Field(default_factory=dict)
     prefer_free: bool = True
+    openclaw: OpenClawConfig = Field(default_factory=OpenClawConfig)
 
 
 # --- Decision log (lightweight harness audit) --------------------------------

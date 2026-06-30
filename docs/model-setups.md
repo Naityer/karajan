@@ -60,11 +60,16 @@ Last local check:
 Recommended open/free activation order:
 
 1. Install Ollama and run `ollama serve`.
-2. Pull a usable local pool:
-   - `ollama pull llama3.2:3b`
-   - `ollama pull llama3.1:8b`
-   - `ollama pull qwen2.5:14b`
-   - `ollama pull deepseek-r1:32b` or `ollama pull qwen2.5:32b` for stronger local routing.
+2. Pull a usable local pool (5 named worker options, pick by available VRAM):
+
+   | Provider | Model | VRAM | Slot |
+   |---|---|---|---|
+   | `ollama-qwen` | `ollama pull qwen2.5:7b` | ~4 GB | N1-N2 general |
+   | `ollama-qwen-coder` | `ollama pull qwen2.5-coder:7b` | ~4 GB | N2-N3 code |
+   | `ollama-deepseek` | `ollama pull deepseek-r1:8b` | ~5 GB | N3 reasoning |
+   | `ollama-gemma2` | `ollama pull gemma2:9b` | ~6 GB | N2-N3 general |
+   | `ollama-mistral-nemo` | `ollama pull mistral-nemo:12b` | ~7 GB | N3-N4 bridge |
+
 3. Add `GROQ_API_KEY` for fast hosted open models.
 4. Add `ZAI_API_KEY` for GLM.
 5. Add `DEEPSEEK_API_KEY` for DeepSeek reasoning/coding.

@@ -2,7 +2,7 @@
   "entities": [
     {
       "id": "entity-agent-claude",
-      "name": "Claude (Agent)",
+      "name": "Claude (padre agente)",
       "role": "parent",
       "role_tags": [
         "parent"
@@ -10,17 +10,16 @@
       "provider": "anthropic",
       "parentId": "",
       "levels": [
-        "level_4_complex",
         "level_5_critical"
       ],
       "skills": [
         "repo-analyzer",
-        "cti-analyst",
         "frontend-builder",
         "backend-builder",
         "security-review",
         "ponytail",
-        "promptfoo"
+        "promptfoo",
+        "cti-analyst"
       ],
       "capabilities": [
         "Classifier",
@@ -28,17 +27,19 @@
         "Router",
         "Reallocator",
         "Policy",
-        "Recovery"
+        "Recovery",
+        "Aggregator"
       ],
-      "x": 520.0,
-      "y": 40.0
+      "x": 549.632001087026,
+      "y": 13.807989324180827
     },
     {
       "id": "entity-backup-chatgpt",
-      "name": "ChatGPT (Backup)",
+      "name": "ChatGPT (backup + tareas medias)",
       "role": "backup",
       "role_tags": [
-        "backup"
+        "backup",
+        "validator"
       ],
       "provider": "openai",
       "parentId": "entity-agent-claude",
@@ -51,75 +52,76 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 1044.0000563401443,
-      "y": 203.84615384615387
+      "x": 1036.3888888888887,
+      "y": 31.944444444444446
     },
     {
-      "id": "entity-worker-ollama",
-      "name": "Ollama (Worker N1)",
+      "id": "entity-worker-qwen",
+      "name": "Qwen (local, subworker barato)",
       "role": "child",
       "role_tags": [
         "child"
       ],
-      "provider": "ollama",
+      "provider": "ollama-qwen",
       "parentId": "entity-agent-claude",
       "levels": [
-        "level_1_simple"
+        "level_1_simple",
+        "level_2_moderate"
       ],
       "skills": [
         "repo-analyzer",
         "ponytail"
       ],
       "capabilities": [],
-      "x": 0.0,
-      "y": 63.84615384615387
+      "x": 126.13405641845858,
+      "y": 613.4905017421953
     },
     {
-      "id": "entity-worker-groq",
-      "name": "Groq (Worker N2)",
+      "id": "entity-worker-deepseek",
+      "name": "DeepSeek (local, subworker razonamiento)",
       "role": "child",
       "role_tags": [
         "child"
       ],
-      "provider": "groq",
-      "parentId": "entity-agent-claude",
-      "levels": [
-        "level_2_moderate"
-      ],
-      "skills": [
-        "repo-analyzer",
-        "cti-analyst",
-        "ponytail",
-        "promptfoo"
-      ],
-      "capabilities": [],
-      "x": 74.00000939002405,
-      "y": 639.2307692307693
-    },
-    {
-      "id": "entity-worker-gemini",
-      "name": "Gemini (Worker N3)",
-      "role": "child",
-      "role_tags": [
-        "child"
-      ],
-      "provider": "google",
+      "provider": "ollama-deepseek",
       "parentId": "entity-agent-claude",
       "levels": [
         "level_3_intermediate"
       ],
       "skills": [
         "repo-analyzer",
-        "frontend-builder",
         "backend-builder",
+        "security-review",
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 657.2306941105769,
-      "y": 677.3846905048077
+      "x": 542.9780665052499,
+      "y": 628.7756280002117
+    },
+    {
+      "id": "entity-worker-mistral-nemo",
+      "name": "Mistral Nemo (local, bridge N4)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-mistral-nemo",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_4_complex"
+      ],
+      "skills": [
+        "repo-analyzer",
+        "backend-builder",
+        "frontend-builder",
+        "ponytail"
+      ],
+      "capabilities": [],
+      "x": 965.2940511006625,
+      "y": 627.8843404997358
     }
   ],
-  "zoom": 0.65,
-  "drawer_width": 360,
-  "updated_at": "2026-06-27T02:36:50.093033Z"
+  "zoom": 0.63,
+  "drawer_width": 341,
+  "updated_at": "2026-06-29T23:40:29.610799Z"
 }

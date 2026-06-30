@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KARAJAN</title>
-    <link rel="icon" type="image/png" href="/static/icons/karajan_v2.png" />
-    <link rel="stylesheet" href="/static/styles.css?v=default-controls-color-6" />
+    <link rel="icon" type="image/png" href="/static/icons/karajan_v2.png?v=ui-2" />
+    <link rel="stylesheet" href="/static/styles.css?v=ui-2" />
   </head>
   <body>
     <!-- Compact tool frame: brand · view switch · live status · theme — not a generic web shell -->
     <header class="bar">
-      <div class="brand"><img src="/static/icons/karajan_v2.png" alt="" class="brand-icon" /><span>KARAJAN</span></div>
+      <div class="brand"><img src="/static/icons/karajan_v2.png?v=ui-2" alt="" class="brand-icon" /><span>KARAJAN</span></div>
 
       <nav class="views" id="viewNav">
         <button class="view-tab active" data-view="human">Control humano</button>
@@ -51,24 +51,6 @@
             </header>
             <div id="agentNotificationSummary"></div>
           </section>
-        </div>
-        <div class="window-actions">
-          <div class="action-set" data-action-view="monitor">
-            <button id="refreshMonitor">Actualizar</button>
-          </div>
-          <div class="action-set" data-action-view="decision">
-            <button id="saveRouting" class="primary">Guardar ahora</button>
-          </div>
-          <div class="action-set" data-action-view="agents">
-            <button id="refreshAgents">Comprobar conexiones</button>
-          </div>
-          <div class="action-set active" data-action-view="human">
-            <button id="refreshHuman">Actualizar</button>
-          </div>
-          <div class="action-set" data-action-view="flow">
-            <button id="reloadConfig">Recargar</button>
-            <button id="saveConfig" class="primary">Guardar configuración</button>
-          </div>
         </div>
       </div>
     </header>
@@ -230,8 +212,8 @@
           <aside class="model-drawer" id="modelDrawer">
             <div class="drawer-head">
               <div>
-                <h3>Modelos</h3>
-                <p>Arrastra una caja al plano o a una entidad existente.</p>
+                <h3>Arquitectura activa</h3>
+                <p>Solo agentes incluidos en la jerarquia actual.</p>
               </div>
             </div>
             <div class="drawer-tools">
@@ -276,8 +258,15 @@
           <p>Configuración del harness: parámetros tradicionales o plantillas guiadas para autoconfigurar la skill mediante prompting.</p>
         </div>
         <div class="config-mode-tabs" id="configModeTabs">
-          <button type="button" data-config-mode="traditional">Configuración tradicional</button>
-          <button class="active" type="button" data-config-mode="prompting">Prompting configuration</button>
+          <div class="config-mode-copy">
+            <span class="eyebrow">Prompting configuration</span>
+            <h2>Editor de plantilla</h2>
+            <p>Carga una plantilla, edítala y copia el prompt final. La biblioteca contiene piezas documentadas para construir jerarquías, reglas y proveedores.</p>
+          </div>
+          <div class="config-mode-actions">
+            <button type="button" data-config-mode="traditional">Configuración tradicional</button>
+            <button class="active" type="button" data-config-mode="prompting">Prompting configuration</button>
+          </div>
         </div>
         <section class="config-mode-panel" id="config-mode-traditional">
           <div class="flow-grid" id="flowGrid"></div>
@@ -289,6 +278,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/static/app.js?v=default-controls-color-6"></script>
+    <script src="/static/app.js?v=ui-2"></script>
   </body>
 </html>

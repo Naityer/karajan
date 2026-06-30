@@ -72,6 +72,7 @@ const state = {
   configTab: "params",
   configMode: "prompting",
   selectedPromptTemplate: "hierarchy",
+  promptTemplateFormOpen: false,
   promptLibraryOpen: true,
   promptLibraryQuery: "",
   selectedConfigAgent: "",
@@ -82,6 +83,7 @@ const state = {
   agentNotificationsOpen: false,
   promptSideMode: "templates",
   selectedPromptResourceId: "",
+  activeView: "human",
 };
 
 const ROLE_DEFS = {
@@ -213,8 +215,8 @@ const escapeHtml = (value) =>
 function entityLabel(id) {
   const entity = (state.entities || []).find((item) => item.id === id);
   if (!entity) return id || "entidad";
-  const provider = (state.catalog || []).find((item) => item.name === entity.providerName);
-  return entity.name || provider?.label || entity.providerName || entity.id;
+  const provider = (state.catalog || []).find((item) => item.name === entity.provider);
+  return entity.name || provider?.label || entity.provider || entity.id;
 }
 
 // ---- theme -----------------------------------------------------------------
@@ -234,26 +236,40 @@ function applyTheme(theme) {
 
 // ---- view switching --------------------------------------------------------
 function initViews() {
-  setActiveViewActions("human");
   $("#viewNav").addEventListener("click", (event) => {
     const tab = event.target.closest(".view-tab");
     if (!tab) return;
     const view = tab.dataset.view;
     $$(".view-tab").forEach((t) => t.classList.toggle("active", t === tab));
     $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
-    setActiveViewActions(view);
-    if (view === "decision") {
-      renderDiagram();
-      renderModels();
-    }
-    if (view === "flow") renderFlow();
-    if (view === "agents") renderAgentsView();
-    if (view === "human") renderHumanHome();
+    state.activeView = view;
+    enterView(view);
   });
 }
 
-function setActiveViewActions(view) {
-  $$(".action-set").forEach((set) => set.classList.toggle("active", set.dataset.actionView === view));
+// ---- automatic data refresh -------------------------------------------------
+// Replaces the old manual "Recargar/Guardar/Actualizar/Comprobar conexiones"
+// buttons: each view fetches its own fresh data the moment it becomes active,
+// and a background poll keeps the live views (monitor/human/agents) current
+// without the user having to ask for it.
+const AUTO_REFRESH_INTERVAL_MS = 20000;
+
+function enterView(view) {
+  if (view === "decision") {
+    renderDiagram();
+    renderModels();
+  }
+  if (view === "flow") loadConfig().then(renderFlow).catch((error) => toast(error.message));
+  if (view === "agents") refreshProvidersAndAgents().catch((error) => toast(error.message));
+  if (view === "human" || view === "monitor") refreshMonitor().catch((error) => toast(error.message));
+}
+
+function initAutoRefresh() {
+  setInterval(() => {
+    const view = state.activeView || "human";
+    if (view === "human" || view === "monitor") refreshMonitor().catch(() => {});
+    if (view === "agents") refreshProvidersAndAgents().catch(() => {});
+  }, AUTO_REFRESH_INTERVAL_MS);
 }
 
 function setNotificationsOpen(open) {
@@ -837,7 +853,7 @@ const ROLE_METRIC_DEFS = {
     { key: "extra.delegated_tasks",  label: "Delegadas",    fmt: (n) => n ?? 0 },
     { key: "_delegation_rate",       label: "Tasa deleg.",  fmt: (n) => `${n}%` },
     { key: "confidence",             label: "Confianza",    fmt: (n) => n != null ? `${Math.round(n * 100)}%` : "—" },
-    { key: "_caps",                  label: "Capacidades",  fmt: (n) => n },
+    { key: "_caps_count",            label: "Caps.",        fmt: (n) => n ?? 0 },
     { key: "model_tier",             label: "Tier",         fmt: (n) => TIER_LABEL[n] || n || "—" },
   ],
   worker: [
@@ -885,7 +901,8 @@ function _nodeMetricValue(node, usage, key) {
     return total ? Math.round(((total - errors) / total) * 100) : 100;
   }
   if (key === "_caps") return (node.active_capabilities || []).join(", ") || "—";
-  if (key === "_levels") return (node.levels || []).map((l) => LEVEL_FULL[l] || l).join(", ") || "sin niveles";
+  if (key === "_caps_count") return (node.active_capabilities || []).length;
+  if (key === "_levels") return (node.levels || []).map((l) => _LEVEL_SHORT[l] || LEVEL_FULL[l] || l).join(" · ") || "sin niveles";
   if (key === "_skills") return (node.skills || []).slice(0, 3).join(", ") || "—";
   if (key.startsWith("extra.")) return node.extra?.[key.slice(6)];
   return node[key];
@@ -994,6 +1011,16 @@ function renderExecutionFlow(events) {
   $("#executionFlow").innerHTML = eventList(events.slice(0, 4), "Sin flujo de ejecución.");
 }
 
+const _NODE_CHIP_ICON = {
+  agent:     `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm-5 11c0-2.2 2.24-4 5-4s5 1.8 5 4H2z"/></svg>`,
+  worker:    `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12.4 6h-1A4.5 4.5 0 0 0 8 3.7V2.6a1 1 0 0 0-2 0v1.1A4.5 4.5 0 0 0 2.6 6h-1a1 1 0 0 0 0 2h1A4.5 4.5 0 0 0 6 10.3v1.1a1 1 0 0 0 2 0v-1.1A4.5 4.5 0 0 0 11.4 8h1a1 1 0 0 0 0-2z"/></svg>`,
+  backup:    `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1z"/></svg>`,
+  validator: `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1zm3.5 4-4 4-2-2-.7.7L6.5 10.2l4.7-4.7-.7-.7z"/></svg>`,
+  memory:    `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="2" y="3" width="10" height="8" rx="1.5"/><path d="M5 3V1.5M9 3V1.5M5 11v1.5M9 11v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`,
+  monitor:   `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 3C4 3 1.5 6 1.5 7s2.5 4 5.5 4 5.5-3 5.5-4-2.5-4-5.5-4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>`,
+};
+const _LEVEL_SHORT = { level_1_simple:"N1", level_2_moderate:"N2", level_3_intermediate:"N3", level_4_complex:"N4", level_5_critical:"N5" };
+
 function renderProcessingNodeTabs(nodes) {
   const target = $("#processingNodeTabs");
   if (!target) return;
@@ -1004,34 +1031,50 @@ function renderProcessingNodeTabs(nodes) {
   ];
   const visibleNodes = nodes.length ? nodes : fallback;
   if (!state.selectedNodeId && visibleNodes.length) state.selectedNodeId = visibleNodes[0].id;
+
+  const allActive = !state.selectedNodeId || state.selectedNodeId === "__all__";
   target.innerHTML = [
-    `<button class="${!state.selectedNodeId || state.selectedNodeId === "__all__" ? "active" : ""}" type="button" data-tab-node="__all__">ALL NODES</button>`,
+    `<button class="node-chip${allActive ? " active" : ""}" type="button" data-tab-node="__all__" title="Ver todos los nodos">
+      <span class="node-chip-all-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="9" r="1.5"/><circle cx="9" cy="9" r="1.5"/></svg></span>
+      <span class="node-chip-name">Todos</span>
+      <span class="node-chip-count">${visibleNodes.length}</span>
+    </button>`,
     ...visibleNodes.map((node) => {
-      const role = node.role || "Node";
-      const name = node.name || node.active_model || "Modelo";
-      const selected = node.id === state.selectedNodeId ? "active" : "";
-      return `<button type="button" class="${selected}" data-tab-node="${escapeHtml(node.id)}">${escapeHtml(name)} (${escapeHtml(role)})</button>`;
+      const role = (node.role || "worker").toLowerCase();
+      const icon = _NODE_CHIP_ICON[role] || _NODE_CHIP_ICON.worker;
+      const selected = node.id === state.selectedNodeId ? " active" : "";
+      const status = node.status === "error" ? "bad" : (node.status === "idle" || node.status === "completed") ? "ok" : "warn";
+      const shortName = (node.name || "Nodo").split("(")[0].trim().split(",")[0].trim();
+      const lvl = (node.levels || []).map(l => _LEVEL_SHORT[l]).filter(Boolean);
+      const lvlBadge = lvl.length ? `<span class="node-chip-lvl">${lvl.join(" ")}</span>` : "";
+      return `<button type="button" class="node-chip role-${role}${selected}" data-tab-node="${escapeHtml(node.id)}" title="${escapeHtml(node.name)}">
+        <span class="node-chip-icon">${icon}</span>
+        <span class="node-chip-name">${escapeHtml(shortName)}</span>
+        ${lvlBadge}
+        <span class="node-chip-dot ${status}"></span>
+      </button>`;
     }),
   ].join("");
+
   target.querySelectorAll("button[data-tab-node]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const nodeId = btn.dataset.tabNode;
-      if (nodeId === "__all__") {
-        state.selectedNodeId = visibleNodes[0]?.id || "";
-      } else {
-        state.selectedNodeId = nodeId;
-      }
+      state.selectedNodeId = nodeId === "__all__" ? (visibleNodes[0]?.id || "") : nodeId;
       target.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn || (nodeId === "__all__" && b.dataset.tabNode === "__all__")));
       setMonitorSide(true);
-      _renderAgentPanels(
-        visibleNodes,
-        state.lastObservability?.model_usage || [],
-        state.lastObservability?.execution_flow || [],
-        state.lastObservability?.audit_timeline || []
-      );
+      _renderAgentPanels(visibleNodes, state.lastObservability?.model_usage || [], state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
     });
   });
 }
+
+const _NOC_ICON = {
+  agent:     `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm-5 11c0-2.2 2.24-4 5-4s5 1.8 5 4H2z"/></svg>`,
+  worker:    `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12.4 6h-1A4.5 4.5 0 0 0 8 3.7V2.6a1 1 0 0 0-2 0v1.1A4.5 4.5 0 0 0 2.6 6h-1a1 1 0 0 0 0 2h1A4.5 4.5 0 0 0 6 10.3v1.1a1 1 0 0 0 2 0v-1.1A4.5 4.5 0 0 0 11.4 8h1a1 1 0 0 0 0-2z"/></svg>`,
+  backup:    `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1z"/></svg>`,
+  validator: `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1zm3.5 4-4 4-2-2-.7.7L6.5 10.2l4.7-4.7-.7-.7z"/></svg>`,
+  memory:    `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="2" y="3" width="10" height="8" rx="1.5"/><path d="M5 3V1.5M9 3V1.5M5 11v1.5M9 11v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`,
+};
+const _LEVEL_COLOR = { level_1_simple:"lvl-1", level_2_moderate:"lvl-2", level_3_intermediate:"lvl-3", level_4_complex:"lvl-4", level_5_critical:"lvl-5" };
 
 function renderNodeOverview(nodes) {
   const target = $("#nodeOverview");
@@ -1040,39 +1083,50 @@ function renderNodeOverview(nodes) {
     target.innerHTML = `<div class="chart-empty">Sin nodos observados todavía.</div>`;
     return;
   }
+  const maxTasks = Math.max(...nodes.map((n) => n.task_count || 0), 1);
+
   target.innerHTML = `<div class="node-overview-grid">
-    ${nodes
-      .map((node) => {
-        const selected = node.id === state.selectedNodeId ? "selected" : "";
-        const status = node.status === "error" ? "bad" : node.status === "completed" || node.status === "idle" ? "ok" : "warn";
-        const levels = (node.levels || []).map((level) => LEVEL_FULL[level]?.split(" · ")[0] || level).join(" · ") || "sin niveles";
-        const skills = (node.skills || []).slice(0, 3).join(" · ") || "sin skills";
-        return `<button type="button" class="node-overview-card ${selected}" data-node="${escapeHtml(node.id)}">
-          <span class="bubble-dot ${status}"></span>
-          <b>${escapeHtml(node.name)}</b>
-          <small>${escapeHtml(node.role)} · ${escapeHtml(levels)}</small>
-          <div class="node-overview-kpis">
-            <span><strong>${node.task_count || 0}</strong><em>tareas</em></span>
-            <span><strong>${node.latency_ms || 0}ms</strong><em>lat.</em></span>
-            <span><strong>$${Number(node.estimated_cost || 0).toFixed(4)}</strong><em>coste</em></span>
+    ${nodes.map((node) => {
+      const selected = node.id === state.selectedNodeId ? "selected" : "";
+      const status = node.status === "error" ? "bad" : (node.status === "completed" || node.status === "idle") ? "ok" : "warn";
+      const role = (node.role || "worker").toLowerCase();
+      const icon = _NOC_ICON[role] || _NOC_ICON.worker;
+      const taskPct = Math.round((node.task_count || 0) / maxTasks * 100);
+      const modelLabel = (node.active_model || node.provider || "—").replace("auto / simulado", "simulado");
+      const levelBadges = (node.levels || [])
+        .map((l) => `<span class="noc-lvl-badge ${_LEVEL_COLOR[l] || ""}">${_LEVEL_SHORT[l] || l}</span>`)
+        .join("") || `<span class="noc-lvl-badge muted">—</span>`;
+      const shortName = (node.name || "Nodo").split("(")[0].trim().split(",")[0].trim();
+      return `<button type="button" class="node-overview-card ${selected}" data-node="${escapeHtml(node.id)}">
+        <div class="noc-header">
+          <span class="noc-icon role-${role}">${icon}</span>
+          <div class="noc-identity">
+            <b class="noc-name">${escapeHtml(shortName)}</b>
+            <span class="noc-model">${escapeHtml(modelLabel)}</span>
           </div>
-          <i>${escapeHtml(skills)}</i>
-        </button>`;
-      })
-      .join("")}
+          <span class="noc-status-dot ${status}"></span>
+        </div>
+        <div class="noc-levels">${levelBadges}</div>
+        <div class="noc-bar-wrap">
+          <div class="noc-bar"><div class="noc-bar-fill ${status}" style="width:${taskPct}%"></div></div>
+          <span class="noc-bar-label">${node.task_count || 0} tareas</span>
+        </div>
+        <div class="noc-footer">
+          <span class="noc-stat"><small>lat.</small><b>${node.latency_ms || 0}ms</b></span>
+          <span class="noc-stat"><small>coste</small><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b></span>
+          <span class="noc-stat"><small>err</small><b>${node.error_count || 0}</b></span>
+        </div>
+      </button>`;
+    }).join("")}
   </div>`;
+
   $$("#nodeOverview .node-overview-card").forEach((button) =>
     button.addEventListener("click", () => {
       state.selectedNodeId = button.dataset.node;
       setMonitorSide(true);
       renderProcessingNodeTabs(nodes);
       renderNodeOverview(nodes);
-      _renderAgentPanels(
-        nodes,
-        state.lastObservability?.model_usage || [],
-        state.lastObservability?.execution_flow || [],
-        state.lastObservability?.audit_timeline || []
-      );
+      _renderAgentPanels(nodes, state.lastObservability?.model_usage || [], state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
     })
   );
 }
@@ -1080,14 +1134,18 @@ function renderNodeOverview(nodes) {
 function renderMonitorGraphs(metrics, observability) {
   const target = $("#monitorGraphs");
   if (!target) return;
-  const statusEntries = Object.entries(metrics.by_status || {});
-  const skillEntries = Object.entries(metrics.by_skill || {}).slice(0, 6);
+  const nodes = observability?.nodes || [];
+
+  const tasksByNode = nodes.map((n) => [n.name.split("(")[0].trim().split(",")[0].trim(), n.task_count || 0]);
+  const latByNode   = nodes.map((n) => [n.name.split("(")[0].trim().split(",")[0].trim(), n.latency_ms || 0]);
   const modelEntries = Object.entries(metrics.by_model || {}).slice(0, 6);
+  const statusEntries = Object.entries(metrics.by_status || {});
+
   target.innerHTML = `<div class="monitor-graph-grid">
+    ${miniBarPanel("Tareas por nodo", tasksByNode)}
+    ${miniBarPanel("Latencia por nodo (ms)", latByNode)}
+    ${miniBarPanel("Tier de modelo", modelEntries, TIER_LABEL)}
     ${miniBarPanel("Estado de tareas", statusEntries)}
-    ${miniBarPanel("Skills implicadas", skillEntries)}
-    ${miniBarPanel("Modelo / tier", modelEntries, TIER_LABEL)}
-    ${latencyPanel(observability.health)}
   </div>`;
 }
 
@@ -1167,7 +1225,7 @@ function renderHumanHome(metrics = state.lastMetrics, tasks = state.tasks, obser
   const totalCost = Number(metrics.total_estimated_cost_usd || observability.health?.total_cost || 0);
 
   $("#humanHomeStatus").innerHTML = `
-    <span><b>${pending.length}</b><small>decisiones</small></span>
+    <span class="${pending.length ? "tone-warn" : "tone-ok"}"><b>${pending.length}</b><small>decisiones</small></span>
     <span><b>${ready.length}/${providers.length}</b><small>agentes listos</small></span>
     <span><b>$${totalCost.toFixed(4)}</b><small>coste estimado</small></span>
   `;
@@ -1322,6 +1380,7 @@ function renderHumanCostPanel({ providers, paid, ready, needsSetup, metrics, tot
   const paidReady = paid.filter((item) => ready.some((readyItem) => readyItem.name === item.name)).length;
   const freeProviders = providers.length - paid.length;
   const paidPct = providers.length ? Math.round((paid.length / providers.length) * 100) : 0;
+  const reviewCount = metrics.human_review_required || 0;
   target.innerHTML = `<div class="cost-home-hero">
       <span>Gasto estimado</span>
       <b>$${totalCost.toFixed(4)}</b>
@@ -1330,9 +1389,9 @@ function renderHumanCostPanel({ providers, paid, ready, needsSetup, metrics, tot
     <div class="cost-meter"><i style="width:${paidPct}%"></i></div>
     <div class="human-side-grid">
       <span><b>${paid.length}</b><small>Pago</small></span>
-      <span><b>${freeProviders}</b><small>Gratis</small></span>
-      <span><b>${metrics.human_review_required || 0}</b><small>Revisión</small></span>
-      <span><b>${needsSetup.length}</b><small>Por conectar</small></span>
+      <span class="tone-ok"><b>${freeProviders}</b><small>Gratis</small></span>
+      <span class="${reviewCount ? "tone-warn" : "tone-ok"}"><b>${reviewCount}</b><small>Revisión</small></span>
+      <span class="${needsSetup.length ? "tone-bad" : "tone-ok"}"><b>${needsSetup.length}</b><small>Por conectar</small></span>
     </div>`;
 }
 
@@ -2146,7 +2205,7 @@ function assignProviderToNode(target, providerName) {
 function addEntityFromProvider(providerName, role = "child", position = null) {
   const provider = state.catalog.find((item) => item.name === providerName);
   const nextIndex = state.entities.length;
-  state.entities.push({
+  const entity = {
     id: `entity-${Date.now().toString(36)}`,
     name: provider?.label || providerName,
     role,
@@ -2157,9 +2216,11 @@ function addEntityFromProvider(providerName, role = "child", position = null) {
     capabilities: [],
     x: Math.max(0, position?.x ?? 360 + nextIndex * 28),
     y: Math.max(0, position?.y ?? 48 + nextIndex * 28),
-  });
+  };
+  state.entities.push(entity);
   renderDiagram();
   scheduleRoutingSave("Entidad añadida. Guardando…");
+  return entity;
 }
 
 function diagramPointFromClient(clientX, clientY) {
@@ -2256,14 +2317,16 @@ function drawWires() {
     svg.setAttribute("height", String(layer.offsetHeight));
     svg.setAttribute("viewBox", `0 0 ${layer.offsetWidth} ${layer.offsetHeight}`);
   }
-  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+  const rootStyle = getComputedStyle(document.documentElement);
+  const accent = rootStyle.getPropertyValue("--diagram-wire").trim() || rootStyle.getPropertyValue("--accent").trim();
+  const opacity = rootStyle.getPropertyValue("--diagram-wire-opacity").trim() || "0.62";
   svg.innerHTML = $$("#diagramNodes .node.entity.child")
     .filter((node) => node.dataset.entity && findEntity(node.dataset.entity)?.parentId)
     .map((node) => {
       const route = connectionRoute(parent, node);
       setNodePort(parent, route.from);
       setNodePort(node, route.to);
-      return `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${accent}" stroke-width="1.5" opacity="0.7"/>`;
+      return `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${accent}" stroke-width="1.5" opacity="${opacity}"/>`;
     })
     .join("");
 }
@@ -2506,9 +2569,11 @@ async function renderModels() {
   }
   const status = new Map(providers.map((p) => [p.provider, p]));
   const advanced = $("#modelsAdvanced").checked;
+  const activeProviders = activeArchitectureProviderNames();
+  const visibleCatalog = activeProviders.size ? catalog.filter((provider) => activeProviders.has(provider.name)) : catalog;
 
   const groups = {};
-  catalog.forEach((p) => (groups[p.backend] || (groups[p.backend] = [])).push(p));
+  visibleCatalog.forEach((p) => (groups[p.backend] || (groups[p.backend] = [])).push(p));
   const groupTitle = { cli: "Local / terminal", api: "Nube (API)", simulated: "Simulado" };
 
   $("#providerGroups").innerHTML = Object.entries(groups)
@@ -2531,6 +2596,10 @@ async function renderModels() {
     });
   });
   if ($("#view-decision").classList.contains("active")) renderDiagram();
+}
+
+function activeArchitectureProviderNames() {
+  return new Set((state.entities || []).map((entity) => entity.provider).filter(Boolean));
 }
 
 function startModelPointerDrag(event, providerName, label) {
@@ -2585,6 +2654,12 @@ function providerCard(provider, status, advanced) {
   const available = status?.available;
   const dot = ready ? "ok" : available ? "warn" : "bad";
   const stateText = ready ? "listo" : available ? "instalado, no listo" : "no configurado";
+  const entity = (state.entities || []).find((item) => item.provider === provider.name);
+  const roleSummary = entity ? roleLabels(entity).join(" · ") : "fuera de jerarquia";
+  const levelSummary =
+    entity && entity.levels?.length
+      ? entity.levels.map((level) => LEVEL_FULL[level] || level).join(" · ")
+      : "sin niveles directos";
   const models = Object.entries(provider.tiers || {})
     .map(([tier, model]) => `<div>${TIER_LABEL[tier] || tier}: ${escapeHtml(model)}</div>`)
     .join("");
@@ -2599,6 +2674,7 @@ function providerCard(provider, status, advanced) {
         <span class="name"><span class="status-dot ${dot}"></span>${escapeHtml(provider.label)}</span>
         <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span>
       </div>
+      <div class="free">${escapeHtml(roleSummary)} · ${escapeHtml(levelSummary)}</div>
       <div class="free">${status ? escapeHtml(status.detail) : stateText}</div>
       ${advBlock}
     </div>`;
@@ -2695,19 +2771,26 @@ function renderPromptConfiguration() {
   }
   const selectedResource = allResources.find((resource) => resource.id === state.selectedPromptResourceId) || resources[0] || null;
   const templateHeaderActions = state.promptSideMode === "templates" ? `<div class="prompt-library-header-actions">
-          <button type="button" data-new-prompt-template>Nueva</button>
-          <button type="button" data-edit-prompt-template="${escapeHtml(selected.id)}">Modificar</button>
-          <button type="button" data-delete-prompt-template="${escapeHtml(selected.id)}">Eliminar</button>
+          <button type="button" class="icon-btn" data-new-prompt-template title="Nueva plantilla" aria-label="Nueva plantilla">+</button>
+          <button type="button" class="icon-btn" data-delete-prompt-template="${escapeHtml(selected.id)}" title="${selected.isDefault ? "Las plantillas base no se pueden eliminar" : "Eliminar plantilla"}" aria-label="Eliminar plantilla" ${selected.isDefault ? "disabled" : ""}>🗑</button>
         </div>` : "";
-  target.innerHTML = `<div class="prompt-config-shell ${state.promptLibraryOpen ? "" : "library-collapsed"}">
-    <section class="prompt-config-main">
-      <div class="prompt-config-intro compact">
-        <div>
-          <span class="eyebrow">Prompting configuration</span>
-          <h2>Editor de plantilla</h2>
-          <p>Carga una plantilla, edítala y copia el prompt final. La biblioteca lateral contiene piezas documentadas para construir jerarquías, reglas y proveedores.</p>
-        </div>
+  const resourceDetailPanel = state.promptSideMode === "library" ? `<section class="prompt-resource-detail-panel">
+      ${promptResourceDetailCard(selectedResource)}
+    </section>` : "";
+  target.innerHTML = `<div class="prompt-config-shell ${state.promptLibraryOpen ? "" : "library-collapsed"} ${state.promptSideMode === "library" ? "has-resource-detail" : "no-resource-detail"}">
+    <section class="prompt-mode-panel config-mode-tabs">
+      <div class="config-mode-copy">
+        <span class="eyebrow">Prompting configuration</span>
+        <h2>Editor de plantilla</h2>
+        <p>Carga una plantilla, edítala y copia el prompt final. La biblioteca contiene piezas documentadas para construir jerarquías, reglas y proveedores.</p>
       </div>
+      <div class="config-mode-actions">
+        <button type="button" data-config-mode="traditional">Configuración tradicional</button>
+        <button class="active" type="button" data-config-mode="prompting">Prompting configuration</button>
+      </div>
+    </section>
+    ${resourceDetailPanel}
+    <section class="prompt-config-main">
       <article class="prompt-editor-card">
         <header>
           <div>
@@ -2716,7 +2799,7 @@ function renderPromptConfiguration() {
             <p>${escapeHtml(selected.description)}</p>
           </div>
           <div class="prompt-editor-actions">
-            <button type="button" data-reset-prompt="${escapeHtml(selected.id)}">Recargar plantilla</button>
+            <button type="button" data-save-prompt="${escapeHtml(selected.id)}">Guardar cambios</button>
             <button type="button" data-copy-prompt="${escapeHtml(selected.id)}" class="primary">Copiar prompt</button>
             <button type="button" data-apply-prompt="${escapeHtml(selected.id)}">Aplicar con agente</button>
           </div>
@@ -2724,24 +2807,26 @@ function renderPromptConfiguration() {
         <textarea data-prompt-template="${escapeHtml(selected.id)}">${escapeHtml(selected.body)}</textarea>
       </article>
     </section>
-    <aside class="prompt-library-panel">
-      <header>
-        <div class="prompt-library-title">
-          <span class="eyebrow">Resource library</span>
-          <h3>${state.promptSideMode === "templates" ? "Plantillas" : "Biblioteca de recursos"}</h3>
+    <aside class="prompt-config-side">
+      <section class="prompt-library-panel">
+        <header>
+          <div class="prompt-library-title">
+            <span class="eyebrow">Resource library</span>
+            <h3>${state.promptSideMode === "templates" ? "Plantillas" : "Biblioteca de recursos"}</h3>
+          </div>
+          <div class="prompt-library-tools">
+            ${templateHeaderActions}
+            <button type="button" class="icon-btn" data-toggle-prompt-library title="Mostrar u ocultar biblioteca">◧</button>
+          </div>
+        </header>
+        <div class="prompt-library-body">
+          <div class="prompt-library-switch">
+            <button type="button" class="${state.promptSideMode === "templates" ? "active" : ""}" data-prompt-side-mode="templates">Plantillas</button>
+            <button type="button" class="${state.promptSideMode === "library" ? "active" : ""}" data-prompt-side-mode="library">Biblioteca</button>
+          </div>
+          ${state.promptSideMode === "templates" ? promptTemplateSidebar(prompts, selected) : promptResourceSidebar(resources, selectedResource)}
         </div>
-        <div class="prompt-library-tools">
-          ${templateHeaderActions}
-          <button type="button" class="icon-btn" data-toggle-prompt-library title="Mostrar u ocultar biblioteca">◧</button>
-        </div>
-      </header>
-      <div class="prompt-library-body">
-        <div class="prompt-library-switch">
-          <button type="button" class="${state.promptSideMode === "templates" ? "active" : ""}" data-prompt-side-mode="templates">Plantillas</button>
-          <button type="button" class="${state.promptSideMode === "library" ? "active" : ""}" data-prompt-side-mode="library">Biblioteca</button>
-        </div>
-        ${state.promptSideMode === "templates" ? promptTemplateSidebar(prompts, selected) : promptResourceSidebar(resources, selectedResource)}
-      </div>
+      </section>
     </aside>
   </div>`;
 }
@@ -2752,6 +2837,7 @@ function renderPromptResourceGrid() {
 
 function promptTemplateSidebar(prompts, selected) {
   return `<div class="prompt-template-sidebar">
+    ${state.promptTemplateFormOpen ? promptTemplateForm() : ""}
     <div class="prompt-side-list">
       ${prompts.map((prompt) => `<button type="button" class="prompt-side-item ${prompt.id === selected.id ? "active" : ""}" data-select-prompt="${escapeHtml(prompt.id)}">
         <span>${escapeHtml(prompt.scope)}</span>
@@ -2762,32 +2848,60 @@ function promptTemplateSidebar(prompts, selected) {
   </div>`;
 }
 
+function promptTemplateForm() {
+  return `<form class="prompt-template-form" data-prompt-template-form onsubmit="return false">
+    <label>
+      <span>Nombre</span>
+      <input type="text" id="newPromptTitle" placeholder="Nombre de la plantilla" autocomplete="off" />
+    </label>
+    <label>
+      <span>Descripción</span>
+      <input type="text" id="newPromptDescription" placeholder="Qué hace esta plantilla" autocomplete="off" />
+    </label>
+    <label>
+      <span>Prompt</span>
+      <textarea id="newPromptBody" placeholder="Escribe aquí el prompt nuevo"></textarea>
+    </label>
+    <div class="prompt-template-form-actions">
+      <button type="button" class="primary" data-save-new-prompt-template>Crear plantilla</button>
+      <button type="button" data-cancel-new-prompt-template>Cancelar</button>
+    </div>
+  </form>`;
+}
+
 function promptResourceSidebar(resources, selectedResource) {
   const grouped = resources.reduce((acc, resource) => {
     (acc[resource.group] ||= []).push(resource);
     return acc;
   }, {});
-  const detail = selectedResource ? `<article class="prompt-resource-detail">
+  return `<div class="prompt-resource-sidebar">
+    <input type="search" id="promptResourceSearch" placeholder="Buscar roles, niveles, restricciones..." value="${escapeHtml(state.promptLibraryQuery)}" />
+    <div class="prompt-resource-layout">
+      <div class="prompt-resource-index">
+        ${Object.entries(grouped).map(([group, items]) => {
+          const open = items.some((resource) => resource.id === selectedResource?.id);
+          return `<details class="prompt-resource-group" ${open ? "open" : ""}>
+            <summary>${escapeHtml(group)}<small>${items.length}</small></summary>
+            <div class="prompt-resource-group-items">
+              ${items.map((resource) => `<button type="button" class="${resource.id === selectedResource?.id ? "active" : ""}" data-select-prompt-resource="${escapeHtml(resource.id)}">
+                ${escapeHtml(resource.title)}
+              </button>`).join("")}
+            </div>
+          </details>`;
+        }).join("") || `<div class="config-empty">Sin recursos para esa búsqueda.</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function promptResourceDetailCard(selectedResource) {
+  return selectedResource ? `<article class="prompt-resource-detail">
       <span>${escapeHtml(selectedResource.group)}</span>
       <h4>${escapeHtml(selectedResource.title)}</h4>
       <p>${escapeHtml(selectedResource.description)}</p>
       <code>${escapeHtml(selectedResource.example)}</code>
       <button type="button" data-insert-prompt-resource="${escapeHtml(selectedResource.id)}">Insertar en plantilla</button>
-    </article>` : `<div class="config-empty">Selecciona un recurso para ver el detalle.</div>`;
-  return `<div class="prompt-resource-sidebar">
-    <input type="search" id="promptResourceSearch" placeholder="Buscar roles, niveles, restricciones..." value="${escapeHtml(state.promptLibraryQuery)}" />
-    <div class="prompt-resource-layout">
-      <div class="prompt-resource-index">
-        ${Object.entries(grouped).map(([group, items]) => `<section>
-          <h4>${escapeHtml(group)}</h4>
-          ${items.map((resource) => `<button type="button" class="${resource.id === selectedResource?.id ? "active" : ""}" data-select-prompt-resource="${escapeHtml(resource.id)}">
-            ${escapeHtml(resource.title)}
-          </button>`).join("")}
-        </section>`).join("") || `<div class="config-empty">Sin recursos para esa búsqueda.</div>`}
-      </div>
-      ${detail}
-    </div>
-  </div>`;
+    </article>` : `<div class="prompt-resource-detail config-empty">Selecciona un recurso para ver el detalle.</div>`;
 }
 
 function promptTemplateCard(template) {
@@ -2879,16 +2993,104 @@ function insertPromptResource(id) {
   toast("Recurso insertado en la plantilla.");
 }
 
+const CUSTOM_PROMPT_TEMPLATES_KEY = "karajan.customPromptTemplates";
+const PROMPT_DRAFT_PREFIX = "karajan.promptDraft.";
+
+function getCustomPromptTemplates() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CUSTOM_PROMPT_TEMPLATES_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => item?.id && item?.title) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomPromptTemplates(templates) {
+  localStorage.setItem(CUSTOM_PROMPT_TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+function getPromptDraft(id) {
+  return localStorage.getItem(`${PROMPT_DRAFT_PREFIX}${id}`) || "";
+}
+
+function savePromptDraft(id, body) {
+  localStorage.setItem(`${PROMPT_DRAFT_PREFIX}${id}`, body);
+}
+
+function applyStoredPromptTemplates(basePrompts) {
+  const defaults = basePrompts.map((prompt) => ({
+    ...prompt,
+    isDefault: true,
+    body: getPromptDraft(prompt.id) || prompt.body,
+  }));
+  const custom = getCustomPromptTemplates().map((prompt) => ({
+    ...prompt,
+    scope: prompt.scope || "Personal",
+    isDefault: false,
+  }));
+  return [...defaults, ...custom];
+}
+
+function saveCurrentPromptTemplate(id) {
+  const textarea = $(`[data-prompt-template="${CSS.escape(id)}"]`);
+  const template = buildConfigPrompts().find((prompt) => prompt.id === id);
+  if (!textarea || !template) return toast("No se ha encontrado la plantilla.");
+  if (template.isDefault) {
+    savePromptDraft(id, textarea.value);
+  } else {
+    const templates = getCustomPromptTemplates();
+    const match = templates.find((prompt) => prompt.id === id);
+    if (match) {
+      match.body = textarea.value;
+      saveCustomPromptTemplates(templates);
+    }
+  }
+  toast("Cambios guardados.");
+  renderPromptConfiguration();
+}
+
+function createPromptTemplateFromForm() {
+  const title = $("#newPromptTitle")?.value.trim() || "";
+  const description = $("#newPromptDescription")?.value.trim() || "";
+  const body = $("#newPromptBody")?.value.trim() || "";
+  if (!title) return toast("Pon un nombre para la plantilla.");
+  if (!body) return toast("Escribe el prompt de la plantilla.");
+  const templates = getCustomPromptTemplates();
+  const id = `custom-${Date.now().toString(36)}`;
+  templates.push({
+    id,
+    scope: "Personal",
+    title,
+    description: description || "Plantilla creada manualmente.",
+    body,
+  });
+  saveCustomPromptTemplates(templates);
+  state.selectedPromptTemplate = id;
+  state.promptTemplateFormOpen = false;
+  renderPromptConfiguration();
+  toast("Plantilla creada.");
+}
+
+function deletePromptTemplate(id) {
+  const template = buildConfigPrompts().find((prompt) => prompt.id === id);
+  if (!template) return toast("No se ha encontrado la plantilla.");
+  if (template.isDefault) return toast("Las plantillas base no se pueden eliminar.");
+  saveCustomPromptTemplates(getCustomPromptTemplates().filter((prompt) => prompt.id !== id));
+  state.selectedPromptTemplate = "hierarchy";
+  renderPromptConfiguration();
+  toast("Plantilla eliminada.");
+}
+
 function buildConfigPrompts() {
   const c = state.config;
   const entities = state.entities || [];
   const hierarchy = entities.length
     ? entities
         .map((entity) => {
-          const roles = (entity.roles || []).map((role) => ROLE_DEFS[role]?.label || role).join(", ") || "sin rol";
+          const roles = (entity.role_tags || []).map((role) => ROLE_DEFS[role]?.label || role).join(", ") || "sin rol";
           const levels = (entity.levels || []).map((level) => LEVEL_FULL[level] || level).join(", ") || "sin niveles";
           const parent = entity.parentId ? `padre=${entityLabel(entity.parentId)}` : "sin padre";
-          return `- ${entityLabel(entity.id)} | proveedor=${entity.providerName || "auto"} | roles=${roles} | niveles=${levels} | ${parent}`;
+          return `- ${entityLabel(entity.id)} | proveedor=${entity.provider || "auto"} | roles=${roles} | niveles=${levels} | ${parent}`;
         })
         .join("\n")
     : "- Sin jerarquía definida todavía. Propón Agent principal, Workers y Backup.";
@@ -2900,7 +3102,7 @@ function buildConfigPrompts() {
     .join("\n") || "- Catálogo no cargado.";
   const modelCosts = TIERS.map((tier) => `- ${TIER_LABEL[tier]}: coste=$${c.cost_table[tier] ?? 0}, latencia=${c.latency_table[tier] ?? 0}ms`).join("\n");
 
-  return [
+  return applyStoredPromptTemplates([
     {
       id: "hierarchy",
       scope: "01 · Jerarquía",
@@ -3012,7 +3214,53 @@ ${modelCosts}
 - No habilites proveedores de pago sin aprobación.
 - Marca como pendiente cualquier proveedor sin API key/login.`,
     },
-  ];
+    {
+      id: "default-config",
+      scope: "05 · Producción",
+      title: "Default config",
+      description: "Deja la jerarquía de producción lista: Claude (N5) → ChatGPT backup/N4 → Qwen+DeepSeek local (N1-N3).",
+      executable: true,
+      body: `# Objetivo
+Aplicar de un clic la jerarquía de referencia para producción, sin redactar nada manualmente.
+
+# Jerarquía que se restaura
+- Claude (Anthropic) -> Agent/padre, N5 crítica.
+- ChatGPT (OpenAI) -> Backup y delegado directo de N4 (tareas medias/complejas).
+- Qwen (local, Ollama) -> Worker, N1 simple + N2 moderada.
+- DeepSeek (local, Ollama) -> Worker, N3 intermedia.
+
+# Qué hace "Aplicar con agente" en esta plantilla
+1. Restaura data/active_config.json y data/routing_layout.json desde data/production_baseline/ (con copia de seguridad automática de lo que hubiera).
+2. Comprueba si los modelos locales qwen2.5:7b y deepseek-r1:8b ya están descargados en Ollama.
+3. Comprueba si ANTHROPIC_API_KEY y OPENAI_API_KEY están configuradas.
+4. Devuelve la lista exacta de pasos pendientes (ej. "ollama pull ...") si algo falta.
+
+# Notas
+- No descarga modelos por sí sola: la descarga de varios GB se hace desde terminal con los comandos que esta plantilla te devuelva.
+- Equivalente a ejecutar: python scripts/setup_production.py --reset-config${formatDefaultConfigResult(state.defaultConfigResult)}`,
+    },
+  ]);
+}
+
+function formatDefaultConfigResult(result) {
+  if (!result) return "";
+  const credLines = Object.entries(result.credentials || {})
+    .map(([name, status]) => `  - ${name}: ${status.ready ? "OK" : "FALTA"} (${status.detail})`)
+    .join("\n");
+  const steps = (result.next_steps || []).length
+    ? result.next_steps.map((step) => `  - ${step}`).join("\n")
+    : "  - Ninguno: todo listo para delegar tareas reales.";
+  return `
+
+# Resultado de la última aplicación
+- Restaurado: ${(result.restored || []).join(", ") || "—"}
+- Copias de seguridad: ${(result.backups || []).length || 0}
+- Modelos locales instalados: ${(result.ollama_installed || []).join(", ") || "ninguno"}
+- Modelos locales que faltan: ${(result.ollama_missing || []).join(", ") || "ninguno"}
+- Credenciales:
+${credLines || "  - —"}
+- Pasos pendientes:
+${steps}`;
 }
 
 function defaultPolicyConfig() {
@@ -3025,6 +3273,22 @@ function defaultPolicyConfig() {
     require_review_for_missing_credentials: true,
   };
 }
+
+const POLICY_SUGGESTIONS = {
+  sensitive_domains: ["security", "operations", "devops", "legal", "credentials", "billing", "production", "compliance", "privacy", "infrastructure"],
+  critical_intents: [
+    "deploy_production",
+    "rotate_credentials",
+    "modify_permissions",
+    "delete_data",
+    "change_billing",
+    "incident_response",
+    "run_external_command",
+    "access_sensitive_data",
+    "security_architecture_review",
+    "security_review",
+  ],
+};
 
 async function renderConfigAgentsPanel() {
   const target = $("#agentsMainPanel") || $("#configAgentsPanel");
@@ -3052,17 +3316,12 @@ async function renderConfigAgentsPanel() {
   target.innerHTML = `<div class="config-agent-layout">
     <section class="fcard config-agent-add">
       <h3>Agregar agente manual</h3>
-      <div class="manual-agent-form">
-        <input id="manual-agent-name" type="text" placeholder="Nombre del agente" />
-        <select id="manual-agent-backend">
-          <option value="cli">Local / CLI</option>
-          <option value="api">API</option>
-          <option value="simulated">Simulado</option>
-        </select>
-        <input id="manual-agent-auth" type="text" placeholder="Auth, comando o variable ENV" />
-        <button type="button" class="primary" id="addManualAgent">Agregar</button>
+      <div class="agent-console-line">
+        <span class="agent-console-prompt">&gt;</span>
+        <input id="manual-agent-command" type="text" spellcheck="false" placeholder='add "Nombre" backend=cli auth="comando o ENV"' />
+        <button type="button" class="primary" id="runManualAgentCommand">Ejecutar</button>
       </div>
-      <p class="config-note">Los agentes manuales quedan guardados localmente para diseñar la topología y documentar futuras conexiones.</p>
+      <p class="config-note">Sintaxis: <code>add "Nombre" backend=cli|api|simulated auth="comando o ENV"</code> · <code>remove &lt;id&gt;</code>. Quedan guardados localmente para documentar la topología.</p>
     </section>
     ${Object.entries(groups)
       .filter(([, list]) => list.length)
@@ -3089,36 +3348,26 @@ function configAgentCard(provider, status = {}) {
   const available = status.available;
   const dot = ready ? "ok" : available ? "warn" : "bad";
   const auth = provider.auth_method === "api_key" ? provider.env_var || "API key" : provider.login_command || provider.auth_method;
-  const tiers = Object.entries(provider.tiers || {})
-    .map(([tier, model]) => `<span><small>${escapeHtml(TIER_LABEL[tier] || tier)}</small><b>${escapeHtml(model)}</b></span>`)
-    .join("");
   const selected = state.selectedConfigAgent === provider.name ? "selected" : "";
-  return `<article class="config-agent-card ${ready ? "ready" : available ? "available" : "missing"} ${selected}" data-agent-card="${escapeHtml(provider.name)}">
-    <header>
-      <div><span class="status-dot ${dot}"></span><b>${escapeHtml(provider.label)}</b><small>${escapeHtml(provider.backend)} · ${escapeHtml(auth)}</small></div>
-      <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span>
-    </header>
-    <p>${escapeHtml(status.detail || "Sin comprobación activa")}</p>
-    <div class="config-tier-grid">${tiers || "<span><small>tiers</small><b>sin niveles</b></span>"}</div>
-    <div class="human-provider-actions">
-      <button type="button" data-refresh-providers>Intentar conectar</button>
-      <button type="button" data-provider-setup="${escapeHtml(provider.name)}">Configurar</button>
-      ${provider.signup_url ? `<a href="${escapeHtml(provider.signup_url)}" target="_blank" rel="noreferrer">Abrir consola</a>` : ""}
-      ${provider.login_command ? `<code>${escapeHtml(provider.login_command)}</code>` : provider.env_var ? `<code>${escapeHtml(provider.env_var)}</code>` : ""}
+  return `<article class="config-agent-card compact ${ready ? "ready" : available ? "available" : "missing"} ${selected}" data-agent-card="${escapeHtml(provider.name)}">
+    <span class="status-dot ${dot}"></span>
+    <div class="config-agent-card-body">
+      <b>${escapeHtml(provider.label)}</b>
+      <small>${escapeHtml(provider.backend)} · ${escapeHtml(auth)}</small>
     </div>
-    <div class="provider-setup" data-provider-setup-target="${escapeHtml(provider.name)}" hidden></div>
+    <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span>
   </article>`;
 }
 
 function manualAgentCard(agent) {
   const selected = state.selectedConfigAgent === agent.id ? "selected" : "";
-  return `<article class="config-agent-card manual ${selected}" data-agent-card="${escapeHtml(agent.id)}">
-    <header>
-      <div><span class="status-dot warn"></span><b>${escapeHtml(agent.name)}</b><small>${escapeHtml(agent.backend)} · manual</small></div>
-      <button type="button" class="icon-btn" data-remove-manual-agent="${escapeHtml(agent.id)}">×</button>
-    </header>
-    <p>${escapeHtml(agent.auth || "Pendiente de definir autenticación o comando.")}</p>
-    <div class="config-tier-grid"><span><small>estado</small><b>documentado</b></span><span><small>origen</small><b>manual</b></span></div>
+  return `<article class="config-agent-card compact manual ${selected}" data-agent-card="${escapeHtml(agent.id)}">
+    <span class="status-dot warn"></span>
+    <div class="config-agent-card-body">
+      <b>${escapeHtml(agent.name)}</b>
+      <small>${escapeHtml(agent.backend)} · manual</small>
+    </div>
+    <button type="button" class="icon-btn" data-remove-manual-agent="${escapeHtml(agent.id)}" title="Quitar">×</button>
   </article>`;
 }
 
@@ -3134,19 +3383,43 @@ function saveManualAgents(agents) {
   localStorage.setItem("karajan-manual-agents", JSON.stringify(agents));
 }
 
-function addManualAgent() {
-  const name = $("#manual-agent-name")?.value?.trim();
-  if (!name) return toast("Indica un nombre para el agente.");
-  const agents = getManualAgents();
-  agents.push({
-    id: `manual_${Date.now().toString(36)}`,
+function parseManualAgentCommand(raw) {
+  const text = (raw || "").trim();
+  if (!text) return null;
+  const [cmd] = text.split(/\s+/, 1);
+  const remainder = text.slice(cmd.length).trim();
+  if (cmd === "remove") {
+    return { type: "remove", id: remainder.split(/\s+/)[0] || "" };
+  }
+  if (cmd !== "add") return null;
+  const nameMatch = remainder.match(/^"([^"]+)"|^'([^']+)'/);
+  const name = (nameMatch ? nameMatch[1] ?? nameMatch[2] : remainder.split(/\s+(?:backend|auth)=/)[0]).trim();
+  const backendMatch = remainder.match(/backend=(\S+)/);
+  const authMatch = remainder.match(/auth="([^"]*)"|auth='([^']*)'|auth=(\S+)/);
+  return {
+    type: "add",
     name,
-    backend: $("#manual-agent-backend")?.value || "cli",
-    auth: $("#manual-agent-auth")?.value?.trim() || "",
-  });
-  saveManualAgents(agents);
-  renderConfigAgentsPanel();
-  toast("Agente manual agregado.");
+    backend: backendMatch ? backendMatch[1] : "cli",
+    auth: authMatch ? authMatch[1] ?? authMatch[2] ?? authMatch[3] ?? "" : "",
+  };
+}
+
+function runManualAgentCommand() {
+  const input = $("#manual-agent-command");
+  const parsed = parseManualAgentCommand(input?.value);
+  if (!parsed) return toast('Sintaxis: add "Nombre" backend=cli auth="comando" · remove <id>');
+  if (parsed.type === "remove") {
+    if (!parsed.id) return toast("Indica el id del agente a quitar.");
+    removeManualAgent(parsed.id);
+  } else {
+    if (!parsed.name) return toast("Indica un nombre para el agente.");
+    const agents = getManualAgents();
+    agents.push({ id: `manual_${Date.now().toString(36)}`, name: parsed.name, backend: parsed.backend, auth: parsed.auth });
+    saveManualAgents(agents);
+    renderConfigAgentsPanel();
+    toast("Agente manual agregado.");
+  }
+  if (input) input.value = "";
 }
 
 function removeManualAgent(id) {
@@ -3171,6 +3444,55 @@ function findConfigAgent(id = state.selectedConfigAgent) {
   return fallback ? { type: "catalog", agent: fallback } : null;
 }
 
+function agentSkillFamily(agent) {
+  if (agent.name.startsWith("ollama")) return "ollama";
+  if (agent.name === "anthropic" || agent.name === "claude-cli") return "claude";
+  if (agent.name === "codex") return "codex";
+  return null;
+}
+
+function compatibleSkills(agent) {
+  const family = agentSkillFamily(agent);
+  const all = state.skills || [];
+  if (!family) return all;
+  const matching = all.filter((skill) => (skill.applies_to || []).includes(family));
+  const rest = all.filter((skill) => !(skill.applies_to || []).includes(family));
+  return matching.length ? [...matching, ...rest] : all;
+}
+
+function ensureEntityForProvider(providerName) {
+  let entity = (state.entities || []).find((item) => item.provider === providerName);
+  if (entity) return entity;
+  entity = addEntityFromProvider(providerName, "child");
+  return entity || (state.entities || []).find((item) => item.provider === providerName);
+}
+
+function agentSkillSection(agent) {
+  if (!(state.skills || []).length) return "";
+  const entity = (state.entities || []).find((item) => item.provider === agent.name);
+  const skills = compatibleSkills(agent);
+  const selected = new Set(entity?.skills || []);
+  const inputClass = entity ? "entity-skill-side" : "agent-skill-provider";
+  const inputScope = entity ? `data-entity="${escapeHtml(entity.id)}"` : `data-provider="${escapeHtml(agent.name)}"`;
+  return `<section class="agent-skill-card">
+    <h3>Skills <span class="cost-tag">${selected.size}</span></h3>
+    <p>${entity ? "Sincronizadas con la entidad de Decisión." : "Marca una opción para añadir este proveedor a Decisión."}</p>
+    <div class="agent-skill-options">
+      ${skills
+        .map(
+          (skill) => `<label class="agent-skill-option ${selected.has(skill.name) ? "on" : ""}">
+        <input class="${inputClass}" type="checkbox" ${inputScope} value="${escapeHtml(skill.name)}" ${selected.has(skill.name) ? "checked" : ""} />
+        <span class="agent-skill-option-body">
+          <b title="${escapeHtml(skill.description)}">${escapeHtml(skill.name)}</b>
+        </span>
+        ${skill.repo_url ? `<a href="${escapeHtml(skill.repo_url)}" target="_blank" rel="noreferrer" title="Ver repositorio en GitHub">⎘</a>` : ""}
+      </label>`
+        )
+        .join("")}
+    </div>
+  </section>`;
+}
+
 function renderAgentsSidePanel() {
   const target = $("#agentsSidePanel");
   if (!target) return;
@@ -3190,13 +3512,15 @@ function renderAgentsSidePanel() {
   const tiers = type === "catalog"
     ? Object.entries(agent.tiers || {}).map(([tier, model]) => `<span><small>${escapeHtml(TIER_LABEL[tier] || tier)}</small><b>${escapeHtml(model)}</b></span>`).join("")
     : `<span><small>origen</small><b>manual</b></span>`;
+  const runSlot = type === "catalog" ? (agent.login_command ? "login_command" : agent.probe_command ? "probe_command" : null) : null;
+  const running = state.agentConsoleRunning === (type === "catalog" ? agent.name : agent.id);
+  const result = state.agentConsoleResults?.[type === "catalog" ? agent.name : agent.id];
   target.innerHTML = `
     <article class="agent-detail-card">
       <header>
         <div>
           <span class="eyebrow">${escapeHtml(backend)} · ${type === "catalog" ? "catálogo" : "manual"}</span>
           <h3>${escapeHtml(label)}</h3>
-          <p>${escapeHtml(status.detail || auth || "Pendiente de comprobación")}</p>
         </div>
         ${type === "catalog" ? `<span class="cost-tag ${agent.is_free ? "free" : "paid"}">${agent.is_free ? "Gratis" : "Pago"}</span>` : ""}
       </header>
@@ -3205,25 +3529,55 @@ function renderAgentsSidePanel() {
         <span><small>Auth</small><b>${escapeHtml(auth)}</b></span>
         <span><small>Estado</small><b>${status.ready ? "listo" : status.available ? "detectado" : "pendiente"}</b></span>
       </div>
-      <div class="config-tier-grid">${tiers}</div>
-      <div class="human-provider-actions">
-        ${type === "catalog" ? `<button type="button" data-refresh-providers>Intentar conectar</button><button type="button" data-provider-setup="${escapeHtml(agent.name)}">Configurar</button>` : ""}
-        ${type === "catalog" && agent.signup_url ? `<a href="${escapeHtml(agent.signup_url)}" target="_blank" rel="noreferrer">Abrir consola</a>` : ""}
-        ${type === "catalog" && agent.login_command ? `<code>${escapeHtml(agent.login_command)}</code>` : type === "catalog" && agent.env_var ? `<code>${escapeHtml(agent.env_var)}</code>` : ""}
-      </div>
-      ${type === "catalog" ? `<div class="provider-setup" data-provider-setup-target="${escapeHtml(agent.name)}" hidden></div>` : ""}
+      ${type === "catalog" ? `<div class="config-tier-grid">${tiers}</div>` : ""}
     </article>
+    ${type === "catalog" ? `<section class="agent-console">
+      <header>
+        <h4>Consola</h4>
+        <div class="agent-console-actions">
+          ${runSlot ? `<button type="button" class="agent-console-action primary" data-run-provider="${escapeHtml(agent.name)}" data-run-slot="${runSlot}" ${running ? "disabled" : ""} aria-label="${running ? "Conectando proveedor" : "Conectar proveedor"}">
+            <span class="action-mark">▶</span><span><b>${running ? "Conectando" : "Conectar"}</b><small>Ejecutar comando</small></span>
+          </button>` : ""}
+          <button type="button" class="agent-console-action" data-refresh-providers aria-label="Comprobar estado del proveedor">
+            <span class="action-mark">✓</span><span><b>Comprobar</b><small>Actualizar estado</small></span>
+          </button>
+          <button type="button" class="agent-console-action" data-provider-setup="${escapeHtml(agent.name)}" aria-label="Configurar credenciales del proveedor">
+            <span class="action-mark">⚙</span><span><b>Configurar</b><small>Credenciales</small></span>
+          </button>
+          ${agent.signup_url ? `<a class="agent-console-action provider-link" href="${escapeHtml(agent.signup_url)}" target="_blank" rel="noreferrer" aria-label="Abrir sitio del proveedor">
+            <span class="action-mark">↗</span><span><b>Proveedor</b><small>Abrir sitio</small></span>
+          </a>` : ""}
+        </div>
+      </header>
+      ${result ? `<pre class="agent-console-output ${result.ok ? "ok" : "bad"}">$ ${escapeHtml(result.command || "")}\n${escapeHtml(result.stdout || "")}${result.stderr ? `\n${escapeHtml(result.stderr)}` : ""}\n[${escapeHtml(String(result.returncode ?? "—"))}] ${escapeHtml(result.detail || "")}</pre>` : `<p class="config-note">${runSlot ? "Pulsa Conectar para ejecutar el comando real del catálogo." : "Este proveedor no tiene un comando de conexión definido."}</p>`}
+      <div class="provider-setup" data-provider-setup-target="${escapeHtml(agent.name)}" hidden></div>
+    </section>` : ""}
+    ${type === "catalog" ? agentSkillSection(agent) : ""}
     <section class="agent-policy-card">
       <h3>Restricciones del agente</h3>
       <p>Estas reglas gobiernan cuándo el router bloquea, pide revisión humana o evita ejecución real con este tipo de proveedor.</p>
-      ${field("Nivel mínimo que exige revisión", selectInput("cfg-policy-human_review_min_level", String(policy.human_review_min_level), ["1", "2", "3", "4", "5"], { 1: "N1", 2: "N2", 3: "N3", 4: "N4", 5: "N5" }))}
-      ${field("Umbral de riesgo operacional", numberInput("cfg-policy-operational_risk_review_threshold", policy.operational_risk_review_threshold, "0.1", "0"))}
-      ${field("Revisar proveedores de pago", checkbox("cfg-policy-require_review_for_paid_providers", policy.require_review_for_paid_providers))}
-      ${field("Revisar credenciales pendientes", checkbox("cfg-policy-require_review_for_missing_credentials", policy.require_review_for_missing_credentials))}
-      <h4>Dominios sensibles</h4>
-      ${policyChipEditor("sensitive_domains", policy.sensitive_domains, "security, operations, legal...")}
-      <h4>Intenciones críticas</h4>
-      ${policyChipEditor("critical_intents", policy.critical_intents, "security_review, deploy_production...")}
+      <div class="agent-policy-section">
+        <h4>Revisión y umbrales</h4>
+        <div class="agent-policy-grid-2">
+          ${field("Nivel mínimo que exige revisión", selectInput("cfg-policy-human_review_min_level", String(policy.human_review_min_level), ["1", "2", "3", "4", "5"], { 1: "N1", 2: "N2", 3: "N3", 4: "N4", 5: "N5" }))}
+          ${field("Umbral de riesgo operacional", numberInput("cfg-policy-operational_risk_review_threshold", policy.operational_risk_review_threshold, "0.1", "0"))}
+        </div>
+      </div>
+      <div class="agent-policy-section">
+        <h4>Reglas automáticas</h4>
+        <div class="agent-policy-toggle-row">
+          <div class="policy-toggle-item"><span>Revisar proveedores de pago</span>${checkbox("cfg-policy-require_review_for_paid_providers", policy.require_review_for_paid_providers)}</div>
+          <div class="policy-toggle-item"><span>Revisar credenciales pendientes</span>${checkbox("cfg-policy-require_review_for_missing_credentials", policy.require_review_for_missing_credentials)}</div>
+        </div>
+      </div>
+      <div class="agent-policy-section">
+        <h4>Dominios sensibles</h4>
+        ${policyChipEditor("sensitive_domains", policy.sensitive_domains, "security, operations, legal...")}
+      </div>
+      <div class="agent-policy-section">
+        <h4>Intenciones críticas</h4>
+        ${policyChipEditor("critical_intents", policy.critical_intents, "security_review, deploy_production...")}
+      </div>
     </section>
   `;
   bindPolicyAutosave();
@@ -3263,15 +3617,16 @@ function renderConfigPolicyPanel() {
   bindPolicyAutosave();
 }
 
-function policyChipEditor(key, values, placeholder) {
+function policyChipEditor(key, values) {
+  const selected = new Set(values || []);
+  const suggestions = (POLICY_SUGGESTIONS[key] || []).filter((value) => !selected.has(value));
   return `<div class="policy-chip-editor" data-policy-key="${key}">
-    <div class="policy-chips">${(values || [])
-      .map((value) => `<button type="button" class="policy-chip" data-remove-policy-chip="${key}:${escapeHtml(value)}">${escapeHtml(value)} <span>×</span></button>`)
-      .join("")}</div>
-    <div class="policy-add-row">
-      <input type="text" data-policy-input="${key}" placeholder="${placeholder}" />
-      <button type="button" data-add-policy-chip="${key}">Agregar</button>
-    </div>
+    <div class="policy-chips">${selected.size
+      ? [...selected].map((value) => `<button type="button" class="policy-chip" data-remove-policy-chip="${key}:${escapeHtml(value)}">${escapeHtml(value)} <span>×</span></button>`).join("")
+      : `<span class="policy-empty">Sin etiquetas activas.</span>`}</div>
+    ${suggestions.length ? `<div class="policy-suggestions">
+      ${suggestions.map((value) => `<button type="button" data-suggest-policy-chip="${key}:${escapeHtml(value)}">+ ${escapeHtml(value)}</button>`).join("")}
+    </div>` : ""}
   </div>`;
 }
 
@@ -3303,9 +3658,15 @@ function addPolicyChip(key) {
   const input = $(`[data-policy-input="${key}"]`);
   const value = input?.value?.trim();
   if (!value) return;
+  addPolicyChipValue(key, value);
+}
+
+function addPolicyChipValue(key, value) {
+  const clean = String(value || "").trim();
+  if (!clean) return;
   const policy = (state.config.policy ||= defaultPolicyConfig());
   const list = new Set(policy[key] || []);
-  list.add(value);
+  list.add(clean);
   policy[key] = [...list];
   renderConfigPolicyPanel();
   renderAgentsSidePanel();
@@ -3396,7 +3757,7 @@ function init() {
     const button = event.target.closest("[data-monitor-tab]");
     if (button) setMonitorTab(button.dataset.monitorTab);
   });
-  $("#configModeTabs")?.addEventListener("click", (event) => {
+  $("#view-flow")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-config-mode]");
     if (button) setConfigMode(button.dataset.configMode);
   });
@@ -3407,11 +3768,14 @@ function init() {
   initHumanSplitter();
   initAgentsSplitter();
   initMonitorBlocks();
-  $("#refreshMonitor").addEventListener("click", () => refreshMonitor().catch((e) => toast(e.message)));
-  $("#refreshHuman")?.addEventListener("click", () => refreshMonitor().then(() => toast("Control humano actualizado.")).catch((e) => toast(e.message)));
-  $("#refreshAgents")?.addEventListener("click", () => refreshProvidersAndAgents());
-  $("#saveRouting").addEventListener("click", () => saveRouting(false));
   $("#modelsAdvanced").addEventListener("change", renderModels);
+  initAutoRefresh();
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && event.target?.id === "manual-agent-command") {
+      event.preventDefault();
+      runManualAgentCommand();
+    }
+  });
   document.addEventListener("click", (event) => {
     if (state.notificationsOpen && !event.target.closest("#notificationWrap")) setNotificationsOpen(false);
     if (state.agentNotificationsOpen && !event.target.closest("#agentNotificationWrap")) setAgentNotificationsOpen(false);
@@ -3470,8 +3834,13 @@ function init() {
       showProviderSetup(providerSetup.dataset.providerSetup);
       return;
     }
-    if (event.target.closest("#addManualAgent")) {
-      addManualAgent();
+    if (event.target.closest("#runManualAgentCommand")) {
+      runManualAgentCommand();
+      return;
+    }
+    const runProviderCommand = event.target.closest("[data-run-provider]");
+    if (runProviderCommand) {
+      executeProviderCommand(runProviderCommand.dataset.runProvider, runProviderCommand.dataset.runSlot);
       return;
     }
     const agentCard = event.target.closest("[data-agent-card]");
@@ -3491,6 +3860,12 @@ function init() {
       addPolicyChip(addPolicy.dataset.addPolicyChip);
       return;
     }
+    const suggestPolicy = event.target.closest("[data-suggest-policy-chip]");
+    if (suggestPolicy) {
+      const [key, ...rest] = suggestPolicy.dataset.suggestPolicyChip.split(":");
+      addPolicyChipValue(key, rest.join(":"));
+      return;
+    }
     const removePolicy = event.target.closest("[data-remove-policy-chip]");
     if (removePolicy) {
       const [key, ...rest] = removePolicy.dataset.removePolicyChip.split(":");
@@ -3505,6 +3880,7 @@ function init() {
     const selectPrompt = event.target.closest("[data-select-prompt]");
     if (selectPrompt) {
       state.selectedPromptTemplate = selectPrompt.dataset.selectPrompt;
+      state.promptTemplateFormOpen = false;
       renderPromptConfiguration();
       return;
     }
@@ -3521,22 +3897,29 @@ function init() {
       return;
     }
     if (event.target.closest("[data-new-prompt-template]")) {
-      toast("Preparado para crear una plantilla nueva en la siguiente iteración.");
-      return;
-    }
-    if (event.target.closest("[data-edit-prompt-template]")) {
-      toast("Edita la plantilla en el panel principal; los cambios quedan en el texto actual.");
-      return;
-    }
-    if (event.target.closest("[data-delete-prompt-template]")) {
-      toast("Las plantillas base están protegidas por ahora.");
-      return;
-    }
-    const resetPrompt = event.target.closest("[data-reset-prompt]");
-    if (resetPrompt) {
-      state.selectedPromptTemplate = resetPrompt.dataset.resetPrompt;
+      state.promptSideMode = "templates";
+      state.promptTemplateFormOpen = true;
       renderPromptConfiguration();
-      toast("Plantilla recargada.");
+      $("#newPromptTitle")?.focus();
+      return;
+    }
+    if (event.target.closest("[data-cancel-new-prompt-template]")) {
+      state.promptTemplateFormOpen = false;
+      renderPromptConfiguration();
+      return;
+    }
+    if (event.target.closest("[data-save-new-prompt-template]")) {
+      createPromptTemplateFromForm();
+      return;
+    }
+    const deletePrompt = event.target.closest("[data-delete-prompt-template]");
+    if (deletePrompt) {
+      deletePromptTemplate(deletePrompt.dataset.deletePromptTemplate);
+      return;
+    }
+    const savePrompt = event.target.closest("[data-save-prompt]");
+    if (savePrompt) {
+      saveCurrentPromptTemplate(savePrompt.dataset.savePrompt);
       return;
     }
     const insertResource = event.target.closest("[data-insert-prompt-resource]");
@@ -3551,7 +3934,11 @@ function init() {
     }
     const applyPrompt = event.target.closest("[data-apply-prompt]");
     if (applyPrompt) {
-      toast("Primer flujo preparado: copia el prompt o pásalo al agente elegido en la siguiente iteración.");
+      if (applyPrompt.dataset.applyPrompt === "default-config") {
+        applyDefaultConfig();
+      } else {
+        toast("Primer flujo preparado: copia el prompt o pásalo al agente elegido en la siguiente iteración.");
+      }
       return;
     }
     if (!event.target.closest(".model-chip-picker")) {
@@ -3567,11 +3954,21 @@ function init() {
       renderPromptResourceGrid();
     }
   });
-  $("#saveConfig").addEventListener("click", () => saveFlow(false));
-  $("#reloadConfig").addEventListener("click", async () => {
-    await loadConfig();
-    renderFlow();
-    toast("Configuración recargada.");
+  document.addEventListener("change", (event) => {
+    const skillBox = event.target.closest(".entity-skill-side");
+    const providerSkillBox = event.target.closest(".agent-skill-provider");
+    if (!skillBox && !providerSkillBox) return;
+    const entity = skillBox
+      ? (state.entities || []).find((item) => item.id === skillBox.dataset.entity)
+      : ensureEntityForProvider(providerSkillBox.dataset.provider);
+    const activeBox = skillBox || providerSkillBox;
+    if (!entity) return;
+    entity.skills ||= [];
+    if (activeBox.checked && !entity.skills.includes(activeBox.value)) entity.skills.push(activeBox.value);
+    if (!activeBox.checked) entity.skills = entity.skills.filter((item) => item !== activeBox.value);
+    renderAgentsSidePanel();
+    if ($("#view-decision")?.classList.contains("active")) renderDiagram();
+    scheduleRoutingSave("Skills del agente actualizadas. Guardando…");
   });
   window.addEventListener("resize", () => {
     if ($("#view-decision").classList.contains("active")) drawWires();
@@ -3584,7 +3981,12 @@ function init() {
   initDiagramViewport();
 
   loadConfig()
-    .then(() => Promise.all([api("/catalog").then((c) => (state.catalog = c)), loadRoutingLayout(), refreshMonitor()]))
+    .then(() => Promise.all([
+      api("/catalog").then((c) => (state.catalog = c)),
+      api("/skills").then((skills) => (state.skills = skills)).catch(() => []),
+      loadRoutingLayout(),
+      refreshMonitor(),
+    ]))
     .then(() => {
       applyDrawerState();
       applyDiagramZoom();
@@ -3606,6 +4008,35 @@ async function copyConfigPrompt(id) {
   }
 }
 
+async function applyDefaultConfig() {
+  const button = $('[data-apply-prompt="default-config"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Aplicando…";
+  }
+  try {
+    const result = await api("/setup/apply-default", { method: "POST" });
+    state.defaultConfigResult = result;
+    await loadConfig();
+    const layout = await api("/routing-layout");
+    state.entities = layout.entities || [];
+    renderPromptConfiguration();
+    toast(
+      result.next_steps.length
+        ? `Jerarquía restaurada. ${result.next_steps.length} paso(s) pendiente(s) — revisa el editor.`
+        : "Jerarquía de producción aplicada: todo listo para delegar tareas reales."
+    );
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    const refreshedButton = $('[data-apply-prompt="default-config"]');
+    if (refreshedButton) {
+      refreshedButton.disabled = false;
+      refreshedButton.textContent = "Aplicar con agente";
+    }
+  }
+}
+
 init();
 
 async function refreshProvidersAndAgents() {
@@ -3618,4 +4049,21 @@ async function refreshProvidersAndAgents() {
   } catch (error) {
     toast(error.message);
   }
+}
+
+async function executeProviderCommand(name, slot) {
+  state.agentConsoleRunning = name;
+  renderAgentsSidePanel();
+  state.agentConsoleResults ||= {};
+  try {
+    state.agentConsoleResults[name] = await api(`/providers/${encodeURIComponent(name)}/run`, {
+      method: "POST",
+      body: JSON.stringify({ slot }),
+    });
+  } catch (error) {
+    state.agentConsoleResults[name] = { ok: false, command: "", stdout: "", stderr: error.message, detail: error.message };
+  }
+  state.agentConsoleRunning = null;
+  renderAgentsSidePanel();
+  refreshProvidersAndAgents().catch(() => null);
 }

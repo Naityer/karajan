@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.env import load_project_env
@@ -14,6 +16,7 @@ from app.env import load_project_env
 load_project_env()
 
 from app import (
+    agent_console,
     catalog,
     classifier,
     config as config_module,
@@ -21,6 +24,8 @@ from app import (
     delegation,
     metrics_export,
     monitoring,
+    openclaw_client,
+    production_setup,
     routing_layout,
     skills_catalog,
 )
@@ -31,13 +36,23 @@ from app.database import TaskStore
 from app.models import (
     CredentialStatus,
     DecisionLogEntry,
+    DefaultConfigApplyResult,
     DelegationRequest,
     HealthStatus,
     IngestRequest,
     KarajanConfig,
     Metrics,
+    OpenClawChannelInfo,
+    OpenClawInstallRequest,
+    OpenClawOperationResult,
+    OpenClawSetupCommand,
+    OpenClawSkillInfo,
+    OpenClawStatus,
+    OpenClawUpdateRequest,
     ObservabilitySnapshot,
     ProviderInfo,
+    ProviderRunRequest,
+    ProviderRunResult,
     ProviderSetup,
     RoutingLayout,
     SkillInfo,
@@ -60,10 +75,29 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "dashboard" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _static_asset_version() -> str:
+    """Fingerprint of the served JS/CSS, used to cache-bust static asset URLs.
+
+    Without this, a browser (or the pywebview/WebView2 control the desktop
+    launcher uses) can keep serving an old app.js/styles.css from its own
+    cache even after the files on disk changed, because the URL never
+    changes. Deriving the version from each file's mtime means the URL
+    changes the moment the content does, with nothing to remember to bump.
+    """
+    parts = []
+    for name in ("app.js", "styles.css"):
+        path = STATIC_DIR / name
+        if path.exists():
+            parts.append(str(path.stat().st_mtime_ns))
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:10]
+
+
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    return FileResponse(
-        STATIC_DIR / "index.html",
+def index() -> HTMLResponse:
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    html = re.sub(r"\?v=[\w.-]+", f"?v={_static_asset_version()}", html)
+    return HTMLResponse(
+        html,
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Pragma": "no-cache",
@@ -305,6 +339,42 @@ def list_skills() -> list[SkillInfo]:
     return skills_catalog.list_skills()
 
 
+@app.get("/integrations/openclaw/status", response_model=OpenClawStatus)
+def openclaw_status() -> OpenClawStatus:
+    return openclaw_client.OpenClawClient(active_config).status()
+
+
+@app.get("/integrations/openclaw/skills", response_model=list[OpenClawSkillInfo])
+def openclaw_skills() -> list[OpenClawSkillInfo]:
+    return openclaw_client.OpenClawClient(active_config).skills()
+
+
+@app.post("/integrations/openclaw/skills/install", response_model=OpenClawOperationResult)
+def openclaw_install_skill(
+    request: OpenClawInstallRequest,
+    _: None = Depends(require_token),
+) -> OpenClawOperationResult:
+    return openclaw_client.OpenClawClient(active_config).install_skill(request)
+
+
+@app.post("/integrations/openclaw/skills/update", response_model=OpenClawOperationResult)
+def openclaw_update_skill(
+    request: OpenClawUpdateRequest,
+    _: None = Depends(require_token),
+) -> OpenClawOperationResult:
+    return openclaw_client.OpenClawClient(active_config).update_skill(request)
+
+
+@app.get("/integrations/openclaw/channels", response_model=list[OpenClawChannelInfo])
+def openclaw_channels() -> list[OpenClawChannelInfo]:
+    return openclaw_client.OpenClawClient(active_config).channels()
+
+
+@app.get("/integrations/openclaw/setup-commands", response_model=list[OpenClawSetupCommand])
+def openclaw_setup_commands() -> list[OpenClawSetupCommand]:
+    return openclaw_client.OpenClawClient(active_config).setup_commands()
+
+
 @app.get("/providers", response_model=list[CredentialStatus])
 def list_providers() -> list[CredentialStatus]:
     return credentials.detect_all()
@@ -316,3 +386,55 @@ def provider_setup(name: str) -> ProviderSetup:
     if setup is None:
         raise HTTPException(status_code=404, detail="provider not found")
     return setup
+
+
+@app.post("/providers/{name}/run", response_model=ProviderRunResult)
+def provider_run(name: str, request: ProviderRunRequest, _: None = Depends(require_token)) -> ProviderRunResult:
+    """Run a provider's catalog-defined login/probe command for the Agentes console.
+
+    Only `login_command`/`probe_command` from the static catalog can run — see
+    `app/agent_console.py` for why this can't become arbitrary command execution.
+    """
+    provider = catalog.get_provider(name)
+    if provider is None:
+        raise HTTPException(status_code=404, detail="provider not found")
+    return agent_console.run_provider_command(provider, request.slot)
+
+
+@app.post("/setup/apply-default", response_model=DefaultConfigApplyResult)
+def apply_default_config(_: None = Depends(require_token)) -> DefaultConfigApplyResult:
+    """Restore the reference production hierarchy (Claude / ChatGPT / Qwen+DeepSeek local)
+    from data/production_baseline/ and report what's still missing to run real tasks.
+
+    Backed by `app/production_setup.py`, the same module `scripts/setup_production.py`
+    uses from the command line — this is its "apply from the GUI" entry point.
+    """
+    global active_config
+    backups = production_setup.reset_config()
+    active_config = config_module.load_config()
+    layout_store.load()
+
+    required = production_setup.ollama_required_models()
+    installed = production_setup.ollama_installed_models()
+    missing_models = [model for model in required if model not in installed]
+
+    creds: dict[str, CredentialStatus] = {}
+    next_steps: list[str] = []
+    for provider_name in production_setup.REQUIRED_API_PROVIDERS:
+        status = production_setup.check_api_key(provider_name)
+        creds[provider_name] = status
+        if not status.ready:
+            next_steps.append(f"Configura la credencial de {provider_name} en .env ({status.detail})")
+    for model in missing_models:
+        next_steps.append(f"ollama pull {model}")
+
+    log_event(logger, logging.INFO, "default_config_applied", backups=len(backups), missing_models=len(missing_models))
+    return DefaultConfigApplyResult(
+        ok=True,
+        restored=["data/active_config.json", "data/routing_layout.json"],
+        backups=backups,
+        ollama_installed=[model for model in required if model in installed],
+        ollama_missing=missing_models,
+        credentials=creds,
+        next_steps=next_steps,
+    )
