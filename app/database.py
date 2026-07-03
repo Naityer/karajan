@@ -226,25 +226,31 @@ class TaskStore:
 
     def list_decisions(self, task_id: str | None = None) -> list[DecisionLogEntry]:
         with self._connect() as conn:
-            if task_id is None:
-                rows = conn.execute("SELECT * FROM decisions ORDER BY created_at").fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM decisions WHERE task_id = ? ORDER BY created_at", (task_id,)
-                ).fetchall()
-        return [
-            DecisionLogEntry(
-                id=row["id"],
-                task_id=row["task_id"],
-                phase=row["phase"],
-                decision=row["decision"],
-                score=row["score"],
-                backend=row["backend"],
-                reason=row["reason"] or "",
-                created_at=datetime.fromisoformat(row["created_at"]),
-            )
-            for row in rows
-        ]
+            try:
+                if task_id is None:
+                    rows = conn.execute("SELECT * FROM decisions ORDER BY created_at").fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM decisions WHERE task_id = ? ORDER BY created_at", (task_id,)
+                    ).fetchall()
+            except sqlite3.DatabaseError:
+                rows = []
+        entries: list[DecisionLogEntry] = []
+        for row in rows:
+            try:
+                entries.append(DecisionLogEntry(
+                    id=row["id"],
+                    task_id=row["task_id"],
+                    phase=row["phase"],
+                    decision=row["decision"],
+                    score=row["score"],
+                    backend=row["backend"],
+                    reason=row["reason"] or "",
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                ))
+            except Exception:
+                continue
+        return entries
 
     def get_task(self, task_id: str) -> TaskRecord:
         with self._connect() as conn:
@@ -260,8 +266,30 @@ class TaskStore:
             query += " LIMIT ? OFFSET ?"
             params = [limit, offset]
         with self._connect() as conn:
-            rows = conn.execute(query, params).fetchall()
-        return [self._row_to_record(row) for row in rows]
+            try:
+                rows = conn.execute(query, params).fetchall()
+            except sqlite3.DatabaseError:
+                # WAL corruption fallback: fetch rows one at a time by rowid,
+                # skipping any that touch corrupted pages.
+                rows = []
+                try:
+                    ids = conn.execute("SELECT rowid FROM tasks ORDER BY rowid DESC").fetchall()
+                    for (rowid,) in ids:
+                        try:
+                            row = conn.execute("SELECT * FROM tasks WHERE rowid = ?", (rowid,)).fetchone()
+                            if row:
+                                rows.append(row)
+                        except sqlite3.DatabaseError:
+                            continue
+                except sqlite3.DatabaseError:
+                    pass
+        records: list[TaskRecord] = []
+        for row in rows:
+            try:
+                records.append(self._row_to_record(row))
+            except Exception:
+                continue
+        return records
 
     def count_tasks(self) -> int:
         with self._connect() as conn:

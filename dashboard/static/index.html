@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KARAJAN</title>
     <link rel="icon" type="image/png" href="/static/icons/karajan_v2.png?v=ui-2" />
-    <link rel="stylesheet" href="/static/styles.css?v=ui-2" />
+    <link rel="stylesheet" href="/static/styles.css?v=ui-4" />
   </head>
   <body>
     <!-- Compact tool frame: brand · view switch · live status · theme — not a generic web shell -->
@@ -18,6 +18,7 @@
         <button class="view-tab" data-view="decision">Decisión</button>
         <button class="view-tab" data-view="agents">Agentes</button>
         <button class="view-tab" data-view="flow">Configuración</button>
+        <button class="view-tab" data-view="graph">Grafo</button>
       </nav>
 
       <div class="bar-right">
@@ -58,38 +59,18 @@
     <main class="stage">
       <!-- VIEW 1 · HUMAN CONTROL HOME -->
       <section class="view active" id="view-human">
-        <div class="human-home">
-          <section class="human-hero-panel">
-            <div>
-              <span class="eyebrow">Human control</span>
-              <h1>Centro de control humano</h1>
-              <p>Decisiones, aprobaciones, conexiones de agentes IA, proveedores locales/API y control de costes antes de liberar ejecución real.</p>
-            </div>
-            <div class="human-hero-right">
-              <div id="humanHomeStatus" class="human-home-status"></div>
-            </div>
-          </section>
-
-          <section class="human-home-grid" id="humanHomeGrid">
-            <div class="human-home-main">
-              <section class="human-home-card decision-card">
-                <header><span>Decisiones pendientes</span><b id="humanDecisionCount">0</b></header>
-                <div id="humanDecisionQueue"></div>
-              </section>
-
-              <div class="human-bottom-grid">
-                <section class="human-home-card">
-                  <header><span>Pagos y coste</span></header>
-                  <div id="humanCostPanel"></div>
-                </section>
-
-                <section class="human-home-card">
-                  <header><span>Acciones humanas</span></header>
-                  <div id="humanActionPanel"></div>
-                </section>
-              </div>
-            </div>
-          </section>
+        <div class="human-iso-fullscreen">
+          <canvas id="iso-cvs"></canvas>
+          <div class="iso-legend" id="iso-legend"></div>
+          <div class="iso-hint">haz clic en una torre · rueda para ajustar zoom</div>
+          <!-- hidden elements kept for JS compatibility -->
+          <div hidden id="humanHomeGrid"></div>
+          <div hidden id="humanDecisionCount"></div>
+          <div hidden id="humanDecisionQueue"></div>
+          <div hidden id="humanCostPanel"></div>
+          <div hidden id="humanActionPanel"></div>
+          <div hidden id="humanHomeStatus"></div>
+          <div hidden class="human-home-status"></div>
         </div>
       </section>
 
@@ -136,6 +117,7 @@
               <div class="monitor-tabs" id="monitorTabs">
                 <button class="active" data-monitor-tab="agents">Nodos</button>
                 <button data-monitor-tab="graphs">Rendimiento</button>
+                <button data-monitor-tab="iso">Vista isométrica</button>
               </div>
               <div class="monitor-tab active" id="monitor-tab-agents">
                 <div class="legacy-metrics" id="nodeMetrics" hidden></div>
@@ -145,6 +127,9 @@
               <div class="monitor-tab" id="monitor-tab-graphs">
                 <div id="monitorGraphs"></div>
                 <div id="modelUsage"></div>
+              </div>
+              <div class="monitor-tab" id="monitor-tab-iso">
+                <p style="padding:24px;color:#4A6478;font-size:13px">Vista isométrica disponible en la página de Control humano.</p>
               </div>
             </div>
 
@@ -275,9 +260,14 @@
           <div id="promptConfigPanel"></div>
         </section>
       </section>
+
+      <!-- VIEW · GRAPH -->
+      <section class="view" id="view-graph">
+        <iframe id="graph-frame" src="/static/graph.html" title="Grafo de módulos Karajan"></iframe>
+      </section>
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/static/app.js?v=ui-2"></script>
+    <script src="/static/app.js?v=ui-4"></script>
   </body>
 </html>

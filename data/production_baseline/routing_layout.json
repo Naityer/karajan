@@ -2,12 +2,12 @@
   "entities": [
     {
       "id": "entity-agent-claude",
-      "name": "Claude (padre agente)",
+      "name": "Claude Code CLI (padre agente)",
       "role": "parent",
       "role_tags": [
         "parent"
       ],
-      "provider": "anthropic",
+      "provider": "claude-cli",
       "parentId": "",
       "levels": [
         "level_5_critical"
@@ -33,13 +33,13 @@
       "y": 0.0
     },
     {
-      "id": "entity-backup-chatgpt",
-      "name": "ChatGPT (backup + tareas medias)",
+      "id": "entity-backup-codex",
+      "name": "Codex CLI (backup + N4 compleja)",
       "role": "backup",
       "role_tags": [
         "backup"
       ],
-      "provider": "openai",
+      "provider": "codex",
       "parentId": "entity-agent-claude",
       "levels": [
         "level_4_complex"
@@ -57,7 +57,7 @@
     },
     {
       "id": "entity-worker-qwen",
-      "name": "Qwen (local, subworker barato)",
+      "name": "Qwen 2.5 7B (local, N1/N2 simple)",
       "role": "child",
       "role_tags": [
         "child"
@@ -74,11 +74,11 @@
       ],
       "capabilities": [],
       "x": 0.0,
-      "y": 805.2777777777778
+      "y": 700.0
     },
     {
       "id": "entity-worker-deepseek",
-      "name": "DeepSeek (local, subworker razonamiento)",
+      "name": "DeepSeek R1 8B (local, N3 razonamiento)",
       "role": "child",
       "role_tags": [
         "child"
@@ -95,11 +95,33 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 1228.6111111111109,
-      "y": 812.5
+      "x": 551.3580516028027,
+      "y": 700.0
+    },
+    {
+      "id": "entity-worker-mistral",
+      "name": "Mistral Nemo 12B (local, N3/N4 bridge)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-mistral-nemo",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_3_intermediate",
+        "level_4_complex"
+      ],
+      "skills": [
+        "repo-analyzer",
+        "backend-builder",
+        "frontend-builder"
+      ],
+      "capabilities": [],
+      "x": 1100.0,
+      "y": 700.0
     }
   ],
   "zoom": 0.63,
   "drawer_width": 360,
-  "updated_at": "2026-06-29T19:40:54.709546Z"
+  "updated_at": "2026-07-02T00:00:00.000000Z"
 }

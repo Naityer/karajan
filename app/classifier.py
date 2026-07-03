@@ -62,7 +62,7 @@ def _llm_classify(prompt: str, config: KarajanConfig) -> ClassificationResult:
         raise RuntimeError("no parent LLM available")
 
     instruction = f"{_skill_prompt()}\n\n## Prompt del usuario\n{prompt}\n\nDevuelve solo JSON."
-    run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.subtask_timeout_s)
+    run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.classify_timeout_s)
     if run.error or not run.output:
         raise RuntimeError(run.error or "empty LLM response")
 

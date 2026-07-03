@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -64,6 +65,14 @@ app = FastAPI(
     title="KARAJAN AI Harness Router",
     version="0.2.0",
     description="Local harness for task classification, real/local/simulated delegation, and audit monitoring.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT"],
+    allow_headers=["*"],
 )
 
 logger = get_logger("api")
@@ -295,11 +304,17 @@ def metrics_prometheus() -> PlainTextResponse:
 
 @app.get("/observability", response_model=ObservabilitySnapshot)
 def observability() -> ObservabilitySnapshot:
-    return monitoring.compute_observability(
-        store.list_tasks(),
-        store.list_decisions(),
-        layout_store.load(),
-    )
+    try:
+        records = store.list_tasks()
+    except Exception as exc:
+        log_event(logger, logging.WARNING, "observability_db_degraded", error=f"{type(exc).__name__}: {exc}")
+        records = []
+    try:
+        decisions = store.list_decisions()
+    except Exception as exc:
+        log_event(logger, logging.WARNING, "observability_decisions_degraded", error=f"{type(exc).__name__}: {exc}")
+        decisions = []
+    return monitoring.compute_observability(records, decisions, layout_store.load())
 
 
 # --- Configuration & providers ----------------------------------------------

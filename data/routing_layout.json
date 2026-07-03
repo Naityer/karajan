@@ -7,7 +7,7 @@
       "role_tags": [
         "parent"
       ],
-      "provider": "anthropic",
+      "provider": "claude-cli",
       "parentId": "",
       "levels": [
         "level_5_critical"
@@ -18,8 +18,7 @@
         "backend-builder",
         "security-review",
         "ponytail",
-        "promptfoo",
-        "cti-analyst"
+        "promptfoo"
       ],
       "capabilities": [
         "Classifier",
@@ -30,20 +29,21 @@
         "Recovery",
         "Aggregator"
       ],
-      "x": 549.632001087026,
-      "y": 13.807989324180827
+      "x": 536.8125970573482,
+      "y": 43.63636363636363
     },
     {
-      "id": "entity-backup-chatgpt",
-      "name": "ChatGPT (backup + tareas medias)",
+      "id": "entity-backup-codex",
+      "name": "Codex CLI (backup N4 complejo)",
       "role": "backup",
       "role_tags": [
-        "backup",
-        "validator"
+        "backup"
       ],
-      "provider": "openai",
+      "provider": "codex",
       "parentId": "entity-agent-claude",
-      "levels": [],
+      "levels": [
+        "level_4_complex"
+      ],
       "skills": [
         "repo-analyzer",
         "frontend-builder",
@@ -57,7 +57,7 @@
     },
     {
       "id": "entity-worker-qwen",
-      "name": "Qwen (local, subworker barato)",
+      "name": "Qwen 2.5 7B (local N1/N2)",
       "role": "child",
       "role_tags": [
         "child"
@@ -73,12 +73,12 @@
         "ponytail"
       ],
       "capabilities": [],
-      "x": 126.13405641845858,
-      "y": 613.4905017421953
+      "x": 160.0,
+      "y": 620.0
     },
     {
       "id": "entity-worker-deepseek",
-      "name": "DeepSeek (local, subworker razonamiento)",
+      "name": "DeepSeek R1 8B (local N3)",
       "role": "child",
       "role_tags": [
         "child"
@@ -95,12 +95,12 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 542.9780665052499,
-      "y": 628.7756280002117
+      "x": 536.0,
+      "y": 620.0
     },
     {
-      "id": "entity-worker-mistral-nemo",
-      "name": "Mistral Nemo (local, bridge N4)",
+      "id": "entity-worker-mistral",
+      "name": "Mistral Nemo 12B (local N3/N4)",
       "role": "child",
       "role_tags": [
         "child"
@@ -108,20 +108,20 @@
       "provider": "ollama-mistral-nemo",
       "parentId": "entity-agent-claude",
       "levels": [
+        "level_3_intermediate",
         "level_4_complex"
       ],
       "skills": [
         "repo-analyzer",
-        "backend-builder",
         "frontend-builder",
-        "ponytail"
+        "backend-builder"
       ],
       "capabilities": [],
-      "x": 965.2940511006625,
-      "y": 627.8843404997358
+      "x": 912.0,
+      "y": 620.0
     }
   ],
-  "zoom": 0.63,
-  "drawer_width": 375,
-  "updated_at": "2026-06-29T23:41:48.615176Z"
+  "zoom": 0.55,
+  "drawer_width": 360,
+  "updated_at": "2026-07-02T22:00:00.000000Z"
 }

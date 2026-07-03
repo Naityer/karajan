@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KARAJAN — Grafo de Módulos</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#12151C;--surface:#1A1E28;--surface2:#222736;
+  --border:#2D3448;--accent:#D4A828;--text:#E8EAF0;
+  --text-muted:#7A84A0;--radius:6px;
+}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  font-size:13px;display:flex;flex-direction:column;
+}
+header{
+  padding:10px 18px;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:14px;flex-shrink:0;
+}
+header h1{
+  font-size:14px;font-weight:700;letter-spacing:.08em;color:var(--accent);
+  white-space:nowrap;
+}
+.subtitle{font-size:10px;color:var(--text-muted);margin-top:2px}
+.legend{
+  display:flex;gap:10px;margin-left:auto;align-items:center;flex-wrap:wrap;
+}
+.li{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.main{display:flex;flex:1;overflow:hidden;min-height:0}
+.canvas-wrap{flex:1;position:relative;overflow:hidden}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas.grabbing{cursor:grabbing}
+.search-wrap{
+  position:absolute;top:10px;left:10px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:5px 10px;
+  display:flex;align-items:center;gap:7px;z-index:5;
+}
+.search-wrap svg{flex-shrink:0;color:var(--text-muted)}
+.search-wrap input{
+  background:none;border:none;outline:none;color:var(--text);
+  font-size:12px;width:170px;
+}
+.search-wrap input::placeholder{color:var(--text-muted)}
+.zoom-btns{
+  position:absolute;bottom:14px;left:10px;
+  display:flex;flex-direction:column;gap:3px;z-index:5;
+}
+.zbtn{
+  width:26px;height:26px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;user-select:none;transition:border-color .15s;
+}
+.zbtn:hover{border-color:var(--accent);color:var(--accent)}
+.tip{
+  position:absolute;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:8px 10px;font-size:11px;
+  pointer-events:none;display:none;max-width:230px;z-index:20;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);
+}
+.tip-title{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:3px}
+.tip-path{color:var(--text-muted);font-size:10px;margin-bottom:6px;word-break:break-all}
+.tip-lbl{color:var(--text-muted);font-size:10px;margin-bottom:2px}
+.tip-imp{color:var(--text);padding:1px 0;font-size:10px}
+.hint{
+  position:absolute;bottom:14px;right:10px;font-size:10px;
+  color:var(--text-muted);text-align:right;line-height:1.6;z-index:5;
+}
+.sidebar{
+  width:230px;background:var(--surface);
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;
+}
+.sidebar h2{
+  padding:10px 13px;font-size:10px;font-weight:600;color:var(--text-muted);
+  letter-spacing:.08em;text-transform:uppercase;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.slist{overflow-y:auto;flex:1}
+.slist::-webkit-scrollbar{width:4px}
+.slist::-webkit-scrollbar-track{background:transparent}
+.slist::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.sg{
+  padding:7px 13px 2px;font-size:9px;color:var(--text-muted);
+  letter-spacing:.07em;text-transform:uppercase;font-weight:600;
+  background:var(--bg);
+}
+.si{
+  padding:5px 13px;cursor:pointer;display:flex;align-items:center;
+  gap:7px;border-left:2px solid transparent;transition:background .1s;
+}
+.si:hover{background:var(--surface2)}
+.si.active{background:var(--surface2);border-left-color:var(--accent)}
+.si-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.si-lbl{
+  font-size:11px;color:var(--text);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+}
+.infobar{
+  padding:6px 13px;border-top:1px solid var(--border);
+  font-size:10px;color:var(--text-muted);flex-shrink:0;
+  min-height:30px;
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>KARAJAN &#8212; Grafo de M&#243;dulos</h1>
+    <div class="subtitle">Repositorio: C:\Users\tiand\Desktop\karajan</div>
+  </div>
+  <div class="legend">
+    <div class="li"><div class="ld" style="background:#D4A828"></div>Ra&#237;z</div>
+    <div class="li"><div class="ld" style="background:#4A9EFF"></div>app/</div>
+    <div class="li"><div class="ld" style="background:#4CAF6A"></div>providers/</div>
+    <div class="li"><div class="ld" style="background:#9B59B6"></div>tests/</div>
+    <div class="li"><div class="ld" style="background:#FF8C42"></div>tools/</div>
+  </div>
+</header>
+<div class="main">
+  <div class="canvas-wrap">
+    <div class="search-wrap">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="search" type="text" placeholder="Buscar m&#243;dulo...">
+    </div>
+    <canvas id="c"></canvas>
+    <div class="zoom-btns">
+      <div class="zbtn" id="zi">+</div>
+      <div class="zbtn" id="zo">&#8722;</div>
+      <div class="zbtn" id="zr" style="font-size:11px">&#8962;</div>
+    </div>
+    <div class="tip" id="tip"></div>
+    <div class="hint">
+      Rueda: zoom &nbsp;&#183;&nbsp; Arrastrar fondo: pan<br>
+      Clic nodo: seleccionar &nbsp;&#183;&nbsp; Clic 2x: fijar posici&#243;n
+    </div>
+  </div>
+  <div class="sidebar">
+    <h2>M&#243;dulos</h2>
+    <div class="slist" id="slist"></div>
+    <div class="infobar" id="info">Cargando…</div>
+  </div>
+</div>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// GRAPH DATA
+// ═══════════════════════════════════════════════════════════════
+const GROUPS = {
+  root:      { color:'#D4A828', label:'Raíz' },
+  app:       { color:'#4A9EFF', label:'app/' },
+  providers: { color:'#4CAF6A', label:'providers/' },
+  tests:     { color:'#9B59B6', label:'tests/' },
+  tools:     { color:'#FF8C42', label:'tools/' },
+};
+
+// Group layout centers (world space)
+const GC = {
+  root:      { x:0,    y:-320 },
+  app:       { x:-80,  y:0    },
+  providers: { x:280,  y:-80  },
+  tests:     { x:0,    y:330  },
+  tools:     { x:340,  y:300  },
+};
+
+const RAW = [
+  // ── ROOT ─────────────────────────────────────────────────────
+  {id:'desktop_app',   lb:'desktop_app',   path:'desktop_app.py',   g:'root',
+   imp:['app/env']},
+  {id:'karajan_mcp',   lb:'karajan_mcp',   path:'karajan_mcp.py',   g:'root',
+   imp:[]},
+
+  // ── APP ──────────────────────────────────────────────────────
+  {id:'app/__init__',       lb:'__init__',         path:'app/__init__.py',       g:'app', imp:[]},
+  {id:'app/auth',           lb:'auth',             path:'app/auth.py',           g:'app', imp:[]},
+  {id:'app/config',         lb:'config',           path:'app/config.py',         g:'app',
+   imp:['app/models','app/catalog','app/credentials']},
+  {id:'app/logging_config', lb:'logging_config',   path:'app/logging_config.py', g:'app', imp:[]},
+  {id:'app/metrics_export', lb:'metrics_export',   path:'app/metrics_export.py', g:'app',
+   imp:['app/models']},
+  {id:'app/routing_layout', lb:'routing_layout',   path:'app/routing_layout.py', g:'app',
+   imp:['app/models']},
+  {id:'app/credentials',    lb:'credentials',      path:'app/credentials.py',    g:'app',
+   imp:['app/catalog','app/models']},
+  {id:'app/flow_policy',    lb:'flow_policy',      path:'app/flow_policy.py',    g:'app',
+   imp:['app/models']},
+  {id:'app/monitoring',     lb:'monitoring',       path:'app/monitoring.py',     g:'app',
+   imp:['app/models']},
+  {id:'app/catalog',        lb:'catalog',          path:'app/catalog.py',        g:'app',
+   imp:['app/models']},
+  {id:'app/delegation',     lb:'delegation',       path:'app/delegation.py',     g:'app',
+   imp:['app/logging_config','app/flow_policy','app/models',
+        'app/providers/__init__','app/providers/base','app/providers/registry']},
+  {id:'app/env',            lb:'env',              path:'app/env.py',            g:'app', imp:[]},
+  {id:'app/openclaw_client',lb:'openclaw_client',  path:'app/openclaw_client.py',g:'app',
+   imp:['app/models']},
+  {id:'app/production_setup',lb:'production_setup',path:'app/production_setup.py',g:'app',
+   imp:['app/env','app/catalog','app/credentials','app/models']},
+  {id:'app/skills_catalog', lb:'skills_catalog',   path:'app/skills_catalog.py', g:'app',
+   imp:['app/models']},
+  {id:'app/models',         lb:'models',           path:'app/models.py',         g:'app', imp:[]},
+  {id:'app/classifier',     lb:'classifier',       path:'app/classifier.py',     g:'app',
+   imp:['app/logging_config','app/models','app/providers/__init__','app/router']},
+  {id:'app/database',       lb:'database',         path:'app/database.py',       g:'app',
+   imp:['app/models']},
+  {id:'app/router',         lb:'router',           path:'app/router.py',         g:'app',
+   imp:['app/models']},
+  {id:'app/agent_console',  lb:'agent_console',    path:'app/agent_console.py',  g:'app',
+   imp:['app/models']},
+  {id:'app/main',           lb:'main',             path:'app/main.py',           g:'app',
+   imp:['app/env','app/agent_console','app/catalog','app/classifier','app/config',
+        'app/credentials','app/delegation','app/metrics_export','app/monitoring',
+        'app/openclaw_client','app/production_setup','app/routing_layout',
+        'app/skills_catalog','app/auth','app/logging_config','app/models','app/database']},
+
+  // ── PROVIDERS ────────────────────────────────────────────────
+  {id:'app/providers/__init__', lb:'providers/__init__', path:'app/providers/__init__.py',
+   g:'providers',
+   imp:['app/providers/api','app/providers/base','app/providers/cli',
+        'app/providers/registry','app/providers/simulated']},
+  {id:'app/providers/base',     lb:'providers/base',     path:'app/providers/base.py',
+   g:'providers', imp:['app/models']},
+  {id:'app/providers/simulated',lb:'providers/simulated',path:'app/providers/simulated.py',
+   g:'providers', imp:['app/models','app/providers/base']},
+  {id:'app/providers/api',      lb:'providers/api',      path:'app/providers/api.py',
+   g:'providers', imp:['app/models','app/providers/base']},
+  {id:'app/providers/cli',      lb:'providers/cli',      path:'app/providers/cli.py',
+   g:'providers', imp:['app/models','app/providers/base']},
+  {id:'app/providers/registry', lb:'providers/registry', path:'app/providers/registry.py',
+   g:'providers',
+   imp:['app/catalog','app/models','app/providers/api','app/providers/base',
+        'app/providers/cli','app/providers/simulated']},
+
+  // ── TESTS ────────────────────────────────────────────────────
+  {id:'tests/test_api',              lb:'test_api',              path:'tests/test_api.py',              g:'tests',
+   imp:['app/database','app/models','app/routing_layout']},
+  {id:'tests/test_config',           lb:'test_config',           path:'tests/test_config.py',           g:'tests',
+   imp:['app/models']},
+  {id:'tests/test_config_persistence',lb:'test_config_persist', path:'tests/test_config_persistence.py',g:'tests',
+   imp:['app/database','app/models']},
+  {id:'tests/test_controls',         lb:'test_controls',         path:'tests/test_controls.py',         g:'tests',
+   imp:['app/database','app/delegation','app/models','app/router']},
+  {id:'tests/test_database',         lb:'test_database',         path:'tests/test_database.py',         g:'tests',
+   imp:['app/database','app/delegation','app/router']},
+  {id:'tests/test_delegation',       lb:'test_delegation',       path:'tests/test_delegation.py',       g:'tests',
+   imp:['app/delegation','app/models','app/providers/base',
+        'app/providers/registry','app/providers/simulated','app/router']},
+  {id:'tests/test_health_and_pagination',lb:'test_health_pag',  path:'tests/test_health_and_pagination.py',g:'tests',
+   imp:['app/database','app/models']},
+  {id:'tests/test_ingest',           lb:'test_ingest',           path:'tests/test_ingest.py',           g:'tests',
+   imp:['app/database']},
+  {id:'tests/test_metrics_export',   lb:'test_metrics_export',   path:'tests/test_metrics_export.py',   g:'tests',
+   imp:['app/database','app/delegation','app/models','app/router']},
+  {id:'tests/test_observability',    lb:'test_observability',    path:'tests/test_observability.py',    g:'tests',
+   imp:['app/database','app/delegation','app/models','app/router']},
+  {id:'tests/test_providers',        lb:'test_providers',        path:'tests/test_providers.py',        g:'tests',
+   imp:['app/providers/__init__','app/providers/api','app/providers/cli',
+        'app/providers/simulated','app/models']},
+  {id:'tests/test_router',           lb:'test_router',           path:'tests/test_router.py',           g:'tests',
+   imp:['app/models','app/router']},
+  {id:'tests/test_skills',           lb:'test_skills',           path:'tests/test_skills.py',           g:'tests',
+   imp:['app/models']},
+  {id:'tests/test_agent_console',    lb:'test_agent_console',    path:'tests/test_agent_console.py',    g:'tests',
+   imp:['app/models']},
+  {id:'tests/test_catalog_arch',     lb:'test_catalog_arch',     path:'tests/test_catalog_architecture.py',g:'tests',
+   imp:['app/catalog','app/models','app/providers/api']},
+  {id:'tests/test_openclaw_client',  lb:'test_openclaw_client',  path:'tests/test_openclaw_client.py',  g:'tests',
+   imp:['app/models','app/openclaw_client']},
+  {id:'tests/test_openclaw_api',     lb:'test_openclaw_api',     path:'tests/test_openclaw_api.py',     g:'tests',
+   imp:['app/models']},
+
+  // ── TOOLS ────────────────────────────────────────────────────
+  {id:'tools/run_karajan_trials',lb:'run_karajan_trials',path:'tools/run_karajan_trials.py',
+   g:'tools', imp:[]},
+];
+
+// Node radii (reflect connectivity / importance)
+const RADII = {
+  'app/models':14,'app/main':13,'app/providers/__init__':12,
+  'app/router':12,'app/catalog':11,'app/delegation':11,
+  'app/database':11,'app/classifier':11,
+};
+
+// ═══════════════════════════════════════════════════════════════
+// INIT NODES + EDGES
+// ═══════════════════════════════════════════════════════════════
+const nodeById = {};
+const nodes = RAW.map(r => {
+  const gc = GC[r.g];
+  const angle = Math.random() * Math.PI * 2;
+  const spread = (r.g === 'tests') ? 200 : (r.g === 'app' ? 160 : 100);
+  const node = {
+    id: r.id, label: r.lb, path: r.path, group: r.g,
+    imports: r.imp,
+    x: gc.x + Math.cos(angle)*spread*(0.5+Math.random()*0.8),
+    y: gc.y + Math.sin(angle)*spread*(0.5+Math.random()*0.8),
+    vx:0, vy:0, pinned:false, visible:true,
+    radius: RADII[r.id] || (r.g==='tests'?8:10),
+  };
+  nodeById[r.id] = node;
+  return node;
+});
+
+const edges = [];
+for (const r of RAW) {
+  for (const tgt of r.imp) {
+    if (nodeById[tgt]) edges.push({src:r.id, tgt});
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS SETUP
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+let W=0, H=0;
+
+function resize() {
+  const p = canvas.parentElement.getBoundingClientRect();
+  W = p.width; H = p.height;
+  canvas.width  = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+}
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+// ═══════════════════════════════════════════════════════════════
+// VIEW STATE
+// ═══════════════════════════════════════════════════════════════
+let panX=0, panY=0, zoom=0.85;
+let hovNode=null, selNode=null;
+let dragNode=null, dragWx=0, dragWy=0;
+let isPanning=false, panSX=0, panSY=0;
+let mouseS={x:0,y:0};
+let query='';
+
+function s2w(sx,sy){ return {x:(sx-W/2-panX)/zoom, y:(sy-H/2-panY)/zoom}; }
+function w2s(wx,wy){ return {x:wx*zoom+W/2+panX,   y:wy*zoom+H/2+panY  }; }
+
+function hitTest(sx,sy){
+  const w = s2w(sx,sy);
+  let best=null, bestD=Infinity;
+  for(const n of nodes){
+    if(!n.visible) continue;
+    const dx=n.x-w.x, dy=n.y-w.y;
+    const d=Math.hypot(dx,dy);
+    const thresh = (n.radius+5)/zoom;
+    if(d<thresh && d<bestD){ best=n; bestD=d; }
+  }
+  return best;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FORCE SIMULATION
+// ═══════════════════════════════════════════════════════════════
+const KR = 4000;   // repulsion constant
+const KS = 0.035;  // spring constant
+const RL = 85;     // rest length
+const DAMP = 0.80; // damping
+const GRAV = 0.0018; // center gravity
+const MXV = 10;    // max velocity
+
+function simulate(){
+  // Repulsion (all pairs)
+  for(let i=0;i<nodes.length;i++){
+    const a=nodes[i];
+    for(let j=i+1;j<nodes.length;j++){
+      const b=nodes[j];
+      let dx=b.x-a.x, dy=b.y-a.y;
+      const d2=dx*dx+dy*dy+0.01;
+      const d=Math.sqrt(d2);
+      const f=KR/d2;
+      const fx=f*dx/d, fy=f*dy/d;
+      if(!a.pinned){a.vx-=fx;a.vy-=fy;}
+      if(!b.pinned){b.vx+=fx;b.vy+=fy;}
+    }
+  }
+  // Spring attraction (edges)
+  for(const e of edges){
+    const a=nodeById[e.src], b=nodeById[e.tgt];
+    if(!a||!b) continue;
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const d=Math.hypot(dx,dy)||1;
+    const f=KS*(d-RL);
+    const fx=f*dx/d, fy=f*dy/d;
+    if(!a.pinned){a.vx+=fx;a.vy+=fy;}
+    if(!b.pinned){b.vx-=fx;b.vy-=fy;}
+  }
+  // Center gravity + integrate
+  for(const n of nodes){
+    if(n.pinned){n.vx=0;n.vy=0;continue;}
+    n.vx=(n.vx-n.x*GRAV)*DAMP;
+    n.vy=(n.vy-n.y*GRAV)*DAMP;
+    const spd=Math.hypot(n.vx,n.vy);
+    if(spd>MXV){n.vx=n.vx/spd*MXV;n.vy=n.vy/spd*MXV;}
+    n.x+=n.vx; n.y+=n.vy;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAW
+// ═══════════════════════════════════════════════════════════════
+function arrow(x1,y1,x2,y2,r2){
+  const dx=x2-x1, dy=y2-y1;
+  const d=Math.hypot(dx,dy)||1;
+  const ux=dx/d, uy=dy/d;
+  const ex=x2-ux*(r2+7), ey=y2-uy*(r2+7);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(ex,ey);ctx.stroke();
+  const ang=Math.atan2(dy,dx), al=7, aa=0.42;
+  ctx.beginPath();
+  ctx.moveTo(ex,ey);
+  ctx.lineTo(ex-al*Math.cos(ang-aa), ey-al*Math.sin(ang-aa));
+  ctx.lineTo(ex-al*Math.cos(ang+aa), ey-al*Math.sin(ang+aa));
+  ctx.closePath();ctx.fill();
+}
+
+function draw(){
+  ctx.save();
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#12151C';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.translate(W/2+panX, H/2+panY);
+  ctx.scale(zoom,zoom);
+
+  // ── EDGES ──────────────────────────────────────────────────
+  for(const e of edges){
+    const a=nodeById[e.src], b=nodeById[e.tgt];
+    if(!a||!b) continue;
+    const isSel = selNode && (e.src===selNode.id||e.tgt===selNode.id);
+    const isHov = hovNode && (e.src===hovNode.id||e.tgt===hovNode.id);
+    let alpha=0.18, lw=0.7, col='#3A4258';
+    if(isSel){alpha=0.85;lw=1.6;col=GROUPS[a.group].color;}
+    else if(isHov){alpha=0.6;lw=1.0;col='#5A6480';}
+    else if(selNode&&!isSel){alpha=0.04;}
+    else if(!a.visible||!b.visible){alpha=0.06;}
+    ctx.strokeStyle=col;ctx.fillStyle=col;
+    ctx.lineWidth=lw;ctx.globalAlpha=alpha;
+    arrow(a.x,a.y,b.x,b.y,b.radius);
+  }
+  ctx.globalAlpha=1;
+
+  // ── NODES ──────────────────────────────────────────────────
+  for(const n of nodes){
+    const isSel=selNode===n, isHov=hovNode===n;
+    const col=GROUPS[n.group].color;
+    const alpha=n.visible?1:(selNode?0.1:0.25);
+    ctx.globalAlpha=alpha;
+    if(isSel||isHov){
+      ctx.shadowColor=col; ctx.shadowBlur=isSel?18:9;
+    }
+    ctx.beginPath();ctx.arc(n.x,n.y,n.radius,0,Math.PI*2);
+    ctx.fillStyle=(isSel||isHov)?col:col+'AA';
+    ctx.fill();
+    if(isSel||isHov){
+      ctx.strokeStyle=col;ctx.lineWidth=isSel?2.5:1.5;ctx.stroke();
+    }
+    ctx.shadowBlur=0;
+    // Pin dot
+    if(n.pinned){
+      ctx.fillStyle='#fff';ctx.beginPath();
+      ctx.arc(n.x+n.radius-3,n.y-n.radius+3,2.5,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+  ctx.restore(); // end world transform
+
+  // ── LABELS (screen space) ────────────────────────────────
+  ctx.textAlign='center';ctx.textBaseline='top';
+  for(const n of nodes){
+    const isSel=selNode===n, isHov=hovNode===n;
+    const screenR=n.radius*zoom;
+    if(screenR<2&&!isSel&&!isHov) continue;
+    const alpha=n.visible?1:(selNode?0.06:0.2);
+    if(alpha<0.08&&!isSel&&!isHov) continue;
+    const s=w2s(n.x,n.y);
+    ctx.globalAlpha=alpha;
+    ctx.font=(isSel||isHov?'600 ':'400 ')+'11px "Segoe UI",sans-serif';
+    // shadow for readability
+    ctx.shadowColor='#12151C';ctx.shadowBlur=3;
+    ctx.fillStyle='#E8EAF0';
+    ctx.fillText(n.label, s.x, s.y+screenR+3);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+
+  ctx.restore(); // end dpr scale
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLTIP
+// ═══════════════════════════════════════════════════════════════
+const tip = document.getElementById('tip');
+function showTip(n,sx,sy){
+  const imps=n.imports.length
+    ? `<div class="tip-lbl">Imports internos (${n.imports.length})</div>`
+      + n.imports.map(i=>`<div class="tip-imp">&#8594; ${i}</div>`).join('')
+    : '<div class="tip-lbl">Sin imports internos</div>';
+  tip.innerHTML=`<div class="tip-title">${n.label}</div><div class="tip-path">${n.path}</div>${imps}`;
+  let tx=sx+14, ty=sy-20;
+  if(tx+240>W) tx=sx-250;
+  if(ty+220>H) ty=H-230;
+  if(ty<0) ty=4;
+  tip.style.left=tx+'px';tip.style.top=ty+'px';tip.style.display='block';
+}
+function hideTip(){ tip.style.display='none'; }
+
+// ═══════════════════════════════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════════
+const slist=document.getElementById('slist');
+const infoEl=document.getElementById('info');
+
+function buildSidebar(){
+  let html='';
+  for(const g of ['root','app','providers','tests','tools']){
+    const gn=nodes.filter(n=>n.group===g);
+    if(!gn.length) continue;
+    html+=`<div class="sg">${GROUPS[g].label}</div>`;
+    for(const n of gn){
+      html+=`<div class="si" data-id="${n.id}">
+        <div class="si-dot" style="background:${GROUPS[n.group].color}"></div>
+        <div class="si-lbl">${n.label}</div></div>`;
+    }
+  }
+  slist.innerHTML=html;
+  slist.addEventListener('click',e=>{
+    const el=e.target.closest('.si');
+    if(!el) return;
+    const n=nodeById[el.dataset.id];
+    if(n){ panTo(n); setSelect(n); }
+  });
+}
+
+function panTo(n){
+  panX=-n.x*zoom; panY=-n.y*zoom;
+}
+
+function setSelect(n){
+  if(selNode===n){ selNode=null; updateInfo(); }
+  else{ selNode=n; updateInfo(); }
+  document.querySelectorAll('.si').forEach(el=>{
+    el.classList.toggle('active', selNode&&el.dataset.id===selNode.id);
+  });
+}
+
+function updateInfo(){
+  if(!selNode){
+    infoEl.textContent=`${nodes.length} m&#243;dulos · sin selecci&#243;n`;
+    return;
+  }
+  const outs=edges.filter(e=>e.src===selNode.id).length;
+  const ins=edges.filter(e=>e.tgt===selNode.id).length;
+  infoEl.innerHTML=`<b style="color:${GROUPS[selNode.group].color}">${selNode.label}</b><br>
+    ${outs} imports &#8226; importado por ${ins}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EVENTS
+// ═══════════════════════════════════════════════════════════════
+let mdNode=null, mdX=0, mdY=0, mdT=0, hasMoved=false;
+
+canvas.addEventListener('mousedown',e=>{
+  const r=canvas.getBoundingClientRect();
+  const sx=(e.clientX-r.left), sy=(e.clientY-r.top);
+  const n=hitTest(sx,sy);
+  mdX=sx;mdY=sy;mdT=Date.now();hasMoved=false;mdNode=n;
+  if(n){
+    dragNode=n;
+    const w=s2w(sx,sy);
+    dragWx=n.x-w.x; dragWy=n.y-w.y;
+    canvas.classList.add('grabbing');
+  } else {
+    isPanning=true;
+    panSX=e.clientX-panX; panSY=e.clientY-panY;
+    canvas.classList.add('grabbing');
+  }
+});
+
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  const sx=(e.clientX-r.left), sy=(e.clientY-r.top);
+  mouseS={x:sx,y:sy};
+  if(Math.hypot(sx-mdX,sy-mdY)>4) hasMoved=true;
+  if(dragNode){
+    const w=s2w(sx,sy);
+    dragNode.x=w.x+dragWx; dragNode.y=w.y+dragWy;
+    dragNode.vx=0;dragNode.vy=0;
+    hideTip();
+  } else if(isPanning){
+    panX=e.clientX-panSX; panY=e.clientY-panSY;
+    hideTip();
+  } else {
+    const n=hitTest(sx,sy);
+    hovNode=n;
+    if(n) showTip(n,sx,sy); else hideTip();
+  }
+});
+
+canvas.addEventListener('mouseup',e=>{
+  const dt=Date.now()-mdT;
+  if(dragNode){
+    if(!hasMoved&&dt<350){
+      // Quick click = pin toggle
+      dragNode.pinned=!dragNode.pinned;
+    }
+    // Any click selects
+    if(!hasMoved) setSelect(dragNode);
+    dragNode=null;
+  } else if(isPanning&&!hasMoved&&!mdNode){
+    // Click on empty = deselect
+    selNode=null;
+    updateInfo();
+    document.querySelectorAll('.si').forEach(el=>el.classList.remove('active'));
+  }
+  isPanning=false;
+  canvas.classList.remove('grabbing');
+});
+
+canvas.addEventListener('mouseleave',()=>{
+  hovNode=null;hideTip();
+  dragNode=null;isPanning=false;
+  canvas.classList.remove('grabbing');
+});
+
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect();
+  const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  const factor=e.deltaY<0?1.13:1/1.13;
+  const oldZoom=zoom;
+  zoom=Math.max(0.15,Math.min(5,zoom*factor));
+  const af=zoom/oldZoom;
+  panX=sx-W/2-(sx-W/2-panX)*af;
+  panY=sy-H/2-(sy-H/2-panY)*af;
+},{passive:false});
+
+document.getElementById('zi').onclick=()=>{ zoom=Math.min(5,zoom*1.25); };
+document.getElementById('zo').onclick=()=>{ zoom=Math.max(0.15,zoom/1.25); };
+document.getElementById('zr').onclick=()=>{ zoom=0.85;panX=0;panY=0; };
+
+document.getElementById('search').addEventListener('input',e=>{
+  query=e.target.value.toLowerCase().trim();
+  for(const n of nodes){
+    n.visible=!query||n.label.toLowerCase().includes(query)||n.path.toLowerCase().includes(query);
+  }
+  document.querySelectorAll('.si').forEach(el=>{
+    const n=nodeById[el.dataset.id];
+    el.style.opacity=(!query||!n||n.visible)?'1':'0.3';
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// LOOP
+// ═══════════════════════════════════════════════════════════════
+function loop(){
+  simulate();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════════════════════
+buildSidebar();
+updateInfo();
+loop();
+</script>
+</body>
+</html>

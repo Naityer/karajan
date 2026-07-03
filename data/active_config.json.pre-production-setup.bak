@@ -39,8 +39,7 @@
   "orchestration": {
     "parallel": false,
     "max_parallel": 3,
-    "subtask_timeout_s": 90,
-    "classify_timeout_s": 10,
+    "subtask_timeout_s": 120,
     "max_retries": 1,
     "enable_runtime_fallback": true,
     "require_human_review_gate": true,
@@ -59,8 +58,8 @@
     "require_review_for_missing_credentials": true
   },
   "provider_preferences": {
-    "strong_model": "codex",
-    "strong_model_with_human_review": "claude-cli",
+    "strong_model": "openai",
+    "strong_model_with_human_review": "anthropic",
     "cheap_model": "ollama-qwen",
     "cheap_or_medium_model": "ollama-qwen",
     "medium_model": "ollama-deepseek"

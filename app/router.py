@@ -171,19 +171,32 @@ def _score_ambiguity(text: str, token_count: int) -> float:
 
 
 def _score_context(text: str, token_count: int) -> float:
-    context_terms = sum(term in text for term in ("repo", "varios archivos", "base de datos", "producción", "logs", "existing", "pipeline"))
-    length_bonus = 1.0 if token_count > 80 else 0.0
-    return min(5.0, 1.0 + context_terms * 0.8 + length_bonus)
+    context_terms = sum(term in text for term in (
+        "repo", "varios archivos", "base de datos", "producción", "logs", "existing", "pipeline",
+        "sistema", "modulo", "componente", "servicio", "microservicio", "clase", "interfaz",
+    ))
+    requirements_count = text.count(",") + text.count(";")
+    length_bonus = 1.5 if token_count > 80 else (0.8 if token_count > 45 else 0.0)
+    multi_req_bonus = min(1.0, requirements_count * 0.2)
+    return min(5.0, 1.0 + context_terms * 0.8 + length_bonus + multi_req_bonus)
 
 
 def _score_reasoning(text: str, token_count: int) -> float:
-    reasoning_terms = sum(term in text for term in ("arquitectura", "orquestador", "debug", "optimiza", "decide", "riesgo", "multi", "workflow"))
-    return min(5.0, 1.0 + reasoning_terms * 0.65 + (1.0 if token_count > 120 else 0.0))
+    reasoning_terms = sum(term in text for term in (
+        "arquitectura", "orquestador", "debug", "optimiza", "decide", "riesgo", "multi", "workflow",
+        "cache", "lru", "fifo", "queue", "árbol", "tree", "graph", "concurrent", "async", "ttl",
+        "patron", "pattern", "decorator", "memoiz", "algoritmo", "algorithm", "complejidad",
+        "rendimiento", "performance", "escalab", "distribuido",
+    ))
+    return min(5.0, 1.0 + reasoning_terms * 0.65 + (1.0 if token_count > 80 else 0.0))
 
 
 def _score_autonomy(text: str) -> float:
-    autonomy_terms = sum(term in text for term in ("implementa", "desarrolla", "end to end", "automatiza", "ejecuta", "deploy"))
-    return min(5.0, 1.0 + autonomy_terms * 0.9)
+    autonomy_terms = sum(term in text for term in (
+        "implementa", "desarrolla", "end to end", "automatiza", "ejecuta", "deploy",
+        "construye", "diseña", "crea", "build", "create", "generate", "escribe", "develop",
+    ))
+    return min(5.0, 1.0 + autonomy_terms * 0.75)
 
 
 def _score_risk(text: str, domains: list[str]) -> float:
@@ -193,7 +206,10 @@ def _score_risk(text: str, domains: list[str]) -> float:
 
 
 def _score_validation(text: str, domains: list[str]) -> float:
-    validation_terms = sum(term in text for term in ("test", "ci", "pipeline", "visual", "dashboard", "api", "database", "sqlite"))
+    validation_terms = sum(term in text for term in (
+        "test", "ci", "pipeline", "visual", "dashboard", "api", "database", "sqlite",
+        "unitario", "integracion", "cobertura", "coverage", "assert", "mock", "fixture",
+    ))
     domain_bonus = 0.8 if any(domain in domains for domain in ("programming", "devops", "data")) else 0.0
     return min(5.0, 1.0 + validation_terms * 0.45 + domain_bonus)
 

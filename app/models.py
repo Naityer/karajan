@@ -421,6 +421,7 @@ class OrchestrationConfig(BaseModel):
     parallel: bool = False
     max_parallel: int = Field(default=3, ge=1, le=16)
     subtask_timeout_s: int = Field(default=120, ge=1)
+    classify_timeout_s: int = Field(default=10, ge=1)
     max_retries: int = Field(default=1, ge=0, le=5)
     enable_runtime_fallback: bool = True
     require_human_review_gate: bool = True

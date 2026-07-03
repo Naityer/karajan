@@ -7934,3 +7934,80 @@ input[type="text"] {
     display: grid;
   }
 }
+
+/* ── ISO FULLSCREEN (Control Humano) ───────────────────────────────────────── */
+.human-iso-fullscreen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0E1118;
+  overflow: hidden;
+}
+#view-human {
+  padding: 0 !important;
+  overflow: hidden;
+}
+#view-human .human-home,
+#view-human .stage {
+  padding: 0;
+  height: 100%;
+}
+#iso-cvs {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.iso-legend {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+}
+.iso-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #8098A8;
+  font-family: 'Cascadia Code', Consolas, monospace;
+}
+.iso-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.iso-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 14px;
+  font-size: 9px;
+  color: #2A3A4A;
+  letter-spacing: .04em;
+  pointer-events: none;
+  font-family: 'Cascadia Code', Consolas, monospace;
+}
+/* ── GRAPH VIEW ─────────────────────────────────────────────────────────────── */
+#view-graph {
+  padding: 0 !important;
+  overflow: hidden;
+}
+#graph-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* ── ISO MONITOR SUB-TAB ────────────────────────────────────────────────────── */
+#monitor-tab-iso {
+  padding: 16px;
+  color: #4A6478;
+  font-size: 13px;
+}
+}
