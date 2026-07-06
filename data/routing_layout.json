@@ -9,6 +9,7 @@
       ],
       "provider": "claude-cli",
       "parentId": "",
+      "target_id": null,
       "levels": [
         "level_5_critical"
       ],
@@ -41,6 +42,7 @@
       ],
       "provider": "codex",
       "parentId": "entity-agent-claude",
+      "target_id": null,
       "levels": [
         "level_4_complex"
       ],
@@ -52,8 +54,8 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 1036.3888888888887,
-      "y": 31.944444444444446
+      "x": 1014.5933455650251,
+      "y": 36.78788926866319
     },
     {
       "id": "entity-worker-qwen",
@@ -64,6 +66,7 @@
       ],
       "provider": "ollama-qwen",
       "parentId": "entity-agent-claude",
+      "target_id": null,
       "levels": [
         "level_1_simple",
         "level_2_moderate"
@@ -73,18 +76,20 @@
         "ponytail"
       ],
       "capabilities": [],
-      "x": 160.0,
-      "y": 620.0
+      "x": 72.81810413707386,
+      "y": 639.3737238103694
     },
     {
       "id": "entity-worker-deepseek",
       "name": "DeepSeek R1 8B (local N3)",
       "role": "child",
       "role_tags": [
-        "child"
+        "child",
+        "guardian"
       ],
       "provider": "ollama-deepseek",
       "parentId": "entity-agent-claude",
+      "target_id": "entity-worker-qwen",
       "levels": [
         "level_3_intermediate"
       ],
@@ -107,10 +112,8 @@
       ],
       "provider": "ollama-mistral-nemo",
       "parentId": "entity-agent-claude",
-      "levels": [
-        "level_3_intermediate",
-        "level_4_complex"
-      ],
+      "target_id": null,
+      "levels": [],
       "skills": [
         "repo-analyzer",
         "frontend-builder",
@@ -123,5 +126,5 @@
   ],
   "zoom": 0.55,
   "drawer_width": 360,
-  "updated_at": "2026-07-02T22:00:00.000000Z"
+  "updated_at": "2026-07-06T16:42:48.081201Z"
 }

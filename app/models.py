@@ -140,6 +140,8 @@ class SubtaskExecution(BaseModel):
     estimated_cost_usd: float
     output: str
     error: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class DelegationResult(BaseModel):
@@ -148,6 +150,8 @@ class DelegationResult(BaseModel):
     executions: list[SubtaskExecution]
     total_latency_ms: int
     total_estimated_cost_usd: float
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
     completed_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -188,6 +192,7 @@ class NodeMetrics(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    token_budget: int = 0  # 0 = no subscription budget (free/local providers)
     estimated_cost: float = 0.0
     latency_ms: int = 0
     task_count: int = 0
@@ -197,6 +202,7 @@ class NodeMetrics(BaseModel):
     active_capabilities: list[str] = Field(default_factory=list)
     levels: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
+    skill_usage: dict[str, int] = Field(default_factory=dict)  # skill -> times this node used it
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -242,6 +248,26 @@ class ObservabilitySnapshot(BaseModel):
     execution_flow: list[FlowEvent] = Field(default_factory=list)
     audit_timeline: list[FlowEvent] = Field(default_factory=list)
     model_usage: list[ModelUsage] = Field(default_factory=list)
+
+
+class MetricsHistoryPoint(BaseModel):
+    timestamp: datetime
+    total_tasks: int
+    total_estimated_cost_usd: float
+    total_tokens: int = 0
+    avg_latency_ms: int = 0
+
+
+class MetricsHistory(BaseModel):
+    points: list[MetricsHistoryPoint] = Field(default_factory=list)
+
+
+class SetupStatus(BaseModel):
+    completed: bool
+
+
+class SetupTutorial(BaseModel):
+    markdown: str
 
 
 class HealthStatus(BaseModel):
@@ -326,6 +352,11 @@ class SkillInfo(BaseModel):
     repo_url: str | None = None
 
 
+class SkillInstallResult(BaseModel):
+    ok: bool
+    detail: str
+
+
 class OpenClawConfig(BaseModel):
     enabled: bool = True
     cli_path: str = "openclaw"
@@ -393,6 +424,24 @@ class OpenClawOperationResult(BaseModel):
     returncode: int | None = None
 
 
+class OpenClawDaemonStatus(BaseModel):
+    installed: bool
+    running: bool
+    detail: str = ""
+
+
+class OpenClawPluginInfo(BaseModel):
+    name: str
+    description: str = ""
+    installed: bool = False
+    spec: str | None = None
+
+
+class OpenClawPluginInstallRequest(BaseModel):
+    spec: str = Field(min_length=1, max_length=400)
+    acknowledge_clawhub_risk: bool = False
+
+
 class RoutingEntity(BaseModel):
     id: str
     name: str | None = None
@@ -400,6 +449,7 @@ class RoutingEntity(BaseModel):
     role_tags: list[str] = Field(default_factory=list)
     provider: str | None = None
     parentId: str | None = ""
+    target_id: str | None = None  # guardian/validator: the entity it supervises/validates
     levels: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)

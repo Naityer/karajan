@@ -10,6 +10,8 @@ from app.models import (
     DecisionLogEntry,
     DelegationResult,
     Metrics,
+    MetricsHistory,
+    MetricsHistoryPoint,
     TaskRecord,
     TaskStatus,
 )
@@ -99,6 +101,22 @@ class TaskStore:
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_task ON decisions(task_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)")
+            # Rolling snapshot of aggregate KPIs, one row per completed delegation —
+            # lets the Monitor view chart cost/tokens/latency trends over time
+            # instead of only showing the current totals.
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS metrics_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    total_tasks INTEGER NOT NULL,
+                    total_estimated_cost_usd REAL NOT NULL,
+                    total_tokens INTEGER NOT NULL DEFAULT 0,
+                    avg_latency_ms INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_history_ts ON metrics_history(timestamp)")
             self._migrate(conn)
 
     def _migrate(self, conn: sqlite3.Connection) -> None:
@@ -194,7 +212,63 @@ class TaskStore:
             )
             if decisions:
                 self._insert_decisions(conn, decisions)
+            self._record_metrics_snapshot(conn, now)
         return self.get_task(delegation.task_id)
+
+    def _record_metrics_snapshot(self, conn: sqlite3.Connection, when: datetime) -> None:
+        """Append a metrics-history row reflecting current aggregate totals.
+
+        Called from the same connection/transaction as save_delegation so the
+        snapshot always corresponds to a real state transition (a task just
+        completed), not an arbitrary poll tick.
+        """
+        agg = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                COALESCE(SUM(est_cost), 0.0) AS cost,
+                COALESCE(AVG(
+                    CASE WHEN delegation_json IS NOT NULL THEN
+                        json_extract(delegation_json, '$.total_latency_ms')
+                    END
+                ), 0) AS avg_latency
+            FROM tasks
+            """
+        ).fetchone()
+        total_tokens = 0
+        for row in conn.execute(
+            "SELECT delegation_json FROM tasks WHERE delegation_json IS NOT NULL"
+        ).fetchall():
+            delegation = json.loads(row["delegation_json"])
+            total_tokens += delegation.get("total_input_tokens", 0) + delegation.get("total_output_tokens", 0)
+        conn.execute(
+            """
+            INSERT INTO metrics_history (timestamp, total_tasks, total_estimated_cost_usd, total_tokens, avg_latency_ms)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (when.isoformat(), agg["total"], round(agg["cost"], 5), total_tokens, int(agg["avg_latency"] or 0)),
+        )
+
+    def metrics_history(self, limit: int = 200) -> MetricsHistory:
+        with self._connect() as conn:
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM metrics_history ORDER BY timestamp DESC LIMIT ?", (limit,)
+                ).fetchall()
+            except sqlite3.DatabaseError:
+                rows = []
+        points = [
+            MetricsHistoryPoint(
+                timestamp=datetime.fromisoformat(row["timestamp"]),
+                total_tasks=row["total_tasks"],
+                total_estimated_cost_usd=row["total_estimated_cost_usd"],
+                total_tokens=row["total_tokens"],
+                avg_latency_ms=row["avg_latency_ms"],
+            )
+            for row in rows
+        ]
+        points.reverse()  # oldest first, for charting left-to-right
+        return MetricsHistory(points=points)
 
     def add_decisions(self, decisions: list[DecisionLogEntry]) -> None:
         """Append decision-log entries (e.g. reported live by the model)."""

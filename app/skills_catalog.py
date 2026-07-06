@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
-from app.models import SkillInfo
+from app.models import SkillInfo, SkillInstallResult
 
 # Mirror of the agent-router skills configured in the user's Claude setup.
 # `applies_to` lists the model families a skill is most relevant for.
@@ -51,3 +54,44 @@ def list_skills() -> list[SkillInfo]:
         )
         for skill in (*_SKILLS, *_GITHUB_SKILLS)
     ]
+
+
+def install_skill(name: str) -> SkillInstallResult:
+    """Install a catalog-listed, GitHub-distributed skill into ~/.claude/skills.
+
+    Restricted to names present in the static catalog (never arbitrary specs),
+    and to skills that declare a `repo_url` — the built-in `_SKILLS` are already
+    bundled with the agent and have nothing to fetch.
+    """
+    entry = next((s for s in (*_SKILLS, *_GITHUB_SKILLS) if s["name"] == name), None)
+    if entry is None:
+        return SkillInstallResult(ok=False, detail=f"Skill desconocida en el catálogo: {name}")
+
+    target = SKILLS_DIR / name
+    if target.is_dir():
+        return SkillInstallResult(ok=True, detail=f"'{name}' ya está instalada.")
+
+    repo_url = entry.get("repo_url")
+    if not repo_url:
+        return SkillInstallResult(ok=False, detail=f"'{name}' viene incluida con el agente; no requiere instalación.")
+
+    if not shutil.which("git"):
+        return SkillInstallResult(ok=False, detail="git no está disponible para clonar la skill.")
+
+    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        clone = subprocess.run(
+            ["git", "clone", "--depth", "1", "--filter=blob:none", "--sparse", repo_url, tmp],
+            capture_output=True, text=True, timeout=60, check=False,
+        )
+        if clone.returncode != 0:
+            return SkillInstallResult(ok=False, detail=clone.stderr.strip() or f"git clone falló para '{name}'.")
+        subprocess.run(
+            ["git", "sparse-checkout", "set", name],
+            cwd=tmp, capture_output=True, text=True, timeout=30, check=False,
+        )
+        source = Path(tmp) / name
+        if not source.is_dir():
+            return SkillInstallResult(ok=False, detail=f"No se encontró la carpeta '{name}' en {repo_url}.")
+        shutil.copytree(source, target)
+    return SkillInstallResult(ok=True, detail=f"'{name}' instalada correctamente.")

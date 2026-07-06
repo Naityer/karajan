@@ -22,3 +22,29 @@ def test_codex_in_catalog() -> None:
     assert "aider" not in cli
     codex = catalog.get_provider("codex")
     assert codex.cli_command == "codex exec {model}"
+
+
+def test_install_skill_already_installed(monkeypatch, tmp_path) -> None:
+    (tmp_path / "ponytail").mkdir()
+    monkeypatch.setattr(skills_catalog, "SKILLS_DIR", tmp_path)
+    result = skills_catalog.install_skill("ponytail")
+    assert result.ok
+    assert "ya está instalada" in result.detail
+
+
+def test_install_skill_unknown_name(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(skills_catalog, "SKILLS_DIR", tmp_path)
+    result = skills_catalog.install_skill("not-a-real-skill")
+    assert not result.ok
+
+
+def test_install_skill_without_repo_url(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(skills_catalog, "SKILLS_DIR", tmp_path)
+    # `security-review` is a built-in skill with no repo_url — nothing to fetch.
+    result = skills_catalog.install_skill("security-review")
+    assert not result.ok
+
+
+def test_token_budget_for_known_and_unknown_provider() -> None:
+    assert catalog.token_budget_for("claude-cli") > 0
+    assert catalog.token_budget_for("ollama-qwen") == 0

@@ -9,8 +9,10 @@ from typing import Any
 
 from app.models import (
     OpenClawChannelInfo,
+    OpenClawDaemonStatus,
     OpenClawInstallRequest,
     OpenClawOperationResult,
+    OpenClawPluginInfo,
     OpenClawSetupCommand,
     OpenClawSkillInfo,
     OpenClawStatus,
@@ -19,7 +21,7 @@ from app.models import (
 )
 
 
-DEFAULT_SETUP_SECTIONS = ("model", "channels", "plugins", "skills", "health")
+DEFAULT_SETUP_SECTIONS = ("workspace", "model", "web", "channels", "plugins", "skills", "health")
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,45 @@ class OpenClawClient:
         result = self._run(["gateway", "status", "--json"], timeout_s=12)
         payload, _ = _parse_json(result.stdout)
         return _normalize_channels(payload)
+
+    def channel_catalog(self) -> list[OpenClawChannelInfo]:
+        """Every channel type OpenClaw supports, not just the configured ones —
+        lets the activation panel show "add WhatsApp" even before it's set up."""
+        if not self.config.enabled or not self._resolve_cli():
+            return []
+        result = self._run(["channels", "list", "--json", "--all"], timeout_s=12)
+        payload, _ = _parse_json(result.stdout)
+        if isinstance(payload, list):
+            payload = {"channels": payload}
+        return _normalize_channels(payload)
+
+    def daemon_status(self) -> OpenClawDaemonStatus:
+        if not self.config.enabled or not self._resolve_cli():
+            return OpenClawDaemonStatus(installed=False, running=False, detail="openclaw CLI was not found in PATH.")
+        result = self._run(["daemon", "status", "--json"], timeout_s=10)
+        payload, parse_error = _parse_json_object(result.stdout)
+        installed = bool(payload.get("installed", result.ok))
+        running = bool(payload.get("running") or payload.get("active"))
+        detail = _string(payload, "detail") or result.stdout.strip() or result.stderr.strip() or parse_error or ""
+        return OpenClawDaemonStatus(installed=installed, running=running, detail=_redact(detail))
+
+    def plugins(self) -> list[OpenClawPluginInfo]:
+        if not self.config.enabled or not self._resolve_cli():
+            return []
+        result = self._run(["plugins", "list", "--json"], timeout_s=15)
+        payload, _ = _parse_json(result.stdout)
+        return _normalize_plugins(payload)
+
+    def install_plugin(self, spec: str, acknowledge_clawhub_risk: bool) -> OpenClawOperationResult:
+        command = f"{self._display_cli()} plugins install {spec}"
+        if not acknowledge_clawhub_risk:
+            return OpenClawOperationResult(
+                ok=False,
+                command=command,
+                detail="Debes confirmar que entiendes el riesgo de instalar un plugin de ClawHub.",
+            )
+        args = ["plugins", "install", spec, "--acknowledge-clawhub-risk"]
+        return self._operation(args, timeout_s=90)
 
     def install_skill(self, request: OpenClawInstallRequest) -> OpenClawOperationResult:
         args = ["skills", "install", request.spec]
@@ -247,9 +288,35 @@ def _normalize_channels(payload: Any) -> list[OpenClawChannelInfo]:
     return channels
 
 
+def _normalize_plugins(payload: Any) -> list[OpenClawPluginInfo]:
+    candidates = payload
+    if isinstance(payload, dict):
+        candidates = payload.get("plugins") or payload.get("items") or []
+    if not isinstance(candidates, list):
+        return []
+    plugins: list[OpenClawPluginInfo] = []
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        name = _string(item, "name") or _string(item, "id")
+        if not name:
+            continue
+        plugins.append(
+            OpenClawPluginInfo(
+                name=name,
+                description=_string(item, "description") or "",
+                installed=bool(item.get("installed", False)),
+                spec=_string(item, "spec") or _string(item, "ref"),
+            )
+        )
+    return plugins
+
+
 def _setup_description(section: str) -> str:
     return {
+        "workspace": "Elige el directorio de trabajo y el perfil de espacio de OpenClaw.",
         "model": "Configura proveedores, login y modelos disponibles en OpenClaw.",
+        "web": "Configura acceso web (búsqueda, herramientas de navegador) si aplica.",
         "channels": "Añade o repara canales como Slack, WhatsApp, Telegram o Discord.",
         "plugins": "Instala plugins de OpenClaw sin acoplarlos al código de Karajan.",
         "skills": "Instala y revisa skills visibles para los agentes de OpenClaw.",

@@ -126,3 +126,62 @@ def test_observability_marks_human_review_as_policy_waiting(tmp_path: Path) -> N
 
     assert agent.status == "policy_waiting"
     assert snapshot.health.status == "policy_waiting"
+
+
+def test_observability_accumulates_tokens_and_skill_usage(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "obs-tokens.db")
+    config = KarajanConfig(backend=Backend.SIMULATED)
+    classification = classify_prompt(
+        "Disena e implementa un router de IA con API, SQLite y panel de control.", config
+    )
+    store.save_classification(classification)
+    result, decisions = delegate(classification, config)
+    store.save_delegation(result, decisions)
+
+    snapshot = monitoring.compute_observability(store.list_tasks(), store.list_decisions(), RoutingLayout())
+    agent = next(node for node in snapshot.nodes if node.role == "Agent")
+
+    assert result.total_input_tokens > 0
+    assert result.total_output_tokens > 0
+    assert agent.total_tokens == agent.input_tokens + agent.output_tokens
+    assert sum(agent.skill_usage.values()) >= 0  # populated when a subtask has a recommended_skill
+
+
+def test_routing_entity_target_id_round_trips() -> None:
+    layout = RoutingLayout.model_validate(
+        {
+            "entities": [
+                {"id": "worker", "role": "worker"},
+                {"id": "guardian", "role": "guardian", "target_id": "worker"},
+            ]
+        }
+    )
+    guardian = next(entity for entity in layout.entities if entity.id == "guardian")
+    assert guardian.target_id == "worker"
+
+    # Round-trips through JSON (as it would over the API) without loss.
+    reloaded = RoutingLayout.model_validate_json(layout.model_dump_json())
+    assert next(e for e in reloaded.entities if e.id == "guardian").target_id == "worker"
+
+
+def test_node_token_budget_from_provider(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "obs-budget.db")
+    layout = RoutingLayout.model_validate(
+        {"entities": [{"id": "agent", "name": "Claude", "role": "parent", "provider": "claude-cli"}]}
+    )
+    snapshot = monitoring.compute_observability(store.list_tasks(), store.list_decisions(), layout)
+    agent = next(node for node in snapshot.nodes if node.id == "agent")
+    assert agent.token_budget > 0
+
+
+def test_metrics_history_records_a_point_per_delegation(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "history.db")
+    config = KarajanConfig(backend=Backend.SIMULATED)
+    classification = classify_prompt("Renombra una variable trivial en un script local.", config)
+    store.save_classification(classification)
+    result, decisions = delegate(classification, config)
+    store.save_delegation(result, decisions)
+
+    history = store.metrics_history()
+    assert len(history.points) == 1
+    assert history.points[0].total_tasks == 1

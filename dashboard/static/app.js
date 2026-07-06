@@ -58,14 +58,19 @@ const state = {
   panningDiagram: false,
   diagramCentered: false,
   openSkillPanels: new Set(),
-  monitorTab: "agents",
   selectedNodeId: "",
+  nodeFilter: "__all__",
+  openclawPos: readOpenClawPos(),
   lastObservability: null,
+  lastMetrics: null,
+  metricsHistory: null,
+  healthHistory: [],
+  nodeActivityHistory: {},
+  onboardingStep: 1,
   monitorSideOpen: true,
   monitorSideWidth: 380,
   resizingMonitorSide: false,
   monitorBlockOrder: ["summary", "health", "flow"],
-  lastMetrics: null,
   humanSideOpen: true,
   humanSideWidth: 430,
   resizingHumanSide: false,
@@ -395,38 +400,30 @@ function renderAgentNotifications() {
 
 // ---- MONITOR ---------------------------------------------------------------
 async function refreshMonitor() {
-  if (!$("#monitorMainContent") && !$("#kpis")) return;
-  const [metrics, tasks, observability, providers] = await Promise.all([api("/metrics"), api("/tasks"), api("/observability"), api("/providers")]);
+  if (!$("#monitorMainContent")) return;
+  const [metrics, tasks, observability, providers, history] = await Promise.all([
+    api("/metrics"),
+    api("/tasks"),
+    api("/observability"),
+    api("/providers"),
+    api("/observability/history").catch(() => ({ points: [] })),
+  ]);
   state.tasks = tasks;
   state.lastObservability = observability;
   state.lastMetrics = metrics;
   state.providers = providers;
+  state.metricsHistory = history;
   renderNotifications();
   renderAgentNotifications();
   if (!state.selectedNodeId && observability.nodes?.length) state.selectedNodeId = observability.nodes[0].id;
-  if ($("#monitorMainContent")) {
-    renderSummaryMetrics(metrics, tasks, observability);
-    renderSystemHealth(observability.health);
-    renderExecutionFlow(observability.execution_flow || []);
-    renderProcessingNodeTabs(observability.nodes || []);
-    renderNodeOverview(observability.nodes || []);
-    renderMonitorGraphs(metrics, observability);
-    renderHumanReviewQueue(tasks);
-    renderHumanHome(metrics, tasks, observability);
-    _renderAgentPanels(observability.nodes || [], observability.model_usage || [], observability.execution_flow || [], observability.audit_timeline || []);
-    renderAuditTimeline(observability.audit_timeline || []);
-    renderModelUsage(observability.model_usage || []);
-    renderTaskRows(tasks);
-    const selected = tasks.find((t) => t.task_id === state.selected) || tasks[0];
-    if (selected) {
-      state.selected = selected.task_id;
-      await renderDetail(selected);
-    }
-    return;
-  }
-  renderKpis(metrics);
-  renderCharts(metrics);
-  renderObservability(observability);
+  renderSummaryMetrics(metrics, tasks, observability);
+  renderSystemHealth(observability.health);
+  renderExecutionFlow(observability.execution_flow || []);
+  renderNodeOverview(observability.nodes || [], metrics, observability.model_usage || []);
+  renderHumanReviewQueue(tasks);
+  renderHumanHome(metrics, tasks, observability);
+  _renderAgentPanels(observability.nodes || [], observability.execution_flow || [], observability.audit_timeline || []);
+  renderAuditTimeline(observability.audit_timeline || []);
   renderTaskRows(tasks);
   const selected = tasks.find((t) => t.task_id === state.selected) || tasks[0];
   if (selected) {
@@ -435,26 +432,14 @@ async function refreshMonitor() {
   }
 }
 
-function renderObservability(snapshot) {
-  state.lastObservability = snapshot;
-  if (!state.selectedNodeId && snapshot.nodes?.length) state.selectedNodeId = snapshot.nodes[0].id;
-  renderSystemHealth(snapshot.health);
-  renderNodeMetrics(snapshot.nodes || []);
-  renderModelBubbles(snapshot.nodes || [], snapshot.model_usage || []);
-  renderExecutionFlow(snapshot.execution_flow || []);
-  renderAuditTimeline(snapshot.audit_timeline || []);
-  renderModelUsage(snapshot.model_usage || []);
-  renderNodeOverview(snapshot.nodes || []);
-  _renderAgentPanels(snapshot.nodes || [], snapshot.model_usage || [], snapshot.execution_flow || [], snapshot.audit_timeline || []);
-}
-
-function _renderAgentPanels(nodes, usage, flow, audit) {
+function _renderAgentPanels(nodes, flow, audit) {
   const node = nodes.find((n) => n.id === state.selectedNodeId) || nodes[0];
-  const usageByModel = new Map((usage || []).map((u) => [u.model, u]));
-  renderAgentDetailPanel(node, usageByModel);
   renderMonitorSidePanel(node, flow, audit);
 }
 
+// System Health: a summary ring + a sparkline of recent load, replacing the
+// older "health-compact/health-orbit" layout (renamed to health-summary* to
+// avoid colliding with dead pre-redesign CSS of the same old names).
 function renderSystemHealth(health) {
   if (!health) {
     $("#systemHealth").innerHTML = `<div class="chart-empty">sin datos</div>`;
@@ -462,14 +447,19 @@ function renderSystemHealth(health) {
   }
   const status = health.status === "healthy" ? "ok" : health.status === "error" ? "bad" : "warn";
   const healthPct = health.observed_nodes ? Math.round((health.healthy_nodes / health.observed_nodes) * 100) : 0;
-  $("#systemHealth").innerHTML = `<div class="health-compact ${status}">
-      <div>
+  state.healthHistory ||= [];
+  state.healthHistory.push(healthPct);
+  if (state.healthHistory.length > 24) state.healthHistory.shift();
+  $("#systemHealth").innerHTML = `
+    <div class="health-summary">
+      <div class="health-summary-ring">${svgDonut(healthPct, { tone: status, sub: "salud" })}</div>
+      <div class="health-summary-meta">
         <span class="pill ${status}">${escapeHtml(health.status)}</span>
-        <b>${healthPct}%</b>
-        <small>salud operativa</small>
+        <b>${health.observed_nodes}</b>
+        <small>nodos observados</small>
       </div>
-      <div class="health-orbit" style="--pct:${healthPct}%"><span>${health.observed_nodes}</span><small>nodos</small></div>
     </div>
+    ${svgSparkline(state.healthHistory, { tone: status, w: 220, h: 34 })}
     <div class="health-strip">
       <span><b>${health.healthy_nodes}</b><small>healthy</small></span>
       <span><b>${health.warning_nodes}</b><small>warn</small></span>
@@ -477,100 +467,6 @@ function renderSystemHealth(health) {
       <span><b>${health.active_tasks}</b><small>act.</small></span>
       <span><b>${health.blocked_tasks}</b><small>block</small></span>
       <span><b>${health.avg_latency_ms || 0}ms</b><small>lat.</small></span>
-    </div>`;
-}
-
-function renderNodeMetrics(nodes) {
-  $("#nodeMetrics").innerHTML = nodes.length
-    ? nodes
-        .map((node) => {
-          const status = node.status === "completed" || node.status === "idle" ? "ok" : node.status === "error" ? "bad" : "warn";
-          const selected = node.id === state.selectedNodeId ? "selected" : "";
-          const levels = (node.levels || []).map((level) => LEVEL_FULL[level] || level).join(" · ") || "sin niveles";
-          const caps = (node.active_capabilities || []).length
-            ? `<div class="node-caps">${node.active_capabilities.map((cap) => `<span>${escapeHtml(cap)}</span>`).join("")}</div>`
-            : "";
-          const skills = (node.skills || []).slice(0, 4).join(" · ") || "sin skills";
-          return `<button class="node-metric ${selected}" data-node="${escapeHtml(node.id)}">
-              <div class="node-metric-head"><b>${escapeHtml(node.name)}</b><span class="pill ${status}">${escapeHtml(node.status)}</span></div>
-              <div class="node-role">${escapeHtml(node.role)} · ${escapeHtml(node.provider)} · ${escapeHtml(node.active_model)}</div>
-              ${caps}
-              <div class="node-stats">
-                <span><b>${node.task_count}</b><small>tasks</small></span>
-                <span><b>${node.error_count}</b><small>errors</small></span>
-                <span><b>${node.latency_ms || 0}ms</b><small>lat.</small></span>
-                <span><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b><small>coste</small></span>
-              </div>
-              <div class="node-role">${escapeHtml(levels)}</div>
-              <div class="node-role">${escapeHtml(skills)}</div>
-            </button>`;
-        })
-        .join("")
-    : `<div class="chart-empty">sin nodos</div>`;
-  $$("#nodeMetrics .node-metric").forEach((button) =>
-    button.addEventListener("click", () => {
-      state.selectedNodeId = button.dataset.node;
-      setMonitorSide(true);
-      renderNodeMetrics(state.lastObservability?.nodes || []);
-      renderModelBubbles(state.lastObservability?.nodes || [], state.lastObservability?.model_usage || []);
-      _renderAgentPanels(
-        state.lastObservability?.nodes || [],
-        state.lastObservability?.model_usage || [],
-        state.lastObservability?.execution_flow || [],
-        state.lastObservability?.audit_timeline || []
-      );
-    })
-  );
-}
-
-function renderModelBubbles(nodes, usage) {
-  const usageByModel = new Map((usage || []).map((item) => [item.model, item]));
-  $("#modelBubbles").innerHTML = nodes.length
-    ? nodes
-        .map((node) => {
-          const selected = node.id === state.selectedNodeId ? "selected" : "";
-          const status = node.status === "error" ? "bad" : node.status === "completed" || node.status === "idle" ? "ok" : "warn";
-          const label = node.active_model && node.active_model !== "auto / simulado" ? node.active_model : node.name;
-          return `<button class="model-bubble ${selected} ${status}" data-node="${escapeHtml(node.id)}">
-              <span class="bubble-dot"></span>
-              <b>${escapeHtml(node.name)}</b>
-              <small>${escapeHtml(node.role)} · ${escapeHtml(label)}</small>
-            </button>`;
-        })
-        .join("")
-    : `<div class="chart-empty">sin modelos implicados</div>`;
-  $$("#modelBubbles .model-bubble").forEach((button) =>
-    button.addEventListener("click", () => {
-      state.selectedNodeId = button.dataset.node;
-      setMonitorSide(true);
-      renderNodeMetrics(nodes);
-      renderModelBubbles(nodes, usage);
-      _renderAgentPanels(nodes, usage, state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
-    })
-  );
-  renderBubbleMetricPanel(nodes.find((node) => node.id === state.selectedNodeId) || nodes[0], usageByModel);
-}
-
-function renderBubbleMetricPanel(node, usageByModel) {
-  if (!node) {
-    $("#modelBubblePanel").innerHTML = "";
-    return;
-  }
-  const usage = usageByModel.get(node.active_model);
-  const chips = [
-    ["Rol", node.role],
-    ["Modelo", node.active_model || "auto"],
-    ["Provider", node.provider],
-    ["Llamadas", usage?.calls ?? node.task_count],
-    ["Coste", `$${Number(usage?.estimated_cost ?? node.estimated_cost ?? 0).toFixed(4)}`],
-    ["Latencia", `${usage?.latency_ms ?? node.latency_ms ?? 0}ms`],
-  ];
-  $("#modelBubblePanel").innerHTML = `<div class="bubble-window">
-      <header><b>${escapeHtml(node.name)}</b><span>${escapeHtml(node.status)}</span></header>
-      <div class="bubble-window-grid">
-        ${chips.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></span>`).join("")}
-      </div>
-      <div class="node-caps">${(node.active_capabilities || []).map((cap) => `<span>${escapeHtml(cap)}</span>`).join("") || "<span>sin capacidades</span>"}</div>
     </div>`;
 }
 
@@ -1001,152 +897,244 @@ function renderMonitorSidePanel(node, flow, audit) {
   if (activityEl) activityEl.innerHTML = eventList(relatedActivity, "Sin actividad para este nodo.");
 }
 
-function setMonitorTab(tab) {
-  state.monitorTab = tab;
-  $$("#monitorTabs button").forEach((button) => button.classList.toggle("active", button.dataset.monitorTab === tab));
-  $$(".monitor-tab").forEach((panel) => panel.classList.toggle("active", panel.id === `monitor-tab-${tab}`));
-}
-
 function renderExecutionFlow(events) {
   $("#executionFlow").innerHTML = eventList(events.slice(0, 4), "Sin flujo de ejecución.");
 }
 
-const _NODE_CHIP_ICON = {
-  agent:     `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm-5 11c0-2.2 2.24-4 5-4s5 1.8 5 4H2z"/></svg>`,
-  worker:    `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12.4 6h-1A4.5 4.5 0 0 0 8 3.7V2.6a1 1 0 0 0-2 0v1.1A4.5 4.5 0 0 0 2.6 6h-1a1 1 0 0 0 0 2h1A4.5 4.5 0 0 0 6 10.3v1.1a1 1 0 0 0 2 0v-1.1A4.5 4.5 0 0 0 11.4 8h1a1 1 0 0 0 0-2z"/></svg>`,
-  backup:    `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1z"/></svg>`,
-  validator: `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1zm3.5 4-4 4-2-2-.7.7L6.5 10.2l4.7-4.7-.7-.7z"/></svg>`,
-  memory:    `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="2" y="3" width="10" height="8" rx="1.5"/><path d="M5 3V1.5M9 3V1.5M5 11v1.5M9 11v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`,
-  monitor:   `<svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 3C4 3 1.5 6 1.5 7s2.5 4 5.5 4 5.5-3 5.5-4-2.5-4-5.5-4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>`,
-};
 const _LEVEL_SHORT = { level_1_simple:"N1", level_2_moderate:"N2", level_3_intermediate:"N3", level_4_complex:"N4", level_5_critical:"N5" };
 
-function renderProcessingNodeTabs(nodes) {
-  const target = $("#processingNodeTabs");
-  if (!target) return;
-  const fallback = [
-    { id: "fallback-agent", name: "Claude", role: "Agent", status: "idle", active_model: "auto / simulado", provider: "simulated", levels: [], skills: [], active_capabilities: [], task_count: 0, error_count: 0, latency_ms: 0, estimated_cost: 0, confidence: null, extra: {} },
-    { id: "fallback-worker-1", name: "Gemini", role: "Worker", status: "idle", active_model: "auto / simulado", provider: "simulated", levels: [], skills: [], active_capabilities: [], task_count: 0, error_count: 0, latency_ms: 0, estimated_cost: 0, confidence: null, extra: {} },
-    { id: "fallback-worker-2", name: "Groq", role: "Worker", status: "idle", active_model: "auto / simulado", provider: "simulated", levels: [], skills: [], active_capabilities: [], task_count: 0, error_count: 0, latency_ms: 0, estimated_cost: 0, confidence: null, extra: {} },
-  ];
-  const visibleNodes = nodes.length ? nodes : fallback;
-  if (!state.selectedNodeId && visibleNodes.length) state.selectedNodeId = visibleNodes[0].id;
-
-  const allActive = !state.selectedNodeId || state.selectedNodeId === "__all__";
-  target.innerHTML = [
-    `<button class="node-chip${allActive ? " active" : ""}" type="button" data-tab-node="__all__" title="Ver todos los nodos">
-      <span class="node-chip-all-icon"><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="9" r="1.5"/><circle cx="9" cy="9" r="1.5"/></svg></span>
-      <span class="node-chip-name">Todos</span>
-      <span class="node-chip-count">${visibleNodes.length}</span>
-    </button>`,
-    ...visibleNodes.map((node) => {
-      const role = (node.role || "worker").toLowerCase();
-      const icon = _NODE_CHIP_ICON[role] || _NODE_CHIP_ICON.worker;
-      const selected = node.id === state.selectedNodeId ? " active" : "";
-      const status = node.status === "error" ? "bad" : (node.status === "idle" || node.status === "completed") ? "ok" : "warn";
-      const shortName = (node.name || "Nodo").split("(")[0].trim().split(",")[0].trim();
-      const lvl = (node.levels || []).map(l => _LEVEL_SHORT[l]).filter(Boolean);
-      const lvlBadge = lvl.length ? `<span class="node-chip-lvl">${lvl.join(" ")}</span>` : "";
-      return `<button type="button" class="node-chip role-${role}${selected}" data-tab-node="${escapeHtml(node.id)}" title="${escapeHtml(node.name)}">
-        <span class="node-chip-icon">${icon}</span>
-        <span class="node-chip-name">${escapeHtml(shortName)}</span>
-        ${lvlBadge}
-        <span class="node-chip-dot ${status}"></span>
-      </button>`;
-    }),
-  ].join("");
-
-  target.querySelectorAll("button[data-tab-node]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const nodeId = btn.dataset.tabNode;
-      state.selectedNodeId = nodeId === "__all__" ? (visibleNodes[0]?.id || "") : nodeId;
-      target.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn || (nodeId === "__all__" && b.dataset.tabNode === "__all__")));
-      setMonitorSide(true);
-      _renderAgentPanels(visibleNodes, state.lastObservability?.model_usage || [], state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
-    });
-  });
+// ---- Inline-SVG chart primitives (zero dependency, theme-driven) ------------
+function fmtTokens(n) {
+  const value = Number(n || 0);
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}K`;
+  return String(Math.round(value));
 }
 
-const _NOC_ICON = {
-  agent:     `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm-5 11c0-2.2 2.24-4 5-4s5 1.8 5 4H2z"/></svg>`,
-  worker:    `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12.4 6h-1A4.5 4.5 0 0 0 8 3.7V2.6a1 1 0 0 0-2 0v1.1A4.5 4.5 0 0 0 2.6 6h-1a1 1 0 0 0 0 2h1A4.5 4.5 0 0 0 6 10.3v1.1a1 1 0 0 0 2 0v-1.1A4.5 4.5 0 0 0 11.4 8h1a1 1 0 0 0 0-2z"/></svg>`,
-  backup:    `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1z"/></svg>`,
-  validator: `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M7 1 2 3v4c0 3 2.2 5.5 5 6 2.8-.5 5-3 5-6V3L7 1zm3.5 4-4 4-2-2-.7.7L6.5 10.2l4.7-4.7-.7-.7z"/></svg>`,
-  memory:    `<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="2" y="3" width="10" height="8" rx="1.5"/><path d="M5 3V1.5M9 3V1.5M5 11v1.5M9 11v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`,
-};
-const _LEVEL_COLOR = { level_1_simple:"lvl-1", level_2_moderate:"lvl-2", level_3_intermediate:"lvl-3", level_4_complex:"lvl-4", level_5_critical:"lvl-5" };
+function svgDonut(pct, { label = "", sub = "", tone = "accent", size = 84 } = {}) {
+  const p = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  const r = 33, circ = 2 * Math.PI * r, off = circ * (1 - p / 100), cx = size / 2;
+  return `<svg class="svg-donut tone-${tone}" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${escapeHtml(label)} ${p}%">
+    <circle class="donut-track" cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke-width="9"/>
+    <circle class="donut-fill" cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke-width="9"
+      stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+      transform="rotate(-90 ${cx} ${cx})" stroke-linecap="round"/>
+    <text class="donut-num" x="${cx}" y="${cx - 1}" text-anchor="middle">${p}%</text>
+    ${sub ? `<text class="donut-sub" x="${cx}" y="${cx + 13}" text-anchor="middle">${escapeHtml(sub)}</text>` : ""}
+  </svg>`;
+}
 
-function renderNodeOverview(nodes) {
+function svgSparkline(values, { tone = "accent", w = 120, h = 32 } = {}) {
+  const pts = (values || []).map(Number).filter(Number.isFinite);
+  if (pts.length < 2) return `<div class="spark-empty">sin histórico todavía</div>`;
+  const max = Math.max(...pts), min = Math.min(...pts), span = max - min || 1;
+  const step = w / (pts.length - 1);
+  const line = pts.map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / span) * (h - 4) - 2).toFixed(1)}`).join(" ");
+  return `<svg class="svg-spark tone-${tone}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" width="100%" height="${h}" aria-hidden="true">
+    <polygon class="spark-area" points="0,${h} ${line} ${w},${h}"/>
+    <polyline class="spark-line" points="${line}" fill="none"/>
+  </svg>`;
+}
+
+function svgTokenRing(consumed, budget) {
+  if (!budget) {
+    return `<div class="token-plain"><b>${fmtTokens(consumed)}</b><small>tokens usados</small></div>`;
+  }
+  const pct = (consumed / budget) * 100;
+  const remaining = Math.max(0, budget - consumed);
+  const tone = pct > 90 ? "bad" : pct > 70 ? "warn" : "ok";
+  return `<div class="token-ring">${svgDonut(pct, { tone, sub: "usado" })}
+    <div class="token-ring-meta"><b>${fmtTokens(remaining)}</b><small>tokens restantes*</small>
+      <span>${fmtTokens(consumed)} / ${fmtTokens(budget)}</span></div></div>`;
+}
+
+function nodeActivitySeries(nodeId) {
+  state.nodeActivityHistory ||= {};
+  const node = (state.lastObservability?.nodes || []).find((item) => item.id === nodeId);
+  const series = (state.nodeActivityHistory[nodeId] ||= []);
+  series.push(node?.task_count || 0);
+  if (series.length > 24) series.shift();
+  return series;
+}
+
+// Skill usage across the system: how much each skill was used and by which agents.
+function renderSkillUsagePanel(nodes) {
+  const totals = {};
+  const agentsBySkill = {};
+  nodes.forEach((node) => {
+    const usage = node.skill_usage || {};
+    Object.entries(usage).forEach(([skill, count]) => {
+      totals[skill] = (totals[skill] || 0) + Number(count || 0);
+      (agentsBySkill[skill] ||= new Set()).add(node.name.split("(")[0].trim().split(",")[0].trim());
+    });
+  });
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (!entries.length) {
+    return `<section class="skill-usage-panel"><h4>Uso de skills</h4><div class="chart-empty">Aún no se ha usado ninguna skill.</div></section>`;
+  }
+  const max = Math.max(...entries.map(([, v]) => v), 1);
+  return `<section class="skill-usage-panel">
+    <h4>Uso de skills · por agente</h4>
+    ${entries
+      .map(([skill, count]) => {
+        const pct = Math.max(6, Math.round((count / max) * 100));
+        const agents = [...(agentsBySkill[skill] || [])];
+        return `<div>
+          <div class="skill-usage-row">
+            <span title="${escapeHtml(skill)}">${escapeHtml(skill)}</span>
+            <div class="skill-usage-bar"><i style="width:${pct}%"></i></div>
+            <b>${count}</b>
+          </div>
+          <div class="skill-usage-agents">${agents.map((a) => `<em>${escapeHtml(a)}</em>`).join("") || "<em>—</em>"}</div>
+        </div>`;
+      })
+      .join("")}
+  </section>`;
+}
+
+// `detail=true` (the single-agent filtered view) folds the node's own spec
+// (model/provider) and its own skill usage into this same card, instead of
+// stacking the separate system-wide skill-usage/performance panels above it —
+// one compact card per node instead of three sections for one node.
+function agentChartCard(node, { selected, detail = false } = {}) {
+  const status = node.status === "error" ? "bad" : (node.status === "completed" || node.status === "idle") ? "ok" : "warn";
+  const shortName = (node.name || "Nodo").split("(")[0].trim().split(",")[0].trim();
+  const total = Math.max(1, node.task_count || 0);
+  const successPct = node.task_count ? Math.round(((node.task_count - (node.error_count || 0)) / total) * 100) : 100;
+  const successTone = successPct >= 90 ? "ok" : successPct >= 60 ? "warn" : "bad";
+  const tokens = node.total_tokens || 0;
+  const activity = nodeActivitySeries(node.id);
+  const caps = (node.active_capabilities || []).slice(0, 4).map((c) => `<em>${escapeHtml(c)}</em>`).join("");
+  const skillEntries = Object.entries(node.skill_usage || {}).sort((a, b) => b[1] - a[1]);
+  const specLine = detail
+    ? `<div class="agent-chart-spec"><span>${escapeHtml(node.active_model || "auto")}</span><span>${escapeHtml(node.provider || "—")}</span></div>`
+    : "";
+  const skillChips = detail && skillEntries.length
+    ? `<div class="agent-chart-skills">${skillEntries
+        .map(([skill, count]) => `<span class="skill-chip">${escapeHtml(skill)} <b>${count}</b></span>`)
+        .join("")}</div>`
+    : "";
+  return `<article class="agent-chart-card ${selected ? "selected" : ""} ${detail ? "detail" : ""}" data-node="${escapeHtml(node.id)}">
+    <div class="agent-chart-head">
+      <span class="status-dot ${status}"></span>
+      <b>${escapeHtml(shortName)}</b>
+      <span class="agent-chart-role">${escapeHtml(node.role)}</span>
+    </div>
+    ${specLine}
+    <div class="agent-chart-rings">
+      <div class="agent-chart-ring-label">${svgDonut(successPct, { tone: successTone, sub: "éxito" })}<span>tasa de éxito</span></div>
+      <div class="agent-chart-ring-label" style="align-items:flex-start">${svgTokenRing(tokens, node.token_budget)}</div>
+    </div>
+    <div class="agent-chart-activity">
+      <small>Actividad (tareas en el tiempo)</small>
+      ${svgSparkline(activity, { tone: status })}
+    </div>
+    <div class="agent-chart-stats">
+      <span><small>Pila</small><b>${node.task_count || 0}</b></span>
+      <span><small>Errores</small><b>${node.error_count || 0}</b></span>
+      <span><small>Coste</small><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b></span>
+      <span><small>Latencia</small><b>${node.latency_ms || 0}ms</b></span>
+    </div>
+    ${caps ? `<div class="agent-chart-caps">${caps}</div>` : ""}
+    ${skillChips}
+    ${node.token_budget ? `<div class="agent-chart-note">* consumo acumulado del histórico, no mensual.</div>` : ""}
+  </article>`;
+}
+
+// Compact "performance" card: model tier / task status breakdown. Sits side by
+// side with the skill-usage panel; the wider per-model usage list (below,
+// full width) needs more room than a half-width column allows.
+function renderPerformancePanel(metrics) {
+  const modelEntries = Object.entries(metrics?.by_model || {}).slice(0, 6);
+  const statusEntries = Object.entries(metrics?.by_status || {});
+  return `<section class="skill-usage-panel">
+    <h4>Rendimiento</h4>
+    <div class="monitor-graph-grid">
+      ${miniBarPanel("Tier de modelo", modelEntries, TIER_LABEL)}
+      ${miniBarPanel("Estado de tareas", statusEntries)}
+    </div>
+  </section>`;
+}
+
+function renderModelUsagePanel(modelUsage) {
+  const usageRows = modelUsage.length
+    ? modelUsage
+        .map(
+          (item) => `<div class="usage-row">
+            <div><b>${escapeHtml(item.model)}</b><span>${escapeHtml(item.provider)}</span></div>
+            <span>${item.calls} llamadas</span>
+            <span>${item.latency_ms || 0}ms</span>
+            <strong>$${Number(item.estimated_cost || 0).toFixed(4)}</strong>
+          </div>`
+        )
+        .join("")
+    : `<div class="chart-empty">sin llamadas a modelo</div>`;
+  return `<section class="skill-usage-panel">
+    <h4>Uso por modelo</h4>
+    <div class="usage-list">${usageRows}</div>
+  </section>`;
+}
+
+// "Todos" shows every agent's chart card; picking one agent filters the same
+// grid down to just that card instead of routing to a second, separate detail
+// surface — one render path, no duplicated logic between the two views.
+function renderNodeFilterTabs(nodes) {
+  const active = nodes.some((n) => n.id === state.nodeFilter) ? state.nodeFilter : "__all__";
+  const chip = (id, label, selected) =>
+    `<button type="button" class="node-filter-chip ${selected ? "active" : ""}" data-node-filter="${escapeHtml(id)}">${escapeHtml(label)}</button>`;
+  return `<div class="node-filter-tabs">
+    ${chip("__all__", "Todos", active === "__all__")}
+    ${nodes
+      .map((node) => chip(node.id, (node.name || "Nodo").split("(")[0].trim().split(",")[0].trim(), active === node.id))
+      .join("")}
+  </div>`;
+}
+
+function renderNodeOverview(nodes, metrics, modelUsage = []) {
   const target = $("#nodeOverview");
   if (!target) return;
   if (!nodes.length) {
     target.innerHTML = `<div class="chart-empty">Sin nodos observados todavía.</div>`;
     return;
   }
-  const maxTasks = Math.max(...nodes.map((n) => n.task_count || 0), 1);
+  const active = nodes.some((n) => n.id === state.nodeFilter) ? state.nodeFilter : "__all__";
+  const visible = active === "__all__" ? nodes : nodes.filter((n) => n.id === active);
+  // "Todos" keeps the system-wide skill-usage/performance panels above the
+  // grid; a single agent instead gets one condensed spec+stats card (detail
+  // mode) so its spec isn't spread across three stacked sections.
+  target.innerHTML =
+    active === "__all__"
+      ? `${renderNodeFilterTabs(nodes)}
+    <div class="monitor-panels-row">
+      ${renderSkillUsagePanel(nodes)}
+      ${renderPerformancePanel(metrics)}
+    </div>
+    ${renderModelUsagePanel(modelUsage)}
+    <div class="agent-chart-grid">
+      ${visible.map((node) => agentChartCard(node, { selected: node.id === state.selectedNodeId })).join("")}
+    </div>`
+      : `${renderNodeFilterTabs(nodes)}
+    <div class="agent-chart-grid single">
+      ${visible.map((node) => agentChartCard(node, { selected: true, detail: true })).join("")}
+    </div>`;
 
-  target.innerHTML = `<div class="node-overview-grid">
-    ${nodes.map((node) => {
-      const selected = node.id === state.selectedNodeId ? "selected" : "";
-      const status = node.status === "error" ? "bad" : (node.status === "completed" || node.status === "idle") ? "ok" : "warn";
-      const role = (node.role || "worker").toLowerCase();
-      const icon = _NOC_ICON[role] || _NOC_ICON.worker;
-      const taskPct = Math.round((node.task_count || 0) / maxTasks * 100);
-      const modelLabel = (node.active_model || node.provider || "—").replace("auto / simulado", "simulado");
-      const levelBadges = (node.levels || [])
-        .map((l) => `<span class="noc-lvl-badge ${_LEVEL_COLOR[l] || ""}">${_LEVEL_SHORT[l] || l}</span>`)
-        .join("") || `<span class="noc-lvl-badge muted">—</span>`;
-      const shortName = (node.name || "Nodo").split("(")[0].trim().split(",")[0].trim();
-      return `<button type="button" class="node-overview-card ${selected}" data-node="${escapeHtml(node.id)}">
-        <div class="noc-header">
-          <span class="noc-icon role-${role}">${icon}</span>
-          <div class="noc-identity">
-            <b class="noc-name">${escapeHtml(shortName)}</b>
-            <span class="noc-model">${escapeHtml(modelLabel)}</span>
-          </div>
-          <span class="noc-status-dot ${status}"></span>
-        </div>
-        <div class="noc-levels">${levelBadges}</div>
-        <div class="noc-bar-wrap">
-          <div class="noc-bar"><div class="noc-bar-fill ${status}" style="width:${taskPct}%"></div></div>
-          <span class="noc-bar-label">${node.task_count || 0} tareas</span>
-        </div>
-        <div class="noc-footer">
-          <span class="noc-stat"><small>lat.</small><b>${node.latency_ms || 0}ms</b></span>
-          <span class="noc-stat"><small>coste</small><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b></span>
-          <span class="noc-stat"><small>err</small><b>${node.error_count || 0}</b></span>
-        </div>
-      </button>`;
-    }).join("")}
-  </div>`;
-
-  $$("#nodeOverview .node-overview-card").forEach((button) =>
-    button.addEventListener("click", () => {
-      state.selectedNodeId = button.dataset.node;
+  $$("#nodeOverview .node-filter-chip").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      state.nodeFilter = chip.dataset.nodeFilter;
+      if (state.nodeFilter !== "__all__") state.selectedNodeId = state.nodeFilter;
       setMonitorSide(true);
-      renderProcessingNodeTabs(nodes);
-      renderNodeOverview(nodes);
-      _renderAgentPanels(nodes, state.lastObservability?.model_usage || [], state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
+      renderNodeOverview(nodes, metrics, modelUsage);
+      _renderAgentPanels(nodes, state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
     })
   );
-}
-
-function renderMonitorGraphs(metrics, observability) {
-  const target = $("#monitorGraphs");
-  if (!target) return;
-  const nodes = observability?.nodes || [];
-
-  const tasksByNode = nodes.map((n) => [n.name.split("(")[0].trim().split(",")[0].trim(), n.task_count || 0]);
-  const latByNode   = nodes.map((n) => [n.name.split("(")[0].trim().split(",")[0].trim(), n.latency_ms || 0]);
-  const modelEntries = Object.entries(metrics.by_model || {}).slice(0, 6);
-  const statusEntries = Object.entries(metrics.by_status || {});
-
-  target.innerHTML = `<div class="monitor-graph-grid">
-    ${miniBarPanel("Tareas por nodo", tasksByNode)}
-    ${miniBarPanel("Latencia por nodo (ms)", latByNode)}
-    ${miniBarPanel("Tier de modelo", modelEntries, TIER_LABEL)}
-    ${miniBarPanel("Estado de tareas", statusEntries)}
-  </div>`;
+  $$("#nodeOverview .agent-chart-card").forEach((card) =>
+    card.addEventListener("click", () => {
+      state.selectedNodeId = card.dataset.node;
+      setMonitorSide(true);
+      renderNodeOverview(nodes, metrics, modelUsage);
+      _renderAgentPanels(nodes, state.lastObservability?.execution_flow || [], state.lastObservability?.audit_timeline || []);
+    })
+  );
 }
 
 function miniBarPanel(title, entries, labelMap = {}) {
@@ -1781,6 +1769,8 @@ function providerOptions(current) {
 function renderDiagram() {
   ensureEntities();
   $("#diagramNodes").innerHTML = state.entities.map(entityCard).join("");
+  renderOpenClawDiagramCard();
+  renderOpenClawDrawerCard();
 
   $$("#diagramNodes .entity-model-toggle").forEach((button) =>
     button.addEventListener("click", (event) => {
@@ -1833,6 +1823,15 @@ function renderDiagram() {
       entity.parentId = event.target.value;
       renderDiagram();
       scheduleRoutingSave("Conexión actualizada. Guardando…");
+    })
+  );
+  $$("#diagramNodes .entity-target-link").forEach((sel) =>
+    sel.addEventListener("change", (event) => {
+      const entity = findEntity(event.target.dataset.entity);
+      if (!entity) return;
+      entity.target_id = event.target.value || null;
+      renderDiagram();
+      scheduleRoutingSave("Asociación de supervisión actualizada. Guardando…");
     })
   );
   $$("#diagramNodes .level-chip").forEach((btn) =>
@@ -1911,6 +1910,23 @@ function entityCard(entity) {
           </select>
         </label>`
       : "";
+  // Guardian/Validator are support tags (role_tags), not primary roles — this
+  // is the "which element am I supervising/validating" association, distinct
+  // from parent/child hierarchy. Single target, same select pattern as above.
+  const targetLabels = [];
+  if (entity.role_tags.includes("guardian")) targetLabels.push("Supervisa a");
+  if (entity.role_tags.includes("validator")) targetLabels.push("Valida a");
+  const targetOptions = state.entities
+    .filter((item) => item.id !== entity.id && !isAgentRole(item.role))
+    .map((item) => `<option value="${item.id}" ${entity.target_id === item.id ? "selected" : ""}>${escapeHtml(item.name || roleDef(item.role).label)}</option>`)
+    .join("");
+  const supervises = targetLabels.length
+    ? `<label>${escapeHtml(targetLabels.join(" / "))}
+        <select class="entity-target-link" data-entity="${entity.id}">
+          <option value="">Sin asignar</option>${targetOptions}
+        </select>
+      </label>`
+    : "";
   const skills = skillPicker(entity);
   const classRole = isAgentRole(entity.role) ? "parent" : "child";
   return `<div class="node entity ${classRole} role-${escapeHtml(entity.role)}" data-entity="${entity.id}">
@@ -1923,6 +1939,7 @@ function entityCard(entity) {
       <div class="entity-controls">
         ${roleTagPicker(entity)}
         ${connection}
+        ${supervises}
         ${levelControls}
         ${skills}
       </div>
@@ -2320,7 +2337,7 @@ function drawWires() {
   const rootStyle = getComputedStyle(document.documentElement);
   const accent = rootStyle.getPropertyValue("--diagram-wire").trim() || rootStyle.getPropertyValue("--accent").trim();
   const opacity = rootStyle.getPropertyValue("--diagram-wire-opacity").trim() || "0.62";
-  svg.innerHTML = $$("#diagramNodes .node.entity.child")
+  const hierarchyWires = $$("#diagramNodes .node.entity.child")
     .filter((node) => node.dataset.entity && findEntity(node.dataset.entity)?.parentId)
     .map((node) => {
       const route = connectionRoute(parent, node);
@@ -2329,6 +2346,35 @@ function drawWires() {
       return `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${accent}" stroke-width="1.5" opacity="${opacity}"/>`;
     })
     .join("");
+
+  // Guardian/Validator supervision wires: dashed, role-accent colored, drawn
+  // directly between the two specific nodes (not routed through the root) so
+  // they read as "supervision/validation," not hierarchy.
+  let supportWires = "";
+  state.entities.forEach((entity) => {
+    if (!entity.target_id) return;
+    const isGuardian = (entity.role_tags || []).includes("guardian");
+    const isValidator = (entity.role_tags || []).includes("validator");
+    if (!isGuardian && !isValidator) return;
+    const fromNode = $(`.node.entity[data-entity="${entity.id}"]`);
+    const toNode = $(`.node.entity[data-entity="${entity.target_id}"]`);
+    if (!fromNode || !toNode) return;
+    const route = connectionRoute(fromNode, toNode);
+    const color = isGuardian ? "#b9a7ff" : "#ffb25f";
+    supportWires += `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${color}" stroke-width="1.3" stroke-dasharray="4,4" opacity="0.6"/>`;
+  });
+
+  // Third wire type: OpenClaw's link to the root Agent — dotted and in its own
+  // color, so it reads as "connected to the system" without looking like a
+  // routing/hierarchy relationship.
+  let openclawWire = "";
+  const openclawCard = $("#openclawDiagramCard");
+  if (openclawCard) {
+    const route = connectionRoute(openclawCard, parent);
+    openclawWire = `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${OPENCLAW_NODE_ACCENT}" stroke-width="1.3" stroke-dasharray="2,5" opacity="0.55"/>`;
+  }
+
+  svg.innerHTML = hierarchyWires + supportWires + openclawWire;
 }
 
 function nodeBox(node) {
@@ -2379,6 +2425,129 @@ function controlPoint(point, side, distance) {
   if (side === "right") return { x: point.x + distance, y: point.y };
   if (side === "top") return { x: point.x, y: point.y - distance };
   return { x: point.x, y: point.y + distance };
+}
+
+const OPENCLAW_NODE_ACCENT = "#3ecf9a"; // teal — visually distinct from routing-entity accents
+const OPENCLAW_POS_KEY = "karajan-openclaw-pos";
+
+function readOpenClawPos() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(OPENCLAW_POS_KEY) || "null");
+    if (stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)) return stored;
+  } catch {
+    /* fall through to default */
+  }
+  return { x: -300, y: 40 };
+}
+
+// OpenClaw isn't a RoutingEntity (it doesn't classify/execute subtasks), but the
+// user wants it shown as part of the architecture, styled like the routing
+// entity cards (compact, summarized) and visibly connected to the main system —
+// signaling "additional integration," not a hidden extra. It's a plain status
+// card (no click-to-expand) that can be dragged around like any other node;
+// activation itself lives in the "Arquitectura activa" side drawer
+// (renderOpenClawDrawerCard). A dedicated dashed wire to the root Agent is
+// drawn in drawWires().
+function openClawCardBody(detail, dotClass) {
+  return `
+    <div class="node-port" title="Punto de conexión"></div>
+    <div class="role">Integración adicional</div>
+    <div class="node-title">OpenClaw</div>
+    <div class="model-meta"><span class="status-dot ${dotClass}"></span> ${escapeHtml(detail)}</div>`;
+}
+
+function renderOpenClawDiagramCard() {
+  const card = $("#openclawDiagramCard");
+  if (!card) return;
+  card.style.left = `${screenX(state.openclawPos.x)}px`;
+  card.style.top = `${screenY(state.openclawPos.y)}px`;
+  card.style.setProperty("--entity-accent", OPENCLAW_NODE_ACCENT);
+  card.style.setProperty("--entity-ink", "#04231a");
+  card.innerHTML = openClawCardBody("comprobando…", "warn");
+  bindOpenClawMove();
+  api("/integrations/openclaw/status")
+    .then((status) => {
+      const dot = status.ready ? "ok" : status.cli_available ? "warn" : "bad";
+      const detail = status.ready ? "activo" : status.cli_available ? "sin iniciar" : "CLI no encontrado";
+      card.innerHTML = openClawCardBody(detail, dot);
+    })
+    .catch(() => {
+      card.innerHTML = openClawCardBody("sin datos", "bad");
+    });
+}
+
+let activeOpenclawMove = null;
+
+function bindOpenClawMove() {
+  const card = $("#openclawDiagramCard");
+  if (!card || card.dataset.dragBound) return;
+  card.dataset.dragBound = "1";
+  card.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    activeOpenclawMove = {
+      originX: state.openclawPos.x,
+      originY: state.openclawPos.y,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    card.classList.add("moving");
+    document.body.classList.add("moving-node");
+    document.addEventListener("pointermove", onOpenClawMove);
+    document.addEventListener("pointerup", stopOpenClawMove, { once: true });
+  });
+}
+
+function onOpenClawMove(event) {
+  if (!activeOpenclawMove) return;
+  const card = $("#openclawDiagramCard");
+  if (!card) return;
+  state.openclawPos = {
+    x: activeOpenclawMove.originX + (event.clientX - activeOpenclawMove.startX) / state.diagramZoom,
+    y: Math.max(0, activeOpenclawMove.originY + (event.clientY - activeOpenclawMove.startY) / state.diagramZoom),
+  };
+  card.style.left = `${screenX(state.openclawPos.x)}px`;
+  card.style.top = `${screenY(state.openclawPos.y)}px`;
+  requestAnimationFrame(drawWires);
+}
+
+function stopOpenClawMove() {
+  $("#openclawDiagramCard")?.classList.remove("moving");
+  activeOpenclawMove = null;
+  document.body.classList.remove("moving-node");
+  document.removeEventListener("pointermove", onOpenClawMove);
+  localStorage.setItem(OPENCLAW_POS_KEY, JSON.stringify(state.openclawPos));
+}
+
+// "Arquitectura activa" side drawer entry point for OpenClaw — the diagram
+// card itself is now a plain draggable status indicator; the actual
+// activation UI (openOpenClawPanel) is only reachable from here.
+function renderOpenClawDrawerCard() {
+  const target = $("#openclawDrawerCard");
+  if (!target) return;
+  target.innerHTML = `
+    <div class="openclaw-drawer-card">
+      <div class="openclaw-drawer-info">
+        <span class="status-dot warn"></span>
+        <b>OpenClaw</b>
+        <span class="openclaw-drawer-detail">comprobando…</span>
+      </div>
+      <button type="button" class="openclaw-activate-btn" data-openclaw-open>Configurar</button>
+    </div>`;
+  target.querySelector("[data-openclaw-open]")?.addEventListener("click", () => openOpenClawPanel());
+  api("/integrations/openclaw/status")
+    .then((status) => {
+      const dot = status.ready ? "ok" : status.cli_available ? "warn" : "bad";
+      const detail = status.ready ? "Activo" : status.cli_available ? "CLI listo, sin iniciar" : "CLI no encontrado";
+      const dotEl = target.querySelector(".status-dot");
+      const detailEl = target.querySelector(".openclaw-drawer-detail");
+      if (dotEl) dotEl.className = `status-dot ${dot}`;
+      if (detailEl) detailEl.textContent = detail;
+    })
+    .catch(() => {
+      const detailEl = target.querySelector(".openclaw-drawer-detail");
+      if (detailEl) detailEl.textContent = "sin datos";
+    });
 }
 
 function bindEntityMove() {
@@ -3753,10 +3922,6 @@ function init() {
     event.stopPropagation();
     setAgentNotificationsOpen(!state.agentNotificationsOpen);
   });
-  $("#monitorTabs")?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-monitor-tab]");
-    if (button) setMonitorTab(button.dataset.monitorTab);
-  });
   $("#view-flow")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-config-mode]");
     if (button) setConfigMode(button.dataset.configMode);
@@ -3770,6 +3935,8 @@ function init() {
   initMonitorBlocks();
   $("#modelsAdvanced").addEventListener("change", renderModels);
   initAutoRefresh();
+  initOnboardingControls();
+  initOnboarding();
   document.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && event.target?.id === "manual-agent-command") {
       event.preventDefault();
@@ -3941,6 +4108,31 @@ function init() {
       }
       return;
     }
+    const wizardApplyDefaultBtn = event.target.closest("[data-wizard-apply-default]");
+    if (wizardApplyDefaultBtn) {
+      wizardApplyDefaultConfig();
+      return;
+    }
+    const wizardRunProviderBtn = event.target.closest("[data-wizard-run-provider]");
+    if (wizardRunProviderBtn) {
+      wizardRunProvider(wizardRunProviderBtn.dataset.wizardRunProvider, wizardRunProviderBtn.dataset.wizardRunSlot);
+      return;
+    }
+    const wizardInstallSkillBtn = event.target.closest("[data-wizard-install-skill]");
+    if (wizardInstallSkillBtn && !wizardInstallSkillBtn.disabled) {
+      wizardInstallSkill(wizardInstallSkillBtn.dataset.wizardInstallSkill);
+      return;
+    }
+    const wizardInstallPluginBtn = event.target.closest("[data-wizard-install-plugin]");
+    if (wizardInstallPluginBtn && !wizardInstallPluginBtn.disabled) {
+      wizardInstallPlugin(wizardInstallPluginBtn.dataset.wizardInstallPlugin);
+      return;
+    }
+    const wizardCopyBtn = event.target.closest("[data-wizard-copy]");
+    if (wizardCopyBtn) {
+      wizardCopyCommand(wizardCopyBtn.dataset.wizardCopy);
+      return;
+    }
     if (!event.target.closest(".model-chip-picker")) {
       $$(".model-chip-picker.open").forEach((item) => item.classList.remove("open"));
     }
@@ -3955,6 +4147,11 @@ function init() {
     }
   });
   document.addEventListener("change", (event) => {
+    const riskAck = event.target.closest("[data-wizard-risk-ack]");
+    if (riskAck) {
+      $$("[data-wizard-install-plugin]").forEach((button) => (button.disabled = !riskAck.checked));
+      return;
+    }
     const skillBox = event.target.closest(".entity-skill-side");
     const providerSkillBox = event.target.closest(".agent-skill-provider");
     if (!skillBox && !providerSkillBox) return;
@@ -4039,6 +4236,399 @@ async function applyDefaultConfig() {
 
 init();
 
+// ---- Generic modal shell (OpenClaw activation panel, navigation tutorial) --
+
+function openModal(title) {
+  $("#appModalTitle").textContent = title;
+  $("#appModal").hidden = false;
+}
+
+const TUTORIAL_SEEN_KEY = "karajan-tutorial-seen";
+
+function closeModal() {
+  $("#appModal").hidden = true;
+  // The "?" help icon is a one-time discovery hint, not a permanent nav item —
+  // once the user has opened and closed the tutorial once, it's dismissed for
+  // good (persisted, not just for this session).
+  if (state.tutorialModalOpen) {
+    state.tutorialModalOpen = false;
+    localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
+    const helpBtn = $("#helpTutorialBtn");
+    if (helpBtn) helpBtn.hidden = true;
+  }
+}
+
+function initModalControls() {
+  $("#appModalClose")?.addEventListener("click", closeModal);
+  $("#appModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "appModal") closeModal();
+  });
+}
+initModalControls();
+
+function initHelpButton() {
+  const btn = $("#helpTutorialBtn");
+  if (btn && localStorage.getItem(TUTORIAL_SEEN_KEY)) btn.hidden = true;
+}
+initHelpButton();
+
+// ---- First-run onboarding overlay (web equivalent of scripts/setup_production.py) ----
+
+const ONBOARDING_STEPS = 3;
+
+async function initOnboarding() {
+  let status;
+  try {
+    status = await api("/setup/status");
+  } catch {
+    return; // don't block the app on a status-check failure
+  }
+  if (status.completed) return;
+  $("#onboardingOverlay").hidden = false;
+  onboardingGoToStep(1);
+  await Promise.all([
+    renderOnboardingAgents().catch((error) => toast(error.message)),
+    renderOnboardingSkills().catch((error) => toast(error.message)),
+    renderOpenClawPanel("#onboardingOpenclaw").catch((error) => toast(error.message)),
+  ]);
+}
+
+function onboardingGoToStep(step) {
+  state.onboardingStep = step;
+  $$("#onboardingSteps .onboarding-step-dot").forEach((dot) =>
+    dot.classList.toggle("active", Number(dot.dataset.onboardingStep) === step)
+  );
+  $$(".onboarding-step-panel").forEach((panel) =>
+    panel.classList.toggle("active", Number(panel.dataset.onboardingPanel) === step)
+  );
+  $("#onboardingBack").hidden = step === 1;
+  $("#onboardingNext").hidden = step === ONBOARDING_STEPS;
+  $("#onboardingFinish").hidden = step !== ONBOARDING_STEPS;
+}
+
+async function finishOnboarding() {
+  try {
+    await api("/setup/complete", { method: "POST" });
+  } catch (error) {
+    toast(error.message);
+  }
+  $("#onboardingOverlay").hidden = true;
+}
+
+function initOnboardingControls() {
+  $("#onboardingNext")?.addEventListener("click", () => onboardingGoToStep(Math.min(ONBOARDING_STEPS, (state.onboardingStep || 1) + 1)));
+  $("#onboardingBack")?.addEventListener("click", () => onboardingGoToStep(Math.max(1, (state.onboardingStep || 1) - 1)));
+  $("#onboardingFinish")?.addEventListener("click", () => finishOnboarding());
+  $("#onboardingSkip")?.addEventListener("click", () => finishOnboarding());
+  $("#helpTutorialBtn")?.addEventListener("click", openTutorialModal);
+}
+
+async function openTutorialModal() {
+  state.tutorialModalOpen = true;
+  openModal("Tutorial de navegación");
+  const body = $("#appModalBody");
+  body.innerHTML = `<div class="config-empty">Cargando…</div>`;
+  try {
+    const { markdown } = await api("/setup/tutorial");
+    body.innerHTML = renderMarkdownBasic(markdown);
+  } catch (error) {
+    body.innerHTML = `<div class="config-empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+// Tiny "just enough" markdown renderer for the tutorial's fixed, trusted
+// content (# / ## headings + plain paragraphs) — not a general-purpose parser.
+function renderMarkdownBasic(markdown) {
+  return markdown
+    .split(/\n{2,}/)
+    .map((block) => {
+      const trimmed = block.trim();
+      if (trimmed.startsWith("## ")) return `<h4>${escapeHtml(trimmed.slice(3))}</h4>`;
+      if (trimmed.startsWith("# ")) return `<h3>${escapeHtml(trimmed.slice(2))}</h3>`;
+      return trimmed ? `<p>${escapeHtml(trimmed)}</p>` : "";
+    })
+    .join("");
+}
+
+async function wizardApplyDefaultConfig() {
+  const button = $("[data-wizard-apply-default]");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Aplicando…";
+  }
+  try {
+    await api("/setup/apply-default", { method: "POST" });
+    await loadConfig();
+    toast("Jerarquía de referencia aplicada.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    await renderOnboardingAgents();
+  }
+}
+
+function wizardRunProvider(name, slot) {
+  executeProviderCommand(name, slot).then(() => renderOnboardingAgents());
+}
+
+async function renderOnboardingAgents() {
+  const target = $("#onboardingAgents");
+  if (!target) return;
+  let catalogList = state.catalog || [];
+  let providers = state.providers || [];
+  if (!catalogList.length || !providers.length) {
+    try {
+      [catalogList, providers] = await Promise.all([api("/catalog"), api("/providers")]);
+      state.catalog = catalogList;
+      state.providers = providers;
+    } catch (error) {
+      target.innerHTML = `<div class="fcard"><h3>Agentes y jerarquía</h3><div class="config-empty">${escapeHtml(error.message)}</div></div>`;
+      return;
+    }
+  }
+  const status = new Map(providers.map((p) => [p.provider, p]));
+  const readyCount = catalogList.filter((p) => status.get(p.name)?.ready).length;
+  const firstPending = catalogList.find((p) => !status.get(p.name)?.ready);
+  target.innerHTML = `
+    <div class="wizard-progress">
+      <span>Agente <b>${readyCount}</b> de <b>${catalogList.length}</b> listo${readyCount === 1 ? "" : "s"} — la jerarquía actual (<code>/config</code>, <code>/routing-layout</code>) es el punto de partida.</span>
+      <div class="wizard-agent-actions">
+        ${firstPending ? `<button type="button" data-scroll-agent="${escapeHtml(firstPending.name)}">Ir al siguiente pendiente</button>` : ""}
+        <button type="button" data-wizard-apply-default>Restaurar jerarquía de referencia</button>
+      </div>
+    </div>
+    <div class="config-agent-grid">
+      ${catalogList
+        .map((provider) => {
+          const providerStatus = status.get(provider.name) || {};
+          const runSlot = provider.login_command ? "login_command" : provider.probe_command ? "probe_command" : null;
+          return `<div class="wizard-agent-row" data-wizard-agent-row="${escapeHtml(provider.name)}">
+            ${configAgentCard(provider, providerStatus)}
+            <div class="wizard-agent-actions">
+              <button type="button" data-provider-setup="${escapeHtml(provider.name)}">Configurar</button>
+              ${runSlot ? `<button type="button" data-wizard-run-provider="${escapeHtml(provider.name)}" data-wizard-run-slot="${runSlot}" ${state.agentConsoleRunning === provider.name ? "disabled" : ""}>${state.agentConsoleRunning === provider.name ? "Conectando…" : "Conectar"}</button>` : ""}
+              ${provider.signup_url ? `<a href="${escapeHtml(provider.signup_url)}" target="_blank" rel="noreferrer">Abrir consola</a>` : ""}
+            </div>
+            <div class="provider-setup" data-provider-setup-target="${escapeHtml(provider.name)}" hidden></div>
+            ${state.agentConsoleResults?.[provider.name] ? `<pre class="agent-console-output ${state.agentConsoleResults[provider.name].ok ? "ok" : "bad"}">${escapeHtml(state.agentConsoleResults[provider.name].detail || "")}</pre>` : ""}
+          </div>`;
+        })
+        .join("")}
+    </div>`;
+  target.querySelector("[data-scroll-agent]")?.addEventListener("click", (event) => {
+    const name = event.currentTarget.dataset.scrollAgent;
+    target.querySelector(`[data-wizard-agent-row="${CSS.escape(name)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+// ---- step 2: skills catalog -------------------------------------------------
+
+function renderSkillsCatalog(skills, { installing } = {}) {
+  if (!skills.length) return `<div class="config-empty">No hay skills en el catálogo.</div>`;
+  return `<div class="skill-catalog-grid">
+    ${skills
+      .map((skill) => {
+        const busy = installing === skill.name;
+        return `<article class="skill-catalog-card" data-installed="${skill.installed}">
+          <header>
+            <h4>${escapeHtml(skill.name)}</h4>
+            <span class="status-dot ${skill.installed ? "ok" : skill.recommended ? "warn" : "bad"}"></span>
+          </header>
+          <p class="skill-desc">${escapeHtml(skill.description || "Sin descripción.")}</p>
+          <div class="skill-meta">
+            ${(skill.applies_to || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+            ${skill.recommended ? `<span class="tag">recomendada</span>` : ""}
+          </div>
+          ${skill.install_command ? `<code class="skill-install-cmd">${escapeHtml(skill.install_command)}</code>` : ""}
+          <div class="skill-catalog-actions">
+            ${!skill.installed ? `<button type="button" data-wizard-install-skill="${escapeHtml(skill.name)}" ${busy ? "disabled" : ""}>${busy ? "Instalando…" : "Instalar"}</button>` : `<button type="button" disabled>Instalada</button>`}
+            ${skill.repo_url ? `<a href="${escapeHtml(skill.repo_url)}" target="_blank" rel="noreferrer">Repositorio</a>` : ""}
+          </div>
+        </article>`;
+      })
+      .join("")}
+  </div>`;
+}
+
+async function renderOnboardingSkills() {
+  const target = $("#onboardingSkills");
+  if (!target) return;
+  let skills = state.skills || [];
+  if (!skills.length) {
+    try {
+      skills = await api("/skills");
+      state.skills = skills;
+    } catch (error) {
+      target.innerHTML = `<div class="fcard"><h3>Skills</h3><div class="config-empty">${escapeHtml(error.message)}</div></div>`;
+      return;
+    }
+  }
+  const installedCount = skills.filter((s) => s.installed).length;
+  target.innerHTML = `
+    <div class="wizard-progress"><span><b>${installedCount}</b> de <b>${skills.length}</b> skills instaladas.</span></div>
+    ${renderSkillsCatalog(skills, { installing: state.wizardInstallingSkill })}`;
+}
+
+async function wizardInstallSkill(name) {
+  state.wizardInstallingSkill = name;
+  await renderOnboardingSkills();
+  try {
+    const result = await api(`/skills/${encodeURIComponent(name)}/install`, { method: "POST" });
+    toast(result.ok ? `'${name}' instalada.` : result.detail);
+  } catch (error) {
+    toast(error.message);
+  }
+  state.wizardInstallingSkill = null;
+  try {
+    state.skills = await api("/skills");
+  } catch {
+    /* keep previous list if the refresh fails */
+  }
+  await renderOnboardingSkills();
+}
+
+// ---- OpenClaw activation panel (opened from the "Arquitectura activa" drawer) ----
+
+function wizardCopyCommand(text) {
+  navigator.clipboard?.writeText(text).then(
+    () => toast("Comando copiado."),
+    () => toast("No se pudo copiar el comando.")
+  );
+}
+
+function openOpenClawPanel() {
+  openModal("Activación OpenClaw");
+  renderOpenClawPanel("#appModalBody");
+}
+
+// Reused both by the modal opened from the "Arquitectura activa" drawer and
+// by onboarding step 3 (#onboardingOpenclaw) — same activation content,
+// different host container.
+async function renderOpenClawPanel(targetSelector = "#appModalBody") {
+  state.openClawPanelTarget = targetSelector;
+  const target = $(targetSelector);
+  if (!target) return;
+  target.innerHTML = `<div class="config-empty">Cargando estado de OpenClaw…</div>`;
+  let status, daemonStatus, setupCommands, channels, channelCatalog, plugins;
+  try {
+    [status, daemonStatus, setupCommands, channels, channelCatalog, plugins] = await Promise.all([
+      api("/integrations/openclaw/status"),
+      api("/integrations/openclaw/daemon-status"),
+      api("/integrations/openclaw/setup-commands"),
+      api("/integrations/openclaw/channels").catch(() => []),
+      api("/integrations/openclaw/channels/catalog").catch(() => []),
+      api("/integrations/openclaw/plugins").catch(() => []),
+    ]);
+  } catch (error) {
+    target.innerHTML = `<div class="fcard"><h3>Activación OpenClaw</h3><div class="config-empty">${escapeHtml(error.message)}</div></div>`;
+    return;
+  }
+  const configuredIds = new Set(channels.map((c) => c.id));
+  const catalogOnly = channelCatalog.filter((c) => !configuredIds.has(c.id));
+  target.innerHTML = `
+    <div class="fcard">
+      <h3>Estado</h3>
+      <div class="openclaw-status-grid" style="padding:12px">
+        <div class="openclaw-status-card"><small>CLI</small><b>${status.cli_available ? "Encontrado" : "No encontrado"}</b></div>
+        <div class="openclaw-status-card"><small>Servicio</small><b>${daemonStatus.installed ? "Instalado" : "No instalado"}</b></div>
+        <div class="openclaw-status-card"><small>Gateway</small><b>${daemonStatus.running ? "En ejecución" : "Detenido"}</b></div>
+        <div class="openclaw-status-card"><small>Alcanzable</small><b>${status.ready ? "Sí" : "No"}</b></div>
+      </div>
+      <p class="config-note" style="padding:0 12px 12px">${escapeHtml(status.detail || "")}</p>
+    </div>
+
+    <div class="fcard">
+      <h3>Asistente de configuración (openclaw configure)</h3>
+      <div class="openclaw-command-list" style="padding:12px">
+        ${setupCommands
+          .map(
+            (cmd) => `<div class="openclaw-command-row">
+          <header><b>${escapeHtml(cmd.section)}</b></header>
+          <p>${escapeHtml(cmd.description)}</p>
+          <code>${escapeHtml(cmd.command)}</code>
+          <button type="button" data-wizard-copy="${escapeHtml(cmd.command)}">Copiar comando</button>
+        </div>`
+          )
+          .join("")}
+      </div>
+    </div>
+
+    <div class="fcard">
+      <h3>Canales (WhatsApp y otros)</h3>
+      <div class="openclaw-command-list" style="padding:12px">
+        ${channels
+          .map(
+            (ch) => `<div class="openclaw-command-row">
+          <header><b>${escapeHtml(ch.label)}</b><span class="status-dot ${ch.ready ? "ok" : "warn"}"></span></header>
+          <p>${escapeHtml(ch.detail || ch.status)}</p>
+        </div>`
+          )
+          .join("")}
+        ${catalogOnly
+          .map((ch) => {
+            const isWhatsapp = ch.id.toLowerCase().includes("whatsapp");
+            const command = isWhatsapp ? `openclaw channels login --channel ${ch.id}` : `openclaw channels add --channel ${ch.id} --token-file <ruta-al-token>`;
+            return `<div class="openclaw-command-row">
+          <header><b>${escapeHtml(ch.label)}</b><span class="status-dot bad"></span></header>
+          <p>${isWhatsapp ? "Emparejamiento por código QR — ejecuta este comando en tu terminal, nunca desde el navegador." : "Añade el canal indicando el archivo con el token (no pegues secretos aquí)."}</p>
+          <code>${escapeHtml(command)}</code>
+          <button type="button" data-wizard-copy="${escapeHtml(command)}">Copiar comando</button>
+        </div>`;
+          })
+          .join("")}
+        ${!channels.length && !catalogOnly.length ? `<div class="config-empty">Sin datos de canales (¿está instalado el CLI de OpenClaw?).</div>` : ""}
+      </div>
+    </div>
+
+    <div class="fcard">
+      <h3>Plugins</h3>
+      <div class="openclaw-command-list" style="padding:12px">
+        <div class="openclaw-risk-gate">
+          <input type="checkbox" id="wizardPluginRiskAck" data-wizard-risk-ack />
+          <label for="wizardPluginRiskAck">Entiendo que instalar un plugin ejecuta código de terceros (ClawHub) en esta máquina.</label>
+        </div>
+        ${plugins
+          .map(
+            (plugin) => `<div class="openclaw-command-row">
+          <header><b>${escapeHtml(plugin.name)}</b><span class="status-dot ${plugin.installed ? "ok" : "warn"}"></span></header>
+          <p>${escapeHtml(plugin.description || "")}</p>
+          ${!plugin.installed && plugin.spec ? `<button type="button" data-wizard-install-plugin="${escapeHtml(plugin.spec)}" disabled>Instalar</button>` : ""}
+        </div>`
+          )
+          .join("")}
+        ${!plugins.length ? `<div class="config-empty">Sin plugins detectados (¿está instalado el CLI de OpenClaw?).</div>` : ""}
+      </div>
+    </div>
+
+    <div class="fcard">
+      <h3>Servicio en segundo plano (daemon)</h3>
+      <div class="openclaw-command-list" style="padding:12px">
+        ${["install", "start", "stop", "restart"]
+          .map(
+            (action) => `<div class="openclaw-command-row">
+          <code>openclaw daemon ${action}</code>
+          <button type="button" data-wizard-copy="openclaw daemon ${action}">Copiar comando</button>
+        </div>`
+          )
+          .join("")}
+        <p class="config-note">Estas acciones modifican un servicio del sistema — se muestran para ejecutar manualmente en tu terminal, nunca desde este panel.</p>
+      </div>
+    </div>`;
+}
+
+async function wizardInstallPlugin(spec) {
+  try {
+    const result = await api("/integrations/openclaw/plugins/install", {
+      method: "POST",
+      body: JSON.stringify({ spec, acknowledge_clawhub_risk: true }),
+    });
+    toast(result.detail || (result.ok ? "Plugin instalado." : "No se pudo instalar el plugin."));
+  } catch (error) {
+    toast(error.message);
+  }
+  await renderOpenClawPanel(state.openClawPanelTarget || "#appModalBody");
+}
+
 async function refreshProvidersAndAgents() {
   try {
     const [catalog, providers] = await Promise.all([api("/catalog"), api("/providers")]);
@@ -4122,6 +4712,13 @@ var demoRunning=false,demoTimers=[];
 var LW=262;           // left panel width
 var lastBellCount=-1;
 var panelStates={metrics:'open',spec:'open'}; // 'open'|'mini'|'closed'
+// Manual pan offset (drag-to-scroll), added on top of the auto-centered
+// origin — clamped so the tower cluster can't be dragged fully off-screen.
+// Named mapPan* (not pan*) since drawLeftPanel() already has a local panY
+// for its own panel y-position bookkeeping.
+var mapPanX=0,mapPanY=0,isDraggingMap=false,dragMoved=false;
+var dragStartClientX=0,dragStartClientY=0,dragStartPanX=0,dragStartPanY=0;
+var PAN_RANGE_X=220,PAN_RANGE_Y=160;
 // fixed workstation offsets per agent (relative to home tile)
 var WORKSPOTS={
   claude:   {dx:-0.5,dy:-0.8},
@@ -4132,7 +4729,7 @@ var WORKSPOTS={
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
-function iso(gx,gy){return {x:OX+(gx-gy)*TW, y:OY+(gx+gy)*TH};}
+function iso(gx,gy){return {x:OX+(gx-gy)*TW+mapPanX, y:OY+(gx+gy)*TH+mapPanY};}
 function c(h,a){
   if(!h||h.length<7)return 'rgba(128,128,128,'+a+')';
   return 'rgba('+parseInt(h.slice(1,3),16)+','+parseInt(h.slice(3,5),16)+','+parseInt(h.slice(5,7),16)+','+a+')';
@@ -4155,8 +4752,22 @@ function resize(){
   var rect=cvs.parentElement.getBoundingClientRect();
   W=Math.max(400,rect.width||800);H=Math.max(300,rect.height||600);
   TW=Math.min(42,Math.max(22,W*0.030));TH=TW*0.5;
-  OX=LW+(W-LW)*0.5; // center of available area right of left panel
-  OY=H*0.06;
+  // Center the actual bounding box of the agent towers (not a fixed formula)
+  // within the viewport band that's free of the header/footer HUD chrome —
+  // the towers aren't symmetric around (0,0) in iso-space, so a fixed
+  // formula left them visibly off-center.
+  var minGX=Infinity,maxGX=-Infinity,minGY=Infinity,maxGY=-Infinity;
+  AGENTS.forEach(function(ag){
+    minGX=Math.min(minGX,ag.hx);maxGX=Math.max(maxGX,ag.hx);
+    minGY=Math.min(minGY,ag.hy);maxGY=Math.max(maxGY,ag.hy);
+  });
+  var isoMinX=(minGX-maxGY)*TW,isoMaxX=(maxGX-minGY)*TW;
+  var isoMinY=(minGX+minGY)*TH,isoMaxY=(maxGX+maxGY)*TH;
+  var boxCx=(isoMinX+isoMaxX)/2,boxCy=(isoMinY+isoMaxY)/2;
+  var topMargin=40,bottomMargin=52;
+  var viewportCx=LW+(W-LW)*0.5,viewportCy=topMargin+(H-topMargin-bottomMargin)*0.5;
+  OX=viewportCx-boxCx;
+  OY=viewportCy-boxCy;
   var dpr=window.devicePixelRatio||1;
   cvs.width=Math.round(W*dpr);cvs.height=Math.round(H*dpr);
   ctx2.setTransform(dpr,0,0,dpr,0,0);
@@ -4688,8 +5299,9 @@ function drawLeftPanel(){
   ctx2.strokeStyle='rgba(55,95,165,0.4)';ctx2.lineWidth=1;ctx2.beginPath();rr(8,panY,LW-16,panH,10);ctx2.stroke();
   // title
   ctx2.fillStyle='rgba(190,215,255,0.95)';ctx2.font='bold 10px system-ui';ctx2.textAlign='left';ctx2.textBaseline='middle';ctx2.fillText('MÉTRICAS DEL SISTEMA',16,panY+13);
-  // window buttons — only minimize (no close)
-  winBtn(LW-25,panY+5,17,17,'255,190,30',st==='mini'?'▪':'─',st==='mini'?'open_metrics':'mini_metrics');
+  // window buttons — only minimize (no close). Inset from LW-25 to LW-30 so
+  // the button doesn't sit flush against the panel's own right border.
+  winBtn(LW-30,panY+5,17,17,'255,190,30',st==='mini'?'▪':'─',st==='mini'?'open_metrics':'mini_metrics');
 
   if(st==='mini')return;
   var px=16,py=panY+32;
@@ -4748,16 +5360,18 @@ function drawLeftPanel(){
     var load=Math.min(1,tc/Math.max(1,ag.maxCap));
     var alive=tc>0;
     // status indicator
-    if(alive){var mp=0.6+0.4*Math.abs(Math.sin(tick*0.08+ag.ph));ctx2.fillStyle=c(ag.col,mp);ctx2.beginPath();ctx2.arc(px+3,py+5,3,0,Math.PI*2);ctx2.fill();}
-    else{ctx2.fillStyle='rgba(80,100,130,0.4)';ctx2.beginPath();ctx2.arc(px+3,py+5,2.5,0,Math.PI*2);ctx2.fill();}
+    if(alive){var mp=0.6+0.4*Math.abs(Math.sin(tick*0.08+ag.ph));ctx2.fillStyle=c(ag.col,mp);ctx2.beginPath();ctx2.arc(px+3,py+6,3,0,Math.PI*2);ctx2.fill();}
+    else{ctx2.fillStyle='rgba(80,100,130,0.4)';ctx2.beginPath();ctx2.arc(px+3,py+6,2.5,0,Math.PI*2);ctx2.fill();}
     ctx2.fillStyle=alive?ag.col:'rgba(90,110,140,0.5)';
     ctx2.font=(alive?'bold ':'')+'8.5px system-ui';ctx2.textAlign='left';ctx2.textBaseline='middle';
-    ctx2.fillText(ag.name.substring(0,10),px+9,py+5);
-    var bW=LW-24-68,bX2=px+68;
-    ctx2.fillStyle='rgba(255,255,255,0.06)';ctx2.beginPath();ctx2.rect(bX2,py+1,bW,7);ctx2.fill();
-    if(load>0){ctx2.fillStyle=ag.col;ctx2.beginPath();rr(bX2,py+1,Math.max(3,bW*load),7,2);ctx2.fill();}
+    ctx2.fillText(ag.name.substring(0,10),px+9,py+6);
+    // thicker bar with breathing room from the panel's right edge and a
+    // reserved slot for the percentage label so it never touches the bar.
+    var numX=LW-16,bW=LW-24-68-34,bX2=px+68;
+    ctx2.fillStyle='rgba(255,255,255,0.06)';ctx2.beginPath();rr(bX2,py+1,bW,10,3);ctx2.fill();
+    if(load>0){ctx2.fillStyle=ag.col;ctx2.beginPath();rr(bX2,py+1,Math.max(4,bW*load),10,3);ctx2.fill();}
     ctx2.fillStyle=alive?ag.col:'rgba(90,110,140,0.5)';ctx2.font='7.5px monospace';ctx2.textAlign='right';
-    ctx2.fillText(Math.round(load*100)+'%',LW-8,py+5);py+=15;
+    ctx2.fillText(Math.round(load*100)+'%',numX,py+6);py+=18;
   });
 
   py+=5;ctx2.fillStyle='rgba(60,90,150,0.25)';ctx2.beginPath();ctx2.rect(px,py,LW-24,0.5);ctx2.fill();py+=8;
@@ -4831,9 +5445,11 @@ function drawInfoPanel(){
   ctx2.fillStyle=c(ag.col,0.55);ctx2.beginPath();rr(PX,PY,PW,26,6);ctx2.fill();
   ctx2.strokeStyle=c(ag.col,0.45);ctx2.lineWidth=1.2;ctx2.beginPath();rr(PX,PY,PW,panH,9);ctx2.stroke();
   // title text
-  ctx2.fillStyle='rgba(255,255,255,0.92)';ctx2.font='bold 11px system-ui';ctx2.textAlign='left';ctx2.textBaseline='middle';
-  ctx2.fillText(ag.name+' '+ag.level,PX+10,PY+13);
-  ctx2.fillStyle='rgba(255,255,255,0.55)';ctx2.font='9px system-ui';ctx2.fillText(ag.role,PX+10+ctx2.measureText(ag.name+' '+ag.level).width+8,PY+13);
+  ctx2.font='bold 11px system-ui';ctx2.textAlign='left';ctx2.textBaseline='middle';
+  var titleText=ag.name+' '+ag.level;
+  var titleWidth=ctx2.measureText(titleText).width; // measure BEFORE switching font below, or this reads the wrong metrics
+  ctx2.fillStyle='rgba(255,255,255,0.92)';ctx2.fillText(titleText,PX+10,PY+13);
+  ctx2.fillStyle='rgba(255,255,255,0.55)';ctx2.font='9px system-ui';ctx2.fillText(ag.role,PX+10+titleWidth+8,PY+13);
   // only close button (no minimize)
   winBtn(PX+PW-22,PY+5,17,17,'255,70,70','×','close_panel');
   var y2=PY+30,pad=PX+9;
@@ -5008,9 +5624,38 @@ function frame(){
   }catch(e){lastErr='FRAME:'+e.message;ctx2.globalAlpha=1;ctx2.fillStyle='rgba(180,20,20,0.8)';ctx2.font='12px monospace';ctx2.textAlign='left';ctx2.textBaseline='top';ctx2.fillText('Err:'+e.message,LW+6,6);}
 }
 
+// ── MAP PAN (drag to scroll within a clamped range) ──────────────────────────
+function clampMapPan(){
+  mapPanX=Math.max(-PAN_RANGE_X,Math.min(PAN_RANGE_X,mapPanX));
+  mapPanY=Math.max(-PAN_RANGE_Y,Math.min(PAN_RANGE_Y,mapPanY));
+}
+function onMapPointerDown(e){
+  if(!cvs)return;
+  var rect=cvs.getBoundingClientRect();
+  var mx=(e.clientX-rect.left)*(W/rect.width);
+  if(mx<LW)return; // don't hijack drags starting over the left metrics panel
+  isDraggingMap=true;dragMoved=false;
+  dragStartClientX=e.clientX;dragStartClientY=e.clientY;
+  dragStartPanX=mapPanX;dragStartPanY=mapPanY;
+  cvs.style.cursor='grabbing';
+}
+function onMapPointerMove(e){
+  if(!isDraggingMap)return;
+  var ddx=e.clientX-dragStartClientX,ddy=e.clientY-dragStartClientY;
+  if(Math.abs(ddx)>3||Math.abs(ddy)>3)dragMoved=true;
+  mapPanX=dragStartPanX+ddx;mapPanY=dragStartPanY+ddy;
+  clampMapPan();
+}
+function onMapPointerUp(){
+  if(!isDraggingMap)return;
+  isDraggingMap=false;
+  if(cvs)cvs.style.cursor='';
+}
+
 // ── CLICK ─────────────────────────────────────────────────────────────────────
 function handleClick(e){
   if(!cvs)return;
+  if(dragMoved){dragMoved=false;return;} // a drag just ended — don't also (de)select a tower
   var rect=cvs.getBoundingClientRect();
   var mx=(e.clientX-rect.left)*(W/rect.width),my=(e.clientY-rect.top)*(H/rect.height);
   for(var bi=0;bi<BTNS.length;bi++){
@@ -5044,6 +5689,9 @@ function activate(){
     ctx2=cvs.getContext('2d');cvs._isoReady=true;
     new ResizeObserver(resize).observe(cvs.parentElement);
     cvs.addEventListener('click',handleClick);
+    cvs.addEventListener('pointerdown',onMapPointerDown);
+    document.addEventListener('pointermove',onMapPointerMove);
+    document.addEventListener('pointerup',onMapPointerUp);
   }
   resize();initWander();
   if(!running){running=true;requestAnimationFrame(frame);}

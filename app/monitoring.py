@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from app import catalog
 from app.models import (
     ClassificationResult,
     DecisionLogEntry,
@@ -139,10 +140,14 @@ def compute_observability(
                 owner.model_tier = subtask.recommended_model.value if subtask else classification.recommended_model.value
                 owner.estimated_cost += execution.estimated_cost_usd
                 owner.latency_ms += execution.latency_ms
+                owner.input_tokens += execution.input_tokens
+                owner.output_tokens += execution.output_tokens
                 owner.error_count += int(execution.status == TaskStatus.FAILED or bool(execution.error))
                 owner.last_activity = record.updated_at.isoformat()
                 if subtask and subtask.recommended_skill and subtask.recommended_skill not in owner.skills:
                     owner.skills.append(subtask.recommended_skill)
+                if subtask and subtask.recommended_skill:
+                    owner.skill_usage[subtask.recommended_skill] = owner.skill_usage.get(subtask.recommended_skill, 0) + 1
 
                 key = execution.model_used
                 item = usage.setdefault(
@@ -263,6 +268,7 @@ def _seed_nodes(layout: RoutingLayout) -> dict[str, NodeMetrics]:
             role=role,
             active_model=entity.provider or "auto / simulado",
             provider=_provider_family(entity.provider),
+            token_budget=catalog.token_budget_for(entity.provider) if entity.provider else 0,
             levels=entity.levels,
             skills=entity.skills,
             active_capabilities=capabilities,

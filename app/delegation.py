@@ -23,6 +23,12 @@ from app.providers.registry import Resolution, fallback_resolutions
 logger = get_logger("delegation")
 
 
+def _estimate_tokens(text: str) -> int:
+    """Rough ~4-chars-per-token estimate for dashboard display — not a real
+    tokenizer count, just enough to drive the Monitor view's token rings."""
+    return max(0, len(text) // 4)
+
+
 def estimate_task_cost(classification: ClassificationResult, config: KarajanConfig) -> float:
     """Estimate the task cost up front, using the same formula as `_run_subtask`.
 
@@ -75,6 +81,8 @@ def delegate(
         executions=executions,
         total_latency_ms=sum(item.latency_ms for item in executions),
         total_estimated_cost_usd=round(sum(item.estimated_cost_usd for item in executions), 5),
+        total_input_tokens=sum(item.input_tokens for item in executions),
+        total_output_tokens=sum(item.output_tokens for item in executions),
     )
     return result, decisions
 
@@ -155,6 +163,8 @@ def _run_subtask(
         estimated_cost_usd=cost,
         output=run.output or (run.error or ""),
         error=run.error,
+        input_tokens=_estimate_tokens(instruction),
+        output_tokens=_estimate_tokens(run.output or ""),
     )
     decisions.append(
         DecisionLogEntry(

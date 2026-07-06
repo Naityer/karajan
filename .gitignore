@@ -13,6 +13,9 @@ __pycache__/
 # Runtime config override written by PUT /config
 data/active_config.json
 
+# First-run onboarding marker (POST /setup/complete)
+data/.setup_complete
+
 # Trial reports
 data/trial_reports/
 data/audit_reports/

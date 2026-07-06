@@ -12,13 +12,15 @@
     <header class="bar">
       <div class="brand"><img src="/static/icons/karajan_v2.png?v=ui-2" alt="" class="brand-icon" /><span>KARAJAN</span></div>
 
+      <button id="helpTutorialBtn" class="icon-btn" type="button" title="Tutorial de navegación" aria-label="Tutorial de navegación">?</button>
+
       <nav class="views" id="viewNav">
         <button class="view-tab active" data-view="human">Control humano</button>
+        <button class="view-tab" data-view="graph">Grafo</button>
         <button class="view-tab" data-view="monitor">Monitor</button>
         <button class="view-tab" data-view="decision">Decisión</button>
         <button class="view-tab" data-view="agents">Agentes</button>
         <button class="view-tab" data-view="flow">Configuración</button>
-        <button class="view-tab" data-view="graph">Grafo</button>
       </nav>
 
       <div class="bar-right">
@@ -62,7 +64,7 @@
         <div class="human-iso-fullscreen">
           <canvas id="iso-cvs"></canvas>
           <div class="iso-legend" id="iso-legend"></div>
-          <div class="iso-hint">haz clic en una torre · rueda para ajustar zoom</div>
+          <div class="iso-hint">haz clic en una torre · arrastra para desplazar el mapa</div>
           <!-- hidden elements kept for JS compatibility -->
           <div hidden id="humanHomeGrid"></div>
           <div hidden id="humanDecisionCount"></div>
@@ -84,7 +86,6 @@
                 <h1>Monitor de observabilidad</h1>
                 <p>Auditoría del harness: tareas, delegaciones, coste, latencia y nodos implicados desde <code>/karajan</code>.</p>
               </div>
-              <button id="toggleMonitorSide" class="icon-btn" title="Mostrar u ocultar panel lateral" aria-label="Mostrar u ocultar panel lateral">◧</button>
             </div>
 
             <div class="monitor-blocks">
@@ -96,42 +97,20 @@
                 <header>System Health</header>
                 <div id="systemHealth"></div>
               </section>
-              <section class="monitor-card flow-card">
-                <header>Execution Flow</header>
-                <div id="executionFlow"></div>
-              </section>
             </div>
 
-            <section class="nodes-section">
+            <section class="nodes-section" id="monitorMainContent">
               <div class="nodes-title">
                 <span class="nodes-mark">✣</span>
                 <h2>Nodos de Procesamiento</h2>
               </div>
-              <div class="node-tabs" id="processingNodeTabs"></div>
-              <div class="model-bubbles" id="modelBubbles" hidden></div>
-              <div class="bubble-panel" id="modelBubblePanel" hidden></div>
-              <div class="node-detail-panel" id="agentDetailPanel"></div>
+              <div id="nodeOverview"></div>
             </section>
 
-            <div id="monitorMainContent" class="monitor-tabs-shell">
-              <div class="monitor-tabs" id="monitorTabs">
-                <button class="active" data-monitor-tab="agents">Nodos</button>
-                <button data-monitor-tab="graphs">Rendimiento</button>
-                <button data-monitor-tab="iso">Vista isométrica</button>
-              </div>
-              <div class="monitor-tab active" id="monitor-tab-agents">
-                <div class="legacy-metrics" id="nodeMetrics" hidden></div>
-                <div id="selectedAgentUsage" hidden></div>
-                <div id="nodeOverview"></div>
-              </div>
-              <div class="monitor-tab" id="monitor-tab-graphs">
-                <div id="monitorGraphs"></div>
-                <div id="modelUsage"></div>
-              </div>
-              <div class="monitor-tab" id="monitor-tab-iso">
-                <p style="padding:24px;color:#4A6478;font-size:13px">Vista isométrica disponible en la página de Control humano.</p>
-              </div>
-            </div>
+            <section class="card flow-strip">
+              <header class="card-h">Flujo de ejecución</header>
+              <div id="executionFlow"></div>
+            </section>
 
             <div class="monitor-grid monitor-bottom">
               <section class="card">
@@ -170,7 +149,10 @@
 
           <aside class="monitor-side" id="monitorSide">
             <section class="side-card selected-node-card">
-              <header>Agente seleccionado</header>
+              <header>
+                <span>Agente seleccionado</span>
+                <button id="toggleMonitorSide" class="icon-btn" title="Mostrar u ocultar panel lateral" aria-label="Mostrar u ocultar panel lateral">◧</button>
+              </header>
               <div id="sideAgentHeader"></div>
             </section>
             <section class="side-card">
@@ -191,6 +173,7 @@
             <div class="diagram-layer" id="diagramLayer">
               <svg class="wires" id="wires" aria-hidden="true"></svg>
               <div class="diagram-nodes" id="diagramNodes"></div>
+              <div class="node entity openclaw-node" id="openclawDiagramCard"></div>
             </div>
           </div>
           <div class="splitter" id="drawerSplitter" role="separator" aria-orientation="vertical" title="Ajustar panel de modelos"></div>
@@ -204,6 +187,7 @@
             <div class="drawer-tools">
               <label class="adv-toggle"><input type="checkbox" id="modelsAdvanced" /> Vista avanzada</label>
             </div>
+            <div id="openclawDrawerCard"></div>
             <div class="provider-groups" id="providerGroups"></div>
           </aside>
         </div>
@@ -266,6 +250,55 @@
         <iframe id="graph-frame" src="/static/graph.html" title="Grafo de módulos Karajan"></iframe>
       </section>
     </main>
+
+    <!-- First-run setup overlay: shown once (gated by GET /setup/status), never a
+         permanent tab. Terminal equivalent: scripts/setup_production.py. -->
+    <div id="onboardingOverlay" class="app-modal onboarding-overlay" hidden>
+      <div class="app-modal-box onboarding-box">
+        <header><b>Bienvenido a KARAJAN</b></header>
+        <div class="app-modal-body">
+          <nav class="onboarding-steps" id="onboardingSteps">
+            <span class="onboarding-step-dot active" data-onboarding-step="1"><b>1</b>Agentes y jerarquía</span>
+            <span class="onboarding-step-dot" data-onboarding-step="2"><b>2</b>Skills</span>
+            <span class="onboarding-step-dot" data-onboarding-step="3"><b>3</b>OpenClaw</span>
+          </nav>
+          <section class="fcard onboarding-step-panel active" data-onboarding-panel="1">
+            <h3>1. Agentes y jerarquía</h3>
+            <p class="onboarding-intro">La jerarquía actual es el punto de partida, ajustable luego desde Decisión.</p>
+            <div id="onboardingAgents"></div>
+          </section>
+          <section class="fcard onboarding-step-panel" data-onboarding-panel="2">
+            <h3>2. Skills</h3>
+            <p class="onboarding-intro">Instala las skills que necesites; podrás revisarlas después desde el catálogo.</p>
+            <div id="onboardingSkills"></div>
+          </section>
+          <section class="fcard onboarding-step-panel" data-onboarding-panel="3">
+            <h3>3. OpenClaw</h3>
+            <p class="onboarding-intro">Integración opcional; configúrala ahora o más tarde desde Decisión.</p>
+            <div id="onboardingOpenclaw"></div>
+          </section>
+          <div class="onboarding-actions">
+            <button type="button" id="onboardingSkip">Omitir</button>
+            <div class="onboarding-actions-right">
+              <button type="button" id="onboardingBack" hidden>Atrás</button>
+              <button type="button" id="onboardingNext">Siguiente</button>
+              <button type="button" id="onboardingFinish" class="primary" hidden>Finalizar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic modal shell, reused by the OpenClaw panel and the navigation tutorial -->
+    <div id="appModal" class="app-modal" hidden>
+      <div class="app-modal-box">
+        <header>
+          <b id="appModalTitle"></b>
+          <button id="appModalClose" class="icon-btn" type="button" aria-label="Cerrar">✕</button>
+        </header>
+        <div class="app-modal-body" id="appModalBody"></div>
+      </div>
+    </div>
 
     <div id="toast" class="toast" hidden></div>
     <script src="/static/app.js?v=ui-4"></script>

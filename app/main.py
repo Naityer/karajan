@@ -28,12 +28,14 @@ from app import (
     openclaw_client,
     production_setup,
     routing_layout,
+    setup_status,
     skills_catalog,
 )
 from app.auth import TOKEN_ENV_VAR, require_token
 from app.logging_config import get_logger, log_event
 from app.models import ClassificationResult
 from app.database import TaskStore
+from app.tutorial import navigation_tutorial_markdown
 from app.models import (
     CredentialStatus,
     DecisionLogEntry,
@@ -43,9 +45,13 @@ from app.models import (
     IngestRequest,
     KarajanConfig,
     Metrics,
+    MetricsHistory,
     OpenClawChannelInfo,
+    OpenClawDaemonStatus,
     OpenClawInstallRequest,
     OpenClawOperationResult,
+    OpenClawPluginInfo,
+    OpenClawPluginInstallRequest,
     OpenClawSetupCommand,
     OpenClawSkillInfo,
     OpenClawStatus,
@@ -56,7 +62,10 @@ from app.models import (
     ProviderRunResult,
     ProviderSetup,
     RoutingLayout,
+    SetupStatus,
+    SetupTutorial,
     SkillInfo,
+    SkillInstallResult,
     TaskRecord,
     TaskRequest,
 )
@@ -317,6 +326,12 @@ def observability() -> ObservabilitySnapshot:
     return monitoring.compute_observability(records, decisions, layout_store.load())
 
 
+@app.get("/observability/history", response_model=MetricsHistory)
+def observability_history(limit: int = Query(default=200, ge=1, le=1000)) -> MetricsHistory:
+    """Rolling KPI trend (cost/tokens/latency over time), one point per completed delegation."""
+    return store.metrics_history(limit=limit)
+
+
 # --- Configuration & providers ----------------------------------------------
 
 
@@ -354,6 +369,11 @@ def list_skills() -> list[SkillInfo]:
     return skills_catalog.list_skills()
 
 
+@app.post("/skills/{name}/install", response_model=SkillInstallResult)
+def install_skill(name: str, _: None = Depends(require_token)) -> SkillInstallResult:
+    return skills_catalog.install_skill(name)
+
+
 @app.get("/integrations/openclaw/status", response_model=OpenClawStatus)
 def openclaw_status() -> OpenClawStatus:
     return openclaw_client.OpenClawClient(active_config).status()
@@ -388,6 +408,29 @@ def openclaw_channels() -> list[OpenClawChannelInfo]:
 @app.get("/integrations/openclaw/setup-commands", response_model=list[OpenClawSetupCommand])
 def openclaw_setup_commands() -> list[OpenClawSetupCommand]:
     return openclaw_client.OpenClawClient(active_config).setup_commands()
+
+
+@app.get("/integrations/openclaw/channels/catalog", response_model=list[OpenClawChannelInfo])
+def openclaw_channel_catalog() -> list[OpenClawChannelInfo]:
+    return openclaw_client.OpenClawClient(active_config).channel_catalog()
+
+
+@app.get("/integrations/openclaw/daemon-status", response_model=OpenClawDaemonStatus)
+def openclaw_daemon_status() -> OpenClawDaemonStatus:
+    return openclaw_client.OpenClawClient(active_config).daemon_status()
+
+
+@app.get("/integrations/openclaw/plugins", response_model=list[OpenClawPluginInfo])
+def openclaw_plugins() -> list[OpenClawPluginInfo]:
+    return openclaw_client.OpenClawClient(active_config).plugins()
+
+
+@app.post("/integrations/openclaw/plugins/install", response_model=OpenClawOperationResult)
+def openclaw_install_plugin(
+    request: OpenClawPluginInstallRequest,
+    _: None = Depends(require_token),
+) -> OpenClawOperationResult:
+    return openclaw_client.OpenClawClient(active_config).install_plugin(request.spec, request.acknowledge_clawhub_risk)
 
 
 @app.get("/providers", response_model=list[CredentialStatus])
@@ -453,3 +496,25 @@ def apply_default_config(_: None = Depends(require_token)) -> DefaultConfigApply
         credentials=creds,
         next_steps=next_steps,
     )
+
+
+# --- First-run setup (web overlay + terminal installer share this state) ----
+
+
+@app.get("/setup/status", response_model=SetupStatus)
+def setup_status_endpoint() -> SetupStatus:
+    return SetupStatus(completed=setup_status.is_complete())
+
+
+@app.post("/setup/complete", response_model=SetupStatus)
+def setup_complete(_: None = Depends(require_token)) -> SetupStatus:
+    """Mark first-run setup done (web overlay finished/skipped) and write the
+    navigation tutorial doc — idempotent, safe to call again."""
+    setup_status.mark_complete()
+    return SetupStatus(completed=True)
+
+
+@app.get("/setup/tutorial", response_model=SetupTutorial)
+def setup_tutorial() -> SetupTutorial:
+    """Not gated on completion — help must work regardless of onboarding state."""
+    return SetupTutorial(markdown=navigation_tutorial_markdown())

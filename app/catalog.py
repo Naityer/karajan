@@ -387,6 +387,15 @@ _CATALOG: tuple[ProviderInfo, ...] = (
 
 _BY_NAME = {provider.name: provider for provider in _CATALOG}
 
+# Subscription-style monthly token allotments (0 = no fixed budget — local/free
+# providers or pure pay-as-you-go). Drives the Monitor view's "tokens
+# restantes" ring for providers where consumption maps to a real plan limit.
+TOKEN_BUDGETS: dict[str, int] = {
+    "claude-cli": 10_000_000,
+    "codex": 5_000_000,
+    "copilot": 3_000_000,
+}
+
 
 def all_providers() -> list[ProviderInfo]:
     return list(_CATALOG)
@@ -398,3 +407,7 @@ def get_provider(name: str) -> ProviderInfo | None:
 
 def providers_for_backend(backend: Backend) -> list[ProviderInfo]:
     return [p for p in _CATALOG if p.backend == backend]
+
+
+def token_budget_for(provider_name: str) -> int:
+    return TOKEN_BUDGETS.get(provider_name, 0)
