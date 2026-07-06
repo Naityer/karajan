@@ -119,6 +119,63 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         probe_command="ollama list",
     ),
     ProviderInfo(
+        # L2 fallback: genuinely local, self-improving agentic-coding family
+        # (MIT). Pulled/run entirely on the operator's own hardware.
+        name="ollama-ornith",
+        label="Ornith (local)",
+        is_free=True,
+        auth_method=AuthMethod.LOCAL,
+        backend=Backend.CLI,
+        tiers={
+            RM.MEDIUM_MODEL: "ornith:9b",
+            RM.STRONG_MODEL: "ornith:35b",
+            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "ornith:35b",
+        },
+        endpoint="http://127.0.0.1:11434",
+        signup_url="https://ollama.com/library/ornith",
+        cli_command="ollama run {model}",
+        login_command="ollama serve",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
+        # L1 "best open-source available": invoked via the local `ollama` CLI
+        # but the model itself runs on Ollama's cloud (needs `ollama signin`),
+        # so it's metered/rate-limited, not free local compute.
+        name="ollama-glm",
+        label="GLM-5.2 (Ollama cloud)",
+        is_free=False,
+        is_cloud_hosted=True,
+        auth_method=AuthMethod.CLI_LOGIN,
+        backend=Backend.CLI,
+        tiers={
+            RM.STRONG_MODEL: "glm-5.2:cloud",
+            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "glm-5.2:cloud",
+        },
+        endpoint="https://ollama.com",
+        signup_url="https://ollama.com/library/glm-5.2",
+        cli_command="ollama run {model}",
+        login_command="ollama signin",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
+        # L1 "best open-source available": same Ollama-cloud caveat as GLM-5.2.
+        name="ollama-kimi",
+        label="Kimi K2.7 Code (Ollama cloud)",
+        is_free=False,
+        is_cloud_hosted=True,
+        auth_method=AuthMethod.CLI_LOGIN,
+        backend=Backend.CLI,
+        tiers={
+            RM.STRONG_MODEL: "kimi-k2.7-code:cloud",
+            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "kimi-k2.7-code:cloud",
+        },
+        endpoint="https://ollama.com",
+        signup_url="https://ollama.com/library/kimi-k2.7-code",
+        cli_command="ollama run {model}",
+        login_command="ollama signin",
+        probe_command="ollama list",
+    ),
+    ProviderInfo(
         name="openclaw",
         label="OpenClaw Gateway (add-on)",
         is_free=True,

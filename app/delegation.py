@@ -4,7 +4,9 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from app.logging_config import get_logger, log_event
+from app import execution as execution_helpers
 from app import flow_policy
+from app import validation
 from app.models import (
     Backend,
     ClassificationResult,
@@ -17,20 +19,13 @@ from app.models import (
     TaskStatus,
 )
 from app.providers import resolve
-from app.providers.base import ProviderRun
-from app.providers.registry import Resolution, fallback_resolutions
+from app.providers.registry import Resolution, fallback_resolutions, resolve_entity
 
 logger = get_logger("delegation")
 
 
-def _estimate_tokens(text: str) -> int:
-    """Rough ~4-chars-per-token estimate for dashboard display — not a real
-    tokenizer count, just enough to drive the Monitor view's token rings."""
-    return max(0, len(text) // 4)
-
-
 def estimate_task_cost(classification: ClassificationResult, config: KarajanConfig) -> float:
-    """Estimate the task cost up front, using the same formula as `_run_subtask`.
+    """Estimate the task cost up front, using the same formula as `run_subtask`.
 
     Lets the harness gate on cost *before* spending anything on real backends.
     """
@@ -65,9 +60,9 @@ def delegate(
 
     if config.orchestration.parallel and len(subtasks) > 1:
         with ThreadPoolExecutor(max_workers=config.orchestration.max_parallel) as pool:
-            paired = list(pool.map(lambda item: _run_subtask(classification, item[0], item[1], config, layout), enumerate(subtasks, start=1)))
+            paired = list(pool.map(lambda item: run_subtask(classification, item[0], item[1], config, layout), enumerate(subtasks, start=1)))
     else:
-        paired = [_run_subtask(classification, index, subtask, config, layout) for index, subtask in enumerate(subtasks, start=1)]
+        paired = [run_subtask(classification, index, subtask, config, layout) for index, subtask in enumerate(subtasks, start=1)]
 
     executions = [execution for execution, _ in paired]
     for _, subtask_decisions in paired:
@@ -87,18 +82,24 @@ def delegate(
     return result, decisions
 
 
-def _run_subtask(
+def run_subtask(
     classification: ClassificationResult,
     index: int,
     subtask: Subtask,
     config: KarajanConfig,
     layout: RoutingLayout | None,
+    preresolved: Resolution | None = None,
 ) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
+    """Execute one subtask end-to-end: assign, run (with fallback chain), and
+    optionally validate. `preresolved` lets a caller that already picked a
+    specific, available entity (the async scheduler) skip the static
+    tier-pinned `resolve()` and use that entity's resolution instead — the
+    rest of the pipeline (fallback, validation) is identical either way."""
     assignment = flow_policy.assign_subtask(classification, subtask, layout)
-    resolution = resolve(subtask.recommended_model, config)
+    resolution = preresolved or resolve(subtask.recommended_model, config)
     instruction = f"{classification.original_prompt}\n\nSubtarea: {subtask.name}\nValidación: {subtask.validation}"
 
-    run = _run_with_retries(resolution, instruction, config)
+    run = execution_helpers.run_with_retries(resolution, instruction, config)
     attempted = {resolution.provider_name}
     decisions: list[DecisionLogEntry] = [
         DecisionLogEntry(
@@ -142,19 +143,18 @@ def _run_subtask(
                 )
             )
             attempted.add(fallback.provider_name)
-            fallback_run = _run_with_retries(fallback, instruction, config)
+            fallback_run = execution_helpers.run_with_retries(fallback, instruction, config)
             resolution = fallback
             run = fallback_run
             if not run.error:
                 break
 
     tier = subtask.recommended_model.value
-    cost = round(config.cost_table.get(tier, 0.0) * subtask.complexity, 5)
-    # Real backends report measured latency; simulated returns 0 → use the config table.
-    latency = run.latency_ms or (config.latency_table.get(tier, 0) + index * 37)
+    cost = execution_helpers.cost_for(tier, subtask.complexity, config)
+    latency = execution_helpers.latency_for(tier, run, config, index)
     status = TaskStatus.FAILED if run.error else TaskStatus.COMPLETED
 
-    execution = SubtaskExecution(
+    subtask_execution = SubtaskExecution(
         subtask_id=subtask.id,
         status=status,
         backend=resolution.backend,
@@ -163,8 +163,8 @@ def _run_subtask(
         estimated_cost_usd=cost,
         output=run.output or (run.error or ""),
         error=run.error,
-        input_tokens=_estimate_tokens(instruction),
-        output_tokens=_estimate_tokens(run.output or ""),
+        input_tokens=execution_helpers.estimate_tokens(instruction),
+        output_tokens=execution_helpers.estimate_tokens(run.output or ""),
     )
     decisions.append(
         DecisionLogEntry(
@@ -176,31 +176,133 @@ def _run_subtask(
             reason=run.error or f"executed '{subtask.name}'",
         )
     )
-    decisions.append(
-        DecisionLogEntry(
-            task_id=classification.task_id,
-            phase="validate",
-            decision=flow_policy.validation_summary(subtask, assignment, status),
-            score=float(subtask.complexity),
-            backend=resolution.backend,
-            reason=run.error or subtask.validation,
+
+    if (
+        config.orchestration.enable_validator_loop
+        and not run.error
+        and assignment.validator is not None
+        and assignment.owner is not None
+        and assignment.validator.id != assignment.owner.id
+    ):
+        subtask_execution, loop_decisions = _run_validator_loop(
+            classification, subtask, assignment, resolution, instruction, run, config, index, layout
         )
-    )
-    return execution, decisions
+        decisions.extend(loop_decisions)
+    else:
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="validate",
+                decision=flow_policy.validation_summary(subtask, assignment, status),
+                score=float(subtask.complexity),
+                backend=resolution.backend,
+                reason=run.error or subtask.validation,
+            )
+        )
+    return subtask_execution, decisions
 
 
-def _run_with_retries(
-    resolution: Resolution,
+def _run_validator_loop(
+    classification: ClassificationResult,
+    subtask: Subtask,
+    assignment: flow_policy.FlowAssignment,
+    resolution,
     instruction: str,
+    run,
     config: KarajanConfig,
-) -> ProviderRun:
-    retries = config.orchestration.max_retries
-    run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.subtask_timeout_s)
-    attempts = 0
-    while run.error and attempts < retries:
-        attempts += 1
-        run = resolution.provider.run(instruction, resolution.model_id, config.orchestration.subtask_timeout_s)
-    return run
+    index: int,
+    layout: RoutingLayout | None,
+) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
+    """Real validator feedback loop: a dedicated cheap agent critiques the
+    owner's output; rejections re-run the *owner* with the feedback appended,
+    bounded by `max_validation_iterations`. Only after the cap is exhausted and
+    still rejected does it escalate once to the root agent."""
+    decisions: list[DecisionLogEntry] = []
+    tier = subtask.recommended_model.value
+    max_iterations = config.orchestration.max_validation_iterations
+    iteration = 0
+
+    while True:
+        verdict = validation.run_validator(
+            run.output or "", subtask, classification.original_prompt, assignment.validator, config, iteration
+        )
+        verdict_label = "approved" if verdict.approved else "needs_revision"
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="validate",
+                decision=(
+                    f"{subtask.id}:verdict={verdict_label};iteration={iteration};"
+                    f"validator={assignment.validator_label}"
+                ),
+                score=float(subtask.complexity),
+                backend=resolution.backend,
+                reason=verdict.feedback or "validator reviewed the output",
+            )
+        )
+        if verdict.approved or iteration >= max_iterations:
+            if not verdict.approved and config.orchestration.escalate_to_root_after_max_iterations:
+                root = _root_entity(layout)
+                root_resolution = resolve_entity(root, subtask.recommended_model) if root else None
+                if root_resolution is not None:
+                    escalated_instruction = (
+                        f"{instruction}\n\n[Validador, sin aprobar tras {iteration} revision(es)]: {verdict.feedback}"
+                    )
+                    escalated_run = execution_helpers.run_with_retries(root_resolution, escalated_instruction, config)
+                    decisions.append(
+                        DecisionLogEntry(
+                            task_id=classification.task_id,
+                            phase="escalate",
+                            decision=f"{subtask.id}:validator_cap_reached;escalated_to={root_resolution.provider_name}",
+                            score=float(subtask.complexity),
+                            backend=root_resolution.backend,
+                            reason=f"Validator rejected after {iteration} revision(es); escalated to root.",
+                        )
+                    )
+                    if not escalated_run.error:
+                        run = escalated_run
+                        resolution = root_resolution
+                        instruction = escalated_instruction
+            break
+        iteration += 1
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="revise",
+                decision=f"{subtask.id}:iteration={iteration};feedback={verdict.feedback[:200]}",
+                score=float(subtask.complexity),
+                backend=resolution.backend,
+                reason="validator requested changes",
+            )
+        )
+        instruction = f"{instruction}\n\n[Revision #{iteration} del validador]: {verdict.feedback}\nCorrige la salida anterior."
+        run = execution_helpers.run_with_retries(resolution, instruction, config)
+
+    cost = execution_helpers.cost_for(tier, subtask.complexity, config)
+    latency = execution_helpers.latency_for(tier, run, config, index)
+    status = TaskStatus.FAILED if run.error else TaskStatus.COMPLETED
+    updated = SubtaskExecution(
+        subtask_id=subtask.id,
+        status=status,
+        backend=resolution.backend,
+        model_used=run.model_used,
+        latency_ms=latency,
+        estimated_cost_usd=cost,
+        output=run.output or (run.error or ""),
+        error=run.error,
+        input_tokens=execution_helpers.estimate_tokens(instruction),
+        output_tokens=execution_helpers.estimate_tokens(run.output or ""),
+        validation_iterations=iteration,
+    )
+    return updated, decisions
+
+
+def _root_entity(layout: RoutingLayout | None):
+    entities = layout.entities if layout else []
+    parent = next((e for e in entities if e.tier == 0 and e.role.strip().lower() == "parent"), None)
+    if parent is not None:
+        return parent
+    return next((e for e in entities if e.tier == 0), None)
 
 
 def _pre_execution_gate(

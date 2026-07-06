@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
 import re
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,6 +30,7 @@ from app import (
     openclaw_client,
     production_setup,
     routing_layout,
+    scheduler as scheduler_module,
     setup_status,
     skills_catalog,
 )
@@ -68,12 +71,28 @@ from app.models import (
     SkillInstallResult,
     TaskRecord,
     TaskRequest,
+    TaskStatus,
 )
+
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    global _loop
+    _loop = asyncio.get_running_loop()
+    scheduler.start()
+    try:
+        yield
+    finally:
+        await scheduler.stop()
+
 
 app = FastAPI(
     title="KARAJAN AI Harness Router",
     version="0.2.0",
     description="Local harness for task classification, real/local/simulated delegation, and audit monitoring.",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -88,6 +107,7 @@ logger = get_logger("api")
 store = TaskStore()
 layout_store = routing_layout.RoutingLayoutStore()
 active_config: KarajanConfig = config_module.load_config()
+scheduler = scheduler_module.TaskScheduler(store=store)
 STATIC_DIR = Path(__file__).resolve().parent.parent / "dashboard" / "static"
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -208,8 +228,29 @@ def delegate_task(request: DelegationRequest, _: None = Depends(require_token)) 
         raise HTTPException(status_code=404, detail="task not found") from exc
 
     _enforce_daily_budget(record.classification)
+
+    if active_config.orchestration.dispatch_mode == "queue":
+        store.mark_status(request.task_id, TaskStatus.QUEUED)
+        layout = layout_store.load()
+        assert _loop is not None, "scheduler event loop not started yet"
+        future = asyncio.run_coroutine_threadsafe(
+            scheduler.enqueue(record.classification, active_config, layout), _loop
+        )
+        future.result(timeout=5)
+        return store.get_task(request.task_id)
+
     result, decisions = delegation.delegate(record.classification, active_config, layout=layout_store.load())
     return store.save_delegation(result, decisions)
+
+
+@app.get("/queue/status")
+def queue_status(_: None = Depends(require_token)) -> dict:
+    """Pending depth and live per-agent availability, for the `queue` dispatch mode."""
+    availability = {
+        entity_id: {"in_flight": in_flight, "capacity": capacity}
+        for entity_id, (in_flight, capacity) in scheduler.availability.snapshot().items()
+    }
+    return {"pending": scheduler.queue_depth(), "availability": availability}
 
 
 @app.get("/tasks", response_model=list[TaskRecord])
@@ -485,6 +526,13 @@ def apply_default_config(_: None = Depends(require_token)) -> DefaultConfigApply
             next_steps.append(f"Configura la credencial de {provider_name} en .env ({status.detail})")
     for model in missing_models:
         next_steps.append(f"ollama pull {model}")
+    for provider_name in production_setup.CLOUD_PROVIDERS:
+        provider = catalog.get_provider(provider_name)
+        if provider is not None:
+            models = ", ".join(dict.fromkeys(provider.tiers.values()))
+            next_steps.append(
+                f"Opcional (L1, requiere cuenta Ollama): {provider.login_command} y luego usa {models}"
+            )
 
     log_event(logger, logging.INFO, "default_config_applied", backups=len(backups), missing_models=len(missing_models))
     return DefaultConfigApplyResult(
@@ -494,6 +542,54 @@ def apply_default_config(_: None = Depends(require_token)) -> DefaultConfigApply
         ollama_installed=[model for model in required if model in installed],
         ollama_missing=missing_models,
         credentials=creds,
+        next_steps=next_steps,
+    )
+
+
+@app.post("/setup/apply-queue-config", response_model=DefaultConfigApplyResult)
+def apply_queue_config(_: None = Depends(require_token)) -> DefaultConfigApplyResult:
+    """Turn on the availability-driven queue + validator loop and make sure every
+    tier (raíz/L1/L2) of the pyramidal hierarchy is present in the routing graph.
+
+    Purely additive and idempotent: existing entities/customizations are never
+    touched, only missing baseline hierarchy nodes get appended, and running
+    this again when everything's already configured is a harmless no-op.
+    """
+    global active_config
+    layout = layout_store.load()
+    merged_layout, added_ids = production_setup.ensure_queue_hierarchy_entities(layout)
+    if added_ids:
+        layout_store.save(merged_layout)
+
+    active_config.orchestration.dispatch_mode = "queue"
+    active_config.orchestration.enable_validator_loop = True
+    config_module.save_runtime_config(active_config)
+
+    required = production_setup.ollama_required_models()
+    installed = production_setup.ollama_installed_models()
+    missing_models = [model for model in required if model not in installed]
+
+    next_steps: list[str] = [f"ollama pull {model}" for model in missing_models]
+    for provider_name in production_setup.CLOUD_PROVIDERS:
+        provider = catalog.get_provider(provider_name)
+        if provider is not None:
+            models = ", ".join(dict.fromkeys(provider.tiers.values()))
+            next_steps.append(
+                f"Opcional (L1, requiere cuenta Ollama): {provider.login_command} y luego usa {models}"
+            )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "queue_hierarchy_applied",
+        added_entities=len(added_ids),
+        missing_models=len(missing_models),
+    )
+    return DefaultConfigApplyResult(
+        ok=True,
+        restored=[f"routing-layout: +{len(added_ids)} agente(s) añadidos"] if added_ids else [],
+        ollama_installed=[model for model in required if model in installed],
+        ollama_missing=missing_models,
         next_steps=next_steps,
     )
 

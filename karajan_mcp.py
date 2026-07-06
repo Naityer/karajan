@@ -1,11 +1,16 @@
 """MCP server that bridges Claude Code to the Karajan AI routing harness.
 
 Exposes Karajan's classify + delegate pipeline as MCP tools so Claude Code
-can route sub-tasks to the right model automatically:
-  N1/N2 simple/moderate  → Qwen 2.5 7B  (local, free)
-  N3 intermediate        → DeepSeek R1 8B (local, free)
-  N4 complex             → ChatGPT GPT-4o (OpenAI API)
-  N5 critical            → Claude Opus    (Anthropic API)
+can route sub-tasks to the right model automatically, through a pyramidal
+hierarchy that can grow beyond these tiers:
+  N1/N2 simple/moderate  → L2 local (Qwen 2.5 7B)
+  N3 intermediate        → L1 open-source (Kimi K2.7 Code) → escalates to L2 (DeepSeek/Ornith/Mistral) if busy
+  N4 complex             → L1 open-source (GLM-5.2 / Kimi K2.7 Code) → escalates to L2 → root backup (Codex/ChatGPT)
+  N5 critical             → root (Claude Opus), requires human review
+
+When Karajan's `dispatch_mode` is `"queue"`, delegation is asynchronous and
+availability-driven (an agent only takes a task once it's actually free,
+regardless of arrival order) — `karajan_run` polls until the task finishes.
 
 Usage: registered as an MCP server in ~/.claude/settings.json.
 Requires Karajan server to be running: python -m uvicorn app.main:app --reload
@@ -24,12 +29,16 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
+import time
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
 KARAJAN_URL = os.environ.get("KARAJAN_URL", "http://127.0.0.1:8000")
 TIMEOUT_CLASSIFY = 30
 TIMEOUT_DELEGATE = 180
+QUEUE_POLL_INTERVAL_S = 2
+QUEUE_POLL_MAX_ATTEMPTS = TIMEOUT_DELEGATE // QUEUE_POLL_INTERVAL_S
 
 mcp = FastMCP("karajan")
 
@@ -53,11 +62,11 @@ def _is_running() -> bool:
 def karajan_run(prompt: str) -> str:
     """Classify a task by complexity and delegate it to the optimal AI model via Karajan.
 
-    The routing hierarchy is:
-    - N1/N2 (simple/moderate)  → Qwen 2.5 7B local
-    - N3 (intermediate)        → DeepSeek R1 8B local
-    - N4 (complex)             → ChatGPT GPT-4o
-    - N5 (critical)            → Claude Opus (requires human review)
+    The routing hierarchy (root → L1 → L2, may grow more levels over time):
+    - N1/N2 (simple/moderate)  → L2 local (Qwen 2.5 7B)
+    - N3 (intermediate)        → L1 open-source (Kimi K2.7 Code), escalates to L2 if busy
+    - N4 (complex)             → L1 open-source (GLM-5.2 / Kimi K2.7 Code), escalates to L2, then root backup
+    - N5 (critical)            → root (Claude Opus), requires human review
 
     Args:
         prompt: The task or instruction to route and execute.
@@ -110,6 +119,25 @@ def karajan_run(prompt: str) -> str:
         return f"ERROR delegando tarea (task_id={task_id}): {exc}"
 
     result = r2.json()
+
+    # Under dispatch_mode="queue" the task is enqueued and dispatched
+    # asynchronously (availability-driven, not immediate) — poll until done.
+    if result.get("status") == "queued":
+        for _ in range(QUEUE_POLL_MAX_ATTEMPTS):
+            time.sleep(QUEUE_POLL_INTERVAL_S)
+            try:
+                r3 = httpx.get(f"{KARAJAN_URL}/tasks/{task_id}", timeout=10)
+                r3.raise_for_status()
+            except httpx.HTTPError as exc:
+                return f"ERROR consultando tarea en cola (task_id={task_id}): {exc}"
+            result = r3.json()
+            if result.get("status") in ("completed", "failed"):
+                break
+        else:
+            return (
+                f"[Karajan] La tarea sigue en cola tras {TIMEOUT_DELEGATE}s "
+                f"(ningún agente elegible quedó libre).\ntask_id={task_id}"
+            )
     delegation = result.get("delegation") or {}
     executions = delegation.get("executions") or []
     latency = delegation.get("total_latency_ms", 0)

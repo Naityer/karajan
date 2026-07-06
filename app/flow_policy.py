@@ -40,15 +40,15 @@ def assign_subtask(
     just as a provider call.
     """
     entities = tuple((layout.entities if layout else []) or [])
-    level = _level_for_complexity(subtask.complexity)
+    level = level_for_complexity(subtask.complexity)
     owner = _owner_for_level(entities, level) or _first_role(entities, {"parent", "agent"})
-    validator = _validator_for(classification, subtask, entities) or owner
+    validator = _validator_for(classification, subtask, entities, owner) or owner
     backups = tuple(entity for entity in entities if _role_key(entity.role) == "backup")
     return FlowAssignment(
         owner=owner,
         validator=validator,
         backups=backups,
-        priority=_priority_for(classification, subtask),
+        priority=priority_for(classification, subtask),
         level=level,
     )
 
@@ -79,7 +79,7 @@ def reassign_summary(subtask: Subtask, from_provider: str, to_provider: str, ass
 def _owner_for_level(entities: tuple[RoutingEntity, ...], level: str) -> RoutingEntity | None:
     regular_roles = {"parent", "agent", "child", "worker"}
     for entity in entities:
-        if _role_key(entity.role) in regular_roles and _level_matches(entity.levels, level):
+        if _role_key(entity.role) in regular_roles and level_matches(entity.levels, level):
             return entity
     return None
 
@@ -88,14 +88,44 @@ def _validator_for(
     classification: ClassificationResult,
     subtask: Subtask,
     entities: tuple[RoutingEntity, ...],
+    owner: RoutingEntity | None = None,
 ) -> RoutingEntity | None:
+    """Pick who validates this subtask's output.
+
+    `role_tags` (not `role`) is where "validator"/"guardian" actually live in the
+    schema — a dedicated validator node wins, then a guardian tag, and only for
+    high-complexity/human-review subtasks does it fall back to the parent.
+    """
+    dedicated = _first_tagged(entities, {"validator"}, exclude=owner)
+    if dedicated is not None:
+        return dedicated
+    guardian = _first_tagged(entities, {"guardian"}, exclude=owner)
+    if guardian is not None:
+        return guardian
     if classification.requires_human_review or subtask.complexity >= 4:
-        return _first_role(entities, {"guardian", "validator", "parent", "agent"})
-    return _first_role(entities, {"validator", "guardian"})
+        return _first_role(entities, {"parent", "agent"})
+    return None
 
 
 def _first_role(entities: tuple[RoutingEntity, ...], roles: set[str]) -> RoutingEntity | None:
     return next((entity for entity in entities if _role_key(entity.role) in roles), None)
+
+
+def _has_tag(entity: RoutingEntity, tag: str) -> bool:
+    return tag in (entity.role_tags or [])
+
+
+def _first_tagged(
+    entities: tuple[RoutingEntity, ...],
+    tags: set[str],
+    exclude: RoutingEntity | None = None,
+) -> RoutingEntity | None:
+    for entity in entities:
+        if exclude is not None and entity.id == exclude.id:
+            continue
+        if any(_has_tag(entity, tag) for tag in tags):
+            return entity
+    return None
 
 
 def _matching_provider(entities: tuple[RoutingEntity, ...], provider: str) -> RoutingEntity | None:
@@ -106,7 +136,7 @@ def _matching_provider(entities: tuple[RoutingEntity, ...], provider: str) -> Ro
     return None
 
 
-def _priority_for(classification: ClassificationResult, subtask: Subtask) -> str:
+def priority_for(classification: ClassificationResult, subtask: Subtask) -> str:
     if classification.requires_human_review or subtask.complexity >= 5:
         return "P0"
     if subtask.complexity >= 4:
@@ -116,7 +146,7 @@ def _priority_for(classification: ClassificationResult, subtask: Subtask) -> str
     return "P3"
 
 
-def _level_for_complexity(complexity: int) -> str:
+def level_for_complexity(complexity: int) -> str:
     return {
         1: "level_1_simple",
         2: "level_2_moderate",
@@ -126,7 +156,7 @@ def _level_for_complexity(complexity: int) -> str:
     }[complexity]
 
 
-def _level_matches(entity_levels: list[str], level: str) -> bool:
+def level_matches(entity_levels: list[str], level: str) -> bool:
     aliases = {
         "level_1_simple": "N1",
         "level_2_moderate": "N2",

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app import config as config_module
 from app import main
 from app.database import TaskStore
 from app.models import Backend, KarajanConfig
@@ -130,3 +131,44 @@ def test_approve_human_review(tmp_path: Path) -> None:
     response = client.post(f"/tasks/{task['task_id']}/approve-review")
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
+
+
+def test_apply_queue_config_enables_queue_dispatch_and_fills_hierarchy(tmp_path: Path, monkeypatch) -> None:
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    # apply_queue_config() calls config_module.save_runtime_config(), which
+    # defaults to the real data/active_config.json — redirect it so the test
+    # never writes to the operator's actual runtime config.
+    monkeypatch.setattr(config_module, "RUNTIME_CONFIG_PATH", tmp_path / "active_config.json")
+    client = TestClient(main.app)
+
+    # Starting layout only has the two root entities — everything else is "missing".
+    client.put(
+        "/routing-layout",
+        json={
+            "entities": [
+                {"id": "entity-agent-claude", "role": "parent", "role_tags": ["parent"], "provider": "claude-cli", "tier": 0},
+                {"id": "entity-backup-codex", "role": "backup", "role_tags": ["backup"], "provider": "codex", "tier": 0},
+            ]
+        },
+    )
+
+    response = client.post("/setup/apply-queue-config")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["ok"] is True
+    assert "+" in result["restored"][0]
+
+    config = client.get("/config").json()
+    assert config["orchestration"]["dispatch_mode"] == "queue"
+    assert config["orchestration"]["enable_validator_loop"] is True
+
+    layout = client.get("/routing-layout").json()
+    ids = {entity["id"] for entity in layout["entities"]}
+    assert {"entity-worker-glm", "entity-worker-kimi", "entity-worker-ornith", "entity-validator-cheap"} <= ids
+
+    # Idempotent: applying again doesn't error and doesn't duplicate entities.
+    response2 = client.post("/setup/apply-queue-config")
+    assert response2.status_code == 200
+    layout2 = client.get("/routing-layout").json()
+    assert len(layout2["entities"]) == len(layout["entities"])

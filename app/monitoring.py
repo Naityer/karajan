@@ -369,7 +369,19 @@ def _decision_event_type(decision: DecisionLogEntry) -> str:
         return "provider_fallback"
     if decision.phase == "reassign":
         return "task_reassigned"
+    if decision.phase == "queue":
+        return "task_queued"
+    if decision.phase == "wait":
+        return "waiting_for_agent"
+    if decision.phase == "revise":
+        return "task_revised"
+    if decision.phase == "escalate":
+        return "validator_escalated_to_root" if "validator_cap_reached" in decision.decision else "tier_escalated"
     if decision.phase == "validate":
+        if "verdict=approved" in decision.decision:
+            return "validator_approved"
+        if "verdict=needs_revision" in decision.decision or "verdict=failed" in decision.decision:
+            return "validator_rejected"
         return "validator_approved" if "approved" in decision.decision else "validation"
     if "reassign" in decision.decision:
         return "task_reassigned"
@@ -379,7 +391,7 @@ def _decision_event_type(decision: DecisionLogEntry) -> str:
 
 
 def _decision_source(phase: str, agent_name: str) -> str:
-    if phase in {"classify", "assign", "delegate", "validate", "reassign"}:
+    if phase in {"classify", "assign", "delegate", "validate", "reassign", "queue", "wait", "revise", "escalate"}:
         return agent_name
     return "Harness"
 

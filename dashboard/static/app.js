@@ -29,6 +29,16 @@ const LEVEL_FULL = {
   level_4_complex: "N4 · compleja",
   level_5_critical: "N5 · crítica",
 };
+// Open-ended hierarchy/authority depth (0=raíz, 1=L1, 2=L2, 3+=futuro) — an
+// axis separate from `levels` (complejidad de tarea, fijo en 5 valores).
+const HIERARCHY_TIER_LABEL = {
+  0: "Raíz",
+  1: "L1 · open-source",
+  2: "L2 · local",
+};
+function hierarchyTierLabel(tier) {
+  return HIERARCHY_TIER_LABEL[tier] ?? `L${tier}`;
+}
 const CRITERIA = [
   "ambiguity",
   "context_required",
@@ -155,11 +165,65 @@ const ROLE_DEFS = {
     canOwnLevels: false,
     canConnectToAgent: true,
   },
+  tier_root: {
+    label: "Raíz",
+    summary: "Nivel 0 de la pirámide: máxima autoridad (Claude, ChatGPT).",
+    group: "Jerarquía",
+    restriction: "T0",
+    kind: "tier",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+    tierValue: 0,
+  },
+  tier_l1: {
+    label: "L1",
+    summary: "Primer nivel: los mejores modelos open-source disponibles.",
+    group: "Jerarquía",
+    restriction: "T1",
+    kind: "tier",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+    tierValue: 1,
+  },
+  tier_l2: {
+    label: "L2",
+    summary: "Segundo nivel: respaldo local siempre disponible.",
+    group: "Jerarquía",
+    restriction: "T2",
+    kind: "tier",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+    tierValue: 2,
+  },
+  tier_l3: {
+    label: "L3",
+    summary: "Tercer nivel: espacio para que la pirámide siga creciendo.",
+    group: "Jerarquía",
+    restriction: "T3",
+    kind: "tier",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+    tierValue: 3,
+  },
 };
 
 const PRIMARY_ROLES = ["parent", "child", "backup"];
 const SUPPORT_ROLES = ["guardian", "validator", "memory", "monitor"];
-const ROLE_GROUPS = ["Autoridad", "Ejecución", "Soporte", "Estado"];
+// Hierarchy/authority depth (separate axis from levels N1-N5) — mutually
+// exclusive among themselves, like PRIMARY_ROLES, but orthogonal to them:
+// any parent/child/backup can carry exactly one tier tag. Backs the same
+// `entity.tier` integer the scheduler already reads — this is just its
+// role-tag-driven UI, so the backend contract is unchanged.
+const TIER_ROLES = ["tier_root", "tier_l1", "tier_l2", "tier_l3"];
+const ROLE_GROUPS = ["Autoridad", "Ejecución", "Soporte", "Estado", "Jerarquía"];
+
+function tierRoleForValue(tier) {
+  const value = Number.isFinite(Number(tier)) ? Number(tier) : 2;
+  if (value <= 0) return "tier_root";
+  if (value === 1) return "tier_l1";
+  if (value === 2) return "tier_l2";
+  return "tier_l3";
+}
 
 const AGENT_INTERNAL_CAPABILITIES = ["Classifier", "Planner", "Router"];
 const AGENT_OPTIONAL_CAPABILITIES = [
@@ -1478,8 +1542,19 @@ function friendlyEventType(type = "") {
   const map = {
     prompt_received: "Solicitud recibida",
     task_classified: "Clasificación",
+    task_assigned: "Asignación",
     task_delegated: "Delegación",
+    provider_fallback: "Reserva de proveedor",
+    task_reassigned: "Reasignación",
     validation: "Validación",
+    validator_approved: "Validación aprobada",
+    validator_rejected: "Validación rechazada",
+    task_queued: "En cola",
+    waiting_for_agent: "Esperando agente libre",
+    tier_escalated: "Escalado de nivel",
+    validator_escalated_to_root: "Escalado a raíz",
+    task_revised: "Revisión solicitada",
+    error_detected: "Error detectado",
     execution: "Ejecución",
   };
   return map[type] || type.replace(/_/g, " ");
@@ -1737,6 +1812,8 @@ function normalizeEntityPositions() {
     entity.levels ||= [];
     entity.skills ||= [];
     entity.capabilities ||= [];
+    entity.tier = Number.isFinite(Number(entity.tier)) ? Number(entity.tier) : 2;
+    entity.max_concurrent = Number.isFinite(Number(entity.max_concurrent)) && entity.max_concurrent > 0 ? Number(entity.max_concurrent) : 1;
     if (entity.role === "skill" || entity.role === "worker") {
       entity.role = "child";
     }
@@ -1848,6 +1925,15 @@ function renderDiagram() {
       scheduleRoutingSave("Niveles actualizados. Guardando…");
     })
   );
+  $$("#diagramNodes .entity-max-concurrent").forEach((input) =>
+    input.addEventListener("change", (event) => {
+      const entity = findEntity(event.target.dataset.entity);
+      if (!entity) return;
+      entity.max_concurrent = Math.max(1, parseInt(event.target.value, 10) || 1);
+      renderDiagram();
+      scheduleRoutingSave("Concurrencia máxima actualizada. Guardando…");
+    })
+  );
   $$("#diagramNodes .entity-skill").forEach((box) =>
     box.addEventListener("change", (event) => {
       const entity = findEntity(event.target.dataset.entity);
@@ -1902,6 +1988,15 @@ function entityCard(entity) {
           ${LEVELS.map(([level, short]) => levelChip(entity, level, short)).join("")}
         </div>`
       : "";
+  // Hierarchy tier itself is set via the role-tag picker (Raíz/L1/L2/L3, see
+  // ROLE_DEFS' "Jerarquía" group) — this only carries the numeric dispatch
+  // capacity, which has no natural tag equivalent.
+  const concurrencyControls =
+    canOwnLevels(entity.role)
+      ? `<label>Concurrencia máx. (${hierarchyTierLabel(entity.tier ?? 2)})
+          <input type="number" class="entity-max-concurrent" data-entity="${entity.id}" min="1" step="1" value="${entity.max_concurrent ?? 1}">
+        </label>`
+      : "";
   const connection =
     canConnectToAgent(entity.role)
       ? `<label>Conexión padre
@@ -1941,6 +2036,7 @@ function entityCard(entity) {
         ${connection}
         ${supervises}
         ${levelControls}
+        ${concurrencyControls}
         ${skills}
       </div>
     </div>`.replace('<div class="node entity', `<div style="left:${screenX(entity.x || 0)}px; top:${screenY(entity.y || 0)}px; --entity-accent:${accent.color}; --entity-ink:${accent.ink}" class="node entity`);
@@ -1961,9 +2057,14 @@ function normalizeRoleTags(entity) {
 
   const primary = tags.find((role) => PRIMARY_ROLES.includes(role)) || (PRIMARY_ROLES.includes(legacyRole) ? legacyRole : "child");
   const support = [...new Set(tags.filter((role) => SUPPORT_ROLES.includes(role)))];
-  const normalized = [primary, ...support];
+  // A tier tag already present wins; otherwise seed it from `entity.tier` (or
+  // its role-based default) so hierarchy loaded from the backend renders with
+  // a matching tag instead of showing no selection.
+  const tierTag = tags.find((role) => TIER_ROLES.includes(role)) || tierRoleForValue(entity.tier);
+  const normalized = [primary, tierTag, ...support];
   entity.role = primary;
   entity.role_tags = normalized;
+  entity.tier = roleDef(tierTag).tierValue;
   syncAgentCapabilities(entity);
   return normalized;
 }
@@ -1973,6 +2074,9 @@ function toggleRoleTag(entity, role) {
   const tags = new Set(normalizeRoleTags(entity));
   if (PRIMARY_ROLES.includes(role)) {
     PRIMARY_ROLES.forEach((item) => tags.delete(item));
+    tags.add(role);
+  } else if (TIER_ROLES.includes(role)) {
+    TIER_ROLES.forEach((item) => tags.delete(item));
     tags.add(role);
   } else if (tags.has(role)) {
     tags.delete(role);
@@ -2084,9 +2188,11 @@ function capabilityTagOption(entity, name, group, description, selected) {
 function roleTagOption(entity, value, def, selected) {
   const isSelected = selected.has(value);
   const isPrimary = PRIMARY_ROLES.includes(value);
-  const otherPrimary = isPrimary && [...selected].some((role) => PRIMARY_ROLES.includes(role) && role !== value);
-  const note = isPrimary ? "primario" : def.restriction === "R2" ? "auxiliar" : "estado";
-  return `<button type="button" class="role-tag-option ${isSelected ? "selected" : ""} ${otherPrimary ? "will-replace" : ""}" data-entity="${entity.id}" data-role="${value}">
+  const isTier = TIER_ROLES.includes(value);
+  const exclusiveGroup = isPrimary ? PRIMARY_ROLES : isTier ? TIER_ROLES : null;
+  const willReplace = exclusiveGroup ? [...selected].some((role) => exclusiveGroup.includes(role) && role !== value) : false;
+  const note = isPrimary ? "primario" : isTier ? "jerarquía" : def.restriction === "R2" ? "auxiliar" : "estado";
+  return `<button type="button" class="role-tag-option ${isSelected ? "selected" : ""} ${willReplace ? "will-replace" : ""}" data-entity="${entity.id}" data-role="${value}">
       <span class="role-option-check">${isSelected ? "✓" : ""}</span>
       <span><b>${escapeHtml(def.label)}</b><small>${escapeHtml(def.restriction)} · ${note}</small></span>
     </button>`;
@@ -2098,13 +2204,15 @@ function roleSummary(entity) {
   const hasAgent = tags.includes("parent");
   const hasWorker = tags.includes("child");
   const hasBackup = tags.includes("backup");
+  const tierTag = tags.find((role) => TIER_ROLES.includes(role));
+  const tierLabel = tierTag ? roleDef(tierTag).label : "";
   const supports = tags.filter((role) => SUPPORT_ROLES.includes(role)).map((role) => roleDef(role).label);
   if (hasAgent) {
     const capSummary = capabilities.length ? ` Capacidades: ${capabilities.join(", ")}.` : "";
-    return `R0 autoridad global.${supports.length ? ` Complementos: ${supports.join(", ")}.` : ""}${capSummary}`;
+    return `R0 autoridad global · ${tierLabel}.${supports.length ? ` Complementos: ${supports.join(", ")}.` : ""}${capSummary}`;
   }
-  if (hasBackup) return `R1 fallback. Reclama niveles solo cuando actúa como reserva o promoción controlada.`;
-  if (hasWorker) return `R1 ejecución. ${supports.length ? `Con etiquetas auxiliares: ${supports.join(", ")}.` : "Puede recibir niveles N1-N5."}`;
+  if (hasBackup) return `R1 fallback · ${tierLabel}. Reclama niveles solo cuando actúa como reserva o promoción controlada.`;
+  if (hasWorker) return `R1 ejecución · ${tierLabel}. ${supports.length ? `Con etiquetas auxiliares: ${supports.join(", ")}.` : "Puede recibir niveles N1-N5."}`;
   return supports.length ? `R2/R3 soporte sin ownership de niveles: ${supports.join(", ")}.` : "Selecciona una etiqueta primaria.";
 }
 
@@ -3408,6 +3516,34 @@ Aplicar de un clic la jerarquía de referencia para producción, sin redactar na
 - No descarga modelos por sí sola: la descarga de varios GB se hace desde terminal con los comandos que esta plantilla te devuelva.
 - Equivalente a ejecutar: python scripts/setup_production.py --reset-config${formatDefaultConfigResult(state.defaultConfigResult)}`,
     },
+    {
+      id: "queue-hierarchy",
+      scope: "06 · Cola de tareas",
+      title: "Jerarquía piramidal + cola de disponibilidad",
+      description: "Activa el despacho asíncrono (raíz → L1 → L2, escalado automático) y el validador con feedback.",
+      executable: true,
+      body: `# Objetivo
+Aplicar de un clic la jerarquía piramidal completa con despacho por disponibilidad, sin editar el JSON a mano.
+
+# Qué configura
+1. Añade al grafo cualquier agente que falte de la jerarquía de referencia (no toca ni sobreescribe los que ya tengas):
+   - Raíz (tier 0): Claude (padre), Codex/ChatGPT (backup).
+   - L1 (tier 1, mejores open-source, vía Ollama cloud): GLM-5.2, Kimi K2.7 Code.
+   - L2 (tier 2, siempre disponible en local): Qwen 2.5 7B, DeepSeek R1 8B, Mistral Nemo, Ornith, Qwen Coder, Gemma 2.
+   - Validador dedicado y barato (etiqueta "validator"): Qwen 2.5 7B.
+2. Activa \`orchestration.dispatch_mode = "queue"\`: cola de prioridad real + disponibilidad por agente — si el nivel L1 está ocupado, escala a L2 automáticamente en vez de bloquear la cola.
+3. Activa \`orchestration.enable_validator_loop = true\`: el validador barato revisa cada salida y devuelve feedback; si rechaza, se reintenta al mismo agente (tope: max_validation_iterations) antes de escalar una sola vez a la raíz.
+
+# Estado actual
+- dispatch_mode: ${c.orchestration.dispatch_mode || "sync"}
+- enable_validator_loop: ${c.orchestration.enable_validator_loop ?? false}
+- agentes en el grafo: ${entities.length}
+
+# Notas
+- Es aditivo e idempotente: puedes aplicarlo varias veces sin perder personalizaciones (tags de rol, posiciones, target_id).
+- GLM-5.2 y Kimi K2.7 Code corren en la nube de Ollama: requieren \`ollama signin\` — no se auto-instalan.
+- Equivalente a: POST /setup/apply-queue-config${formatDefaultConfigResult(state.queueConfigResult)}`,
+    },
   ]);
 }
 
@@ -4103,6 +4239,8 @@ function init() {
     if (applyPrompt) {
       if (applyPrompt.dataset.applyPrompt === "default-config") {
         applyDefaultConfig();
+      } else if (applyPrompt.dataset.applyPrompt === "queue-hierarchy") {
+        applyQueueConfig();
       } else {
         toast("Primer flujo preparado: copia el prompt o pásalo al agente elegido en la siguiente iteración.");
       }
@@ -4227,6 +4365,35 @@ async function applyDefaultConfig() {
     toast(error.message);
   } finally {
     const refreshedButton = $('[data-apply-prompt="default-config"]');
+    if (refreshedButton) {
+      refreshedButton.disabled = false;
+      refreshedButton.textContent = "Aplicar con agente";
+    }
+  }
+}
+
+async function applyQueueConfig() {
+  const button = $('[data-apply-prompt="queue-hierarchy"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Aplicando…";
+  }
+  try {
+    const result = await api("/setup/apply-queue-config", { method: "POST" });
+    state.queueConfigResult = result;
+    await loadConfig();
+    const layout = await api("/routing-layout");
+    state.entities = layout.entities || [];
+    renderPromptConfiguration();
+    toast(
+      result.next_steps.length
+        ? `Cola y jerarquía activadas. ${result.next_steps.length} paso(s) pendiente(s) — revisa el editor.`
+        : "Cola de disponibilidad y validador activados: jerarquía completa lista."
+    );
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    const refreshedButton = $('[data-apply-prompt="queue-hierarchy"]');
     if (refreshedButton) {
       refreshedButton.disabled = false;
       refreshedButton.textContent = "Aplicar con agente";

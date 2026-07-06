@@ -29,12 +29,14 @@
         "Recovery",
         "Aggregator"
       ],
+      "tier": 0,
+      "max_concurrent": 1,
       "x": 551.3580516028027,
       "y": 0.0
     },
     {
       "id": "entity-backup-codex",
-      "name": "Codex CLI (backup + N4 compleja)",
+      "name": "Codex CLI (backup raiz N4/N5)",
       "role": "backup",
       "role_tags": [
         "backup"
@@ -42,7 +44,8 @@
       "provider": "codex",
       "parentId": "entity-agent-claude",
       "levels": [
-        "level_4_complex"
+        "level_4_complex",
+        "level_5_critical"
       ],
       "skills": [
         "repo-analyzer",
@@ -52,8 +55,56 @@
         "promptfoo"
       ],
       "capabilities": [],
+      "tier": 0,
+      "max_concurrent": 1,
       "x": 1036.3888888888887,
       "y": 31.944444444444446
+    },
+    {
+      "id": "entity-worker-glm",
+      "name": "GLM-5.2 (L1 - open-source cloud)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-glm",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_4_complex"
+      ],
+      "skills": [
+        "repo-analyzer",
+        "backend-builder",
+        "frontend-builder"
+      ],
+      "capabilities": [],
+      "tier": 1,
+      "max_concurrent": 1,
+      "x": 250.0,
+      "y": 350.0
+    },
+    {
+      "id": "entity-worker-kimi",
+      "name": "Kimi K2.7 Code (L1 - open-source cloud)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-kimi",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_3_intermediate",
+        "level_4_complex"
+      ],
+      "skills": [
+        "repo-analyzer",
+        "backend-builder"
+      ],
+      "capabilities": [],
+      "tier": 1,
+      "max_concurrent": 1,
+      "x": 750.0,
+      "y": 350.0
     },
     {
       "id": "entity-worker-qwen",
@@ -73,6 +124,8 @@
         "ponytail"
       ],
       "capabilities": [],
+      "tier": 2,
+      "max_concurrent": 1,
       "x": 0.0,
       "y": 700.0
     },
@@ -95,6 +148,8 @@
         "promptfoo"
       ],
       "capabilities": [],
+      "tier": 2,
+      "max_concurrent": 1,
       "x": 551.3580516028027,
       "y": 700.0
     },
@@ -117,8 +172,98 @@
         "frontend-builder"
       ],
       "capabilities": [],
+      "tier": 2,
+      "max_concurrent": 1,
       "x": 1100.0,
       "y": 700.0
+    },
+    {
+      "id": "entity-worker-ornith",
+      "name": "Ornith (L2 - local siempre disponible)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-ornith",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_2_moderate",
+        "level_3_intermediate",
+        "level_4_complex"
+      ],
+      "skills": [
+        "repo-analyzer",
+        "backend-builder"
+      ],
+      "capabilities": [],
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 1650.0,
+      "y": 700.0
+    },
+    {
+      "id": "entity-worker-qwen-coder",
+      "name": "Qwen Coder 7B (L2 - local)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-qwen-coder",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_2_moderate",
+        "level_3_intermediate"
+      ],
+      "skills": [
+        "repo-analyzer"
+      ],
+      "capabilities": [],
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 2200.0,
+      "y": 700.0
+    },
+    {
+      "id": "entity-worker-gemma2",
+      "name": "Gemma 2 9B (L2 - local)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-gemma2",
+      "parentId": "entity-agent-claude",
+      "levels": [
+        "level_2_moderate",
+        "level_3_intermediate"
+      ],
+      "skills": [
+        "repo-analyzer"
+      ],
+      "capabilities": [],
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 2750.0,
+      "y": 700.0
+    },
+    {
+      "id": "entity-validator-cheap",
+      "name": "Qwen 2.5 7B (validador dedicado)",
+      "role": "child",
+      "role_tags": [
+        "child",
+        "validator"
+      ],
+      "provider": "ollama-qwen",
+      "parentId": "entity-agent-claude",
+      "levels": [],
+      "skills": [
+        "repo-analyzer"
+      ],
+      "capabilities": [],
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 1650.0,
+      "y": 0.0
     }
   ],
   "zoom": 0.63,

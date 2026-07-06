@@ -1360,6 +1360,14 @@ body.resizing-monitor {
   background: color-mix(in srgb, var(--entity-accent) 9%, var(--panel));
   color: color-mix(in srgb, var(--entity-accent) 68%, var(--text));
 }
+.role-chip-t0,
+.role-chip-t1,
+.role-chip-t2,
+.role-chip-t3 {
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--line));
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+  color: color-mix(in srgb, var(--warn) 72%, var(--text));
+}
 .role-tag-caret {
   width: 7px;
   height: 7px;
@@ -7170,6 +7178,14 @@ input[type="text"] {
   border-radius: 10px;
   background: var(--panel-2);
   overflow: hidden;
+}
+
+#view-monitor .flow-strip {
+  margin-top: 16px;
+}
+
+#view-monitor .flow-strip #executionFlow {
+  padding: 12px;
 }
 
 #view-monitor .nodes-title {

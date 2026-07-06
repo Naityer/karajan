@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app import catalog
-from app.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel, RoutingLayout
+from app.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel, RoutingEntity, RoutingLayout
 from app.providers.api import ApiModelProvider
 from app.providers.base import ModelProvider
 from app.providers.cli import CliModelProvider
@@ -92,6 +92,54 @@ def fallback_resolutions(
     if "simulated" not in tried:
         candidates.append(_simulated(tier))
     return candidates
+
+
+def eligible_entities(level: str, layout: RoutingLayout | None) -> list[RoutingEntity]:
+    """Every layout entity genuinely able to serve `level` (a "level_*" string).
+
+    Unlike `flow_policy._owner_for_level` (which stops at the first match for
+    audit-log attribution), this returns ALL matches — the real candidate pool
+    a scheduler picks a *free* agent from, including entities with several
+    `levels` entries (a real "multi-level worker").
+    """
+    from app import flow_policy  # local import avoids a cycle at module load time
+
+    regular_roles = {"parent", "agent", "child", "worker"}
+    entities = layout.entities if layout else []
+    return [
+        entity
+        for entity in entities
+        if entity.role.strip().lower() in regular_roles and flow_policy.level_matches(entity.levels, level)
+    ]
+
+
+def candidate_tiers(entities: list[RoutingEntity]) -> list[int]:
+    """Distinct hierarchy tiers among `entities`, ascending, with tier 0 (root)
+    moved to the end — root is the last-resort escalation target, not the
+    first pick, mirroring the existing `fallback_resolutions` ordering."""
+    tiers = sorted({entity.tier for entity in entities})
+    return sorted(tiers, key=lambda tier: (tier == 0, tier))
+
+
+def resolve_entity(entity: RoutingEntity, tier: RecommendedModel) -> Resolution | None:
+    """Build a concrete `Resolution` for one specific layout entity.
+
+    Returns `None` when the entity's provider is unknown to the catalog or
+    doesn't support `tier` — callers should skip such entities rather than
+    falling back to the simulated backend (that fallback is `resolve()`'s job
+    for the static/tier-pinned path, not this per-entity lookup).
+    """
+    if not entity.provider:
+        return None
+    info = catalog.get_provider(entity.provider)
+    if info is None or tier not in info.tiers:
+        return None
+    model_id = info.tiers[tier]
+    if info.backend == Backend.API:
+        return Resolution(ApiModelProvider(info), Backend.API, model_id, info.name)
+    if info.backend == Backend.CLI:
+        return Resolution(CliModelProvider(info), Backend.CLI, model_id, info.name)
+    return None
 
 
 def _provider_for_tier(tier: RecommendedModel, config: KarajanConfig) -> ProviderInfo | None:

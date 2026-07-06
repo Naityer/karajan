@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _utcnow() -> datetime:
@@ -33,6 +33,7 @@ class RecommendedModel(str, Enum):
 class TaskStatus(str, Enum):
     CLASSIFIED = "classified"
     DELEGATED = "delegated"
+    QUEUED = "queued"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -142,6 +143,17 @@ class SubtaskExecution(BaseModel):
     error: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
+    validation_iterations: int = 0
+
+
+class ValidationVerdict(BaseModel):
+    """Structured feedback from the dedicated validator agent."""
+
+    approved: bool
+    feedback: str = ""
+    iteration: int = 0
+    validator_provider: str | None = None
+    validator_model: str | None = None
 
 
 class DelegationResult(BaseModel):
@@ -204,6 +216,11 @@ class NodeMetrics(BaseModel):
     skills: list[str] = Field(default_factory=list)
     skill_usage: dict[str, int] = Field(default_factory=dict)  # skill -> times this node used it
     extra: dict[str, Any] = Field(default_factory=dict)
+    # Live availability (from the scheduler's in-memory tracker, not history).
+    hierarchy_tier: int = 2
+    max_concurrent: int = 1
+    busy_slots: int = 0
+    queue_depth: int = 0
 
 
 class FlowEvent(BaseModel):
@@ -291,6 +308,7 @@ class ProviderInfo(BaseModel):
     name: str
     label: str
     is_free: bool
+    is_cloud_hosted: bool = False  # invoked via local CLI but executes on the provider's cloud (e.g. `ollama run x:cloud`) — not free local compute
     auth_method: AuthMethod
     backend: Backend
     tiers: dict[RecommendedModel, str] = Field(default_factory=dict)
@@ -453,8 +471,20 @@ class RoutingEntity(BaseModel):
     levels: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
+    # Open-ended hierarchy/authority depth — 0=root, 1=L1, 2=L2, 3+=future growth.
+    # Orthogonal to `levels` (task-complexity axis, fixed at 5 values).
+    tier: int = Field(default=2, ge=0)
+    max_concurrent: int = Field(default=1, ge=1)
     x: float = 0
     y: float = 0
+
+    @model_validator(mode="after")
+    def _default_tier_by_role(self) -> "RoutingEntity":
+        # Self-heals old JSON that predates `tier`: parent/backup entities default
+        # to root (0) unless the file already set it explicitly.
+        if "tier" not in self.model_fields_set and self.role.strip().lower() in {"parent", "backup"}:
+            self.tier = 0
+        return self
 
 
 class RoutingLayout(BaseModel):
@@ -478,6 +508,12 @@ class OrchestrationConfig(BaseModel):
     # Cost guardrails evaluated BEFORE any subtask runs. 0 disables the cap.
     max_cost_per_task_usd: float = Field(default=0.0, ge=0.0)
     max_daily_cost_usd: float = Field(default=0.0, ge=0.0)
+    # Async availability-driven queue (opt-in; "sync" preserves today's behavior).
+    dispatch_mode: Literal["sync", "queue"] = "sync"
+    # Real second-call validation loop (opt-in; off preserves today's logged-verdict behavior).
+    enable_validator_loop: bool = False
+    max_validation_iterations: int = Field(default=2, ge=0, le=5)
+    escalate_to_root_after_max_iterations: bool = True
 
 
 class PolicyConfig(BaseModel):

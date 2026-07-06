@@ -186,6 +186,23 @@ class TaskStore:
                 self._insert_decisions(conn, [decision])
         return self.get_task(classification.task_id)
 
+    def mark_status(self, task_id: str, status: TaskStatus) -> TaskRecord:
+        """Flip a task's status without requiring a full `DelegationResult`.
+
+        Used by the async queue dispatcher to record `queued` the instant a
+        task is accepted, before any subtask has actually run.
+        """
+        now = datetime.now(timezone.utc)
+        with self._connect() as conn:
+            cursor = conn.execute("SELECT task_id FROM tasks WHERE task_id = ?", (task_id,))
+            if cursor.fetchone() is None:
+                raise KeyError(task_id)
+            conn.execute(
+                "UPDATE tasks SET status = ?, updated_at = ? WHERE task_id = ?",
+                (status.value, now.isoformat(), task_id),
+            )
+        return self.get_task(task_id)
+
     def save_delegation(
         self,
         delegation: DelegationResult,

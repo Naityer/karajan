@@ -5,7 +5,8 @@
       "name": "Claude (padre agente)",
       "role": "parent",
       "role_tags": [
-        "parent"
+        "parent",
+        "tier_l2"
       ],
       "provider": "claude-cli",
       "parentId": "",
@@ -30,15 +31,16 @@
         "Recovery",
         "Aggregator"
       ],
-      "x": 536.8125970573482,
-      "y": 43.63636363636363
+      "x": 552.8125748627459,
+      "y": 40.727261629971586
     },
     {
       "id": "entity-backup-codex",
       "name": "Codex CLI (backup N4 complejo)",
       "role": "backup",
       "role_tags": [
-        "backup"
+        "backup",
+        "tier_l2"
       ],
       "provider": "codex",
       "parentId": "entity-agent-claude",
@@ -54,15 +56,16 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 1014.5933455650251,
-      "y": 36.78788926866319
+      "x": 1136.7751859414454,
+      "y": 39.69699127505524
     },
     {
       "id": "entity-worker-qwen",
       "name": "Qwen 2.5 7B (local N1/N2)",
       "role": "child",
       "role_tags": [
-        "child"
+        "child",
+        "tier_l2"
       ],
       "provider": "ollama-qwen",
       "parentId": "entity-agent-claude",
@@ -76,8 +79,8 @@
         "ponytail"
       ],
       "capabilities": [],
-      "x": 72.81810413707386,
-      "y": 639.3737238103694
+      "x": 0.0,
+      "y": 645.1918723366477
     },
     {
       "id": "entity-worker-deepseek",
@@ -85,6 +88,7 @@
       "role": "child",
       "role_tags": [
         "child",
+        "tier_l2",
         "guardian"
       ],
       "provider": "ollama-deepseek",
@@ -100,15 +104,16 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 536.0,
-      "y": 620.0
+      "x": 485.09085360440343,
+      "y": 641.8181818181819
     },
     {
       "id": "entity-worker-mistral",
       "name": "Mistral Nemo 12B (local N3/N4)",
       "role": "child",
       "role_tags": [
-        "child"
+        "child",
+        "tier_l2"
       ],
       "provider": "ollama-mistral-nemo",
       "parentId": "entity-agent-claude",
@@ -120,11 +125,11 @@
         "backend-builder"
       ],
       "capabilities": [],
-      "x": 912.0,
-      "y": 620.0
+      "x": 968.727294921875,
+      "y": 649.0908536044035
     }
   ],
   "zoom": 0.55,
   "drawer_width": 360,
-  "updated_at": "2026-07-06T16:42:48.081201Z"
+  "updated_at": "2026-07-06T21:29:25.736023Z"
 }

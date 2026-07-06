@@ -22,3 +22,38 @@ def test_openclaw_provider_is_catalogued_as_gateway_addon() -> None:
     assert provider.auth_method == AuthMethod.CLI_LOGIN
     assert provider.tiers == {}
     assert provider.cli_command == "openclaw gateway status --json"
+
+
+def test_ornith_provider_is_genuinely_local() -> None:
+    provider = get_provider("ollama-ornith")
+
+    assert provider is not None
+    assert provider.is_free is True
+    assert provider.is_cloud_hosted is False
+    assert provider.backend == Backend.CLI
+    assert provider.auth_method == AuthMethod.LOCAL
+    assert provider.tiers[RecommendedModel.MEDIUM_MODEL] == "ornith:9b"
+    assert provider.tiers[RecommendedModel.STRONG_MODEL] == "ornith:35b"
+    assert provider.probe_command == "ollama list"
+
+
+def test_glm_provider_is_ollama_cloud_hosted() -> None:
+    provider = get_provider("ollama-glm")
+
+    assert provider is not None
+    assert provider.is_free is False
+    assert provider.is_cloud_hosted is True
+    assert provider.backend == Backend.CLI
+    assert provider.tiers[RecommendedModel.STRONG_MODEL] == "glm-5.2:cloud"
+    assert provider.login_command == "ollama signin"
+
+
+def test_kimi_provider_is_ollama_cloud_hosted() -> None:
+    provider = get_provider("ollama-kimi")
+
+    assert provider is not None
+    assert provider.is_free is False
+    assert provider.is_cloud_hosted is True
+    assert provider.backend == Backend.CLI
+    assert provider.tiers[RecommendedModel.STRONG_MODEL] == "kimi-k2.7-code:cloud"
+    assert provider.login_command == "ollama signin"
