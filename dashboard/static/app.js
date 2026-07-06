@@ -4177,23 +4177,25 @@ function updateWander(){
   AGENTS.forEach(function(ag){
     var pos=agentPos[ag.id];if(!pos)return;
     var mode=(agentModes[ag.id]||{mode:'idle'}).mode;
-    var spd=mode==='working'?0.022:mode==='celebrate'?0.028:mode==='thinking'?0.009:0.012;
     var dx=pos.tx-pos.x,dy=pos.ty-pos.y;
     var dist=Math.sqrt(dx*dx+dy*dy);
     if(dist>0.04){
+      // walk toward target at mode-dependent speed
+      var spd=mode==='working'?0.025:mode==='celebrate'?0.025:mode==='thinking'?0.009:0.012;
       var step=Math.min(dist,spd);
       pos.x+=dx/dist*step;pos.y+=dy/dist*step;
     } else {
-      pos.x=pos.tx;pos.y=pos.ty; // snap to target
-      // celebrate: small random nearby jitter so it doesn't look frozen
-      if(mode==='celebrate'){
+      // arrived: snap and STAY — no jitter, no new targets
+      pos.x=pos.tx;pos.y=pos.ty;
+      // idle: micro breathing drift (very small, stays near home)
+      if(mode==='idle'){
         if(--pos.timer<=0){
-          var ws=WORKSPOTS[ag.id]||{dx:0,dy:0};
-          var jx=ag.hx+ws.dx+(Math.random()-0.5)*0.5;
-          var jy=ag.hy+ws.dy+(Math.random()-0.5)*0.5;
-          setAgentTarget(ag.id,jx,jy);pos.timer=18+Math.round(Math.random()*22);
+          pos.tx=ag.hx+(Math.random()-0.5)*0.15;
+          pos.ty=ag.hy+(Math.random()-0.5)*0.15;
+          pos.timer=180+Math.round(Math.random()*120);
         }
       }
+      // working / celebrate: completely frozen at workspot, no new targets
     }
   });
 }
@@ -4686,9 +4688,8 @@ function drawLeftPanel(){
   ctx2.strokeStyle='rgba(55,95,165,0.4)';ctx2.lineWidth=1;ctx2.beginPath();rr(8,panY,LW-16,panH,10);ctx2.stroke();
   // title
   ctx2.fillStyle='rgba(190,215,255,0.95)';ctx2.font='bold 10px system-ui';ctx2.textAlign='left';ctx2.textBaseline='middle';ctx2.fillText('MÉTRICAS DEL SISTEMA',16,panY+13);
-  // window buttons
-  winBtn(LW-32,panY+5,17,17,'255,190,30','─','mini_metrics');
-  winBtn(LW-13,panY+5,17,17,'255,70,70','×','close_metrics');
+  // window buttons — only minimize (no close)
+  winBtn(LW-25,panY+5,17,17,'255,190,30',st==='mini'?'▪':'─',st==='mini'?'open_metrics':'mini_metrics');
 
   if(st==='mini')return;
   var px=16,py=panY+32;
@@ -4821,8 +4822,7 @@ function drawInfoPanel(){
   var ag=AGENTS.find(function(a){return a.id===selectedId;});if(!ag)return;
   var PW=255,PH=Math.min(195,H-100),PX=W-PW-8;
   var PY=70; // always anchored at top-right
-  var mini=panelStates.spec==='mini';
-  var panH=mini?26:PH;
+  var panH=PH;
   // shadow
   ctx2.fillStyle='rgba(0,0,0,0.4)';ctx2.beginPath();rr(PX+3,PY+4,PW,panH-2,12);ctx2.fill();
   // body
@@ -4834,9 +4834,8 @@ function drawInfoPanel(){
   ctx2.fillStyle='rgba(255,255,255,0.92)';ctx2.font='bold 11px system-ui';ctx2.textAlign='left';ctx2.textBaseline='middle';
   ctx2.fillText(ag.name+' '+ag.level,PX+10,PY+13);
   ctx2.fillStyle='rgba(255,255,255,0.55)';ctx2.font='9px system-ui';ctx2.fillText(ag.role,PX+10+ctx2.measureText(ag.name+' '+ag.level).width+8,PY+13);
-  winBtn(PX+PW-40,PY+5,17,17,'255,190,30','─',mini?'open_spec':'mini_spec');
-  winBtn(PX+PW-21,PY+5,17,17,'255,70,70','×','close_panel');
-  if(mini)return;
+  // only close button (no minimize)
+  winBtn(PX+PW-22,PY+5,17,17,'255,70,70','×','close_panel');
   var y2=PY+30,pad=PX+9;
   var nd=nodeData.find(function(n){return n.id===ag.dataId;});
   var tc=(nd&&nd.task_count)||0;
