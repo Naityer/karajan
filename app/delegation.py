@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from typing import Any
 
 from app.logging_config import get_logger, log_event
+from app import events
 from app import execution as execution_helpers
 from app import flow_policy
 from app import validation
@@ -42,12 +45,20 @@ def delegate(
     *,
     human_approved: bool = False,
     layout: RoutingLayout | None = None,
+    store: Any | None = None,
 ) -> tuple[DelegationResult, list[DecisionLogEntry]]:
     """Run every subtask on its resolved backend and record harness decisions.
 
     Pre-execution gates (cost cap, human review) are evaluated first and can
     withhold execution entirely — nothing is spent on real backends until they
     pass. Returns the delegation result plus a compact, append-only decision trail.
+
+    `store` (an `app.database.TaskStore`, kept as `Any` here to avoid a circular
+    import since `database.py` doesn't need to import this module) is optional
+    and threaded straight through to `run_subtask` so it can persist a `runs`
+    row with the real `resolution.provider_name` — the stable attribution this
+    phase introduces. `None` (the default, used by every pre-existing caller/test)
+    keeps delegation fully functional with no persistence side effect.
     """
     config = config or KarajanConfig()
 
@@ -60,9 +71,15 @@ def delegate(
 
     if config.orchestration.parallel and len(subtasks) > 1:
         with ThreadPoolExecutor(max_workers=config.orchestration.max_parallel) as pool:
-            paired = list(pool.map(lambda item: run_subtask(classification, item[0], item[1], config, layout), enumerate(subtasks, start=1)))
+            paired = list(pool.map(
+                lambda item: run_subtask(classification, item[0], item[1], config, layout, store=store),
+                enumerate(subtasks, start=1),
+            ))
     else:
-        paired = [run_subtask(classification, index, subtask, config, layout) for index, subtask in enumerate(subtasks, start=1)]
+        paired = [
+            run_subtask(classification, index, subtask, config, layout, store=store)
+            for index, subtask in enumerate(subtasks, start=1)
+        ]
 
     executions = [execution for execution, _ in paired]
     for _, subtask_decisions in paired:
@@ -89,12 +106,21 @@ def run_subtask(
     config: KarajanConfig,
     layout: RoutingLayout | None,
     preresolved: Resolution | None = None,
+    *,
+    store: Any | None = None,
 ) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
     """Execute one subtask end-to-end: assign, run (with fallback chain), and
     optionally validate. `preresolved` lets a caller that already picked a
     specific, available entity (the async scheduler) skip the static
     tier-pinned `resolve()` and use that entity's resolution instead — the
-    rest of the pipeline (fallback, validation) is identical either way."""
+    rest of the pipeline (fallback, validation) is identical either way.
+
+    `store` (optional `app.database.TaskStore`) receives a `runs` row for this
+    subtask's execution once it's fully resolved (including any runtime
+    fallback/validator escalation), keyed on `resolution.provider_name` — the
+    stable catalog identity that fixes the old fuzzy `_execution_owner()`
+    attribution. `None` (used by every pre-existing caller) is a no-op."""
+    started_at = datetime.now(timezone.utc).isoformat()
     assignment = flow_policy.assign_subtask(classification, subtask, layout)
     resolution = preresolved or resolve(subtask.recommended_model, config)
     instruction = f"{classification.original_prompt}\n\nSubtarea: {subtask.name}\nValidación: {subtask.validation}"
@@ -184,7 +210,7 @@ def run_subtask(
         and assignment.owner is not None
         and assignment.validator.id != assignment.owner.id
     ):
-        subtask_execution, loop_decisions = _run_validator_loop(
+        subtask_execution, loop_decisions, resolution = _run_validator_loop(
             classification, subtask, assignment, resolution, instruction, run, config, index, layout
         )
         decisions.extend(loop_decisions)
@@ -199,6 +225,39 @@ def run_subtask(
                 reason=run.error or subtask.validation,
             )
         )
+
+    if store is not None:
+        try:
+            completed_at = datetime.now(timezone.utc).isoformat()
+            run_id = store.record_run(
+                task_id=classification.task_id,
+                provider_name=resolution.provider_name,
+                routing_entity_id=assignment.owner.id if assignment.owner else None,
+                routing_entity_name_snapshot=assignment.owner.name if assignment.owner else None,
+                model_id=resolution.model_id,
+                backend=resolution.backend.value,
+                status=subtask_execution.status.value,
+                started_at=started_at,
+                completed_at=completed_at,
+                latency_ms=subtask_execution.latency_ms,
+                input_tokens=subtask_execution.input_tokens,
+                output_tokens=subtask_execution.output_tokens,
+                estimated_cost_usd=subtask_execution.estimated_cost_usd,
+                error=subtask_execution.error,
+            )
+            events.publish("run_started", task_id=classification.task_id, run_id=run_id)
+            events.publish(
+                "run_completed",
+                task_id=classification.task_id,
+                run_id=run_id,
+                status=subtask_execution.status.value,
+            )
+        except Exception:  # noqa: BLE001 - a store/SSE failure must never break delegation
+            log_event(
+                logger, logging.WARNING, "record_run_failed",
+                task_id=classification.task_id, subtask_id=subtask.id,
+            )
+
     return subtask_execution, decisions
 
 
@@ -212,11 +271,15 @@ def _run_validator_loop(
     config: KarajanConfig,
     index: int,
     layout: RoutingLayout | None,
-) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
+) -> tuple[SubtaskExecution, list[DecisionLogEntry], Resolution]:
     """Real validator feedback loop: a dedicated cheap agent critiques the
     owner's output; rejections re-run the *owner* with the feedback appended,
     bounded by `max_validation_iterations`. Only after the cap is exhausted and
-    still rejected does it escalate once to the root agent."""
+    still rejected does it escalate once to the root agent.
+
+    Returns the final `resolution` too (in addition to the execution/decisions)
+    so the caller's `record_run` reflects a validator-cap root escalation
+    instead of the pre-loop provider."""
     decisions: list[DecisionLogEntry] = []
     tier = subtask.recommended_model.value
     max_iterations = config.orchestration.max_validation_iterations
@@ -294,7 +357,7 @@ def _run_validator_loop(
         output_tokens=execution_helpers.estimate_tokens(run.output or ""),
         validation_iterations=iteration,
     )
-    return updated, decisions
+    return updated, decisions, resolution
 
 
 def _root_entity(layout: RoutingLayout | None):

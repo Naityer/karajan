@@ -38,6 +38,22 @@ class TaskStatus(str, Enum):
     FAILED = "failed"
 
 
+class TaskV2Status(str, Enum):
+    """Broader lifecycle vocabulary for `tasks_v2` (Fase 1 schema).
+
+    Distinct from `TaskStatus` (the legacy `tasks` table's vocabulary) — legacy
+    rows are mapped onto this one deterministically, see `TaskStore._map_status_v2`.
+    """
+
+    DRAFT = "draft"
+    QUEUED = "queued"
+    RUNNING = "running"
+    WAITING_HUMAN = "waiting_human"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ARCHIVED = "archived"
+
+
 class Backend(str, Enum):
     SIMULATED = "simulated"
     API = "api"
@@ -277,6 +293,18 @@ class MetricsHistoryPoint(BaseModel):
 
 class MetricsHistory(BaseModel):
     points: list[MetricsHistoryPoint] = Field(default_factory=list)
+
+
+class AgentPerformance(BaseModel):
+    """Provider-keyed aggregation over `runs` — the stable replacement for the
+    old fuzzy model-name/level-alias attribution in `monitoring._execution_owner`."""
+
+    provider_name: str
+    task_count: int
+    error_count: int = 0
+    avg_latency_ms: float | None = None
+    total_cost: float = 0.0
+    total_tokens: int = 0
 
 
 class SetupStatus(BaseModel):
@@ -572,6 +600,10 @@ class KarajanConfig(BaseModel):
     policy: PolicyConfig = Field(default_factory=PolicyConfig)
     # tier -> preferred provider name (filled by auto-detect in simple mode)
     provider_preferences: dict[str, str] = Field(default_factory=dict)
+    # Workspace-default provider (a catalog `name`, e.g. "claude-cli"/"ollama-qwen")
+    # used by the Grafo window's LLM explain/audit. Resolution order for a repo:
+    # repo.provider_override -> this -> provider_preferences["medium_model"] -> first ready.
+    graph_agent_provider: str | None = None
     prefer_free: bool = True
     openclaw: OpenClawConfig = Field(default_factory=OpenClawConfig)
 
@@ -595,3 +627,233 @@ class DecisionLogEntry(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     context: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Predictive analytics (Fase 4) -------------------------------------------
+
+
+class PredictTaskRequest(BaseModel):
+    """A draft task profile for prediction — the fields a caller already holds
+    right after classify-task and before delegate-task.
+
+    Deliberately shaped after `ClassificationResult` (same `domain`/`intent`/
+    `criteria`/`complexity_score` fields) so it can be called mid-flow with the
+    classification output, plus the routing hints (`provider_name`/`model_id`/
+    `backend`) the caller is about to delegate to.
+    """
+
+    task_type: str | None = None  # falls back to `intent` when omitted
+    domain: list[str] = Field(default_factory=lambda: ["general"])
+    intent: str = "classify_and_plan"
+    criteria: CriteriaScores
+    complexity_score: float = Field(default=0.0, ge=0, le=5)
+    provider_name: str | None = None
+    model_id: str | None = None
+    backend: str | None = None
+    prompt_length: int | None = Field(default=None, ge=0)
+    subtask_count: int | None = Field(default=None, ge=0)
+
+
+class PredictTaskResponse(BaseModel):
+    predicted_success_prob: float | None = None
+    predicted_cost_usd: float | None = None
+    predicted_latency_ms: float | None = None
+    is_anomaly: bool = False
+    top_features: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# --- Graph / multi-repo -------------------------------------------------------
+
+
+class RepoConfig(BaseModel):
+    """A registered repository tracked by the multi-repo code graph.
+
+    In this phase a repo is pure metadata: no static analysis has run yet, so
+    scan-related fields stay unset until a later phase populates them.
+    """
+
+    id: str = Field(default_factory=lambda: f"repo_{uuid4().hex[:12]}")
+    name: str
+    root_path: str  # resolved absolute path, so later path-safety checks are reliable
+    language_hint: str | None = None
+    provider_override: str | None = None
+    exclude_globs: list[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: _utcnow().isoformat())
+    last_scanned_at: str | None = None
+    last_scan_status: str | None = None
+
+
+class RepoCreateRequest(BaseModel):
+    """Payload to register a new repository (POST /repos)."""
+
+    name: str
+    root_path: str
+    language_hint: str | None = None
+    provider_override: str | None = None
+    exclude_globs: list[str] = Field(default_factory=list)
+
+
+class GraphNode(BaseModel):
+    """A single node in a repo's code graph (repo/dir/file/class/function/method).
+
+    Symbol-level nodes (class/function/method) carry rough health metrics
+    (`loc`, `complexity_estimate`, `method_count`) that later phases turn into
+    findings. `extraction_method` records how a node was recovered so the
+    frontend can show a reduced-confidence badge on regex-extracted TS nodes.
+    """
+
+    id: str
+    repo_id: str
+    file_id: str | None = None
+    kind: str  # repo | dir | file | class | function | method
+    name: str | None = None
+    qualified_name: str | None = None
+    parent_id: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    method_count: int | None = None
+    loc: int | None = None
+    complexity_estimate: int | None = None
+    extraction_method: str | None = None  # "ast" | "tree_sitter" | "regex" | None
+
+
+class GraphEdge(BaseModel):
+    """A directed edge between two nodes (`contains` structural / `imports`).
+
+    `dst_node_id` is set when the target resolves to an internal node; otherwise
+    `dst_unresolved` keeps the raw specifier (external package or unresolved
+    alias) so nothing is silently dropped.
+    """
+
+    id: str
+    repo_id: str
+    src_node_id: str
+    dst_node_id: str | None = None
+    edge_type: str  # contains | imports
+    dst_unresolved: str | None = None
+
+
+class GraphSnapshot(BaseModel):
+    """The full node+edge set for one repo — powers the frontend graph fetch."""
+
+    repo_id: str
+    nodes: list[GraphNode] = Field(default_factory=list)
+    edges: list[GraphEdge] = Field(default_factory=list)
+    generated_at: str = Field(default_factory=lambda: _utcnow().isoformat())
+
+
+class ScanSummary(BaseModel):
+    """Result of a `scan_repo` run, returned by POST /repos/{id}/scan."""
+
+    repo_id: str
+    files_scanned: int = 0
+    files_skipped_unchanged: int = 0
+    nodes_created: int = 0
+    edges_created: int = 0
+    duration_ms: int = 0
+    errors: list[str] = Field(default_factory=list)
+
+
+class RepoFileResponse(BaseModel):
+    """Source file content for the embedded graph editor."""
+
+    repo_id: str
+    path: str
+    content: str
+    encoding: str = "utf-8"
+    size: int = 0
+    modified_at: str | None = None
+
+
+class RepoFileSaveRequest(BaseModel):
+    """Payload to save a repo-relative source file from the embedded editor."""
+
+    path: str
+    content: str
+
+
+class RepoFileSaveResponse(BaseModel):
+    """Confirmation for a source file save."""
+
+    repo_id: str
+    path: str
+    saved: bool = True
+    size: int = 0
+    modified_at: str | None = None
+
+
+# --- Code audit (Fase D) ------------------------------------------------------
+
+
+class Finding(BaseModel):
+    """One deterministic (or LLM-flagged) issue attached to a graph node.
+
+    Mirrors the `graph_findings` table columns. `severity` is one of
+    info|warning|critical; `node_id` is the graph node the finding attaches to
+    (a file node for file-level detectors, a symbol node otherwise).
+    """
+
+    id: str = Field(default_factory=lambda: f"find_{uuid4().hex[:12]}")
+    repo_id: str
+    node_id: str | None = None
+    severity: str  # info | warning | critical
+    category: str
+    message: str
+    detector: str
+    created_at: str = Field(default_factory=lambda: _utcnow().isoformat())
+    resolved: int = 0
+
+
+class AuditResult(BaseModel):
+    """Outcome of `run_audit`: deterministic findings + optional LLM narrative."""
+
+    repo_id: str
+    findings: list[Finding] = Field(default_factory=list)
+    counts_by_severity: dict[str, int] = Field(default_factory=dict)
+    llm_summary: str | None = None
+    truncated: bool = False
+    generated_at: str = Field(default_factory=lambda: _utcnow().isoformat())
+
+
+class AuditRequest(BaseModel):
+    """Payload for POST /repos/{id}/audit."""
+
+    include_llm: bool = False
+
+
+class FixFindingRequest(BaseModel):
+    """Request to delegate a graph finding to the Fixer role/agent."""
+
+    finding_id: str
+    apply: bool = True
+
+
+class FixFindingResult(BaseModel):
+    """Result of a Fixer attempt for one graph finding."""
+
+    repo_id: str
+    finding_id: str
+    applied: bool = False
+    verified: bool = False
+    provider: str | None = None
+    model: str | None = None
+    file_path: str | None = None
+    severity: str | None = None
+    detector: str | None = None
+    message: str = ""
+    error: str | None = None
+
+
+class ExplainRequest(BaseModel):
+    """Payload for POST /repos/{id}/explain."""
+
+    node_id: str
+
+
+class ExplainResult(BaseModel):
+    """Response of POST /repos/{id}/explain (LLM-backed, not persisted)."""
+
+    explanation: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    error: str | None = None

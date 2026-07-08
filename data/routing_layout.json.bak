@@ -31,6 +31,8 @@
         "Recovery",
         "Aggregator"
       ],
+      "tier": 2,
+      "max_concurrent": 1,
       "x": 552.8125748627459,
       "y": 40.727261629971586
     },
@@ -40,7 +42,8 @@
       "role": "backup",
       "role_tags": [
         "backup",
-        "tier_l2"
+        "tier_l2",
+        "fixer"
       ],
       "provider": "codex",
       "parentId": "entity-agent-claude",
@@ -56,8 +59,10 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 1136.7751859414454,
-      "y": 39.69699127505524
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 1017.7878441692935,
+      "y": 35.89952292062486
     },
     {
       "id": "entity-worker-qwen",
@@ -79,8 +84,10 @@
         "ponytail"
       ],
       "capabilities": [],
-      "x": 0.0,
-      "y": 645.1918723366477
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 71.27269398082386,
+      "y": 675.7373046875
     },
     {
       "id": "entity-worker-deepseek",
@@ -104,8 +111,10 @@
         "promptfoo"
       ],
       "capabilities": [],
-      "x": 485.09085360440343,
-      "y": 641.8181818181819
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 509.8180819424716,
+      "y": 682.5454434481535
     },
     {
       "id": "entity-worker-mistral",
@@ -125,11 +134,13 @@
         "backend-builder"
       ],
       "capabilities": [],
-      "x": 968.727294921875,
-      "y": 649.0908536044035
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 909.0909534801136,
+      "y": 685.4544899680399
     }
   ],
-  "zoom": 0.8699999999999999,
+  "zoom": 0.7899999999999999,
   "drawer_width": 360,
-  "updated_at": "2026-07-06T20:32:23.006221Z"
+  "updated_at": "2026-07-07T23:57:11.988467Z"
 }

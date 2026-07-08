@@ -232,7 +232,9 @@ _CATALOG: tuple[ProviderInfo, ...] = (
             RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "opus",
         },
         signup_url="https://claude.com/claude-code",
-        cli_command="claude -p --model {model} --max-budget-usd 0.02 --output-format text",
+        # No --max-budget-usd: this targets an authenticated Claude subscription
+        # (OAuth login via `claude /login`), which has no per-call USD cost to cap.
+        cli_command="claude -p --model {model} --output-format text",
         login_command="claude /login",
     ),
     # --- Cloud API (paid, some free tiers) ---

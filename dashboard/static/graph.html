@@ -1,681 +1,2103 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KARAJAN — Grafo de Módulos</title>
+<title>KARAJAN — Grafo de Código</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN TOKENS — copied verbatim from dashboard/static/styles.css
+   so this iframe is self-contained yet visually identical to the
+   parent dashboard in all three themes (dark / light / amber).
+   ═══════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#12151C;--surface:#1A1E28;--surface2:#222736;
-  --border:#2D3448;--accent:#D4A828;--text:#E8EAF0;
-  --text-muted:#7A84A0;--radius:6px;
+  --r:6px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
 }
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0e1013;--panel:#2a2f36;--panel-2:#333a45;--line:#3f4750;
+  --text:#feebc8;--muted:#5c6773;--accent:#f9c74f;--accent-ink:#14110a;
+  --ok:#7dbb8a;--warn:#f9c74f;--bad:#e2705b;
+}
+html[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f7faf8;--panel:#ffffff;--panel-2:#f1f5f2;--line:#dbe3dd;
+  --text:#17231c;--muted:#5f6f65;--accent:#3f7554;--accent-ink:#ffffff;
+  --ok:#367b52;--warn:#a97416;--bad:#b94e3f;
+}
+html[data-theme="amber"]{
+  color-scheme:light;
+  --bg:#f6f6f5;--panel:#ffffff;--panel-2:#f0f0ee;--line:#dcdcd9;
+  --text:#1f2023;--muted:#6b6b6c;--accent:#8a5a12;--accent-ink:#ffffff;
+  --ok:#4f7c61;--warn:#8c5c10;--bad:#c0492f;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden}
 body{
   background:var(--bg);color:var(--text);
-  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-  font-size:13px;display:flex;flex-direction:column;
+  font-family:var(--font);font-size:13px;
+  display:flex;flex-direction:column;
 }
-header{
-  padding:10px 18px;background:var(--surface);
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:14px;flex-shrink:0;
+
+/* ---- Workspace tabs --------------------------------------------- */
+.workspace-tabs{
+  position:absolute;top:0;left:0;right:0;height:40px;z-index:8;
+  display:none;align-items:center;gap:8px;padding:0 10px;
+  background:var(--panel);border-bottom:1px solid var(--line);
 }
-header h1{
-  font-size:14px;font-weight:700;letter-spacing:.08em;color:var(--accent);
-  white-space:nowrap;
+body.has-editor-tabs .workspace-tabs{display:flex}
+.workspace-tabs .editor-titlebar{flex:1;min-width:0;height:100%;border-bottom:0}
+.workspace-tabs .status{margin-left:8px;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+select,input[type="text"]{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:6px 8px;color:var(--text);outline:none;font:inherit;
 }
-.subtitle{font-size:10px;color:var(--text-muted);margin-top:2px}
+select:focus,input:focus{border-color:var(--accent)}
+button{
+  background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+  padding:6px 11px;border-radius:var(--r);cursor:pointer;font:inherit;
+}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.55;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.danger:hover:not(:disabled){border-color:var(--bad);color:var(--bad)}
+.status{
+  margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted);
+  text-align:right;line-height:1.5;white-space:nowrap;
+}
+.status b{color:var(--text)}
+.status .err{color:var(--bad)}
+.status .ok{color:var(--ok)}
+
+/* ---- Add-repo form (revealed) ---------------------------------- */
+.addform{
+  display:none;width:100%;gap:8px;align-items:center;flex-wrap:wrap;
+  padding-top:8px;margin-top:2px;border-top:1px solid var(--line);
+}
+.addform.open{display:flex}
+.addform input{flex:1;min-width:160px}
+.addform .msg{font-family:var(--mono);font-size:11px;color:var(--bad);flex-basis:100%}
+
+/* ---- Legend ---------------------------------------------------- */
 .legend{
-  display:flex;gap:10px;margin-left:auto;align-items:center;flex-wrap:wrap;
+  position:absolute;top:10px;right:10px;z-index:6;
+  display:grid;grid-template-columns:repeat(8,max-content);gap:4px 8px;align-items:center;width:max-content;max-width:min(560px,calc(100% - 420px));
+  background:color-mix(in srgb,var(--panel) 92%,transparent);
+  border:1px solid var(--line);border-radius:var(--r);padding:6px 8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+  cursor:pointer;transition:max-width .16s ease,width .16s ease,opacity .16s ease;
 }
-.li{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)}
+.legend:not(:hover):not(.open){
+  display:flex;width:34px;max-width:34px;height:34px;overflow:hidden;opacity:.82;padding:0;align-items:center;justify-content:center;
+}
+.legend:not(:hover):not(.open) .li:not(:first-child),
+.legend:not(:hover):not(.open) .legend-help{display:none}
+.legend:not(:hover):not(.open) .li:first-child{font-size:0}
+.legend:not(:hover):not(.open) .li:first-child .ld{width:10px;height:10px}
+.legend.open{cursor:default}
+.li{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap}
 .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.li.regex .ld{background:transparent;border:1px dashed var(--muted)}
+.legend-help{
+  grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding-top:4px;border-top:1px solid var(--line);
+  font-size:10px;color:var(--muted);font-family:var(--mono);
+}
+
+/* ---- Main split ------------------------------------------------ */
 .main{display:flex;flex:1;overflow:hidden;min-height:0}
+
+/* ---- Tree sidebar (left) --------------------------------------- */
+.tree-pane{
+  width:300px;min-width:280px;max-width:620px;background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;position:relative;
+}
+.sidebar-collapsed .tree-pane{width:0!important;min-width:0;border-right:0;resize:none}
+.sidebar-collapsed .tree-pane>*{display:none}
+.tree-resizer{position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;z-index:9;background:transparent}
+.tree-resizer:hover{background:color-mix(in srgb,var(--accent) 55%,transparent)}
+.side-rail{
+  position:absolute;top:10px;left:10px;z-index:6;
+  width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  font-size:14px;font-weight:700;color:var(--accent);
+}
+.side-tools{padding:10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.side-tools-row{display:flex;gap:6px;align-items:center}
+.side-tools select{flex:1;min-width:0}
+.icon-btn{
+  width:30px;height:30px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+  font-size:14px;line-height:1;flex-shrink:0;background:linear-gradient(180deg,var(--panel-2),color-mix(in srgb,var(--panel-2) 70%,#000));
+  border-color:color-mix(in srgb,var(--line) 72%,var(--accent));color:var(--text);
+}
+.icon-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);filter:brightness(1.08)}
+.project-list{display:flex;flex-direction:column;gap:5px}
+.project-card{
+  display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;
+  padding:7px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);
+}
+.project-card.active{border-color:var(--accent);background:var(--panel-2)}
+.project-name{font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-meta{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-actions{display:flex;gap:3px}
+.project-actions .icon-btn{width:22px;height:22px;font-size:11px}
+.project-actions [data-action="scan"]{color:#93c5fd}
+.project-actions [data-action="audit"]{color:#f9c74f}
+.project-actions [data-action="close"]{color:#fca5a5}
+.pane-h-row{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+.pane-h{
+  padding:9px 12px;font-size:10px;font-weight:600;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;
+  flex-shrink:0;
+}
+#tree{overflow:auto;flex:1;padding:4px 0}
+#tree::-webkit-scrollbar,#detail::-webkit-scrollbar,.findings-box::-webkit-scrollbar{width:6px;height:6px}
+#tree::-webkit-scrollbar-track,#detail::-webkit-scrollbar-track,.findings-box::-webkit-scrollbar-track{background:transparent}
+#tree::-webkit-scrollbar-thumb,#detail::-webkit-scrollbar-thumb,.findings-box::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--muted) 55%,transparent);border-radius:999px}
+#tree::-webkit-scrollbar-thumb:hover,#detail::-webkit-scrollbar-thumb:hover,.findings-box::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+.trow{
+  display:flex;align-items:center;gap:5px;padding:3px 8px;cursor:pointer;
+  white-space:nowrap;border-left:2px solid transparent;
+}
+.trow:hover{background:var(--panel-2)}
+.trow.active{background:var(--panel-2);border-left-color:var(--accent)}
+.caret{
+  width:12px;flex-shrink:0;color:var(--muted);font-size:9px;
+  display:inline-block;text-align:center;user-select:none;
+}
+.caret.leaf{visibility:hidden}
+.tdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.tdot.regex{background:transparent!important;border:1px dashed var(--muted)}
+.tlbl{
+  font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;
+}
+.tvsc{color:var(--muted);text-decoration:none;font-size:11px;flex-shrink:0;margin-left:auto;padding:0 3px}
+.tvsc:hover{color:var(--accent)}
+.tchildren{display:none}
+.tchildren.open{display:block}
+
+/* ---- Canvas (center) ------------------------------------------- */
 .canvas-wrap{flex:1;position:relative;overflow:hidden}
 canvas{display:block;width:100%;height:100%;cursor:grab}
 canvas.grabbing{cursor:grabbing}
 .search-wrap{
-  position:absolute;top:10px;left:10px;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:5px 10px;
+  position:absolute;top:10px;left:56px;background:var(--panel);
+  height:34px;border:1px solid var(--line);border-radius:var(--r);padding:0 10px;
   display:flex;align-items:center;gap:7px;z-index:5;
 }
-.search-wrap svg{flex-shrink:0;color:var(--text-muted)}
-.search-wrap input{
-  background:none;border:none;outline:none;color:var(--text);
-  font-size:12px;width:170px;
-}
-.search-wrap input::placeholder{color:var(--text-muted)}
-.zoom-btns{
-  position:absolute;bottom:14px;left:10px;
-  display:flex;flex-direction:column;gap:3px;z-index:5;
-}
+body.has-editor-tabs .search-wrap,
+body.has-editor-tabs .side-rail,
+body.has-editor-tabs .legend{top:50px}
+body.has-editor-tabs .float-panels{top:116px}
+.search-wrap svg{flex-shrink:0;color:var(--muted)}
+.search-wrap input{background:none;border:none;outline:none;color:var(--text);font-size:12px;width:160px;padding:0}
+.zoom-btns{position:absolute;bottom:14px;left:10px;display:flex;flex-direction:column;gap:3px;z-index:5}
+.map-controls{position:absolute;bottom:14px;left:10px;display:flex;align-items:flex-end;gap:8px;z-index:5}
+.map-controls .zoom-btns{position:static}
 .zbtn{
-  width:26px;height:26px;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);color:var(--text);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  font-size:14px;user-select:none;transition:border-color .15s;
+  width:26px;height:26px;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r);color:var(--text);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:14px;user-select:none;
 }
 .zbtn:hover{border-color:var(--accent);color:var(--accent)}
 .tip{
-  position:absolute;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:8px 10px;font-size:11px;
-  pointer-events:none;display:none;max-width:230px;z-index:20;
-  box-shadow:0 4px 16px rgba(0,0,0,.5);
+  position:absolute;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r);padding:8px 10px;font-size:11px;pointer-events:none;
+  display:none;max-width:320px;z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.35);
 }
 .tip-title{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:3px}
-.tip-path{color:var(--text-muted);font-size:10px;margin-bottom:6px;word-break:break-all}
-.tip-lbl{color:var(--text-muted);font-size:10px;margin-bottom:2px}
-.tip-imp{color:var(--text);padding:1px 0;font-size:10px}
-.hint{
-  position:absolute;bottom:14px;right:10px;font-size:10px;
-  color:var(--text-muted);text-align:right;line-height:1.6;z-index:5;
-}
-.sidebar{
-  width:230px;background:var(--surface);
-  border-left:1px solid var(--border);
-  display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;
-}
-.sidebar h2{
-  padding:10px 13px;font-size:10px;font-weight:600;color:var(--text-muted);
-  letter-spacing:.08em;text-transform:uppercase;
-  border-bottom:1px solid var(--border);flex-shrink:0;
-}
-.slist{overflow-y:auto;flex:1}
-.slist::-webkit-scrollbar{width:4px}
-.slist::-webkit-scrollbar-track{background:transparent}
-.slist::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.sg{
-  padding:7px 13px 2px;font-size:9px;color:var(--text-muted);
-  letter-spacing:.07em;text-transform:uppercase;font-weight:600;
+.tip-path{color:var(--muted);font-size:10px;margin-bottom:4px;word-break:break-all}
+.tip-lbl{color:var(--muted);font-size:10px;margin:4px 0 2px}
+.tip-grid{display:grid;grid-template-columns:auto auto;gap:2px 10px;margin-top:6px}
+.tip-grid span:nth-child(odd){color:var(--muted)}
+.tip-find{margin-top:6px;color:var(--bad);font-weight:600}
+.hint{display:none}
+.overlay{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;text-align:center;padding:24px;z-index:10;
   background:var(--bg);
 }
-.si{
-  padding:5px 13px;cursor:pointer;display:flex;align-items:center;
-  gap:7px;border-left:2px solid transparent;transition:background .1s;
+.overlay.show{display:flex}
+.overlay p{color:var(--muted);max-width:340px;line-height:1.6}
+.overlay b{color:var(--text);display:block;font-size:15px;margin-bottom:2px}
+
+/* ---- Floating inspector panes ---------------------------------- */
+.float-panels{position:absolute;top:76px;right:10px;bottom:12px;width:min(450px,36vw);z-index:7;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.float-card{
+  width:min(450px,100%);min-width:280px;max-width:min(620px,72vw);min-height:130px;max-height:calc(100% - 12px);
+  background:color-mix(in srgb,var(--panel) 96%,transparent);
+  border:1px solid var(--line);border-radius:var(--r);box-shadow:0 14px 34px rgba(0,0,0,.28);
+  display:flex;flex-direction:column;overflow:auto;pointer-events:auto;position:relative;
+  scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--muted) 55%,transparent) transparent;
 }
-.si:hover{background:var(--surface2)}
-.si.active{background:var(--surface2);border-left-color:var(--accent)}
-.si-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.si-lbl{
-  font-size:11px;color:var(--text);overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap;
+.resize-grip{position:absolute;left:0;bottom:0;width:16px;height:16px;cursor:nesw-resize;z-index:4}
+.resize-grip::before{content:"";position:absolute;left:3px;bottom:3px;width:9px;height:9px;border-left:2px solid var(--muted);border-bottom:2px solid var(--muted);opacity:.8}
+.resize-grip:hover::before{border-color:var(--accent)}
+.float-card.findings{max-height:calc(100% - 12px)}
+.float-card.minimized{display:none}
+.float-h{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);flex-shrink:0;cursor:move}
+.float-h .pane-h{border-bottom:0}
+.float-h .icon-btn{width:28px;height:28px;margin-right:3px;border-color:transparent;background:transparent;font-size:16px}
+.float-h .icon-btn:hover{background:var(--panel-2);border-color:var(--line)}
+.bubble-tray{position:absolute;right:12px;bottom:14px;display:flex;gap:6px;z-index:8}
+.bubble{display:none;border-radius:999px;padding:7px 10px;font-size:11px;background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.bubble.show{display:inline-flex}
+#detail{overflow:auto;flex:1;padding:12px}
+#detail .empty{color:var(--muted);font-size:12px;line-height:1.6}
+.d-title{font-size:14px;font-weight:700;color:var(--accent);word-break:break-all}
+.d-top{position:relative;padding-right:172px;min-height:34px}
+.d-kind{
+  display:inline-block;font-family:var(--mono);font-size:10px;text-transform:uppercase;
+  letter-spacing:.06em;padding:1px 7px;border-radius:999px;border:1px solid var(--line);
+  color:var(--muted);margin:4px 0 8px;
 }
-.infobar{
-  padding:6px 13px;border-top:1px solid var(--border);
-  font-size:10px;color:var(--text-muted);flex-shrink:0;
-  min-height:30px;
+.d-actions{position:absolute;top:0;right:0;display:flex;align-items:center;gap:5px}
+.d-open{
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;margin:0;padding:6px 9px;border-radius:var(--r);
+  background:var(--accent);border:1px solid var(--accent);color:var(--accent-ink);
+  text-decoration:none;font-size:12px;line-height:1;min-height:30px;
+}
+.d-open.code{min-width:34px;padding:6px 8px;font-family:var(--mono);font-weight:700}
+.d-open:hover{filter:brightness(1.08);color:var(--accent-ink)}
+.d-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;margin:8px 0}
+.d-grid .k{color:var(--muted)}
+.d-grid .v{color:var(--text);font-family:var(--mono);word-break:break-all}
+.d-sec{margin-top:12px;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.d-item{font-size:11px;padding:2px 0;color:var(--text)}
+.d-item.ext{color:var(--muted)}
+.d-item .arrow{color:var(--accent)}
+.d-mini{color:var(--muted);font-size:10px;font-family:var(--mono);margin-left:4px}
+.d-chipline{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+.d-chip{font-size:10px;border:1px solid var(--line);border-radius:999px;padding:2px 6px;color:var(--muted)}
+.d-chip.kind-class{border-color:#9B59B6;color:#d8b4fe}
+.d-chip.kind-attribute{border-color:#9CA3AF;color:#d1d5db}
+.d-chip.kind-method{border-color:#E2705B;color:#fca5a5}
+.d-chip.kind-function{border-color:#FF8C42;color:#fdba74}
+.d-chip.kind-import{border-color:#4A9EFF;color:#93c5fd}
+.d-uml{border:1px solid var(--line);border-radius:var(--r);margin-top:8px;overflow:hidden;background:var(--bg)}
+.d-uml-h{padding:6px 8px;font-weight:700;color:#d8b4fe;border-bottom:1px solid var(--line);font-size:12px}
+.d-uml-row{padding:4px 8px;border-top:1px solid color-mix(in srgb,var(--line) 58%,transparent);font-family:var(--mono);font-size:11px}
+.d-uml-row:first-child{border-top:0}
+.d-uml-kind{color:var(--muted);font-family:var(--font);font-size:10px;text-transform:uppercase;margin-right:5px}
+.d-uml-kind.attr{color:#d1d5db}
+.d-uml-kind.method{color:#fca5a5}
+
+.ia-toggle{
+  display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;user-select:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px;
+}
+.ia-toggle input{cursor:pointer}
+
+/* ---- Findings panel (bottom of detail pane) -------------------- */
+.findings-box{
+  overflow:auto;padding:8px 12px;flex:1;display:none;
+}
+.findings-box .f-head{
+  font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+  font-weight:600;margin-bottom:8px;
+}
+.f-item{
+  position:relative;display:block;padding:8px 8px 8px 11px;margin-bottom:6px;cursor:pointer;
+  border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(180deg,color-mix(in srgb,var(--panel-2) 96%,#fff),var(--panel-2));
+  box-shadow:inset 3px 0 0 var(--finding-color, var(--line));
+}
+.f-item:hover{border-color:color-mix(in srgb,var(--finding-color, var(--accent)) 72%,var(--line));background:color-mix(in srgb,var(--panel-2) 86%,var(--finding-color, var(--accent)))}
+.f-top{display:flex;align-items:center;gap:6px;min-width:0;margin-bottom:5px}
+.f-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--finding-color, var(--line)) 16%,transparent)}
+.f-detector{font-family:var(--mono);font-size:10px;font-weight:800;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f-sev{margin-left:auto;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--finding-color, var(--muted));font-weight:800}
+.f-msg{display:block;font-size:11px;color:var(--text);line-height:1.45;word-break:break-word;padding-left:14px}
+.f-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;padding-left:14px}
+.f-tool{font-size:10px;border:1px solid var(--line);border-radius:999px;padding:2px 7px;color:var(--muted);font-family:var(--mono);background:color-mix(in srgb,var(--bg) 42%,transparent)}
+.f-fix,.f-fix-all{
+  border:1px solid color-mix(in srgb,var(--accent) 72%,var(--line));border-radius:var(--r);
+  background:color-mix(in srgb,var(--accent) 18%,var(--panel-2));color:var(--accent);
+  font-size:10px;font-weight:800;padding:5px 8px;line-height:1;cursor:pointer;white-space:nowrap;
+}
+.f-fix:hover,.f-fix-all:hover{background:var(--accent);color:var(--accent-ink)}
+.f-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.f-head-text{margin-right:auto}
+.llm-block{margin-bottom:8px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel-2)}
+.llm-block>summary{cursor:pointer;padding:6px 8px;font-size:11px;font-weight:600;color:var(--accent);user-select:none}
+.llm-block .llm-body{padding:2px 10px 9px;font-size:11px;color:var(--text);line-height:1.55}
+
+/* ---- Embedded code editor -------------------------------------- */
+.editor-window{
+  position:absolute;top:48px;left:10px;right:10px;bottom:10px;height:auto;min-width:360px;min-height:180px;max-height:none;
+  display:none;flex-direction:column;z-index:9;background:color-mix(in srgb,var(--panel) 97%,transparent);
+  border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 30px rgba(0,0,0,.28);
+  overflow:hidden;
+}
+.editor-window.open{display:flex}
+.editor-window.graph-mode{display:none}
+.editor-window.graph-mode .editor-path,
+.editor-window.graph-mode .editor-body,
+.editor-window.graph-mode .editor-status{display:none}
+.editor-titlebar{height:34px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);flex-shrink:0}
+.editor-tabs{display:flex;align-items:flex-end;gap:2px;min-width:0;flex:1;height:100%;overflow:auto hidden;padding-left:8px}
+.editor-tab{
+  height:28px;min-width:96px;max-width:190px;padding:0 5px 0 8px;display:flex;align-items:center;gap:6px;
+  background:var(--bg);border:1px solid var(--line);border-bottom-color:transparent;border-radius:var(--r) var(--r) 0 0;
+  color:var(--muted);font-size:11px;cursor:pointer;
+}
+.editor-tab.active{background:var(--panel-2);color:var(--text);border-color:var(--accent);border-bottom-color:var(--panel-2)}
+.editor-tab.graph-tab{min-width:72px;color:var(--accent);font-weight:700}
+.editor-tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.editor-dirty{color:var(--accent);font-weight:800}
+.editor-close{
+  width:16px;height:16px;margin-left:auto;border:0;background:transparent;color:var(--muted);
+  padding:0;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:4px;
+}
+.editor-close:hover{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.editor-actions{display:flex;gap:3px;padding-right:5px}
+.editor-actions .icon-btn{width:26px;height:26px;background:transparent;border-color:transparent}
+.editor-actions .icon-btn:hover{background:var(--panel-2);border-color:var(--line)}
+.editor-window.split{left:auto;width:var(--editor-split-width,48%)}
+.canvas-wrap.editor-split .float-panels{right:calc(var(--editor-split-width,48%) + 18px)}
+body.editor-graph-active .editor-actions{display:none}
+.editor-path{
+  min-width:0;padding:0 10px;font-family:var(--mono);font-size:10px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;
+}
+.editor-codebar{height:30px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-shrink:0;background:color-mix(in srgb,var(--panel) 92%,transparent)}
+.editor-body{display:grid;grid-template-columns:auto 1fr;min-height:0;flex:1;background:#0b0d10}
+.editor-lines{
+  min-width:42px;padding:10px 8px;background:#11151a;color:#59636f;font-family:var(--mono);font-size:12px;
+  line-height:1.55;text-align:right;overflow:hidden;user-select:none;border-right:1px solid var(--line);
+}
+.editor-codecell{position:relative;min-width:0;min-height:0;background:#0b0d10;overflow:hidden}
+.editor-highlight{
+  position:absolute;inset:0;margin:0;padding:10px 12px;font-family:var(--mono);font-size:12px;line-height:1.55;
+  tab-size:2;white-space:pre;color:#d7e0ea;pointer-events:none;z-index:1;
+}
+.editor-text{
+  position:absolute;inset:0;z-index:2;width:100%;height:100%;resize:none;border:0;outline:0;background:transparent;color:transparent;
+  padding:10px 12px;font-family:var(--mono);font-size:12px;line-height:1.55;tab-size:2;overflow:auto;
+  caret-color:#e8eef6;white-space:pre;
+  scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--muted) 55%,transparent) transparent;
+}
+.editor-text::selection{background:rgba(74,158,255,.32);color:transparent}
+.tok-kw{color:#c084fc;font-weight:700}
+.tok-str{color:#86efac}
+.tok-num{color:#fbbf24}
+.tok-cmt{color:#738194;font-style:italic}
+.tok-def{color:#7dd3fc}
+.tok-op{color:#fca5a5}
+.editor-status{
+  height:24px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;
+  padding:0 10px;font-family:var(--mono);font-size:10px;color:var(--muted);flex-shrink:0;
+}
+.editor-window>.resize-grip{display:none}
+.editor-status .ok{color:var(--ok)}
+.editor-status .err{color:var(--bad)}
+@media (max-width:900px){
+  .tree-pane{width:260px;max-width:84vw}
+  .legend{top:48px;left:10px;right:auto;max-width:calc(100% - 20px)}
+  .float-panels{top:auto;left:10px;right:10px;bottom:56px;width:auto;max-height:48%;flex-direction:row}
+  .float-card{max-height:100%;min-width:0;flex:1}
+  .hint{display:none}
+  .side-rail{width:34px}
+  .search-wrap{left:56px}
+  .editor-window{left:10px;right:10px;bottom:54px;width:auto;min-width:0}
 }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>KARAJAN &#8212; Grafo de M&#243;dulos</h1>
-    <div class="subtitle">Repositorio: C:\Users\tiand\Desktop\karajan</div>
-  </div>
-  <div class="legend">
-    <div class="li"><div class="ld" style="background:#D4A828"></div>Ra&#237;z</div>
-    <div class="li"><div class="ld" style="background:#4A9EFF"></div>app/</div>
-    <div class="li"><div class="ld" style="background:#4CAF6A"></div>providers/</div>
-    <div class="li"><div class="ld" style="background:#9B59B6"></div>tests/</div>
-    <div class="li"><div class="ld" style="background:#FF8C42"></div>tools/</div>
-  </div>
-</header>
 <div class="main">
+  <!-- ═══════════════════ NAVIGATION TREE ═══════════════════ -->
+  <div class="tree-pane">
+    <div class="side-tools">
+      <div class="side-tools-row">
+        <select id="repoSelect" title="Abrir repositorio"></select>
+        <button id="addRepoToggle" class="icon-btn" title="Añadir repositorio">&#43;</button>
+      </div>
+      <div class="project-list" id="projectList"></div>
+      <form class="addform" id="addForm" autocomplete="off">
+        <input type="text" id="newRepoName" placeholder="Nombre (p.ej. Atlas)">
+        <input type="text" id="newRepoPath" placeholder="Ruta raíz (p.ej. C:\Users\...\Atlas)">
+        <button type="submit" class="primary" id="addSubmit">Crear</button>
+        <button type="button" id="addCancel">Cancelar</button>
+        <div class="msg" id="addMsg"></div>
+      </form>
+    </div>
+    <div class="pane-h-row">
+      <div class="pane-h">Árbol de código</div>
+    </div>
+    <div id="tree"></div>
+    <div class="tree-resizer" id="treeResizer" title="Redimensionar panel"></div>
+  </div>
+
+  <!-- ═══════════════════ GRAPH CANVAS ═══════════════════ -->
   <div class="canvas-wrap">
+    <div class="workspace-tabs">
+      <div class="editor-titlebar">
+        <div class="editor-tabs" id="editorTabs"></div>
+      </div>
+      <div class="status" id="status">Cargando…</div>
+    </div>
+    <button id="sideRail" class="side-rail" title="Ocultar panel lateral">‹</button>
     <div class="search-wrap">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input id="search" type="text" placeholder="Buscar m&#243;dulo...">
+      <input id="search" type="text" placeholder="Buscar nodo…">
     </div>
     <canvas id="c"></canvas>
-    <div class="zoom-btns">
-      <div class="zbtn" id="zi">+</div>
-      <div class="zbtn" id="zo">&#8722;</div>
-      <div class="zbtn" id="zr" style="font-size:11px">&#8962;</div>
+    <div class="legend" id="legend"></div>
+    <div class="map-controls">
+      <div class="zoom-btns">
+        <div class="zbtn" id="zi">+</div>
+        <div class="zbtn" id="zo">&#8722;</div>
+        <div class="zbtn" id="zr" style="font-size:11px">&#8962;</div>
+      </div>
+      <label class="ia-toggle" title="Incluir narrativa IA (usa el proveedor de grafo configurado)"><input type="checkbox" id="iaToggle"> IA</label>
     </div>
     <div class="tip" id="tip"></div>
-    <div class="hint">
-      Rueda: zoom &nbsp;&#183;&nbsp; Arrastrar fondo: pan<br>
-      Clic nodo: seleccionar &nbsp;&#183;&nbsp; Clic 2x: fijar posici&#243;n
+    <div class="overlay" id="overlay"><p id="overlayMsg"></p></div>
+    <section class="editor-window" id="editorWindow">
+      <div class="editor-codebar">
+        <div class="editor-path" id="editorPath">Sin archivo abierto</div>
+        <div class="editor-actions">
+          <button class="icon-btn" id="editorDock" title="Dividir con el grafo">⇆</button>
+          <button class="icon-btn" id="editorPopout" title="Extraer a ventana">↗</button>
+          <button class="icon-btn" id="editorSave" title="Guardar (Ctrl+S)">✓</button>
+          <button class="icon-btn" id="editorHide" title="Volver al grafo">−</button>
+        </div>
+      </div>
+      <div class="editor-body">
+        <pre class="editor-lines" id="editorLines">1</pre>
+        <div class="editor-codecell">
+          <pre class="editor-highlight" id="editorHighlight"></pre>
+          <textarea class="editor-text" id="editorText" spellcheck="false" wrap="off"></textarea>
+        </div>
+      </div>
+      <div class="editor-status">
+        <span id="editorStatus">Doble click en un fichero del árbol para abrirlo.</span>
+        <span>Ctrl+S</span>
+      </div>
+      <div class="resize-grip" data-resize-target="editorWindow"></div>
+    </section>
+    <div class="float-panels">
+      <section class="float-card" id="detailPanel">
+        <div class="float-h"><div class="pane-h">Detalle</div><button class="icon-btn" data-minimize="detail" title="Minimizar detalle">−</button></div>
+        <div id="detail"><div class="empty">Selecciona un nodo en el grafo o el árbol para inspeccionarlo.</div></div>
+        <div class="resize-grip" data-resize-target="detailPanel"></div>
+      </section>
+      <section class="float-card findings" id="findingsPanel">
+        <div class="float-h"><div class="pane-h">Hallazgos</div><button class="icon-btn" data-minimize="findings" title="Minimizar hallazgos">−</button></div>
+        <div id="findingsBox" class="findings-box"></div>
+        <div class="resize-grip" data-resize-target="findingsPanel"></div>
+      </section>
+    </div>
+    <div class="bubble-tray">
+      <button class="bubble" id="detailBubble" data-restore="detail">Detalle</button>
+      <button class="bubble" id="findingsBubble" data-restore="findings">Hallazgos</button>
     </div>
   </div>
-  <div class="sidebar">
-    <h2>M&#243;dulos</h2>
-    <div class="slist" id="slist"></div>
-    <div class="infobar" id="info">Cargando…</div>
-  </div>
 </div>
+
 <script>
+"use strict";
 // ═══════════════════════════════════════════════════════════════
-// GRAPH DATA
+// THEME SYNC — the iframe is a separate document, so it does NOT
+// inherit the parent's data-theme. Read localStorage on load and
+// track the `storage` event (fired here when the parent flips theme).
 // ═══════════════════════════════════════════════════════════════
-const GROUPS = {
-  root:      { color:'#D4A828', label:'Raíz' },
-  app:       { color:'#4A9EFF', label:'app/' },
-  providers: { color:'#4CAF6A', label:'providers/' },
-  tests:     { color:'#9B59B6', label:'tests/' },
-  tools:     { color:'#FF8C42', label:'tools/' },
+// Declarations first: `THEME` is a `const`, so anything that reads it must run
+// after this point (avoids a temporal-dead-zone "Cannot access 'THEME' before
+// initialization" crash that would abort the whole script at load).
+const THEME = { bg:"#0e1013", text:"#feebc8", line:"#3f4750", accent:"#f9c74f", muted:"#5c6773" };
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function updateThemeCache(){
+  THEME.bg = cssVar("--bg") || THEME.bg;
+  THEME.text = cssVar("--text") || THEME.text;
+  THEME.line = cssVar("--line") || THEME.line;
+  THEME.accent = cssVar("--accent") || THEME.accent;
+  THEME.muted = cssVar("--muted") || THEME.muted;
+}
+function currentTheme(){ return localStorage.getItem("karajan-theme") || "dark"; }
+function applyThemeInIframe(t){ document.documentElement.dataset.theme = t || "dark"; updateThemeCache(); }
+// Now safe to run: sets data-theme from localStorage and primes the cache.
+applyThemeInIframe(currentTheme());
+window.addEventListener("storage", (e) => { if (e.key === "karajan-theme") applyThemeInIframe(e.newValue); });
+
+// ═══════════════════════════════════════════════════════════════
+// API HELPER — duplicated from app.js (~line 244). Documented
+// deviation: the iframe is a separate document, so we cannot import
+// app.js; this ~8-line helper is copied verbatim in spirit.
+// ═══════════════════════════════════════════════════════════════
+async function api(path, options = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"]/g,
+  (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+// ═══════════════════════════════════════════════════════════════
+// KIND STYLING (theme-independent colors for canvas legibility)
+// ═══════════════════════════════════════════════════════════════
+const KIND = {
+  repo:     { color:"#f9c74f", label:"repo",     r:16 },
+  dir:      { color:"#4A9EFF", label:"dir",      r:12 },
+  file:     { color:"#4CAF6A", label:"file",     r:9  },
+  class:    { color:"#9B59B6", label:"class",    r:8  },
+  attribute:{ color:"#9CA3AF", label:"attr",     r:5  },
+  function: { color:"#FF8C42", label:"function", r:7  },
+  method:   { color:"#E2705B", label:"method",   r:5  },
 };
+function kindColor(k){ return (KIND[k] || {color:"#888"}).color; }
+function kindRadius(k){ return (KIND[k] || {r:8}).r; }
 
-// Group layout centers (world space)
-const GC = {
-  root:      { x:0,    y:-320 },
-  app:       { x:-80,  y:0    },
-  providers: { x:280,  y:-80  },
-  tests:     { x:0,    y:330  },
-  tools:     { x:340,  y:300  },
-};
-
-const RAW = [
-  // ── ROOT ─────────────────────────────────────────────────────
-  {id:'desktop_app',   lb:'desktop_app',   path:'desktop_app.py',   g:'root',
-   imp:['app/env']},
-  {id:'karajan_mcp',   lb:'karajan_mcp',   path:'karajan_mcp.py',   g:'root',
-   imp:[]},
-
-  // ── APP ──────────────────────────────────────────────────────
-  {id:'app/__init__',       lb:'__init__',         path:'app/__init__.py',       g:'app', imp:[]},
-  {id:'app/auth',           lb:'auth',             path:'app/auth.py',           g:'app', imp:[]},
-  {id:'app/config',         lb:'config',           path:'app/config.py',         g:'app',
-   imp:['app/models','app/catalog','app/credentials']},
-  {id:'app/logging_config', lb:'logging_config',   path:'app/logging_config.py', g:'app', imp:[]},
-  {id:'app/metrics_export', lb:'metrics_export',   path:'app/metrics_export.py', g:'app',
-   imp:['app/models']},
-  {id:'app/routing_layout', lb:'routing_layout',   path:'app/routing_layout.py', g:'app',
-   imp:['app/models']},
-  {id:'app/credentials',    lb:'credentials',      path:'app/credentials.py',    g:'app',
-   imp:['app/catalog','app/models']},
-  {id:'app/flow_policy',    lb:'flow_policy',      path:'app/flow_policy.py',    g:'app',
-   imp:['app/models']},
-  {id:'app/monitoring',     lb:'monitoring',       path:'app/monitoring.py',     g:'app',
-   imp:['app/models']},
-  {id:'app/catalog',        lb:'catalog',          path:'app/catalog.py',        g:'app',
-   imp:['app/models']},
-  {id:'app/delegation',     lb:'delegation',       path:'app/delegation.py',     g:'app',
-   imp:['app/logging_config','app/flow_policy','app/models',
-        'app/providers/__init__','app/providers/base','app/providers/registry']},
-  {id:'app/env',            lb:'env',              path:'app/env.py',            g:'app', imp:[]},
-  {id:'app/openclaw_client',lb:'openclaw_client',  path:'app/openclaw_client.py',g:'app',
-   imp:['app/models']},
-  {id:'app/production_setup',lb:'production_setup',path:'app/production_setup.py',g:'app',
-   imp:['app/env','app/catalog','app/credentials','app/models']},
-  {id:'app/skills_catalog', lb:'skills_catalog',   path:'app/skills_catalog.py', g:'app',
-   imp:['app/models']},
-  {id:'app/models',         lb:'models',           path:'app/models.py',         g:'app', imp:[]},
-  {id:'app/classifier',     lb:'classifier',       path:'app/classifier.py',     g:'app',
-   imp:['app/logging_config','app/models','app/providers/__init__','app/router']},
-  {id:'app/database',       lb:'database',         path:'app/database.py',       g:'app',
-   imp:['app/models']},
-  {id:'app/router',         lb:'router',           path:'app/router.py',         g:'app',
-   imp:['app/models']},
-  {id:'app/agent_console',  lb:'agent_console',    path:'app/agent_console.py',  g:'app',
-   imp:['app/models']},
-  {id:'app/main',           lb:'main',             path:'app/main.py',           g:'app',
-   imp:['app/env','app/agent_console','app/catalog','app/classifier','app/config',
-        'app/credentials','app/delegation','app/metrics_export','app/monitoring',
-        'app/openclaw_client','app/production_setup','app/routing_layout',
-        'app/skills_catalog','app/auth','app/logging_config','app/models','app/database']},
-
-  // ── PROVIDERS ────────────────────────────────────────────────
-  {id:'app/providers/__init__', lb:'providers/__init__', path:'app/providers/__init__.py',
-   g:'providers',
-   imp:['app/providers/api','app/providers/base','app/providers/cli',
-        'app/providers/registry','app/providers/simulated']},
-  {id:'app/providers/base',     lb:'providers/base',     path:'app/providers/base.py',
-   g:'providers', imp:['app/models']},
-  {id:'app/providers/simulated',lb:'providers/simulated',path:'app/providers/simulated.py',
-   g:'providers', imp:['app/models','app/providers/base']},
-  {id:'app/providers/api',      lb:'providers/api',      path:'app/providers/api.py',
-   g:'providers', imp:['app/models','app/providers/base']},
-  {id:'app/providers/cli',      lb:'providers/cli',      path:'app/providers/cli.py',
-   g:'providers', imp:['app/models','app/providers/base']},
-  {id:'app/providers/registry', lb:'providers/registry', path:'app/providers/registry.py',
-   g:'providers',
-   imp:['app/catalog','app/models','app/providers/api','app/providers/base',
-        'app/providers/cli','app/providers/simulated']},
-
-  // ── TESTS ────────────────────────────────────────────────────
-  {id:'tests/test_api',              lb:'test_api',              path:'tests/test_api.py',              g:'tests',
-   imp:['app/database','app/models','app/routing_layout']},
-  {id:'tests/test_config',           lb:'test_config',           path:'tests/test_config.py',           g:'tests',
-   imp:['app/models']},
-  {id:'tests/test_config_persistence',lb:'test_config_persist', path:'tests/test_config_persistence.py',g:'tests',
-   imp:['app/database','app/models']},
-  {id:'tests/test_controls',         lb:'test_controls',         path:'tests/test_controls.py',         g:'tests',
-   imp:['app/database','app/delegation','app/models','app/router']},
-  {id:'tests/test_database',         lb:'test_database',         path:'tests/test_database.py',         g:'tests',
-   imp:['app/database','app/delegation','app/router']},
-  {id:'tests/test_delegation',       lb:'test_delegation',       path:'tests/test_delegation.py',       g:'tests',
-   imp:['app/delegation','app/models','app/providers/base',
-        'app/providers/registry','app/providers/simulated','app/router']},
-  {id:'tests/test_health_and_pagination',lb:'test_health_pag',  path:'tests/test_health_and_pagination.py',g:'tests',
-   imp:['app/database','app/models']},
-  {id:'tests/test_ingest',           lb:'test_ingest',           path:'tests/test_ingest.py',           g:'tests',
-   imp:['app/database']},
-  {id:'tests/test_metrics_export',   lb:'test_metrics_export',   path:'tests/test_metrics_export.py',   g:'tests',
-   imp:['app/database','app/delegation','app/models','app/router']},
-  {id:'tests/test_observability',    lb:'test_observability',    path:'tests/test_observability.py',    g:'tests',
-   imp:['app/database','app/delegation','app/models','app/router']},
-  {id:'tests/test_providers',        lb:'test_providers',        path:'tests/test_providers.py',        g:'tests',
-   imp:['app/providers/__init__','app/providers/api','app/providers/cli',
-        'app/providers/simulated','app/models']},
-  {id:'tests/test_router',           lb:'test_router',           path:'tests/test_router.py',           g:'tests',
-   imp:['app/models','app/router']},
-  {id:'tests/test_skills',           lb:'test_skills',           path:'tests/test_skills.py',           g:'tests',
-   imp:['app/models']},
-  {id:'tests/test_agent_console',    lb:'test_agent_console',    path:'tests/test_agent_console.py',    g:'tests',
-   imp:['app/models']},
-  {id:'tests/test_catalog_arch',     lb:'test_catalog_arch',     path:'tests/test_catalog_architecture.py',g:'tests',
-   imp:['app/catalog','app/models','app/providers/api']},
-  {id:'tests/test_openclaw_client',  lb:'test_openclaw_client',  path:'tests/test_openclaw_client.py',  g:'tests',
-   imp:['app/models','app/openclaw_client']},
-  {id:'tests/test_openclaw_api',     lb:'test_openclaw_api',     path:'tests/test_openclaw_api.py',     g:'tests',
-   imp:['app/models']},
-
-  // ── TOOLS ────────────────────────────────────────────────────
-  {id:'tools/run_karajan_trials',lb:'run_karajan_trials',path:'tools/run_karajan_trials.py',
-   g:'tools', imp:[]},
-];
-
-// Node radii (reflect connectivity / importance)
-const RADII = {
-  'app/models':14,'app/main':13,'app/providers/__init__':12,
-  'app/router':12,'app/catalog':11,'app/delegation':11,
-  'app/database':11,'app/classifier':11,
-};
+(function buildLegend(){
+  const el = document.getElementById("legend");
+  let html = "";
+  for (const k of ["repo","dir","file","class","attribute","function","method"]) {
+    html += `<div class="li"><div class="ld" style="background:${KIND[k].color}"></div>${KIND[k].label}</div>`;
+  }
+  html += `<div class="li regex"><div class="ld"></div>regex baja conf.</div>`;
+  html += `<div class="legend-help"><span>Rueda zoom</span><span>Arrastra pan</span><span>Clic fichero abre/pliega</span><span>Doble clic fija</span></div>`;
+  el.innerHTML = html;
+})();
 
 // ═══════════════════════════════════════════════════════════════
-// INIT NODES + EDGES
+// STATE
 // ═══════════════════════════════════════════════════════════════
-const nodeById = {};
-const nodes = RAW.map(r => {
-  const gc = GC[r.g];
-  const angle = Math.random() * Math.PI * 2;
-  const spread = (r.g === 'tests') ? 200 : (r.g === 'app' ? 160 : 100);
-  const node = {
-    id: r.id, label: r.lb, path: r.path, group: r.g,
-    imports: r.imp,
-    x: gc.x + Math.cos(angle)*spread*(0.5+Math.random()*0.8),
-    y: gc.y + Math.sin(angle)*spread*(0.5+Math.random()*0.8),
-    vx:0, vy:0, pinned:false, visible:true,
-    radius: RADII[r.id] || (r.g==='tests'?8:10),
-  };
-  nodeById[r.id] = node;
-  return node;
+let repos = [];            // GET /repos
+let currentRepo = null;    // selected RepoConfig
+function readOpenRepos(){
+  try {
+    const ids = JSON.parse(localStorage.getItem("karajan-open-repos") || "[]");
+    return Array.isArray(ids) ? ids : [];
+  } catch (_) {
+    return [];
+  }
+}
+const openRepoIds = new Set(readOpenRepos());
+let allNodes = [];         // graph nodes (with x/y/vx/vy/pinned attached)
+let allEdges = [];         // graph edges
+const nodeById = {};       // id -> node
+const fileNodeByFileId = {}; // file_id -> file node (for vscode path mapping)
+const childrenByParent = {}; // parent_id ('__root' for repo) -> [nodes]
+const expandedFiles = new Set(); // file NODE ids currently expanded in the graph
+let visibleNodes = [], visibleEdges = [];
+let selNode = null, hovNode = null;
+let query = "";
+// --- Findings (Fase D) ---
+let findings = [];                 // GET /repos/{id}/findings
+const findingsByNode = {};         // node_id -> [finding]
+const nodeSeverity = {};           // node_id -> max severity string
+let llmSummary = null;             // narrative from the last audit (not persisted)
+const SEV_ORDER = { info:1, warning:2, critical:3 };
+// Semantic severity colors are intentionally fixed (not themed): red/amber/muted.
+const SEV_COLOR = { info:"#8a8f98", warning:"#f5a623", critical:"#e5484d" };
+
+// ═══════════════════════════════════════════════════════════════
+// DOM refs
+// ═══════════════════════════════════════════════════════════════
+const $ = (id) => document.getElementById(id);
+const repoSelect = $("repoSelect"), projectList = $("projectList"), sideRail = $("sideRail");
+const legendEl = $("legend");
+const detailPanel = $("detailPanel"), findingsPanel = $("findingsPanel"), detailBubble = $("detailBubble"), findingsBubble = $("findingsBubble");
+const editorWindow = $("editorWindow"), editorTabs = $("editorTabs"), editorPath = $("editorPath");
+const editorText = $("editorText"), editorLines = $("editorLines"), editorHighlight = $("editorHighlight"), editorStatus = $("editorStatus");
+const editorDock = $("editorDock"), editorPopout = $("editorPopout"), editorSave = $("editorSave"), editorHide = $("editorHide");
+const iaToggle = $("iaToggle"), findingsBox = $("findingsBox");
+const addRepoToggle = $("addRepoToggle"), addForm = $("addForm"), addCancel = $("addCancel");
+const newRepoName = $("newRepoName"), newRepoPath = $("newRepoPath"), addMsg = $("addMsg"), addSubmit = $("addSubmit");
+const statusEl = $("status"), treeEl = $("tree"), detailEl = $("detail");
+const overlay = $("overlay"), overlayMsg = $("overlayMsg");
+const treePane = document.querySelector(".tree-pane"), treeResizer = $("treeResizer");
+legendEl.addEventListener("click", () => legendEl.classList.toggle("open"));
+
+// ═══════════════════════════════════════════════════════════════
+// EMBEDDED EDITOR STATE
+// ═══════════════════════════════════════════════════════════════
+let editorTabsState = [];
+let activeEditorKey = null;
+let editorSaveTimer = null;
+
+function editorKey(repoId, path){ return `${repoId}::${path}`; }
+function editorName(path){ return String(path || "").split(/[\\/]/).pop() || path; }
+function activeEditorTab(){ return editorTabsState.find((t) => t.key === activeEditorKey) || null; }
+function nodeRepoPath(n){
+  const fn = fileNodeFor(n);
+  if (!fn) return null;
+  const qn = (fn.qualified_name || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  if (qn.includes("/")) return qn;
+  const names = [fn.name || qn];
+  let p = fn.parent_id ? nodeById[fn.parent_id] : null;
+  while (p && p.kind !== "repo") {
+    names.unshift(p.name || p.qualified_name || "");
+    p = p.parent_id ? nodeById[p.parent_id] : null;
+  }
+  return names.filter(Boolean).join("/");
+}
+function setEditorStatus(text, cls = ""){
+  editorStatus.className = cls;
+  editorStatus.textContent = text;
+}
+function editorLang(path){
+  const ext = String(path || "").split(".").pop().toLowerCase();
+  if (["py", "pyw"].includes(ext)) return "python";
+  if (["js", "jsx", "ts", "tsx", "mjs", "cjs"].includes(ext)) return "js";
+  if (["json"].includes(ext)) return "json";
+  if (["md", "markdown"].includes(ext)) return "md";
+  return "plain";
+}
+function highlightLine(line, lang){
+  let out = "";
+  let i = 0;
+  const kw = lang === "python"
+    ? /^(async|await|and|as|assert|break|class|continue|def|del|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|nonlocal|not|or|pass|raise|return|True|try|while|with|yield)\b/
+    : /^(async|await|break|case|catch|class|const|continue|default|delete|else|export|extends|false|finally|for|from|function|if|import|in|instanceof|let|new|null|return|switch|this|throw|true|try|typeof|var|void|while|yield)\b/;
+  while (i < line.length) {
+    const rest = line.slice(i);
+    if ((lang === "python" && rest[0] === "#") || (lang !== "python" && rest.startsWith("//"))) {
+      out += `<span class="tok-cmt">${escapeHtml(rest)}</span>`;
+      break;
+    }
+    const str = rest.match(/^("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/);
+    if (str) { out += `<span class="tok-str">${escapeHtml(str[0])}</span>`; i += str[0].length; continue; }
+    const num = rest.match(/^\b\d+(?:\.\d+)?\b/);
+    if (num) { out += `<span class="tok-num">${escapeHtml(num[0])}</span>`; i += num[0].length; continue; }
+    const def = rest.match(lang === "python" ? /^(def|class)\s+([A-Za-z_]\w*)/ : /^(function|class)\s+([A-Za-z_$][\w$]*)/);
+    if (def) {
+      out += `<span class="tok-kw">${escapeHtml(def[1])}</span> <span class="tok-def">${escapeHtml(def[2])}</span>`;
+      i += def[0].length; continue;
+    }
+    const k = rest.match(kw);
+    if (k) { out += `<span class="tok-kw">${escapeHtml(k[0])}</span>`; i += k[0].length; continue; }
+    const op = rest.match(/^(->|=>|===|!==|==|!=|<=|>=|\+|-|\*|\/|=|:)/);
+    if (op) { out += `<span class="tok-op">${escapeHtml(op[0])}</span>`; i += op[0].length; continue; }
+    out += escapeHtml(rest[0]);
+    i += 1;
+  }
+  return out || " ";
+}
+function updateEditorHighlight(){
+  const tab = activeEditorTab();
+  const lang = editorLang(tab?.path);
+  editorHighlight.innerHTML = editorText.value.split("\n").map((line) => highlightLine(line, lang)).join("\n");
+  editorHighlight.style.transform = `translate(${-editorText.scrollLeft}px, ${-editorText.scrollTop}px)`;
+}
+function updateEditorLines(){
+  const lines = Math.max(1, editorText.value.split("\n").length);
+  editorLines.textContent = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
+  updateEditorHighlight();
+}
+function renderEditorTabs(){
+  document.body.classList.toggle("has-editor-tabs", editorTabsState.length > 0);
+  const graphTab = editorTabsState.length
+    ? `<button class="editor-tab graph-tab${activeEditorKey ? "" : " active"}" data-graph-tab="1" title="Volver al grafo">
+        <span class="editor-tab-name">Grafo</span>
+      </button>`
+    : "";
+  editorTabs.innerHTML = graphTab + editorTabsState.map((t) =>
+    `<button class="editor-tab${t.key === activeEditorKey ? " active" : ""}" data-key="${escapeHtml(t.key)}" title="${escapeHtml(t.path)}">
+      <span class="editor-tab-name">${escapeHtml(editorName(t.path))}</span>
+      ${t.dirty ? `<span class="editor-dirty">●</span>` : ""}
+      <span class="editor-close" data-close="${escapeHtml(t.key)}">×</span>
+    </button>`
+  ).join("");
+  const tab = activeEditorTab();
+  editorPath.textContent = tab ? `${tab.repoName} · ${tab.path}` : "Grafo de nodos";
+}
+function syncEditorTextFromActive(){
+  const tab = activeEditorTab();
+  document.body.classList.toggle("editor-graph-active", !tab && editorTabsState.length > 0);
+  if (!tab) {
+    editorText.value = "";
+    editorText.disabled = true;
+    editorWindow.classList.toggle("open", editorTabsState.length > 0);
+    editorWindow.classList.toggle("graph-mode", editorTabsState.length > 0);
+    editorWindow.classList.remove("docked", "split");
+    document.querySelector(".canvas-wrap").classList.remove("editor-split");
+    editorPath.textContent = editorTabsState.length ? "Grafo de nodos" : "Sin archivo abierto";
+    renderEditorTabs();
+    updateEditorLines();
+    resize();
+    return;
+  }
+  editorWindow.classList.add("open");
+  editorWindow.classList.remove("graph-mode", "docked");
+  editorText.disabled = false;
+  editorText.value = tab.content;
+  renderEditorTabs();
+  updateEditorLines();
+  setEditorStatus(tab.dirty ? "Cambios sin guardar" : "Guardado", tab.dirty ? "" : "ok");
+  resize();
+}
+async function openEditorFile(node){
+  const fn = fileNodeFor(node);
+  const relPath = nodeRepoPath(node);
+  if (!currentRepo || !fn || !relPath) return;
+  const key = editorKey(currentRepo.id, relPath);
+  const existing = editorTabsState.find((t) => t.key === key);
+  if (existing) {
+    activeEditorKey = key;
+    syncEditorTextFromActive();
+    return;
+  }
+  editorWindow.classList.add("open");
+  setEditorStatus("Cargando archivo...");
+  try {
+    const data = await api(`/repos/${encodeURIComponent(currentRepo.id)}/file?path=${encodeURIComponent(relPath)}`);
+    editorTabsState.push({
+      key,
+      repoId: currentRepo.id,
+      repoName: currentRepo.name,
+      path: relPath,
+      content: data.content || "",
+      savedContent: data.content || "",
+      dirty: false,
+      saving: false,
+    });
+    activeEditorKey = key;
+    syncEditorTextFromActive();
+  } catch (err) {
+    setEditorStatus(`No se pudo abrir: ${err.message}`, "err");
+  }
+}
+async function saveActiveEditor(){
+  const tab = activeEditorTab();
+  if (!tab || tab.saving) return;
+  tab.saving = true;
+  setEditorStatus("Guardando...");
+  try {
+    await api(`/repos/${encodeURIComponent(tab.repoId)}/file`, {
+      method:"PUT",
+      body: JSON.stringify({ path: tab.path, content: tab.content }),
+    });
+    tab.savedContent = tab.content;
+    tab.dirty = false;
+    setEditorStatus("Guardado", "ok");
+    renderEditorTabs();
+  } catch (err) {
+    setEditorStatus(`No se pudo guardar: ${err.message}`, "err");
+  } finally {
+    tab.saving = false;
+  }
+}
+function scheduleEditorAutosave(){
+  clearTimeout(editorSaveTimer);
+  editorSaveTimer = setTimeout(() => { saveActiveEditor(); }, 1200);
+}
+function closeEditorTab(key){
+  const idx = editorTabsState.findIndex((t) => t.key === key);
+  if (idx < 0) return;
+  editorTabsState.splice(idx, 1);
+  if (activeEditorKey === key) {
+    activeEditorKey = editorTabsState[Math.max(0, idx - 1)]?.key || editorTabsState[0]?.key || null;
+  }
+  renderEditorTabs();
+  syncEditorTextFromActive();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REPO MANAGER
+// ═══════════════════════════════════════════════════════════════
+async function loadRepos(preferId){
+  try {
+    repos = await api("/repos");
+  } catch (e) {
+    statusEl.innerHTML = `<span class="err">No se pudo cargar /repos: ${escapeHtml(e.message)}</span>`;
+    return;
+  }
+  repoSelect.innerHTML = repos.map((r) => {
+    const scanned = r.last_scanned_at ? r.last_scanned_at.replace("T"," ").slice(0,16) : "sin escanear";
+    return `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)} · ${escapeHtml(scanned)}</option>`;
+  }).join("");
+  if (!repos.length) {
+    currentRepo = null;
+    setControls(false);
+    clearGraph();
+    showOverlay("<b>Sin repositorios</b>Añade un repositorio para empezar. Usa “＋ Añadir repo”.");
+    statusEl.textContent = "0 repos";
+    renderTree();
+    renderRepoShelf();
+    return;
+  }
+  setControls(true);
+  const target = (preferId && repos.some((r) => r.id === preferId)) ? preferId
+    : (currentRepo && repos.some((r) => r.id === currentRepo.id)) ? currentRepo.id
+    : repos[0].id;
+  repoSelect.value = target;
+  openRepoIds.add(target);
+  persistOpenRepos();
+  renderRepoShelf();
+  await selectRepo(target);
+}
+
+function setControls(enabled){
+  projectList?.querySelectorAll("button").forEach((btn) => { btn.disabled = !enabled; });
+}
+
+async function selectRepo(repoId){
+  currentRepo = repos.find((r) => r.id === repoId) || null;
+  if (!currentRepo) return;
+  repoSelect.value = repoId;
+  openRepoIds.add(repoId);
+  persistOpenRepos();
+  renderRepoShelf();
+  await loadGraph();
+}
+
+async function loadGraph(){
+  hideOverlay();
+  selNode = null; hovNode = null; expandedFiles.clear();
+  llmSummary = null; // narrative is per-audit, not carried across repo switches
+  renderDetail();
+  if (!currentRepo.last_scanned_at) {
+    clearGraph();
+    renderTree();
+    showOverlay(`<b>${escapeHtml(currentRepo.name)} aún no se ha escaneado</b>Pulsa “Reescanear” para analizar el repositorio.`);
+    updateStatus();
+    return;
+  }
+  let snap;
+  try {
+    snap = await api(`/repos/${encodeURIComponent(currentRepo.id)}/graph`);
+  } catch (e) {
+    clearGraph();
+    showOverlay(`<b>Error al cargar el grafo</b>${escapeHtml(e.message)}`);
+    return;
+  }
+  buildGraph(snap);
+  if (!allNodes.length) {
+    showOverlay(`<b>Grafo vacío</b>El escaneo no produjo nodos. Pulsa “Reescanear”.`);
+  }
+  await loadFindings(); // persisted findings drive node badges + the panel
+  updateStatus();
+}
+
+function updateStatus(){
+  if (!currentRepo){ statusEl.textContent = ""; return; }
+  const st = currentRepo.last_scan_status;
+  const when = currentRepo.last_scanned_at ? currentRepo.last_scanned_at.replace("T"," ").slice(0,16) : "—";
+  const stClass = st === "ok" ? "ok" : (st && st !== "ok" ? "err" : "");
+  statusEl.innerHTML =
+    `<b>${escapeHtml(currentRepo.name)}</b> · <span class="${stClass}">${escapeHtml(st || "sin escanear")}</span> · ${escapeHtml(when)}<br>` +
+    `${allNodes.length} nodos · ${allEdges.length} aristas · ${openRepoIds.size} abiertos`;
+}
+
+function persistOpenRepos(){
+  const valid = [...openRepoIds].filter((id) => repos.some((r) => r.id === id));
+  localStorage.setItem("karajan-open-repos", JSON.stringify(valid));
+}
+
+function repoMeta(repo){
+  const scanned = repo.last_scanned_at ? repo.last_scanned_at.replace("T"," ").slice(0,16) : "sin escanear";
+  return `${repo.last_scan_status || "pendiente"} · ${scanned}`;
+}
+
+function renderRepoShelf(){
+  if (!projectList) return;
+  const validOpen = [...openRepoIds].filter((id) => repos.some((r) => r.id === id));
+  openRepoIds.clear();
+  validOpen.forEach((id) => openRepoIds.add(id));
+  persistOpenRepos();
+  projectList.innerHTML = validOpen.map((id) => {
+    const repo = repos.find((r) => r.id === id);
+    if (!repo) return "";
+    const active = currentRepo && currentRepo.id === repo.id ? " active" : "";
+    return `<div class="project-card${active}" data-repo="${escapeHtml(repo.id)}" title="${escapeHtml(repo.root_path || "")}">
+      <div class="project-main">
+        <div class="project-name">${escapeHtml(repo.name)}</div>
+        <div class="project-meta">${escapeHtml(repoMeta(repo))}</div>
+      </div>
+      <div class="project-actions">
+        <button class="icon-btn" data-action="scan" title="${repo.last_scanned_at ? "Reescanear proyecto" : "Escanear proyecto"}">↻</button>
+        <button class="icon-btn" data-action="audit" title="Auditar proyecto">◎</button>
+        <button class="icon-btn danger" data-action="close" title="Quitar de la vista lateral">×</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ---- Add repo ----
+function repoNameFromPath(path){
+  const clean = String(path || "").replace(/[\\/]+$/, "");
+  return clean.split(/[\\/]/).pop() || "Proyecto";
+}
+async function createRepoFromPath(root_path){
+  const name = repoNameFromPath(root_path);
+  addRepoToggle.disabled = true;
+  addMsg.textContent = "";
+  try {
+    const created = await api("/repos", { method:"POST", body: JSON.stringify({ name, root_path }) });
+    newRepoName.value = ""; newRepoPath.value = "";
+    addForm.classList.remove("open");
+    await loadRepos(created.id);
+    await rescanRepo(created.id);
+  } catch (err) {
+    addForm.classList.add("open");
+    newRepoName.value = name;
+    newRepoPath.value = root_path;
+    addMsg.textContent = err.message;
+  } finally {
+    addRepoToggle.disabled = false;
+  }
+}
+addRepoToggle.addEventListener("click", async () => {
+  addMsg.textContent = "";
+  try {
+    const picked = await api("/system/pick-folder");
+    if (picked?.path) {
+      await createRepoFromPath(picked.path);
+      return;
+    }
+  } catch (err) {
+    addMsg.textContent = `Selector no disponible: ${err.message}`;
+  }
+  addForm.classList.add("open");
+  newRepoPath.focus();
+});
+addCancel.addEventListener("click", () => { addForm.classList.remove("open"); addMsg.textContent = ""; });
+addForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = newRepoName.value.trim(), root_path = newRepoPath.value.trim();
+  addMsg.textContent = "";
+  if (!name || !root_path){ addMsg.textContent = "Nombre y ruta son obligatorios."; return; }
+  addSubmit.disabled = true;
+  try {
+    const created = await api("/repos", { method:"POST", body: JSON.stringify({ name, root_path }) });
+    newRepoName.value = ""; newRepoPath.value = "";
+    addForm.classList.remove("open");
+    await loadRepos(created.id);
+    await rescanRepo(created.id);
+  } catch (err) {
+    addMsg.textContent = err.message; // surfaces the 400/409 detail inline
+  } finally {
+    addSubmit.disabled = false;
+  }
 });
 
-const edges = [];
-for (const r of RAW) {
-  for (const tgt of r.imp) {
-    if (nodeById[tgt]) edges.push({src:r.id, tgt});
+function setProjectBusy(repoId, busy){
+  for (const card of projectList.querySelectorAll(".project-card")) {
+    if (card.dataset.repo !== repoId) continue;
+    card.querySelectorAll("button").forEach((btn) => { btn.disabled = busy; });
+  }
+}
+
+async function rescanRepo(repoId){
+  if (!repoId) return;
+  if (!currentRepo || currentRepo.id !== repoId) {
+    currentRepo = repos.find((r) => r.id === repoId) || currentRepo;
+  }
+  if (!currentRepo) return;
+  setProjectBusy(repoId, true);
+  try {
+    const sum = await api(`/repos/${encodeURIComponent(repoId)}/scan`, { method:"POST" });
+    await loadRepos(repoId); // refresh last_scanned_at, then re-render graph
+    const errs = (sum.errors && sum.errors.length)
+      ? ` · <span class="err">${sum.errors.length} errores</span>` : "";
+    statusEl.innerHTML =
+      `<b>Escaneo OK</b> · ${sum.files_scanned} ficheros (${sum.files_skipped_unchanged} sin cambios)<br>` +
+      `${sum.nodes_created} nodos · ${sum.edges_created} aristas · ${sum.duration_ms} ms${errs}`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Fallo del escaneo: ${escapeHtml(err.message)}</span>`;
+  } finally {
+    setProjectBusy(repoId, false);
+    renderRepoShelf();
+  }
+}
+
+async function closeRepoFromShelf(repoId){
+  openRepoIds.delete(repoId);
+  persistOpenRepos();
+  renderRepoShelf();
+  if (currentRepo && currentRepo.id === repoId) {
+    const nextId = [...openRepoIds][0];
+    if (nextId) await selectRepo(nextId);
+    else updateStatus();
+  }
+}
+
+repoSelect.addEventListener("change", (e) => selectRepo(e.target.value));
+
+detailEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-open-karajan]");
+  if (!btn) return;
+  e.preventDefault();
+  const node = nodeById[btn.dataset.openKarajan];
+  if (node) openEditorFile(node);
+});
+
+projectList.addEventListener("click", async (e) => {
+  const card = e.target.closest(".project-card");
+  if (!card) return;
+  const repoId = card.dataset.repo;
+  const action = e.target.closest("button")?.dataset.action;
+  if (!action) { await selectRepo(repoId); return; }
+  e.stopPropagation();
+  if (action === "scan") await rescanRepo(repoId);
+  else if (action === "audit") await auditRepo(repoId);
+  else if (action === "close") await closeRepoFromShelf(repoId);
+});
+
+function setSidebarCollapsed(collapsed){
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  sideRail.textContent = collapsed ? "›" : "‹";
+  sideRail.title = collapsed ? "Mostrar panel lateral" : "Ocultar panel lateral";
+}
+sideRail.addEventListener("click", () => setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed")));
+setSidebarCollapsed(false);
+
+editorTabs.addEventListener("click", (e) => {
+  const close = e.target.closest("[data-close]");
+  if (close) {
+    e.stopPropagation();
+    closeEditorTab(close.dataset.close);
+    return;
+  }
+  if (e.target.closest("[data-graph-tab]")) {
+    activeEditorKey = null;
+    syncEditorTextFromActive();
+    return;
+  }
+  const tab = e.target.closest(".editor-tab");
+  if (!tab) return;
+  activeEditorKey = tab.dataset.key;
+  syncEditorTextFromActive();
+});
+editorText.addEventListener("input", () => {
+  const tab = activeEditorTab();
+  if (!tab) return;
+  tab.content = editorText.value;
+  tab.dirty = tab.content !== tab.savedContent;
+  updateEditorLines();
+  renderEditorTabs();
+  setEditorStatus(tab.dirty ? "Editando · autosave activo" : "Guardado", tab.dirty ? "" : "ok");
+  if (tab.dirty) scheduleEditorAutosave();
+});
+editorText.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    saveActiveEditor();
+    return;
+  }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const start = editorText.selectionStart, end = editorText.selectionEnd;
+    editorText.setRangeText("  ", start, end, "end");
+    editorText.dispatchEvent(new Event("input", { bubbles:true }));
+  }
+});
+editorText.addEventListener("scroll", () => {
+  editorLines.scrollTop = editorText.scrollTop;
+  updateEditorHighlight();
+});
+editorSave.addEventListener("click", () => saveActiveEditor());
+editorHide.addEventListener("click", () => {
+  activeEditorKey = null;
+  syncEditorTextFromActive();
+});
+editorDock.addEventListener("click", () => {
+  if (!activeEditorTab()) return;
+  editorWindow.classList.toggle("split");
+  document.querySelector(".canvas-wrap").classList.toggle("editor-split", editorWindow.classList.contains("split"));
+  resize();
+});
+editorPopout.addEventListener("click", () => {
+  const tab = activeEditorTab();
+  if (!tab) return;
+  const url = `/static/editor.html?repo=${encodeURIComponent(tab.repoId)}&path=${encodeURIComponent(tab.path)}&name=${encodeURIComponent(tab.repoName)}`;
+  const popped = window.open(url, `karajan-editor-${tab.repoId}-${tab.path}`.replace(/[^a-zA-Z0-9_-]/g, "_"), "width=1100,height=780");
+  if (!popped) {
+    setEditorStatus("No se pudo extraer: el navegador bloqueó la ventana.", "err");
+    return;
+  }
+  closeEditorTab(tab.key);
+});
+window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && editorWindow.classList.contains("open")) {
+    e.preventDefault();
+    saveActiveEditor();
+  }
+});
+
+treeResizer.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  const startX = e.clientX;
+  const startW = treePane.getBoundingClientRect().width;
+  const onMove = (ev) => {
+    const next = Math.max(280, Math.min(620, startW + ev.clientX - startX));
+    treePane.style.width = next + "px";
+    localStorage.setItem("karajan-tree-width", String(next));
+    resize();
+  };
+  const onUp = () => {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+  };
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+});
+const storedTreeWidth = Number(localStorage.getItem("karajan-tree-width"));
+if (storedTreeWidth) treePane.style.width = Math.max(280, Math.min(620, storedTreeWidth)) + "px";
+
+document.querySelectorAll(".resize-grip").forEach((grip) => {
+  grip.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const target = $(grip.dataset.resizeTarget);
+    if (!target) return;
+    const parent = target.parentElement.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
+    if (getComputedStyle(target).position !== "absolute") {
+      target.style.position = "absolute";
+      target.style.left = (rect.left - parent.left) + "px";
+      target.style.top = (rect.top - parent.top) + "px";
+      target.style.right = "auto";
+      target.style.bottom = "auto";
+    }
+    const startX = e.clientX, startY = e.clientY, startW = rect.width, startH = rect.height;
+    const startLeft = parseFloat(target.style.left || "0");
+    const startTop = parseFloat(target.style.top || "0");
+    const onMove = (ev) => {
+      const margin = 12;
+      const maxW = Math.max(280, Math.min(parent.width - margin, 620));
+      const maxH = Math.max(130, parent.height - startTop - margin);
+      const nextW = Math.max(280, Math.min(maxW, startW + startX - ev.clientX));
+      const nextH = Math.max(130, Math.min(maxH, startH + ev.clientY - startY));
+      if (!target.classList.contains("split")) {
+        target.style.left = Math.max(margin, Math.min(parent.width - nextW - margin, startLeft - (nextW - startW))) + "px";
+      }
+      target.style.maxWidth = maxW + "px";
+      target.style.maxHeight = maxH + "px";
+      target.style.width = nextW + "px";
+      target.style.height = nextH + "px";
+      if (target === editorWindow && editorWindow.classList.contains("split")) {
+        document.querySelector(".canvas-wrap").style.setProperty("--editor-split-width", nextW + "px");
+        resize();
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
+});
+
+document.querySelectorAll(".float-card").forEach((panel) => {
+  const handle = panel.querySelector(".float-h");
+  handle.addEventListener("mousedown", (e) => {
+    if (e.target.closest("button")) return;
+    e.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    const parent = panel.parentElement.getBoundingClientRect();
+    const startX = e.clientX, startY = e.clientY;
+    const startLeft = rect.left - parent.left;
+    const startTop = rect.top - parent.top;
+    panel.style.position = "absolute";
+    panel.style.left = startLeft + "px";
+    panel.style.top = startTop + "px";
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    const onMove = (ev) => {
+      const margin = 12;
+      const nextLeft = Math.max(margin, Math.min(parent.width - panel.offsetWidth - margin, startLeft + ev.clientX - startX));
+      const nextTop = Math.max(margin, Math.min(parent.height - panel.offsetHeight - margin, startTop + ev.clientY - startY));
+      panel.style.left = nextLeft + "px";
+      panel.style.top = nextTop + "px";
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
+});
+
+function setPanelMinimized(name, minimized){
+  const panel = name === "detail" ? detailPanel : findingsPanel;
+  const bubble = name === "detail" ? detailBubble : findingsBubble;
+  panel.classList.toggle("minimized", minimized);
+  bubble.classList.toggle("show", minimized);
+}
+document.querySelectorAll("[data-minimize]").forEach((btn) => {
+  btn.addEventListener("click", () => setPanelMinimized(btn.dataset.minimize, true));
+});
+document.querySelectorAll("[data-restore]").forEach((btn) => {
+  btn.addEventListener("click", () => setPanelMinimized(btn.dataset.restore, false));
+});
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIT + FINDINGS (Fase D)
+// ═══════════════════════════════════════════════════════════════
+async function loadFindings(){
+  findings = [];
+  for (const k in findingsByNode) delete findingsByNode[k];
+  for (const k in nodeSeverity) delete nodeSeverity[k];
+  if (!currentRepo){ renderFindings(); return; }
+  try {
+    findings = await api(`/repos/${encodeURIComponent(currentRepo.id)}/findings`);
+  } catch (e) {
+    findings = []; // a findings fetch failure must never break the graph view
+  }
+  for (const f of findings) {
+    if (!f.node_id) continue;
+    (findingsByNode[f.node_id] = findingsByNode[f.node_id] || []).push(f);
+    const cur = nodeSeverity[f.node_id];
+    if (!cur || SEV_ORDER[f.severity] > SEV_ORDER[cur]) nodeSeverity[f.node_id] = f.severity;
+  }
+  renderFindings();
+  renderTree(); // re-render so tree dots pick up their severity halos
+}
+
+function findingTool(f){
+  const d = String(f.detector || "");
+  if (d === "long_function" || d === "high_complexity") return "Lizard";
+  if (d === "large_file") return "cloc + SonarQube";
+  if (d === "god_class" || d === "circular_imports") return "SonarQube CE";
+  if (d.includes("secret") || d.includes("env")) return "SonarQube CE";
+  return "Karajan audit";
+}
+function findingAdvice(f){
+  const d = String(f.detector || "");
+  if (d === "long_function") return "Divide la función en pasos pequeños, extrae validación/IO y deja una función coordinadora corta.";
+  if (d === "high_complexity") return "Reduce ramas: usa guard clauses, tablas de decisión o extrae estrategias por caso.";
+  if (d === "large_file") return "Separa responsabilidades por módulo y mueve clases/funciones cohesionadas a ficheros propios.";
+  if (d === "god_class") return "Extrae servicios/objetos de valor: una clase debe tener una responsabilidad dominante.";
+  if (d === "circular_imports") return "Rompe el ciclo moviendo contratos comunes a un módulo compartido o invirtiendo la dependencia.";
+  if (d.includes("secret")) return "Elimina el secreto del código, muévelo a variables de entorno y rota la credencial.";
+  return "Revisa el nodo afectado, aplica un refactor mínimo y vuelve a ejecutar auditoría.";
+}
+function findingById(id){ return findings.find((f) => f.id === id) || null; }
+async function solveFinding(id){
+  const f = findingById(id);
+  if (!f) return;
+  if (!currentRepo) return;
+  setEditorStatus(`Fixeador · trabajando en ${f.detector} (${f.severity})...`);
+  try {
+    const result = await api(`/repos/${encodeURIComponent(currentRepo.id)}/findings/fix`, {
+      method:"POST",
+      body: JSON.stringify({ finding_id:id, apply:true }),
+    });
+    setEditorStatus(
+      result.verified
+        ? `Fixeador · corregido y verificado: ${result.file_path}`
+        : `Fixeador · ${result.error || result.message || "no verificado"}`,
+      result.verified ? "ok" : "err"
+    );
+    await loadGraph();
+    await loadFindings();
+  } catch (err) {
+    setEditorStatus(`Fixeador · ${err.message}`, "err");
+  }
+}
+async function solveAllFindings(){
+  if (!findings.length || !currentRepo) return;
+  let ok = 0, failed = 0;
+  const notes = [];
+  const attempted = new Set();
+  const maxAttempts = Math.max(1, findings.length);
+  while (ok + failed < maxAttempts) {
+    const ordered = [...findings]
+      .filter((f) => !attempted.has(`${f.detector}|${f.node_id}|${f.message}`))
+      .sort((a, b) => (SEV_ORDER[b.severity] || 0) - (SEV_ORDER[a.severity] || 0));
+    const f = ordered[0];
+    if (!f) break;
+    attempted.add(`${f.detector}|${f.node_id}|${f.message}`);
+    setEditorStatus(`Fixeador · ${ok + failed + 1}/${maxAttempts}: ${f.detector} (${f.severity})...`);
+    try {
+      const result = await api(`/repos/${encodeURIComponent(currentRepo.id)}/findings/fix`, {
+        method:"POST",
+        body: JSON.stringify({ finding_id:f.id, apply:true }),
+      });
+      if (result.verified) ok += 1;
+      else failed += 1;
+      notes.push(`${result.verified ? "OK" : "PENDIENTE"} · ${f.detector} · ${result.file_path || "sin fichero"} · ${result.error || result.message}`);
+      await loadGraph();
+    } catch (err) {
+      failed += 1;
+      notes.push(`ERROR · ${f.detector} · ${err.message}`);
+      await loadFindings();
+    }
+  }
+  await loadGraph();
+  llmSummary = `Fixeador terminado: ${ok} verificados, ${failed} pendientes.\n` + notes.slice(0, 20).join("\n");
+  renderFindings();
+  setEditorStatus(`Fixeador · ${ok} corregidos/verificados, ${failed} pendientes.`, failed ? "err" : "ok");
+}
+
+function renderFindings(){
+  if (!findings.length && !llmSummary){ findingsBox.innerHTML = ""; findingsBox.style.display = "none"; return; }
+  findingsBox.style.display = "block";
+  let html = "";
+  if (llmSummary){
+    html += `<details class="llm-block" open><summary>Resumen IA</summary>` +
+      `<div class="llm-body">${escapeHtml(llmSummary).replace(/\n/g, "<br>")}</div></details>`;
+  }
+  const counts = { critical:0, warning:0, info:0 };
+  for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
+  html += `<div class="f-head"><span class="f-head-text">Hallazgos · ` +
+    `<span style="color:${SEV_COLOR.critical}">${counts.critical} crít</span> · ` +
+    `<span style="color:${SEV_COLOR.warning}">${counts.warning} adv</span> · ` +
+    `<span style="color:${SEV_COLOR.info}">${counts.info} info</span></span>` +
+    (findings.length ? `<button class="f-fix-all" data-fix-all="1">Solucionar todos</button>` : "") +
+    `</div>`;
+  for (const sev of ["critical","warning","info"]) {
+    for (const f of findings.filter((x) => x.severity === sev)) {
+      html += `<div class="f-item" data-node="${escapeHtml(f.node_id || "")}" style="--finding-color:${SEV_COLOR[sev]}">` +
+        `<div class="f-top"><span class="f-dot" style="background:${SEV_COLOR[sev]}"></span>` +
+        `<span class="f-detector">${escapeHtml(f.detector)}</span><span class="f-sev">${escapeHtml(sev)}</span></div>` +
+        `<span class="f-msg">${escapeHtml(f.message)}</span>` +
+        `<span class="f-meta"><span class="f-tool">${escapeHtml(findingTool(f))}</span>` +
+        `<button class="f-fix" data-fix="${escapeHtml(f.id)}">Solucionar</button></span></div>`;
+    }
+  }
+  findingsBox.innerHTML = html;
+  findingsBox.querySelector("[data-fix-all]")?.addEventListener("click", (e) => {
+    e.preventDefault(); e.stopPropagation(); solveAllFindings();
+  });
+  for (const btn of findingsBox.querySelectorAll("[data-fix]")) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation(); solveFinding(btn.dataset.fix);
+    });
+  }
+  for (const el of findingsBox.querySelectorAll(".f-item")) {
+    el.addEventListener("click", () => selectFindingNode(el.dataset.node));
+  }
+}
+
+function selectFindingNode(nodeId){
+  const n = nodeById[nodeId];
+  if (!n) return;
+  // Expand the owning file so a symbol-level finding's node becomes visible.
+  const fn = fileNodeFor(n);
+  if (fn && n.kind !== "file" && n.kind !== "dir" && n.kind !== "repo" && !expandedFiles.has(fn.id)) {
+    expandedFiles.add(fn.id); rebuildVisible();
+  }
+  selectNode(n, true);
+}
+
+async function auditRepo(repoId){
+  if (!repoId) return;
+  if (!currentRepo || currentRepo.id !== repoId) {
+    await selectRepo(repoId);
+  }
+  if (!currentRepo) return;
+  setProjectBusy(repoId, true);
+  try {
+    const res = await api(`/repos/${encodeURIComponent(repoId)}/audit`,
+      { method:"POST", body: JSON.stringify({ include_llm: iaToggle.checked }) });
+    llmSummary = res.llm_summary || null;
+    await loadFindings();
+    const c = res.counts_by_severity || {};
+    statusEl.innerHTML =
+      `<b>Auditoría OK</b> · <span style="color:${SEV_COLOR.critical}">${c.critical || 0} crít</span> · ` +
+      `<span style="color:${SEV_COLOR.warning}">${c.warning || 0} adv</span> · ${c.info || 0} info` +
+      `${res.truncated ? " · <span class='err'>truncado</span>" : ""}`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Fallo de la auditoría: ${escapeHtml(err.message)}</span>`;
+  } finally {
+    setProjectBusy(repoId, false);
+    renderRepoShelf();
   }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CANVAS SETUP
+// GRAPH BUILD
 // ═══════════════════════════════════════════════════════════════
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-const dpr = window.devicePixelRatio || 1;
-let W=0, H=0;
+function clearGraph(){
+  allNodes = []; allEdges = [];
+  for (const k in nodeById) delete nodeById[k];
+  for (const k in fileNodeByFileId) delete fileNodeByFileId[k];
+  for (const k in childrenByParent) delete childrenByParent[k];
+  findings = [];
+  for (const k in findingsByNode) delete findingsByNode[k];
+  for (const k in nodeSeverity) delete nodeSeverity[k];
+  visibleNodes = []; visibleEdges = [];
+  renderTree();
+  renderFindings();
+}
 
-function resize() {
-  const p = canvas.parentElement.getBoundingClientRect();
-  W = p.width; H = p.height;
-  canvas.width  = Math.round(W * dpr);
-  canvas.height = Math.round(H * dpr);
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
+function buildGraph(snap){
+  clearGraph();
+  allNodes = (snap.nodes || []).map((n) => Object.assign({}, n, { x:0, y:0, vx:0, vy:0, pinned:false }));
+  allEdges = snap.edges || [];
+  for (const n of allNodes) {
+    nodeById[n.id] = n;
+    const pk = n.parent_id || "__root";
+    (childrenByParent[pk] = childrenByParent[pk] || []).push(n);
+    if (n.kind === "file" && n.file_id != null) fileNodeByFileId[n.file_id] = n;
+  }
+  // Positions: place parents before children so symbols spawn near their file.
+  const depthOf = (n) => { let d = 0, p = n; while (p && p.parent_id && nodeById[p.parent_id]) { p = nodeById[p.parent_id]; d++; if (d > 40) break; } return d; };
+  const ordered = allNodes.slice().sort((a, b) => depthOf(a) - depthOf(b));
+  for (const n of ordered) {
+    const parent = n.parent_id ? nodeById[n.parent_id] : null;
+    const bx = parent ? parent.x : 0, by = parent ? parent.y : 0;
+    const ang = Math.random() * Math.PI * 2;
+    const spread = parent ? 90 : 0;
+    n.x = bx + Math.cos(ang) * spread * (0.5 + Math.random());
+    n.y = by + Math.sin(ang) * spread * (0.5 + Math.random());
+  }
+  rebuildVisible();
+  renderTree();
+}
+
+// ---- visibility: collapsed file-level view by default -----------
+function isNodeVisible(n){
+  if (n.kind === "repo" || n.kind === "dir" || n.kind === "file") return true;
+  if (n.kind === "class" || n.kind === "function") return expandedFiles.has(n.parent_id);
+  if (n.kind === "attribute") {
+    const cls = nodeById[n.parent_id];
+    return !!(cls && expandedFiles.has(cls.parent_id));
+  }
+  if (n.kind === "method") {
+    const cls = nodeById[n.parent_id];
+    return !!(cls && expandedFiles.has(cls.parent_id));
+  }
+  return true;
+}
+function rebuildVisible(){
+  visibleNodes = allNodes.filter(isNodeVisible);
+  const vis = new Set(visibleNodes.map((n) => n.id));
+  visibleEdges = allEdges.filter((e) => e.dst_node_id && vis.has(e.src_node_id) && vis.has(e.dst_node_id));
+}
+function matchesSearch(n){
+  if (!query) return true;
+  return (n.name && n.name.toLowerCase().includes(query)) ||
+         (n.qualified_name && n.qualified_name.toLowerCase().includes(query));
+}
+
+function toggleExpand(fileNode){
+  if (fileNode.kind !== "file") return;
+  if (expandedFiles.has(fileNode.id)) expandedFiles.delete(fileNode.id);
+  else expandedFiles.add(fileNode.id);
+  rebuildVisible();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VS CODE LINK — vscode://file/{abs_path}:{line}
+// ═══════════════════════════════════════════════════════════════
+function fileNodeFor(n){
+  if (n.kind === "file") return n;
+  if (n.file_id != null && fileNodeByFileId[n.file_id]) return fileNodeByFileId[n.file_id];
+  return null;
+}
+function vscodeHref(n){
+  if (!currentRepo || !currentRepo.root_path) return null;
+  const relPath = nodeRepoPath(n);
+  if (!relPath) return null;
+  const root = currentRepo.root_path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const rel = relPath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const line = n.start_line || 1;
+  return `vscode://file/${root}/${rel}:${line}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION TREE (lazy: children rendered on first expand)
+// ═══════════════════════════════════════════════════════════════
+const KIND_ORDER = { dir:0, file:1, class:2, attribute:3, function:4, method:5 };
+function sortedChildren(parentKey){
+  const kids = (childrenByParent[parentKey] || []).slice();
+  kids.sort((a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) ||
+    String(a.name || a.qualified_name || "").localeCompare(String(b.name || b.qualified_name || "")));
+  return kids;
+}
+function nodeLabel(n){ return n.name || n.qualified_name || n.kind || n.id; }
+
+function renderTree(){
+  treeEl.innerHTML = "";
+  const roots = childrenByParent["__root"] || [];
+  if (!roots.length){ treeEl.innerHTML = `<div class="trow"><span class="tlbl" style="color:var(--muted)">—</span></div>`; return; }
+  for (const root of roots) treeEl.appendChild(makeTreeRow(root, 0, true));
+}
+
+function makeTreeRow(node, depth, expandNow){
+  const wrap = document.createElement("div");
+  const row = document.createElement("div");
+  row.className = "trow";
+  row.dataset.id = node.id;
+  row.style.paddingLeft = (6 + depth * 12) + "px";
+
+  const kids = sortedChildren(node.id);
+  const hasKids = kids.length > 0;
+
+  const caret = document.createElement("span");
+  caret.className = "caret" + (hasKids ? "" : " leaf");
+  caret.textContent = hasKids ? "▶" : "";
+  row.appendChild(caret);
+
+  const dot = document.createElement("span");
+  dot.className = "tdot" + (node.extraction_method === "regex" ? " regex" : "");
+  dot.style.background = kindColor(node.kind);
+  // Severity halo when this node has findings.
+  const tsev = nodeSeverity[node.id];
+  if (tsev) dot.style.boxShadow = "0 0 0 2px " + SEV_COLOR[tsev];
+  row.appendChild(dot);
+
+  const lbl = document.createElement("span");
+  lbl.className = "tlbl";
+  lbl.textContent = nodeLabel(node);
+  lbl.title = node.qualified_name || nodeLabel(node);
+  row.appendChild(lbl);
+
+  const href = vscodeHref(node);
+  if (href && node.kind !== "repo" && node.kind !== "dir") {
+    const a = document.createElement("a");
+    a.className = "tvsc"; a.href = href; a.textContent = "↗";
+    a.title = "Abrir en VS Code";
+    a.addEventListener("click", (e) => e.stopPropagation());
+    row.appendChild(a);
+  }
+
+  const childBox = document.createElement("div");
+  childBox.className = "tchildren";
+  let built = false;
+  const buildKids = () => {
+    if (built) return; built = true;
+    for (const k of kids) childBox.appendChild(makeTreeRow(k, depth + 1, false));
+  };
+  const setOpen = (open) => {
+    if (open){ buildKids(); childBox.classList.add("open"); caret.textContent = "▼"; }
+    else { childBox.classList.remove("open"); caret.textContent = "▶"; }
+  };
+
+  caret.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (hasKids) setOpen(!childBox.classList.contains("open"));
+  });
+  row.addEventListener("click", () => onTreeSelect(node));
+  row.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const fn = fileNodeFor(node);
+    if (fn && node.kind !== "repo" && node.kind !== "dir") openEditorFile(node);
+  });
+
+  wrap.appendChild(row);
+  wrap.appendChild(childBox);
+  if (expandNow && hasKids) setOpen(true);
+  return wrap;
+}
+
+function onTreeSelect(node){
+  // Ensure symbol nodes become visible in the graph before centering.
+  const fn = fileNodeFor(node);
+  if (fn && node.kind !== "file" && node.kind !== "dir" && node.kind !== "repo") {
+    if (!expandedFiles.has(fn.id)) { expandedFiles.add(fn.id); rebuildVisible(); }
+  }
+  selectNode(node, true);
+}
+
+function markTreeActive(){
+  for (const el of treeEl.querySelectorAll(".trow")) {
+    el.classList.toggle("active", selNode != null && el.dataset.id === selNode.id);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SELECTION + DETAIL PANEL
+// ═══════════════════════════════════════════════════════════════
+function selectNode(node, doPan){
+  selNode = node;
+  if (doPan && node) panTo(node);
+  renderDetail();
+  markTreeActive();
+}
+function deselect(){ selNode = null; renderDetail(); markTreeActive(); }
+
+function descendantsOf(parentId, kinds){
+  const out = [];
+  const stack = [...(childrenByParent[parentId] || [])];
+  while (stack.length) {
+    const n = stack.shift();
+    if (!n) continue;
+    if (!kinds || kinds.includes(n.kind)) out.push(n);
+    stack.push(...(childrenByParent[n.id] || []));
+  }
+  return out;
+}
+
+function directChildrenOf(parentId, kind){
+  return (childrenByParent[parentId] || []).filter((n) => !kind || n.kind === kind);
+}
+
+function symbolSummary(node){
+  const scope = node.kind === "file" ? node.id : (node.kind === "class" ? node.id : fileNodeFor(node)?.id);
+  const nodes = scope ? descendantsOf(scope, ["class","attribute","function","method"]) : [];
+  return {
+    classes: nodes.filter((n) => n.kind === "class"),
+    attributes: nodes.filter((n) => n.kind === "attribute"),
+    functions: nodes.filter((n) => n.kind === "function"),
+    methods: nodes.filter((n) => n.kind === "method"),
+  };
+}
+
+function symbolLine(n){
+  const lines = n.start_line ? `L${n.start_line}${n.end_line && n.end_line !== n.start_line ? "-" + n.end_line : ""}` : "";
+  return `<div class="d-item"><span class="arrow" style="color:${kindColor(n.kind)}">•</span> ${escapeHtml(n.qualified_name || nodeLabel(n))}<span class="d-mini">${escapeHtml(lines)}</span></div>`;
+}
+
+function umlBlockForClass(cls){
+  const attrs = directChildrenOf(cls.id, "attribute");
+  const methods = directChildrenOf(cls.id, "method");
+  let html = `<div class="d-uml"><div class="d-uml-h">${escapeHtml(cls.name || cls.qualified_name || "Clase")}</div>`;
+  html += attrs.length
+    ? attrs.map((a) => `<div class="d-uml-row"><span class="d-uml-kind attr">attr</span>${escapeHtml(a.name || a.qualified_name)}</div>`).join("")
+    : `<div class="d-uml-row"><span class="d-uml-kind">attr</span><span style="color:var(--muted)">sin atributos detectados</span></div>`;
+  html += methods.length
+    ? methods.map((m) => `<div class="d-uml-row"><span class="d-uml-kind method">method</span>${escapeHtml(m.name || m.qualified_name)}()${m.complexity_estimate ? `<span class="d-mini">C${escapeHtml(m.complexity_estimate)}</span>` : ""}</div>`).join("")
+    : `<div class="d-uml-row"><span class="d-uml-kind">method</span><span style="color:var(--muted)">sin métodos detectados</span></div>`;
+  return html + `</div>`;
+}
+
+function findingsForNode(n){
+  const ids = new Set([n.id]);
+  const fn = fileNodeFor(n);
+  if (fn) ids.add(fn.id);
+  return findings.filter((f) => f.node_id && ids.has(f.node_id));
+}
+
+function renderDetail(){
+  if (!selNode){
+    detailEl.innerHTML = `<div class="empty">Selecciona un nodo en el grafo o el árbol para inspeccionarlo.</div>`;
+    return;
+  }
+  const n = selNode;
+  const fn = fileNodeFor(n);
+  const href = vscodeHref(n);
+  const row = (label, value) => (value == null || value === "")
+    ? ""
+    : `<span class="k">${escapeHtml(label)}</span><span class="v">${escapeHtml(value)}</span>`;
+
+  const outs = allEdges.filter((e) => e.src_node_id === n.id && e.edge_type === "imports");
+  const ins  = allEdges.filter((e) => e.dst_node_id === n.id && e.edge_type === "imports");
+  const fileOuts = fn ? allEdges.filter((e) => e.src_node_id === fn.id && e.edge_type === "imports") : outs;
+  const fileIns = fn ? allEdges.filter((e) => e.dst_node_id === fn.id && e.edge_type === "imports") : ins;
+  const summary = symbolSummary(n);
+  const nodeFindings = findingsForNode(n);
+  const impItem = (e) => {
+    if (e.dst_node_id && nodeById[e.dst_node_id]) {
+      const t = nodeById[e.dst_node_id];
+      return `<div class="d-item"><span class="arrow">→</span> ${escapeHtml(t.qualified_name || nodeLabel(t))}</div>`;
+    }
+    return `<div class="d-item ext"><span class="arrow">→</span> ${escapeHtml(e.dst_unresolved || "?")} <em>(externo)</em></div>`;
+  };
+  const importerItem = (e) => {
+    const s = nodeById[e.src_node_id];
+    return `<div class="d-item"><span class="arrow">←</span> ${escapeHtml(s ? (s.qualified_name || nodeLabel(s)) : e.src_node_id)}</div>`;
+  };
+
+  let html = `<div class="d-top"><div class="d-title">${escapeHtml(nodeLabel(n))}</div>`;
+  if (fn && n.kind !== "repo" && n.kind !== "dir") {
+    html += `<div class="d-actions"><button class="d-open code" data-open-karajan="${escapeHtml(n.id)}" title="Abrir en Karajan">&lt;/&gt;</button>`;
+    if (href) html += `<a class="d-open" href="${href}" title="Abrir en VS Code">↗ VS Code</a>`;
+    html += `</div>`;
+  } else if (href) {
+    html += `<div class="d-actions"><a class="d-open" href="${href}" title="Abrir en VS Code">↗ VS Code</a></div>`;
+  }
+  html += `<span class="d-kind" style="border-color:${kindColor(n.kind)};color:${kindColor(n.kind)}">${escapeHtml(n.kind)}</span></div>`;
+  const lines = n.start_line ? `${n.start_line}${n.end_line && n.end_line !== n.start_line ? "–" + n.end_line : ""}` : null;
+  html += `<div class="d-grid">
+    ${row("qualified", n.qualified_name)}
+    ${row("ruta", fn ? fn.qualified_name : n.qualified_name)}
+    ${row("fichero", fn ? fn.qualified_name : null)}
+    ${row("líneas", lines)}
+    ${row("extracción", n.extraction_method)}
+  </div>`;
+  html += `<div class="d-chipline">
+    <span class="d-chip kind-class">${summary.classes.length} clases</span>
+    <span class="d-chip kind-attribute">${summary.attributes.length} atributos</span>
+    <span class="d-chip kind-method">${summary.methods.length} métodos</span>
+    <span class="d-chip kind-function">${summary.functions.length} funciones</span>
+    <span class="d-chip kind-import">${fileOuts.length} imports</span>
+    <span class="d-chip kind-import">${fileIns.length} importadores</span>
+  </div>`;
+
+  const classesToShow = n.kind === "class" ? [n] : summary.classes;
+  if (classesToShow.length) {
+    html += `<div class="d-sec">Modelo de clases</div>`;
+    html += classesToShow.slice(0, 8).map(umlBlockForClass).join("");
+    if (classesToShow.length > 8) html += `<div class="d-item ext">+ ${classesToShow.length - 8} clases más</div>`;
+  }
+  if (summary.functions.length && n.kind !== "class") {
+    html += `<div class="d-sec">Funciones</div>`;
+    html += summary.functions.slice(0, 14).map(symbolLine).join("");
+    if (summary.functions.length > 14) html += `<div class="d-item ext">+ ${summary.functions.length - 14} funciones más</div>`;
+  }
+  if (nodeFindings.length) {
+    html += `<div class="d-sec">Hallazgos relacionados (${nodeFindings.length})</div>`;
+    html += nodeFindings.slice(0, 8).map((f) =>
+      `<div class="d-item"><span class="arrow" style="color:${SEV_COLOR[f.severity]}">●</span> <b>${escapeHtml(f.detector)}</b> · ${escapeHtml(f.message)}</div>`
+    ).join("");
+  }
+  html += `<div class="d-sec">Imports (${fileOuts.length})</div>`;
+  html += fileOuts.length ? fileOuts.map(impItem).join("") : `<div class="d-item ext">sin imports</div>`;
+  html += `<div class="d-sec">Importado por (${fileIns.length})</div>`;
+  html += fileIns.length ? fileIns.map(importerItem).join("") : `<div class="d-item ext">nadie</div>`;
+  detailEl.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OVERLAY (empty / unscanned states)
+// ═══════════════════════════════════════════════════════════════
+function showOverlay(html){ overlayMsg.innerHTML = html; overlay.classList.add("show"); }
+function hideOverlay(){ overlay.classList.remove("show"); }
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS SETUP + VIEW STATE
+// ═══════════════════════════════════════════════════════════════
+const canvas = $("c");
+const ctx = canvas.getContext("2d");
+const dpr = window.devicePixelRatio || 1;
+let W = 0, H = 0;
+function resize(){
+  const wrap = canvas.parentElement.getBoundingClientRect();
+  let availableW = wrap.width;
+  if (editorWindow.classList.contains("open") && editorWindow.classList.contains("split")) {
+    availableW = Math.max(320, wrap.width - editorWindow.getBoundingClientRect().width - 18);
+  }
+  W = availableW; H = wrap.height;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
 }
 resize();
-window.addEventListener('resize', () => { resize(); });
+window.addEventListener("resize", resize);
 
-// ═══════════════════════════════════════════════════════════════
-// VIEW STATE
-// ═══════════════════════════════════════════════════════════════
-let panX=0, panY=0, zoom=0.85;
-let hovNode=null, selNode=null;
-let dragNode=null, dragWx=0, dragWy=0;
-let isPanning=false, panSX=0, panSY=0;
-let mouseS={x:0,y:0};
-let query='';
+let panX = 0, panY = 0, zoom = 0.85;
+function s2w(sx, sy){ return { x:(sx - W/2 - panX)/zoom, y:(sy - H/2 - panY)/zoom }; }
+function w2s(wx, wy){ return { x:wx*zoom + W/2 + panX, y:wy*zoom + H/2 + panY }; }
+function panTo(n){ panX = -n.x * zoom; panY = -n.y * zoom; }
 
-function s2w(sx,sy){ return {x:(sx-W/2-panX)/zoom, y:(sy-H/2-panY)/zoom}; }
-function w2s(wx,wy){ return {x:wx*zoom+W/2+panX,   y:wy*zoom+H/2+panY  }; }
-
-function hitTest(sx,sy){
-  const w = s2w(sx,sy);
-  let best=null, bestD=Infinity;
-  for(const n of nodes){
-    if(!n.visible) continue;
-    const dx=n.x-w.x, dy=n.y-w.y;
-    const d=Math.hypot(dx,dy);
-    const thresh = (n.radius+5)/zoom;
-    if(d<thresh && d<bestD){ best=n; bestD=d; }
+function hitTest(sx, sy){
+  const w = s2w(sx, sy);
+  let best = null, bestD = Infinity;
+  for (const n of visibleNodes) {
+    const dx = n.x - w.x, dy = n.y - w.y, d = Math.hypot(dx, dy);
+    const thresh = (kindRadius(n.kind) + 5) / zoom;
+    if (d < thresh && d < bestD) { best = n; bestD = d; }
   }
   return best;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// FORCE SIMULATION
+// FORCE SIMULATION (over visible nodes/edges only)
 // ═══════════════════════════════════════════════════════════════
-const KR = 4000;   // repulsion constant
-const KS = 0.035;  // spring constant
-const RL = 85;     // rest length
-const DAMP = 0.80; // damping
-const GRAV = 0.0018; // center gravity
-const MXV = 10;    // max velocity
-
+const KR = 4200, KS = 0.035, RL = 78, DAMP = 0.80, GRAV = 0.0016, MXV = 10;
 function simulate(){
-  // Repulsion (all pairs)
-  for(let i=0;i<nodes.length;i++){
-    const a=nodes[i];
-    for(let j=i+1;j<nodes.length;j++){
-      const b=nodes[j];
-      let dx=b.x-a.x, dy=b.y-a.y;
-      const d2=dx*dx+dy*dy+0.01;
-      const d=Math.sqrt(d2);
-      const f=KR/d2;
-      const fx=f*dx/d, fy=f*dy/d;
-      if(!a.pinned){a.vx-=fx;a.vy-=fy;}
-      if(!b.pinned){b.vx+=fx;b.vy+=fy;}
+  const N = visibleNodes;
+  for (let i = 0; i < N.length; i++) {
+    const a = N[i];
+    for (let j = i + 1; j < N.length; j++) {
+      const b = N[j];
+      let dx = b.x - a.x, dy = b.y - a.y;
+      const d2 = dx*dx + dy*dy + 0.01, d = Math.sqrt(d2);
+      const f = KR / d2, fx = f*dx/d, fy = f*dy/d;
+      if (!a.pinned) { a.vx -= fx; a.vy -= fy; }
+      if (!b.pinned) { b.vx += fx; b.vy += fy; }
     }
   }
-  // Spring attraction (edges)
-  for(const e of edges){
-    const a=nodeById[e.src], b=nodeById[e.tgt];
-    if(!a||!b) continue;
-    const dx=b.x-a.x, dy=b.y-a.y;
-    const d=Math.hypot(dx,dy)||1;
-    const f=KS*(d-RL);
-    const fx=f*dx/d, fy=f*dy/d;
-    if(!a.pinned){a.vx+=fx;a.vy+=fy;}
-    if(!b.pinned){b.vx-=fx;b.vy-=fy;}
+  for (const e of visibleEdges) {
+    const a = nodeById[e.src_node_id], b = nodeById[e.dst_node_id];
+    if (!a || !b) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+    const f = KS * (d - RL), fx = f*dx/d, fy = f*dy/d;
+    if (!a.pinned) { a.vx += fx; a.vy += fy; }
+    if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
   }
-  // Center gravity + integrate
-  for(const n of nodes){
-    if(n.pinned){n.vx=0;n.vy=0;continue;}
-    n.vx=(n.vx-n.x*GRAV)*DAMP;
-    n.vy=(n.vy-n.y*GRAV)*DAMP;
-    const spd=Math.hypot(n.vx,n.vy);
-    if(spd>MXV){n.vx=n.vx/spd*MXV;n.vy=n.vy/spd*MXV;}
-    n.x+=n.vx; n.y+=n.vy;
+  for (const n of N) {
+    if (n.pinned) { n.vx = 0; n.vy = 0; continue; }
+    n.vx = (n.vx - n.x*GRAV) * DAMP;
+    n.vy = (n.vy - n.y*GRAV) * DAMP;
+    const spd = Math.hypot(n.vx, n.vy);
+    if (spd > MXV) { n.vx = n.vx/spd*MXV; n.vy = n.vy/spd*MXV; }
+    n.x += n.vx; n.y += n.vy;
   }
 }
 
 // ═══════════════════════════════════════════════════════════════
 // DRAW
 // ═══════════════════════════════════════════════════════════════
-function arrow(x1,y1,x2,y2,r2){
-  const dx=x2-x1, dy=y2-y1;
-  const d=Math.hypot(dx,dy)||1;
-  const ux=dx/d, uy=dy/d;
-  const ex=x2-ux*(r2+7), ey=y2-uy*(r2+7);
-  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(ex,ey);ctx.stroke();
-  const ang=Math.atan2(dy,dx), al=7, aa=0.42;
-  ctx.beginPath();
-  ctx.moveTo(ex,ey);
-  ctx.lineTo(ex-al*Math.cos(ang-aa), ey-al*Math.sin(ang-aa));
-  ctx.lineTo(ex-al*Math.cos(ang+aa), ey-al*Math.sin(ang+aa));
-  ctx.closePath();ctx.fill();
+function arrow(x1, y1, x2, y2, r2){
+  const dx = x2 - x1, dy = y2 - y1, d = Math.hypot(dx, dy) || 1;
+  const ux = dx/d, uy = dy/d, ex = x2 - ux*(r2+6), ey = y2 - uy*(r2+6);
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex, ey); ctx.stroke();
+  const ang = Math.atan2(dy, dx), al = 6, aa = 0.42;
+  ctx.beginPath(); ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - al*Math.cos(ang-aa), ey - al*Math.sin(ang-aa));
+  ctx.lineTo(ex - al*Math.cos(ang+aa), ey - al*Math.sin(ang+aa));
+  ctx.closePath(); ctx.fill();
 }
 
 function draw(){
   ctx.save();
-  ctx.scale(dpr,dpr);
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='#12151C';
-  ctx.fillRect(0,0,W,H);
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = THEME.bg; ctx.fillRect(0, 0, W, H);
 
   ctx.save();
-  ctx.translate(W/2+panX, H/2+panY);
-  ctx.scale(zoom,zoom);
+  ctx.translate(W/2 + panX, H/2 + panY);
+  ctx.scale(zoom, zoom);
 
-  // ── EDGES ──────────────────────────────────────────────────
-  for(const e of edges){
-    const a=nodeById[e.src], b=nodeById[e.tgt];
-    if(!a||!b) continue;
-    const isSel = selNode && (e.src===selNode.id||e.tgt===selNode.id);
-    const isHov = hovNode && (e.src===hovNode.id||e.tgt===hovNode.id);
-    let alpha=0.18, lw=0.7, col='#3A4258';
-    if(isSel){alpha=0.85;lw=1.6;col=GROUPS[a.group].color;}
-    else if(isHov){alpha=0.6;lw=1.0;col='#5A6480';}
-    else if(selNode&&!isSel){alpha=0.04;}
-    else if(!a.visible||!b.visible){alpha=0.06;}
-    ctx.strokeStyle=col;ctx.fillStyle=col;
-    ctx.lineWidth=lw;ctx.globalAlpha=alpha;
-    arrow(a.x,a.y,b.x,b.y,b.radius);
+  // ── EDGES ──
+  for (const e of visibleEdges) {
+    const a = nodeById[e.src_node_id], b = nodeById[e.dst_node_id];
+    if (!a || !b) continue;
+    const isSel = selNode && (e.src_node_id === selNode.id || e.dst_node_id === selNode.id);
+    const contains = e.edge_type === "contains";
+    let alpha = contains ? 0.14 : 0.20, lw = 0.7, col = THEME.line;
+    if (isSel) { alpha = 0.9; lw = 1.6; col = THEME.accent; }
+    else if (selNode) { alpha = 0.05; }
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw; ctx.globalAlpha = alpha;
+    ctx.setLineDash(contains ? [3, 3] : []);
+    arrow(a.x, a.y, b.x, b.y, kindRadius(b.kind));
   }
-  ctx.globalAlpha=1;
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
 
-  // ── NODES ──────────────────────────────────────────────────
-  for(const n of nodes){
-    const isSel=selNode===n, isHov=hovNode===n;
-    const col=GROUPS[n.group].color;
-    const alpha=n.visible?1:(selNode?0.1:0.25);
-    ctx.globalAlpha=alpha;
-    if(isSel||isHov){
-      ctx.shadowColor=col; ctx.shadowBlur=isSel?18:9;
+  // ── NODES ──
+  for (const n of visibleNodes) {
+    const isSel = selNode === n, isHov = hovNode === n;
+    const col = kindColor(n.kind);
+    const dim = query && !matchesSearch(n);
+    const alpha = dim ? 0.15 : (selNode && !isSel ? 0.85 : 1);
+    ctx.globalAlpha = alpha;
+    const r = kindRadius(n.kind);
+    if (isSel || isHov) { ctx.shadowColor = col; ctx.shadowBlur = isSel ? 18 : 9; }
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI*2);
+    ctx.fillStyle = (isSel || isHov) ? col : col + "AA"; ctx.fill();
+    ctx.shadowBlur = 0;
+    // reduced-confidence (regex) marker: dashed outline
+    if (n.extraction_method === "regex") {
+      ctx.setLineDash([2, 2]); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
     }
-    ctx.beginPath();ctx.arc(n.x,n.y,n.radius,0,Math.PI*2);
-    ctx.fillStyle=(isSel||isHov)?col:col+'AA';
-    ctx.fill();
-    if(isSel||isHov){
-      ctx.strokeStyle=col;ctx.lineWidth=isSel?2.5:1.5;ctx.stroke();
+    if (isSel || isHov) { ctx.strokeStyle = col; ctx.lineWidth = isSel ? 2.5 : 1.5; ctx.stroke(); }
+    // severity badge ring (findings): critical=red, warning=amber, info=muted
+    const sev = nodeSeverity[n.id];
+    if (sev) {
+      ctx.strokeStyle = SEV_COLOR[sev]; ctx.globalAlpha = alpha; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 4, 0, Math.PI*2); ctx.stroke();
     }
-    ctx.shadowBlur=0;
-    // Pin dot
-    if(n.pinned){
-      ctx.fillStyle='#fff';ctx.beginPath();
-      ctx.arc(n.x+n.radius-3,n.y-n.radius+3,2.5,0,Math.PI*2);ctx.fill();
+    // expanded-file ring
+    if (n.kind === "file" && expandedFiles.has(n.id)) {
+      ctx.strokeStyle = THEME.accent; ctx.globalAlpha = alpha * 0.9; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 3, 0, Math.PI*2); ctx.stroke();
     }
-    ctx.globalAlpha=1;
+    if (n.pinned) {
+      ctx.fillStyle = THEME.text; ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(n.x + r - 2, n.y - r + 2, 2.2, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
   ctx.restore(); // end world transform
 
-  // ── LABELS (screen space) ────────────────────────────────
-  ctx.textAlign='center';ctx.textBaseline='top';
-  for(const n of nodes){
-    const isSel=selNode===n, isHov=hovNode===n;
-    const screenR=n.radius*zoom;
-    if(screenR<2&&!isSel&&!isHov) continue;
-    const alpha=n.visible?1:(selNode?0.06:0.2);
-    if(alpha<0.08&&!isSel&&!isHov) continue;
-    const s=w2s(n.x,n.y);
-    ctx.globalAlpha=alpha;
-    ctx.font=(isSel||isHov?'600 ':'400 ')+'11px "Segoe UI",sans-serif';
-    // shadow for readability
-    ctx.shadowColor='#12151C';ctx.shadowBlur=3;
-    ctx.fillStyle='#E8EAF0';
-    ctx.fillText(n.label, s.x, s.y+screenR+3);
-    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  // ── LABELS (screen space) ──
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const n of visibleNodes) {
+    const isSel = selNode === n, isHov = hovNode === n;
+    const screenR = kindRadius(n.kind) * zoom;
+    if (screenR < 5 && !isSel && !isHov) continue;
+    if (query && !matchesSearch(n) && !isSel) continue;
+    const s = w2s(n.x, n.y);
+    ctx.font = (isSel || isHov ? "600 " : "400 ") + "11px " + THEME_FONT;
+    ctx.shadowColor = THEME.bg; ctx.shadowBlur = 3;
+    ctx.fillStyle = THEME.text;
+    ctx.fillText(nodeLabel(n), s.x, s.y + screenR + 3);
+    ctx.shadowBlur = 0;
   }
-
   ctx.restore(); // end dpr scale
 }
+const THEME_FONT = '"Segoe UI",system-ui,sans-serif';
 
 // ═══════════════════════════════════════════════════════════════
 // TOOLTIP
 // ═══════════════════════════════════════════════════════════════
-const tip = document.getElementById('tip');
-function showTip(n,sx,sy){
-  const imps=n.imports.length
-    ? `<div class="tip-lbl">Imports internos (${n.imports.length})</div>`
-      + n.imports.map(i=>`<div class="tip-imp">&#8594; ${i}</div>`).join('')
-    : '<div class="tip-lbl">Sin imports internos</div>';
-  tip.innerHTML=`<div class="tip-title">${n.label}</div><div class="tip-path">${n.path}</div>${imps}`;
-  let tx=sx+14, ty=sy-20;
-  if(tx+240>W) tx=sx-250;
-  if(ty+220>H) ty=H-230;
-  if(ty<0) ty=4;
-  tip.style.left=tx+'px';tip.style.top=ty+'px';tip.style.display='block';
+const tip = $("tip");
+function showTip(n, sx, sy){
+  const fn = fileNodeFor(n);
+  const summary = symbolSummary(n);
+  const fileId = fn ? fn.id : n.id;
+  const out = allEdges.filter((e) => e.src_node_id === fileId && e.edge_type === "imports").length;
+  const inc = allEdges.filter((e) => e.dst_node_id === fileId && e.edge_type === "imports").length;
+  const nodeFindings = findingsForNode(n);
+  const loc = n.loc || (n.start_line && n.end_line ? Math.max(1, n.end_line - n.start_line + 1) : null);
+  tip.innerHTML =
+    `<div class="tip-title">${escapeHtml(nodeLabel(n))}</div>` +
+    `<div class="tip-path">${escapeHtml((fn && fn.qualified_name) || n.qualified_name || "")}</div>` +
+    `<div class="tip-lbl">${escapeHtml(n.kind)}${n.extraction_method === "regex" ? " · regex" : ""}` +
+    ` · ${out}→ · ←${inc}${n.kind === "file" ? (expandedFiles.has(n.id) ? " · [clic: plegar]" : " · [clic: expandir]") : ""}</div>` +
+    `<div class="tip-grid">
+      <span>líneas</span><b>${escapeHtml(n.start_line || "—")}-${escapeHtml(n.end_line || "—")}</b>
+      <span>loc</span><b>${escapeHtml(loc || "—")}</b>
+      <span>clases</span><b>${summary.classes.length}</b>
+      <span>attrs</span><b>${summary.attributes.length}</b>
+      <span>métodos</span><b>${summary.methods.length}</b>
+      <span>funciones</span><b>${summary.functions.length}</b>
+    </div>` +
+    (nodeFindings.length ? `<div class="tip-find">${nodeFindings.length} hallazgos relacionados</div>` : "");
+  let tx = sx + 14, ty = sy - 20;
+  if (tx + 330 > W) tx = sx - 340;
+  if (ty + 190 > H) ty = H - 200;
+  if (ty < 0) ty = 4;
+  tip.style.left = tx + "px"; tip.style.top = ty + "px"; tip.style.display = "block";
 }
-function hideTip(){ tip.style.display='none'; }
-
-// ═══════════════════════════════════════════════════════════════
-// SIDEBAR
-// ═══════════════════════════════════════════════════════════════
-const slist=document.getElementById('slist');
-const infoEl=document.getElementById('info');
-
-function buildSidebar(){
-  let html='';
-  for(const g of ['root','app','providers','tests','tools']){
-    const gn=nodes.filter(n=>n.group===g);
-    if(!gn.length) continue;
-    html+=`<div class="sg">${GROUPS[g].label}</div>`;
-    for(const n of gn){
-      html+=`<div class="si" data-id="${n.id}">
-        <div class="si-dot" style="background:${GROUPS[n.group].color}"></div>
-        <div class="si-lbl">${n.label}</div></div>`;
-    }
-  }
-  slist.innerHTML=html;
-  slist.addEventListener('click',e=>{
-    const el=e.target.closest('.si');
-    if(!el) return;
-    const n=nodeById[el.dataset.id];
-    if(n){ panTo(n); setSelect(n); }
-  });
-}
-
-function panTo(n){
-  panX=-n.x*zoom; panY=-n.y*zoom;
-}
-
-function setSelect(n){
-  if(selNode===n){ selNode=null; updateInfo(); }
-  else{ selNode=n; updateInfo(); }
-  document.querySelectorAll('.si').forEach(el=>{
-    el.classList.toggle('active', selNode&&el.dataset.id===selNode.id);
-  });
-}
-
-function updateInfo(){
-  if(!selNode){
-    infoEl.textContent=`${nodes.length} m&#243;dulos · sin selecci&#243;n`;
-    return;
-  }
-  const outs=edges.filter(e=>e.src===selNode.id).length;
-  const ins=edges.filter(e=>e.tgt===selNode.id).length;
-  infoEl.innerHTML=`<b style="color:${GROUPS[selNode.group].color}">${selNode.label}</b><br>
-    ${outs} imports &#8226; importado por ${ins}`;
-}
+function hideTip(){ tip.style.display = "none"; }
 
 // ═══════════════════════════════════════════════════════════════
 // EVENTS
 // ═══════════════════════════════════════════════════════════════
-let mdNode=null, mdX=0, mdY=0, mdT=0, hasMoved=false;
+let dragNode = null, dragWx = 0, dragWy = 0;
+let isPanning = false, panSX = 0, panSY = 0;
+let mdNode = null, mdX = 0, mdY = 0, mdT = 0, hasMoved = false;
 
-canvas.addEventListener('mousedown',e=>{
-  const r=canvas.getBoundingClientRect();
-  const sx=(e.clientX-r.left), sy=(e.clientY-r.top);
-  const n=hitTest(sx,sy);
-  mdX=sx;mdY=sy;mdT=Date.now();hasMoved=false;mdNode=n;
-  if(n){
-    dragNode=n;
-    const w=s2w(sx,sy);
-    dragWx=n.x-w.x; dragWy=n.y-w.y;
-    canvas.classList.add('grabbing');
+canvas.addEventListener("mousedown", (e) => {
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const n = hitTest(sx, sy);
+  mdX = sx; mdY = sy; mdT = Date.now(); hasMoved = false; mdNode = n;
+  if (n) {
+    dragNode = n;
+    const w = s2w(sx, sy);
+    dragWx = n.x - w.x; dragWy = n.y - w.y;
   } else {
-    isPanning=true;
-    panSX=e.clientX-panX; panSY=e.clientY-panY;
-    canvas.classList.add('grabbing');
+    isPanning = true; panSX = e.clientX - panX; panSY = e.clientY - panY;
+  }
+  canvas.classList.add("grabbing");
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  if (Math.hypot(sx - mdX, sy - mdY) > 4) hasMoved = true;
+  if (dragNode) {
+    const w = s2w(sx, sy);
+    dragNode.x = w.x + dragWx; dragNode.y = w.y + dragWy; dragNode.vx = 0; dragNode.vy = 0;
+    hideTip();
+  } else if (isPanning) {
+    panX = e.clientX - panSX; panY = e.clientY - panSY; hideTip();
+  } else {
+    const n = hitTest(sx, sy);
+    hovNode = n;
+    if (n) showTip(n, sx, sy); else hideTip();
   }
 });
 
-canvas.addEventListener('mousemove',e=>{
-  const r=canvas.getBoundingClientRect();
-  const sx=(e.clientX-r.left), sy=(e.clientY-r.top);
-  mouseS={x:sx,y:sy};
-  if(Math.hypot(sx-mdX,sy-mdY)>4) hasMoved=true;
-  if(dragNode){
-    const w=s2w(sx,sy);
-    dragNode.x=w.x+dragWx; dragNode.y=w.y+dragWy;
-    dragNode.vx=0;dragNode.vy=0;
-    hideTip();
-  } else if(isPanning){
-    panX=e.clientX-panSX; panY=e.clientY-panSY;
-    hideTip();
-  } else {
-    const n=hitTest(sx,sy);
-    hovNode=n;
-    if(n) showTip(n,sx,sy); else hideTip();
-  }
-});
-
-canvas.addEventListener('mouseup',e=>{
-  const dt=Date.now()-mdT;
-  if(dragNode){
-    if(!hasMoved&&dt<350){
-      // Quick click = pin toggle
-      dragNode.pinned=!dragNode.pinned;
+canvas.addEventListener("mouseup", () => {
+  const dt = Date.now() - mdT;
+  if (dragNode) {
+    if (!hasMoved && dt < 350) {
+      selectNode(dragNode, false);
+      if (dragNode.kind === "file") { toggleExpand(dragNode); }
     }
-    // Any click selects
-    if(!hasMoved) setSelect(dragNode);
-    dragNode=null;
-  } else if(isPanning&&!hasMoved&&!mdNode){
-    // Click on empty = deselect
-    selNode=null;
-    updateInfo();
-    document.querySelectorAll('.si').forEach(el=>el.classList.remove('active'));
+    dragNode = null;
+  } else if (isPanning && !hasMoved && !mdNode) {
+    deselect();
   }
-  isPanning=false;
-  canvas.classList.remove('grabbing');
+  isPanning = false;
+  canvas.classList.remove("grabbing");
 });
 
-canvas.addEventListener('mouseleave',()=>{
-  hovNode=null;hideTip();
-  dragNode=null;isPanning=false;
-  canvas.classList.remove('grabbing');
+canvas.addEventListener("mouseleave", () => {
+  hovNode = null; hideTip(); dragNode = null; isPanning = false;
+  canvas.classList.remove("grabbing");
 });
 
-canvas.addEventListener('wheel',e=>{
+canvas.addEventListener("dblclick", (e) => {
+  const r = canvas.getBoundingClientRect();
+  const n = hitTest(e.clientX - r.left, e.clientY - r.top);
+  if (n) { n.pinned = !n.pinned; }
+});
+
+canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
-  const r=canvas.getBoundingClientRect();
-  const sx=e.clientX-r.left, sy=e.clientY-r.top;
-  const factor=e.deltaY<0?1.13:1/1.13;
-  const oldZoom=zoom;
-  zoom=Math.max(0.15,Math.min(5,zoom*factor));
-  const af=zoom/oldZoom;
-  panX=sx-W/2-(sx-W/2-panX)*af;
-  panY=sy-H/2-(sy-H/2-panY)*af;
-},{passive:false});
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const factor = e.deltaY < 0 ? 1.13 : 1/1.13;
+  const oldZoom = zoom;
+  zoom = Math.max(0.12, Math.min(5, zoom * factor));
+  const af = zoom / oldZoom;
+  panX = sx - W/2 - (sx - W/2 - panX) * af;
+  panY = sy - H/2 - (sy - H/2 - panY) * af;
+}, { passive:false });
 
-document.getElementById('zi').onclick=()=>{ zoom=Math.min(5,zoom*1.25); };
-document.getElementById('zo').onclick=()=>{ zoom=Math.max(0.15,zoom/1.25); };
-document.getElementById('zr').onclick=()=>{ zoom=0.85;panX=0;panY=0; };
+$("zi").onclick = () => { zoom = Math.min(5, zoom * 1.25); };
+$("zo").onclick = () => { zoom = Math.max(0.12, zoom / 1.25); };
+$("zr").onclick = () => { zoom = 0.85; panX = 0; panY = 0; };
 
-document.getElementById('search').addEventListener('input',e=>{
-  query=e.target.value.toLowerCase().trim();
-  for(const n of nodes){
-    n.visible=!query||n.label.toLowerCase().includes(query)||n.path.toLowerCase().includes(query);
-  }
-  document.querySelectorAll('.si').forEach(el=>{
-    const n=nodeById[el.dataset.id];
-    el.style.opacity=(!query||!n||n.visible)?'1':'0.3';
-  });
-});
+$("search").addEventListener("input", (e) => { query = e.target.value.toLowerCase().trim(); });
 
 // ═══════════════════════════════════════════════════════════════
-// LOOP
+// LIVE AUTO-REFRESH (Fase 1 del arreglo de reactividad, previo al
+// bus SSE). Mantiene el Grafo al día sin que el usuario recargue:
+// cada tick re-comprueba el `last_scanned_at` del repo seleccionado
+// y recarga el grafo SOLO cuando aparece un escaneo nuevo (p.ej.
+// lanzado por un agente o desde otra pestaña), además de refrescar
+// los badges de hallazgos. No hace nada visible si nada cambió, y se
+// salta el tick si estás arrastrando un nodo, con la pestaña oculta,
+// o con un escaneo en curso — para no introducir saltos ("jank").
+// ═══════════════════════════════════════════════════════════════
+const LIVE_REFRESH_MS = 12000;
+let pollInFlight = false;
+
+function refreshRepoOptions(){
+  const val = repoSelect.value;
+  repoSelect.innerHTML = repos.map((r) => {
+    const scanned = r.last_scanned_at ? r.last_scanned_at.replace("T"," ").slice(0,16) : "sin escanear";
+    return `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)} · ${escapeHtml(scanned)}</option>`;
+  }).join("");
+  repoSelect.value = val;
+  renderRepoShelf();
+}
+
+async function liveRefresh(){
+  if (pollInFlight || dragNode || document.hidden || !currentRepo) return;
+  pollInFlight = true;
+  try {
+    const fresh = await api("/repos");
+    if (!Array.isArray(fresh)) return;
+    repos = fresh;
+    const mine = fresh.find((r) => r.id === currentRepo.id);
+    if (!mine) { await loadRepos(); return; }          // repo removed elsewhere
+    refreshRepoOptions();                               // keep dropdown labels current
+    const changed = mine.last_scanned_at !== currentRepo.last_scanned_at;
+    currentRepo = mine;
+    if (changed) { await loadGraph(); }                // new scan landed → full reload
+    else { await loadFindings(); }                     // cheap: keep badges/panel live
+  } catch (_) { /* transient — retry next tick */ }
+  finally { pollInFlight = false; }
+}
+setInterval(liveRefresh, LIVE_REFRESH_MS);
+
+// Instant push via SSE: react the moment the backend signals a scan/audit for
+// the repo currently on screen (e.g. triggered by an agent or another tab),
+// instead of waiting for the 12s poll above (which stays as the fallback).
+try {
+  const es = new EventSource("/events");
+  es.onmessage = (event) => {
+    let ev;
+    try { ev = JSON.parse(event.data); } catch (_) { return; }
+    if (!currentRepo || dragNode) return;               // don't yank mid-drag
+    if (ev.repo_id !== currentRepo.id) return;
+    if (ev.type === "repo_scanned") { loadRepos(currentRepo.id); }   // new graph
+    else if (ev.type === "repo_audited") { loadFindings(); }         // fresh badges
+  };
+} catch (_) { /* no SSE → the 12s poll still keeps the view current */ }
+
+// ═══════════════════════════════════════════════════════════════
+// LOOP + START
 // ═══════════════════════════════════════════════════════════════
 function loop(){
-  simulate();
+  if (visibleNodes.length) { simulate(); }
   draw();
   requestAnimationFrame(loop);
 }
-
-// ═══════════════════════════════════════════════════════════════
-// START
-// ═══════════════════════════════════════════════════════════════
-buildSidebar();
-updateInfo();
+loadRepos();
 loop();
 </script>
 </body>

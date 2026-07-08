@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KARAJAN Editor</title>
+<style>
+:root{--r:6px;--font:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace}
+html[data-theme="dark"]{color-scheme:dark;--bg:#0b0d10;--panel:#2a2f36;--panel-2:#333a45;--line:#3f4750;--text:#feebc8;--muted:#6c7886;--accent:#f9c74f;--accent-ink:#14110a;--ok:#7dbb8a;--bad:#e2705b}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font)}
+body{display:flex;flex-direction:column}
+header{height:34px;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.path{font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.actions{display:flex;align-items:center;gap:3px}
+button.icon-btn{width:26px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:var(--r);background:transparent;color:var(--text);font-weight:700;cursor:pointer}
+button.icon-btn:hover{background:var(--panel-2);border-color:var(--line);color:var(--accent)}
+main{display:grid;grid-template-columns:auto 1fr;min-height:0;flex:1;background:#0b0d10}
+.lines{min-width:46px;padding:12px 8px;background:#11151a;color:#59636f;font-family:var(--mono);font-size:13px;line-height:1.55;text-align:right;overflow:hidden;user-select:none;border-right:1px solid var(--line)}
+.codecell{position:relative;min-width:0;min-height:0;overflow:hidden}
+.highlight{position:absolute;inset:0;margin:0;padding:12px 14px;font-family:var(--mono);font-size:13px;line-height:1.55;tab-size:2;white-space:pre;color:#d7e0ea;pointer-events:none}
+textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:0;background:transparent;color:transparent;caret-color:#e8eef6;padding:12px 14px;font-family:var(--mono);font-size:13px;line-height:1.55;tab-size:2;overflow:auto;white-space:pre}
+textarea::selection{background:rgba(74,158,255,.32);color:transparent}
+.tok-kw{color:#c084fc;font-weight:700}.tok-str{color:#86efac}.tok-num{color:#fbbf24}.tok-cmt{color:#738194;font-style:italic}.tok-def{color:#7dd3fc}.tok-op{color:#fca5a5}
+footer{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--panel);border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--muted)}
+.ok{color:var(--ok)}.err{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <div class="path" id="path">Cargando...</div>
+  <div class="actions">
+    <button class="icon-btn" id="split" title="Vista externa">⇆</button>
+    <button class="icon-btn" id="popout" title="Ya está extraído">↗</button>
+    <button class="icon-btn" id="save" title="Guardar (Ctrl+S)">✓</button>
+    <button class="icon-btn" id="close" title="Cerrar ventana">−</button>
+  </div>
+</header>
+<main>
+  <pre class="lines" id="lines">1</pre>
+  <div class="codecell">
+    <pre class="highlight" id="highlight"></pre>
+    <textarea id="code" spellcheck="false" wrap="off"></textarea>
+  </div>
+</main>
+<footer><span id="status">Ctrl+S para guardar</span><span>Ventana extraída</span></footer>
+<script>
+"use strict";
+const params = new URLSearchParams(location.search);
+const repo = params.get("repo");
+const filePath = params.get("path");
+const repoName = params.get("name") || repo || "";
+const code = document.getElementById("code");
+const lines = document.getElementById("lines");
+const highlight = document.getElementById("highlight");
+const statusEl = document.getElementById("status");
+const pathEl = document.getElementById("path");
+let saved = "";
+let timer = null;
+function setStatus(text, cls=""){ statusEl.className = cls; statusEl.textContent = text; }
+function esc(s){ return String(s).replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#039;" }[ch])); }
+function lang(path){ const ext = String(path || "").split(".").pop().toLowerCase(); if(["py","pyw"].includes(ext)) return "python"; if(["js","jsx","ts","tsx","mjs","cjs"].includes(ext)) return "js"; if(ext === "json") return "json"; return "plain"; }
+function highlightLine(line, mode){
+  let out = "", i = 0;
+  const kw = mode === "python"
+    ? /^(async|await|and|as|assert|break|class|continue|def|del|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|nonlocal|not|or|pass|raise|return|True|try|while|with|yield)\b/
+    : /^(async|await|break|case|catch|class|const|continue|default|delete|else|export|extends|false|finally|for|from|function|if|import|in|instanceof|let|new|null|return|switch|this|throw|true|try|typeof|var|void|while|yield)\b/;
+  while(i < line.length){
+    const rest = line.slice(i);
+    if((mode === "python" && rest[0] === "#") || (mode !== "python" && rest.startsWith("//"))){ out += `<span class="tok-cmt">${esc(rest)}</span>`; break; }
+    const str = rest.match(/^("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/);
+    if(str){ out += `<span class="tok-str">${esc(str[0])}</span>`; i += str[0].length; continue; }
+    const num = rest.match(/^\b\d+(?:\.\d+)?\b/);
+    if(num){ out += `<span class="tok-num">${esc(num[0])}</span>`; i += num[0].length; continue; }
+    const def = rest.match(mode === "python" ? /^(def|class)\s+([A-Za-z_]\w*)/ : /^(function|class)\s+([A-Za-z_$][\w$]*)/);
+    if(def){ out += `<span class="tok-kw">${esc(def[1])}</span> <span class="tok-def">${esc(def[2])}</span>`; i += def[0].length; continue; }
+    const k = rest.match(kw);
+    if(k){ out += `<span class="tok-kw">${esc(k[0])}</span>`; i += k[0].length; continue; }
+    const op = rest.match(/^(->|=>|===|!==|==|!=|<=|>=|\+|-|\*|\/|=|:)/);
+    if(op){ out += `<span class="tok-op">${esc(op[0])}</span>`; i += op[0].length; continue; }
+    out += esc(rest[0]); i += 1;
+  }
+  return out || " ";
+}
+function updateHighlight(){ highlight.innerHTML = code.value.split("\n").map(line => highlightLine(line, lang(filePath))).join("\n"); highlight.style.transform = `translate(${-code.scrollLeft}px, ${-code.scrollTop}px)`; }
+function updateLines(){ const n = Math.max(1, code.value.split("\n").length); lines.textContent = Array.from({length:n},(_,i)=>i+1).join("\n"); updateHighlight(); }
+async function api(path, options={}){
+  const res = await fetch(path, { headers:{ "Content-Type":"application/json" }, ...options });
+  if(!res.ok){ const body = await res.json().catch(()=>({})); throw new Error(body.detail || `HTTP ${res.status}`); }
+  return res.status === 204 ? null : res.json();
+}
+async function load(){
+  if(!repo || !filePath){ setStatus("Falta repo o path", "err"); return; }
+  pathEl.textContent = `${repoName} · ${filePath}`;
+  document.title = `${filePath.split(/[\\/]/).pop()} - KARAJAN`;
+  try{
+    const data = await api(`/repos/${encodeURIComponent(repo)}/file?path=${encodeURIComponent(filePath)}`);
+    code.value = data.content || "";
+    saved = code.value;
+    updateLines();
+    setStatus("Guardado", "ok");
+  }catch(err){ setStatus(`No se pudo abrir: ${err.message}`, "err"); }
+}
+async function save(){
+  try{
+    await api(`/repos/${encodeURIComponent(repo)}/file`, { method:"PUT", body:JSON.stringify({ path:filePath, content:code.value }) });
+    saved = code.value;
+    setStatus("Guardado", "ok");
+  }catch(err){ setStatus(`No se pudo guardar: ${err.message}`, "err"); }
+}
+code.addEventListener("input", () => {
+  updateLines();
+  setStatus(code.value === saved ? "Guardado" : "Editando · autosave activo", code.value === saved ? "ok" : "");
+  clearTimeout(timer);
+  timer = setTimeout(save, 1200);
+});
+code.addEventListener("scroll", () => { lines.scrollTop = code.scrollTop; updateHighlight(); });
+code.addEventListener("keydown", (e) => {
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s"){ e.preventDefault(); save(); }
+  if(e.key === "Tab"){ e.preventDefault(); code.setRangeText("  ", code.selectionStart, code.selectionEnd, "end"); code.dispatchEvent(new Event("input", { bubbles:true })); }
+});
+document.getElementById("save").addEventListener("click", save);
+document.getElementById("close").addEventListener("click", () => window.close());
+document.getElementById("split").addEventListener("click", () => window.resizeTo(1100, 780));
+document.getElementById("popout").addEventListener("click", () => window.focus());
+load();
+</script>
+</body>
+</html>

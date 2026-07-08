@@ -60,7 +60,7 @@ def _layout() -> RoutingLayout:
 
 
 def _fake_run_subtask(used: list[str]):
-    def _run(classification, index, subtask, config, layout, preresolved=None):
+    def _run(classification, index, subtask, config, layout, preresolved=None, *, store=None):
         used.append(preresolved.provider_name if preresolved else "static")
         execution = SubtaskExecution(
             subtask_id=subtask.id,

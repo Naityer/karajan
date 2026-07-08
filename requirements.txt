@@ -12,3 +12,6 @@ pywebview>=6.2,<7.0
 # anthropic>=0.40        # Anthropic (Claude) API backend
 # openai>=1.40           # OpenAI / Groq / Mistral / DeepSeek / Z.AI / Together / OpenRouter / HF API backends
 # google-genai>=0.3      # Google (Gemini) API backend
+# tree-sitter>=0.23      # TS/JS static analysis (graph scanner) — optional
+# tree-sitter-language-pack>=1.10  # prebuilt grammars for the above; graph TS/JS analysis falls back to regex if absent
+# duckdb>=1.0            # analytics layer (Fase 3) — optional, /analytics/dashboard degrades gracefully if absent

@@ -147,6 +147,15 @@ const ROLE_DEFS = {
     canOwnLevels: false,
     canConnectToAgent: true,
   },
+  fixer: {
+    label: "Fixeador",
+    summary: "Recibe hallazgos de código, aplica parches y verifica con la auditoría.",
+    group: "Soporte",
+    restriction: "R2",
+    kind: "fixer",
+    canOwnLevels: false,
+    canConnectToAgent: true,
+  },
   memory: {
     label: "Memory",
     summary: "Mantiene estado, checkpoints y contexto.",
@@ -208,7 +217,7 @@ const ROLE_DEFS = {
 };
 
 const PRIMARY_ROLES = ["parent", "child", "backup"];
-const SUPPORT_ROLES = ["guardian", "validator", "memory", "monitor"];
+const SUPPORT_ROLES = ["guardian", "validator", "fixer", "memory", "monitor"];
 // Hierarchy/authority depth (separate axis from levels N1-N5) — mutually
 // exclusive among themselves, like PRIMARY_ROLES, but orthogonal to them:
 // any parent/child/backup can carry exactly one tier tag. Backs the same
@@ -330,15 +339,82 @@ function enterView(view) {
   }
   if (view === "flow") loadConfig().then(renderFlow).catch((error) => toast(error.message));
   if (view === "agents") refreshProvidersAndAgents().catch((error) => toast(error.message));
-  if (view === "human" || view === "monitor") refreshMonitor().catch((error) => toast(error.message));
+  if (view === "monitor") refreshMonitor().catch((error) => toast(error.message));
+  if (view === "human") refreshHuman().catch((error) => toast(error.message));
+  // Human view canvas: on (re)entry, start the real-task-or-demo animation if
+  // nothing is playing yet. Guarded internally (bootstrap runs at most once).
+  if (view === "human" && window.karajanCanvas) {
+    try { window.karajanCanvas.bootstrap(); } catch (_) {}
+  }
+}
+
+// Human owns a light data path — just /tasks feeding the notification bell and
+// the isometric canvas — instead of piggybacking on Monitor's heavier
+// /metrics+/observability+/history poll. The visible Human surface is the real
+// canvas plus the approve/reject action (bell → /tasks/{id}/approve-review), so
+// no independent cost/latency or provider-card computation happens here.
+async function refreshHuman() {
+  const tasks = await api("/tasks").catch(() => state.tasks || []);
+  state.tasks = tasks;
+  renderNotifications();
+  renderAgentNotifications();
 }
 
 function initAutoRefresh() {
   setInterval(() => {
     const view = state.activeView || "human";
-    if (view === "human" || view === "monitor") refreshMonitor().catch(() => {});
+    if (view === "monitor") refreshMonitor().catch(() => {});
+    if (view === "human") refreshHuman().catch(() => {});
     if (view === "agents") refreshProvidersAndAgents().catch(() => {});
+    // Decisión: refresh only the provider/readiness panel (renderModels),
+    // never renderDiagram — re-rendering the editable canvas mid-interaction
+    // would fight the user. This keeps "Arquitectura activa" live (which
+    // providers are ready) as models get installed/authenticated. The Grafo
+    // iframe self-refreshes on its own; the flow/config view is edit-only.
+    if (view === "decision") renderModels().catch(() => {});
   }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+// ---- live push (SSE) --------------------------------------------------------
+// The 20s poll above is the resilience fallback; this makes the UI react the
+// instant the backend publishes a change (a task delegated by an agent, a scan
+// or audit finishing, config/architecture edited). One EventSource, dispatched
+// to whichever view is active. The Grafo iframe opens its own EventSource.
+function initLiveEvents() {
+  let es;
+  try {
+    es = new EventSource("/events");
+  } catch (_) {
+    return; // no SSE support → the poll still keeps things fresh
+  }
+  es.onmessage = (event) => {
+    let ev;
+    try { ev = JSON.parse(event.data); } catch (_) { return; }
+    const view = state.activeView || "human";
+    // A real delegation lifecycle: task classified/delegated (task_changed) or a
+    // run started/finished (run_started/run_completed, Fase 1). This is the single
+    // dispatcher — Monitor and the human canvas both react here, no private polls.
+    if (ev.type === "task_changed" || ev.type === "run_started" || ev.type === "run_completed") {
+      if (view === "monitor") refreshMonitor().catch(() => {});
+      else if (view === "human") refreshHuman().catch(() => {});
+      // Drive the human-view isometric canvas from the real task/run lifecycle,
+      // and refresh its per-agent metrics (nodeData) — replacing its old 5s poll.
+      if (view === "human" && window.karajanCanvas) {
+        try {
+          window.karajanCanvas.onTaskChanged(ev.task_id);
+          if (window.karajanCanvas.refreshNodes) window.karajanCanvas.refreshNodes();
+        } catch (_) {}
+      }
+    } else if (ev.type === "config_changed") {
+      if (view === "decision") renderModels().catch(() => {});
+      else if (view === "agents") refreshProvidersAndAgents().catch(() => {});
+      else if (view === "flow") loadConfig().then(renderFlow).catch(() => {});
+    } else if (ev.type === "layout_changed" && view === "decision") {
+      renderModels().catch(() => {});
+    }
+    // repo_scanned / repo_audited are consumed by the Grafo iframe directly.
+  };
+  // EventSource auto-reconnects on error; nothing to do here.
 }
 
 function setNotificationsOpen(open) {
@@ -465,18 +541,20 @@ function renderAgentNotifications() {
 // ---- MONITOR ---------------------------------------------------------------
 async function refreshMonitor() {
   if (!$("#monitorMainContent")) return;
-  const [metrics, tasks, observability, providers, history] = await Promise.all([
+  const [metrics, tasks, observability, providers, history, performance] = await Promise.all([
     api("/metrics"),
     api("/tasks"),
     api("/observability"),
     api("/providers"),
     api("/observability/history").catch(() => ({ points: [] })),
+    api("/agents/performance").catch(() => []),
   ]);
   state.tasks = tasks;
   state.lastObservability = observability;
   state.lastMetrics = metrics;
   state.providers = providers;
   state.metricsHistory = history;
+  state.agentPerformance = performance;
   renderNotifications();
   renderAgentNotifications();
   if (!state.selectedNodeId && observability.nodes?.length) state.selectedNodeId = observability.nodes[0].id;
@@ -484,8 +562,8 @@ async function refreshMonitor() {
   renderSystemHealth(observability.health);
   renderExecutionFlow(observability.execution_flow || []);
   renderNodeOverview(observability.nodes || [], metrics, observability.model_usage || []);
-  renderHumanReviewQueue(tasks);
-  renderHumanHome(metrics, tasks, observability);
+  // Human is decoupled: it owns its own light data path (refreshHuman) driven by
+  // view activation + SSE — Monitor no longer renders Human panels as a side effect.
   _renderAgentPanels(observability.nodes || [], observability.execution_flow || [], observability.audit_timeline || []);
   renderAuditTimeline(observability.audit_timeline || []);
   renderTaskRows(tasks);
@@ -1067,6 +1145,12 @@ function agentChartCard(node, { selected, detail = false } = {}) {
   const successPct = node.task_count ? Math.round(((node.task_count - (node.error_count || 0)) / total) * 100) : 100;
   const successTone = successPct >= 90 ? "ok" : successPct >= 60 ? "warn" : "bad";
   const tokens = node.total_tokens || 0;
+  // Prefer the shared /agents/performance aggregate (stable per provider_name)
+  // for coste/latencia; fall back to the observability node's own values when no
+  // matching run aggregate exists so behaviour never regresses.
+  const perf = (state.agentPerformance || []).find((p) => p.provider_name && node.provider && p.provider_name === node.provider);
+  const cost = perf ? Number(perf.total_cost || 0) : Number(node.estimated_cost || 0);
+  const latency = perf ? Math.round(perf.avg_latency_ms || 0) : (node.latency_ms || 0);
   const activity = nodeActivitySeries(node.id);
   const caps = (node.active_capabilities || []).slice(0, 4).map((c) => `<em>${escapeHtml(c)}</em>`).join("");
   const skillEntries = Object.entries(node.skill_usage || {}).sort((a, b) => b[1] - a[1]);
@@ -1096,8 +1180,8 @@ function agentChartCard(node, { selected, detail = false } = {}) {
     <div class="agent-chart-stats">
       <span><small>Pila</small><b>${node.task_count || 0}</b></span>
       <span><small>Errores</small><b>${node.error_count || 0}</b></span>
-      <span><small>Coste</small><b>$${Number(node.estimated_cost || 0).toFixed(4)}</b></span>
-      <span><small>Latencia</small><b>${node.latency_ms || 0}ms</b></span>
+      <span><small>Coste</small><b>$${cost.toFixed(4)}</b></span>
+      <span><small>Latencia</small><b>${latency}ms</b></span>
     </div>
     ${caps ? `<div class="agent-chart-caps">${caps}</div>` : ""}
     ${skillChips}
@@ -1139,6 +1223,30 @@ function renderModelUsagePanel(modelUsage) {
   </section>`;
 }
 
+// Monitor's per-agent cost/latency table, backed by GET /agents/performance
+// (stable GROUP BY provider_name over `runs`) — the audit surface's replacement
+// for each view recomputing these numbers independently.
+function renderAgentPerformancePanel(perf = state.agentPerformance || []) {
+  const rows = perf.length
+    ? perf
+        .slice()
+        .sort((a, b) => (b.task_count || 0) - (a.task_count || 0))
+        .map(
+          (p) => `<div class="usage-row">
+            <div><b>${escapeHtml(p.provider_name)}</b><span>${p.task_count || 0} ejec. · ${p.error_count || 0} err.</span></div>
+            <span>${p.avg_latency_ms != null ? Math.round(p.avg_latency_ms) : 0}ms</span>
+            <span>${p.total_tokens || 0} tok</span>
+            <strong>$${Number(p.total_cost || 0).toFixed(4)}</strong>
+          </div>`
+        )
+        .join("")
+    : `<div class="chart-empty">sin ejecuciones registradas</div>`;
+  return `<section class="skill-usage-panel">
+    <h4>Rendimiento por agente <span class="cost-tag">coste · latencia</span></h4>
+    <div class="usage-list">${rows}</div>
+  </section>`;
+}
+
 // "Todos" shows every agent's chart card; picking one agent filters the same
 // grid down to just that card instead of routing to a second, separate detail
 // surface — one render path, no duplicated logic between the two views.
@@ -1174,6 +1282,7 @@ function renderNodeOverview(nodes, metrics, modelUsage = []) {
       ${renderPerformancePanel(metrics)}
     </div>
     ${renderModelUsagePanel(modelUsage)}
+    ${renderAgentPerformancePanel()}
     <div class="agent-chart-grid">
       ${visible.map((node) => agentChartCard(node, { selected: node.id === state.selectedNodeId })).join("")}
     </div>`
@@ -1224,189 +1333,6 @@ function latencyPanel(health) {
   </section>`;
 }
 
-function renderHumanReviewQueue(tasks) {
-  const target = $("#humanReviewQueue");
-  if (!target) return;
-  const queue = tasks.filter((task) => task.classification?.requires_human_review || task.status === "delegated");
-  if (!queue.length) {
-    target.innerHTML = `<div class="human-empty">
-      <b>Sin aprobaciones pendientes</b>
-      <span>Las tareas actuales no requieren credenciales, login, API externa ni firma humana.</span>
-    </div>`;
-    return;
-  }
-  target.innerHTML = `<div class="human-queue">
-    ${queue
-      .map((task) => {
-        const c = task.classification;
-        const why = c.requires_human_review
-          ? "Requiere confirmación antes de ejecutar o delegar."
-          : "Delegada: pendiente de seguimiento operativo.";
-        const approvals = [
-          c.requires_human_review ? "aprobación humana" : "",
-          c.recommended_strategy?.includes("human") ? "estrategia con control" : "",
-          c.reason || "",
-        ].filter(Boolean);
-        return `<article class="human-card">
-          <header><b>${escapeHtml(c.intent || "Tarea")}</b>${statusPill(task.status)}</header>
-          <p>${escapeHtml(why)}</p>
-          <div class="human-meta">
-            <span><small>Riesgo</small><b>${escapeHtml(c.complexity_level.replace("level_", "N").replace(/_.*/, ""))} · ${Number(c.complexity_score).toFixed(2)}</b></span>
-            <span><small>Modelo</small><b>${escapeHtml(TIER_LABEL[c.recommended_model] || c.recommended_model)}</b></span>
-            <span><small>Dominio</small><b>${escapeHtml((c.domain || []).slice(0, 2).join(", "))}</b></span>
-          </div>
-          <ul>${approvals.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
-          ${task.status === "delegated" && c.requires_human_review ? `<button class="approve-review" data-approve="${task.task_id}">Aprobar y liberar ejecución</button>` : ""}
-        </article>`;
-      })
-      .join("")}
-  </div>`;
-}
-
-function renderHumanHome(metrics = state.lastMetrics, tasks = state.tasks, observability = state.lastObservability) {
-  if (!$("#view-human")) return;
-  metrics ||= {};
-  tasks ||= [];
-  observability ||= {};
-  const providers = state.catalog || [];
-  const statusByProvider = new Map((state.providers || []).map((item) => [item.provider, item]));
-  const pending = tasks.filter((task) => task.classification?.requires_human_review || task.status === "delegated");
-  const paid = providers.filter((item) => !item.is_free);
-  const ready = providers.filter((item) => statusByProvider.get(item.name)?.ready);
-  const needsSetup = providers.filter((item) => !statusByProvider.get(item.name)?.ready);
-  const totalCost = Number(metrics.total_estimated_cost_usd || observability.health?.total_cost || 0);
-
-  $("#humanHomeStatus").innerHTML = `
-    <span class="${pending.length ? "tone-warn" : "tone-ok"}"><b>${pending.length}</b><small>decisiones</small></span>
-    <span><b>${ready.length}/${providers.length}</b><small>agentes listos</small></span>
-    <span><b>$${totalCost.toFixed(4)}</b><small>coste estimado</small></span>
-  `;
-
-  $("#humanDecisionCount").textContent = pending.length;
-  const providerCount = $("#humanProviderCount");
-  if (providerCount) providerCount.textContent = providers.length;
-  renderHumanDecisionQueue(pending);
-  renderHumanProviderGrid(providers, statusByProvider);
-  renderHumanCostPanel({ providers, paid, ready, needsSetup, metrics, totalCost });
-  renderHumanActionPanel({ pending, needsSetup, paid, observability });
-  requestAnimationFrame(syncHumanSideOffset);
-}
-
-function renderHumanDecisionQueue(tasks) {
-  const target = $("#humanDecisionQueue");
-  if (!target) return;
-  if (!tasks.length) {
-    target.innerHTML = `<div class="human-home-empty">
-      <b>Sin bloqueos humanos</b>
-      <span>No hay tareas esperando aprobación, login, API key o confirmación de coste.</span>
-    </div>`;
-    return;
-  }
-  target.innerHTML = tasks
-    .map((task) => {
-      const c = task.classification;
-      const level = c.complexity_level.replace("level_", "N").replace(/_.*/, "");
-      const blockers = [
-        c.requires_human_review ? "Aprobación humana" : "",
-        c.recommended_strategy?.includes("human") ? "Estrategia con puerta humana" : "",
-        c.recommended_model?.includes("human") ? "Modelo crítico" : "",
-      ].filter(Boolean);
-      return `<article class="human-decision-item">
-        <div class="human-decision-title">
-          <span class="status-dot ${task.status === "completed" ? "ok" : "warn"}"></span>
-          <div><b>${escapeHtml(c.intent || "Decisión pendiente")}</b><small>${escapeHtml((c.domain || []).join(", ") || "sin dominio")}</small></div>
-          ${statusPill(task.status)}
-        </div>
-        ${decisionRoadmap(task)}
-        <p>${escapeHtml(c.reason || "Requiere revisión antes de continuar.")}</p>
-        <div class="human-decision-meta">
-          <span><small>Nivel</small><b>${escapeHtml(level)} · ${Number(c.complexity_score || 0).toFixed(2)}</b></span>
-          <span><small>Ruta</small><b>${escapeHtml(TIER_LABEL[c.recommended_model] || c.recommended_model)}</b></span>
-          <span><small>Bloqueo</small><b>${escapeHtml(blockers.join(" · ") || "seguimiento")}</b></span>
-        </div>
-        <div class="human-decision-actions">
-          ${task.status === "delegated" && c.requires_human_review ? `<button class="primary approve-review" data-approve="${task.task_id}">Aprobar ejecución</button>` : ""}
-          <button type="button" data-select-task="${escapeHtml(task.task_id)}">Ver en Monitor</button>
-        </div>
-      </article>`;
-    })
-    .join("");
-}
-
-function decisionRoadmap(task) {
-  const c = task.classification || {};
-  const blocked = Boolean(c.requires_human_review || task.status === "delegated");
-  const delegatedTo = (task.executions || []).map((execution) => execution.model || execution.provider).filter(Boolean)[0];
-  const stages = [
-    ["Entrada", "Prompt recibido", "request"],
-    ["Router", "clasifica riesgo", "agent"],
-    ["Delegación", delegatedTo || TIER_LABEL[c.recommended_model] || "modelo recomendado", "worker"],
-    ["Control", blocked ? "aprobación humana" : "sin bloqueo", blocked ? "blocker" : "check"],
-    ["Meta", blocked ? "pendiente" : "listo", "goal"],
-  ];
-  return `<div class="decision-roadmap ${blocked ? "blocked" : "clear"}">
-    <div class="roadmap-track">
-      ${stages
-        .map(([label, detail, kind], index) => `<div class="roadmap-step ${kind} ${blocked && kind === "blocker" ? "locked" : ""}">
-          <span class="roadmap-avatar">${roadmapIcon(kind)}</span>
-          <b>${escapeHtml(label)}</b>
-          <small>${escapeHtml(detail)}</small>
-          ${index < stages.length - 1 ? `<i></i>` : ""}
-        </div>`)
-        .join("")}
-      <span class="roadmap-courier" aria-hidden="true"></span>
-    </div>
-    ${blocked ? `<div class="roadmap-obstacle"><b>Bloqueo activo</b><span>Desbloquea la ejecución con aprobación humana.</span></div>` : ""}
-  </div>`;
-}
-
-function roadmapIcon(kind) {
-  return {
-    request: "◆",
-    agent: "A",
-    worker: "W",
-    blocker: "!",
-    check: "✓",
-    goal: "◎",
-  }[kind] || "•";
-}
-
-function renderHumanProviderGrid(providers, statusByProvider) {
-  const target = $("#humanProviderGrid");
-  if (!target) return;
-  if (!providers.length) {
-    target.innerHTML = `<div class="human-home-empty">Sin catálogo de proveedores.</div>`;
-    return;
-  }
-  target.innerHTML = providers
-    .map((provider) => {
-      const status = statusByProvider.get(provider.name) || {};
-      const cls = status.ready ? "ready" : status.available ? "available" : "missing";
-      const auth = provider.auth_method === "api_key" ? provider.env_var || "API key" : provider.login_command || provider.auth_method;
-      const tiers = Object.keys(provider.tiers || {}).length;
-      return `<article class="human-provider-card ${cls}">
-        <header>
-          <span><i class="status-dot ${status.ready ? "ok" : status.available ? "warn" : "bad"}"></i><b>${escapeHtml(provider.label)}</b></span>
-          <em class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</em>
-        </header>
-        <p>${escapeHtml(status.detail || "sin estado detectado")}</p>
-        <div class="human-provider-meta">
-          <span><small>Tipo</small><b>${escapeHtml(provider.backend)}</b></span>
-          <span><small>Auth</small><b>${escapeHtml(auth)}</b></span>
-          <span><small>Tiers</small><b>${tiers}</b></span>
-        </div>
-        <div class="human-provider-actions">
-          <button type="button" data-refresh-providers>Comprobar</button>
-          <button type="button" data-provider-setup="${escapeHtml(provider.name)}">Configurar</button>
-          ${provider.signup_url ? `<a href="${escapeHtml(provider.signup_url)}" target="_blank" rel="noreferrer">Abrir consola</a>` : ""}
-          ${provider.login_command ? `<code>${escapeHtml(provider.login_command)}</code>` : provider.env_var ? `<code>${escapeHtml(provider.env_var)}</code>` : ""}
-        </div>
-        <div class="provider-setup" data-provider-setup-target="${escapeHtml(provider.name)}" hidden></div>
-      </article>`;
-    })
-    .join("");
-}
-
 async function showProviderSetup(name) {
   const targets = $$(`[data-provider-setup-target="${CSS.escape(name)}"]`);
   if (!targets.length) return;
@@ -1426,47 +1352,31 @@ async function showProviderSetup(name) {
   }
 }
 
-function renderHumanCostPanel({ providers, paid, ready, needsSetup, metrics, totalCost }) {
-  const target = $("#humanCostPanel");
-  if (!target) return;
-  const paidReady = paid.filter((item) => ready.some((readyItem) => readyItem.name === item.name)).length;
-  const freeProviders = providers.length - paid.length;
-  const paidPct = providers.length ? Math.round((paid.length / providers.length) * 100) : 0;
-  const reviewCount = metrics.human_review_required || 0;
-  target.innerHTML = `<div class="cost-home-hero">
-      <span>Gasto estimado</span>
-      <b>$${totalCost.toFixed(4)}</b>
-      <small>${paidReady} proveedores de pago listos · ${freeProviders} gratis disponibles</small>
-    </div>
-    <div class="cost-meter"><i style="width:${paidPct}%"></i></div>
-    <div class="human-side-grid">
-      <span><b>${paid.length}</b><small>Pago</small></span>
-      <span class="tone-ok"><b>${freeProviders}</b><small>Gratis</small></span>
-      <span class="${reviewCount ? "tone-warn" : "tone-ok"}"><b>${reviewCount}</b><small>Revisión</small></span>
-      <span class="${needsSetup.length ? "tone-bad" : "tone-ok"}"><b>${needsSetup.length}</b><small>Por conectar</small></span>
-    </div>`;
-}
-
-function renderHumanActionPanel({ pending, needsSetup, paid, observability }) {
-  const target = $("#humanActionPanel");
-  if (!target) return;
-  const actions = [
-    pending.length ? [`${pending.length} aprobaciones pendientes`, "Revisa intención, coste y riesgo antes de liberar ejecución."] : null,
-    needsSetup.length ? [`${needsSetup.length} proveedores por conectar`, "Configura API key, login CLI o servicio local antes de delegar tareas reales."] : null,
-    paid.length ? [`${paid.length} proveedores de pago`, "Mantén el uso bajo control antes de activar modelos fuertes o revisión humana."] : null,
-    observability?.health?.blocked_tasks ? [`${observability.health.blocked_tasks} tareas bloqueadas`, "Puede requerir firma, credenciales o intervención manual."] : null,
-  ].filter(Boolean);
-  target.innerHTML = actions.length
-    ? `<div class="human-action-list">${actions.map(([title, body]) => `<div><b>${escapeHtml(title)}</b><span>${escapeHtml(body)}</span></div>`).join("")}</div>`
-    : `<div class="human-home-empty"><b>Todo despejado</b><span>No hay acciones humanas obligatorias ahora mismo.</span></div>`;
+// Single source of truth for provider cost/latency: GET /agents/performance
+// (Fase 1, GROUP BY provider_name over `runs`). Views consume this cached
+// aggregate instead of each recomputing coste/latencia from /metrics+/observability.
+function computeCostLatency(perf = state.agentPerformance || []) {
+  let totalCost = 0, tasks = 0, errors = 0, tokens = 0, latSum = 0, latWeight = 0;
+  perf.forEach((p) => {
+    const weight = Number(p.task_count || 0) || 1;
+    totalCost += Number(p.total_cost || 0);
+    tasks += Number(p.task_count || 0);
+    errors += Number(p.error_count || 0);
+    tokens += Number(p.total_tokens || 0);
+    if (p.avg_latency_ms != null) { latSum += Number(p.avg_latency_ms) * weight; latWeight += weight; }
+  });
+  return { totalCost, tasks, errors, tokens, avgLatency: latWeight ? Math.round(latSum / latWeight) : 0, hasData: perf.length > 0 };
 }
 
 function renderSummaryMetrics(metrics, tasks, observability) {
   const nodes = observability.nodes || [];
   const usage = observability.model_usage || [];
   const totalCalls = usage.reduce((acc, item) => acc + Number(item.calls || 0), 0);
-  const avgLatency = observability.health?.avg_latency_ms || 0;
-  const blocked = observability.health?.blocked_tasks || 0;
+  const perf = computeCostLatency();
+  // /agents/performance is authoritative for coste/latencia; fall back to the
+  // legacy /metrics+/observability numbers only while `runs` has no rows yet.
+  const avgLatency = perf.hasData ? perf.avgLatency : (observability.health?.avg_latency_ms || 0);
+  const totalCost = perf.hasData ? perf.totalCost : Number(metrics.total_estimated_cost_usd || 0);
   const completed = metrics.by_status?.completed || 0;
   const delegated = metrics.by_status?.delegated || metrics.delegated_tasks || 0;
   const items = [
@@ -1475,7 +1385,7 @@ function renderSummaryMetrics(metrics, tasks, observability) {
     ["Completadas", completed],
     ["Delegadas", delegated],
     ["Latencia media", `${avgLatency}ms`],
-    ["Coste total", `$${Number(metrics.total_estimated_cost_usd || 0).toFixed(4)}`],
+    ["Coste total", `$${Number(totalCost).toFixed(4)}`],
   ];
   $("#summaryMetrics").innerHTML = `<div class="summary-hero">
       <span>Actividad total</span>
@@ -3648,13 +3558,19 @@ async function renderConfigAgentsPanel() {
   renderAgentsSidePanel();
 }
 
-function configAgentCard(provider, status = {}) {
+// The single provider-status-card renderer (readiness dot + backend/auth line +
+// free/paid cost tag). Consolidates the three former copies of this fragment:
+// renderHumanProviderGrid (deleted — wrote to a non-existent DOM node) and the
+// Agentes catalog list below. Monitor's agentChartCard renders observability
+// performance nodes (rings/sparklines), a different data shape, so it keeps its
+// own layout but shares the /agents/performance cost/latency source.
+function renderProviderStatusCard(provider, status = {}, { selected = false } = {}) {
   const ready = status.ready;
   const available = status.available;
   const dot = ready ? "ok" : available ? "warn" : "bad";
+  const stateClass = ready ? "ready" : available ? "available" : "missing";
   const auth = provider.auth_method === "api_key" ? provider.env_var || "API key" : provider.login_command || provider.auth_method;
-  const selected = state.selectedConfigAgent === provider.name ? "selected" : "";
-  return `<article class="config-agent-card compact ${ready ? "ready" : available ? "available" : "missing"} ${selected}" data-agent-card="${escapeHtml(provider.name)}">
+  return `<article class="config-agent-card compact ${stateClass} ${selected ? "selected" : ""}" data-agent-card="${escapeHtml(provider.name)}">
     <span class="status-dot ${dot}"></span>
     <div class="config-agent-card-body">
       <b>${escapeHtml(provider.label)}</b>
@@ -3662,6 +3578,10 @@ function configAgentCard(provider, status = {}) {
     </div>
     <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span>
   </article>`;
+}
+
+function configAgentCard(provider, status = {}) {
+  return renderProviderStatusCard(provider, status, { selected: state.selectedConfigAgent === provider.name });
 }
 
 function manualAgentCard(agent) {
@@ -4071,6 +3991,7 @@ function init() {
   initMonitorBlocks();
   $("#modelsAdvanced").addEventListener("change", renderModels);
   initAutoRefresh();
+  initLiveEvents();
   initOnboardingControls();
   initOnboarding();
   document.addEventListener("keydown", (event) => {
@@ -4877,7 +4798,6 @@ var agentPos={};      // {id:{x,y,tx,ty,timer,phase}}
 var effTarget=0,effCur=0,effHistory=[];
 var demoRunning=false,demoTimers=[];
 var LW=262;           // left panel width
-var lastBellCount=-1;
 var panelStates={metrics:'open',spec:'open'}; // 'open'|'mini'|'closed'
 // Manual pan offset (drag-to-scroll), added on top of the auto-centered
 // origin — clamped so the tower cluster can't be dragged fully off-screen.
@@ -5371,26 +5291,9 @@ function drawTaskCards(){
 }
 
 // ── DECISION NOTIFICATIONS (persistent, non-blocking) ────────────────────────
-function syncBell(){
-  var pending=decisions.filter(function(d){return !d.resolved;}).length;
-  if(pending===lastBellCount)return;
-  lastBellCount=pending;
-  var badge=document.getElementById('notificationBadge');
-  var count=document.getElementById('notificationPanelCount');
-  if(badge){badge.textContent=String(pending);badge.hidden=pending===0;}
-  if(count)count.textContent=String(pending);
-  // populate panel summary with our decisions
-  var summary=document.getElementById('notificationSummary');
-  if(summary&&pending>0){
-    summary.innerHTML=decisions.filter(function(d){return !d.resolved;}).map(function(d){
-      return '<article class="notification-item warn">'
-        +'<span class="status-dot warn"></span>'
-        +'<div><b>'+escHtml(d.title)+'</b>'
-        +'<small>'+(d.agentId||'IA')+' · Decisión de agente pendiente</small>'
-        +'</div></article>';
-    }).join('');
-  }
-}
+// The canvas no longer writes the notification bell (#notificationBadge/
+// #notificationSummary). The real renderNotifications() (driven by state.tasks)
+// is the single writer; canvas-scripted decisions live on the canvas only.
 function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function drawDecisions(){
@@ -5667,7 +5570,6 @@ function drawHUD(){
   if(lastErr){ctx2.fillStyle='rgba(180,20,20,0.8)';ctx2.font='10px monospace';ctx2.textAlign='left';ctx2.textBaseline='top';ctx2.fillText('ERR:'+lastErr.substring(0,80),LW+6,6);}
   if(selectedId)drawInfoPanel();
   drawDecisions();
-  syncBell();
 }
 
 // ── DEMO RUNNER ───────────────────────────────────────────────────────────────
@@ -5711,7 +5613,7 @@ var DACT={
   }
 };
 function startDemo(){
-  if(demoRunning)return;stopDemo();demoRunning=true;
+  if(demoRunning)return;stopDemo();stopReal();demoRunning=true;
   taskCards=[];links=[];sparkles=[];dataStacks={};
   // keep existing unresolved decisions, only clear resolved ones
   decisions=decisions.filter(function(d){return !d.resolved;});
@@ -5721,6 +5623,145 @@ function startDemo(){
   demoTimers.push(setTimeout(function(){demoRunning=false;},23000));
 }
 function stopDemo(){demoTimers.forEach(clearTimeout);demoTimers=[];demoRunning=false;}
+
+// ── REAL TASK ANIMATION ───────────────────────────────────────────────────────
+// Drives the same canvas primitives (DACT) from real backend task records
+// (GET /tasks, GET /tasks/{id}) instead of the scripted DEMO. The demo stays as
+// the empty-state showcase (no task history). Live task_changed SSE events call
+// karajanCanvas.onTaskChanged(id) to re-animate a task as it advances.
+var realRunning=false,realTimers=[],pendingTaskId=null,bootstrapped=false,lastPlayedSig='';
+function stopReal(){realTimers.forEach(clearTimeout);realTimers=[];realRunning=false;}
+function realSched(ms,fn){realTimers.push(setTimeout(fn,ms));}
+// provider / model_used → animation agent-node id (best-effort)
+function mapAgentNode(s){
+  s=(s||'').toLowerCase();
+  if(s.indexOf('claude')>=0)return 'claude';
+  if(s.indexOf('codex')>=0)return 'codex';
+  if(s.indexOf('deepseek')>=0)return 'deepseek';
+  if(s.indexOf('mistral')>=0)return 'mistral';
+  if(s.indexOf('qwen')>=0)return 'qwen';
+  return null;
+}
+function tierLabelES(t){
+  t=(t||'').toLowerCase();
+  if(t.indexOf('cheap')>=0)return 'económico';
+  if(t.indexOf('medium')>=0)return 'intermedio';
+  if(t.indexOf('strong')>=0)return 'potente';
+  return t;
+}
+function snip(s,n){s=(s||'').replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n)+'…':s;}
+function fetchTaskRecord(id){
+  return fetch('/tasks/'+encodeURIComponent(id)).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+}
+// Signature so we don't replay the identical state twice in a row (e.g. an
+// enterView bootstrap right after a live event for the same task).
+function taskSig(task){
+  var d=task.delegation;
+  return (task.task_id||'')+'|'+(task.status||'')+'|'+((d&&d.executions&&d.executions.length)||0)
+    +'|'+((d&&d.executions&&d.executions.filter(function(e){return e.status;}).map(function(e){return e.status;}).join(','))||'');
+}
+function playTaskRecord(task){
+  if(!task||!task.classification)return;
+  var sig=taskSig(task);
+  if(sig===lastPlayedSig&&realRunning)return;
+  lastPlayedSig=sig;
+  stopDemo();stopReal();
+  realRunning=true;
+  // reset transient canvas state (mirrors startDemo; leaves nodeData/poll data)
+  taskCards=[];links=[];sparkles=[];dataStacks={};
+  decisions=decisions.filter(function(d){return !d.resolved;});
+  effTarget=0;effCur=0;effHistory=[];
+  AGENTS.forEach(function(ag){agentModes[ag.id]={mode:'idle',since:Date.now()};});
+
+  var cls=task.classification;
+  var prompt=task.prompt||cls.original_prompt||cls.prompt||'Tarea';
+  var domain=(cls.domain||[]).slice(0,2).join(', ')||'general';
+  var summary='Dominio: '+domain+(cls.intent?(' · Intención: '+cls.intent):'')+(cls.complexity_level?(' · Nivel: '+cls.complexity_level):'');
+  realSched(0,function(){DACT.userTask(prompt);});
+  realSched(700,function(){DACT.mode('claude','thinking');});
+  realSched(1000,function(){DACT.card('claude','Clasificando…',summary,'analyzing');});
+
+  var del=task.delegation;
+  var execs=(del&&del.executions)||[];
+  if(execs.length){
+    var subMap={};(cls.subtasks||[]).forEach(function(s){subMap[s.id]=s;});
+    var usedFallback={};
+    var resolveNode=function(ex){
+      var node=mapAgentNode(ex.model_used)||mapAgentNode(ex.backend);
+      if(node)return node;
+      // fall back to a distinct worker node, else the elite codex node
+      var order=['codex','qwen','deepseek','mistral'];
+      for(var i=0;i<order.length;i++){if(!usedFallback[order[i]]){usedFallback[order[i]]=1;return order[i];}}
+      return 'codex';
+    };
+    var delBase=2400;
+    execs.forEach(function(ex,i){
+      var node=resolveNode(ex);ex._node=node;
+      var sub=subMap[ex.subtask_id]||{};
+      var subName=sub.name||ex.subtask_id||'Subtarea';
+      var tgt=ex.model_used||sub.recommended_model||cls.recommended_model||'';
+      var tier=tierLabelES(sub.recommended_model||cls.recommended_model);
+      var meta='Modelo: '+(tgt||'—')+(tier?(' ('+tier+')'):'');
+      realSched(delBase+i*750,function(){DACT.delegate('claude',node,snip(subName,40),meta,'working');});
+    });
+    realSched(delBase+200,function(){DACT.mode('claude','idle');});
+    var doneBase=delBase+execs.length*750+1600;
+    execs.forEach(function(ex,i){
+      var node=ex._node;
+      var ok=!ex.error&&['success','completed','ok','done'].indexOf((ex.status||'').toLowerCase())>=0;
+      var cost=ex.estimated_cost_usd!=null?('$'+Number(ex.estimated_cost_usd).toFixed(4)):'';
+      var lat=ex.latency_ms!=null?(Math.round(ex.latency_ms)+'ms'):'';
+      var costLat=[cost,lat].filter(Boolean).join(' · ');
+      realSched(doneBase+i*900,function(){
+        if(ok){
+          var meta=[snip(ex.output,80),costLat].filter(Boolean).join(' — ')||'Ejecutado';
+          DACT.done(node,'✓ Completado',meta,'done');
+        } else {
+          var err=snip(ex.error||ex.output,90)||'Fallo en ejecución';
+          DACT.done(node,'✗ Error',[err,costLat].filter(Boolean).join(' — '),'waiting');
+        }
+      });
+    });
+    var endT=doneBase+execs.length*900+1600;
+    var totCost=del.total_estimated_cost_usd!=null?('$'+Number(del.total_estimated_cost_usd).toFixed(4)):'';
+    var totLat=del.total_latency_ms!=null?(Math.round(del.total_latency_ms)+'ms'):'';
+    realSched(endT,function(){DACT.card('claude','Misión completada ✓','Agentes: '+execs.length+([totCost,totLat].filter(Boolean).length?(' · '+[totCost,totLat].filter(Boolean).join(' · ')):''),'done');DACT.mode('claude','celebrate');});
+    realSched(endT+500,realDone);
+  } else {
+    // classification only, delegation pending
+    if(cls.requires_human_review){
+      realSched(1900,function(){DACT.decision('Revisión humana requerida',snip(cls.reason,120)||'Esta tarea requiere aprobación antes de delegar.','claude');});
+    }
+    realSched(4200,function(){DACT.mode('claude','idle');realDone();});
+  }
+}
+function realDone(){
+  realRunning=false;
+  var p=pendingTaskId;pendingTaskId=null;
+  if(p)onTaskChangedReal(p);
+}
+// Called from the outer SSE dispatcher on a task_changed event (human view only).
+function onTaskChangedReal(taskId){
+  if(!taskId)return;
+  if(realRunning){pendingTaskId=taskId;return;} // queue latest; play after current
+  fetchTaskRecord(taskId).then(function(task){
+    if(task&&task.classification)playTaskRecord(task);
+  });
+}
+// Called on entering / activating the human view: real history → animate the
+// newest task; empty → play the scripted demo so the view is never dead.
+function bootstrapCanvas(){
+  if(bootstrapped||demoRunning||realRunning)return;
+  bootstrapped=true;
+  fetch('/tasks?limit=1').then(function(r){return r.ok?r.json():null;}).then(function(list){
+    if(list&&list.length&&list[0]&&list[0].classification){playTaskRecord(list[0]);}
+    else{startDemo();}
+  }).catch(function(){if(!demoRunning&&!realRunning)startDemo();});
+}
+// Expose the hooks the outer app scope needs (SSE + view switching). refreshNodes
+// lets the shared initLiveEvents() dispatcher refresh the left-panel per-agent
+// metrics (nodeData) on run events, replacing this module's old private 5s poll.
+window.karajanCanvas={onTaskChanged:onTaskChangedReal,bootstrap:bootstrapCanvas,playTaskRecord:playTaskRecord,refreshNodes:poll};
 
 // ── MISSION INPUT ─────────────────────────────────────────────────────────────
 function showMissionInput(){
@@ -5862,7 +5903,12 @@ function activate(){
   }
   resize();initWander();
   if(!running){running=true;requestAnimationFrame(frame);}
-  poll();clearInterval(cvs._pollInt);cvs._pollInt=setInterval(poll,5000);
+  // Live task/run animation is driven by the shared SSE dispatcher (initLiveEvents
+  // → onTaskChanged/refreshNodes); this poll only seeds nodeData once and acts as
+  // a slow 60s resilience fallback for the left-panel metrics (which SSE events
+  // don't carry) in case the EventSource drops silently between run events.
+  poll();clearInterval(cvs._pollInt);cvs._pollInt=setInterval(poll,60000);
+  bootstrapCanvas(); // real task history → animate it; empty → play demo
 }
 
 setTimeout(activate,400);

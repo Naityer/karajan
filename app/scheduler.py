@@ -226,6 +226,7 @@ class TaskScheduler:
                 item.config,
                 item.layout,
                 resolution,
+                store=self._store,
             )
             self._record_completion(item, subtask_execution, decisions)
         finally:
@@ -240,6 +241,7 @@ class TaskScheduler:
             item.config,
             item.layout,
             None,
+            store=self._store,
         )
         self._record_completion(item, subtask_execution, decisions)
 
