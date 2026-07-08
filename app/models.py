@@ -488,6 +488,39 @@ class OpenClawPluginInstallRequest(BaseModel):
     acknowledge_clawhub_risk: bool = False
 
 
+class GroupMembership(BaseModel):
+    """An entity's membership in one `HierarchyGroup`, carrying its own Prio.
+
+    Prio drives dispatch order: the lower the number, the higher the priority
+    (Prio 1 is tried before Prio 2). Within a single group no two members may
+    claim the same Prio — enforced across the whole layout by
+    `RoutingLayout._reject_duplicate_group_prio`.
+    """
+
+    group_id: str
+    prio: int = Field(ge=1)
+
+
+class HierarchyGroup(BaseModel):
+    """A named, colored container that agents can join (via `GroupMembership`).
+
+    Orthogonal to `RoutingEntity.levels` (task-complexity axis). A group is a
+    draggable node on the Decisión canvas; `x`/`y` mirror the entity coordinate
+    convention. `color` is a UI tint (typically `#rrggbb` from a color picker).
+    """
+
+    id: str
+    name: str
+    color: str
+    x: float = 0
+    y: float = 0
+
+
+class CanvasPoint(BaseModel):
+    x: float = 0
+    y: float = 0
+
+
 class RoutingEntity(BaseModel):
     id: str
     name: str | None = None
@@ -495,16 +528,43 @@ class RoutingEntity(BaseModel):
     role_tags: list[str] = Field(default_factory=list)
     provider: str | None = None
     parentId: str | None = ""
-    target_id: str | None = None  # guardian/validator: the entity it supervises/validates
+    target_ids: list[str] = Field(default_factory=list)  # guardian/validator: the entities it supervises/validates
     levels: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
+    # Hierarchy-group memberships. When non-empty, they drive dispatch order via
+    # `effective_tier()` and override the raw `tier` fallback below.
+    memberships: list[GroupMembership] = Field(default_factory=list)
     # Open-ended hierarchy/authority depth — 0=root, 1=L1, 2=L2, 3+=future growth.
     # Orthogonal to `levels` (task-complexity axis, fixed at 5 values).
+    # Backward-compat fallback for entities with no group memberships.
     tier: int = Field(default=2, ge=0)
     max_concurrent: int = Field(default=1, ge=1)
     x: float = 0
     y: float = 0
+
+    def effective_tier(self) -> int:
+        """Dispatch tier actually used by the scheduler.
+
+        An entity with group memberships is scheduled by the lowest (highest-
+        priority) Prio number among its groups; an ungrouped entity falls back
+        to its raw `tier`, so legacy behavior is preserved exactly.
+        """
+        if self.memberships:
+            return min(m.prio for m in self.memberships)
+        return self.tier
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_target_id(cls, data: object) -> object:
+        # Self-heals old JSON that predates the 1-to-N `target_ids`: an existing
+        # single `target_id` string is folded into `target_ids` so upgrading
+        # doesn't silently drop the saved supervision/validation association.
+        if isinstance(data, dict) and not data.get("target_ids"):
+            legacy = data.get("target_id")
+            if legacy:
+                data = {**data, "target_ids": [legacy]}
+        return data
 
     @model_validator(mode="after")
     def _default_tier_by_role(self) -> "RoutingEntity":
@@ -517,9 +577,28 @@ class RoutingEntity(BaseModel):
 
 class RoutingLayout(BaseModel):
     entities: list[RoutingEntity] = Field(default_factory=list)
+    groups: list[HierarchyGroup] = Field(default_factory=list)
     zoom: float = Field(default=1.0, ge=0.4, le=2.0)
     drawer_width: int = Field(default=320, ge=220, le=680)
+    openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
     updated_at: datetime = Field(default_factory=_utcnow)
+
+    @model_validator(mode="after")
+    def _reject_duplicate_group_prio(self) -> "RoutingLayout":
+        # Defense in depth: within one group, no two members may claim the same
+        # Prio. Checked across ALL entities' memberships combined so an invalid
+        # state can never be silently persisted (the frontend also prevents it).
+        seen: dict[tuple[str, int], str] = {}
+        for entity in self.entities:
+            for membership in entity.memberships:
+                key = (membership.group_id, membership.prio)
+                if key in seen:
+                    raise ValueError(
+                        f"Duplicate Prio {membership.prio} in group '{membership.group_id}': "
+                        f"claimed by both entity '{seen[key]}' and entity '{entity.id}'"
+                    )
+                seen[key] = entity.id
+        return self
 
 
 # --- Configuration -----------------------------------------------------------

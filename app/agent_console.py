@@ -62,9 +62,21 @@ def run_provider_command(provider: ProviderInfo, slot: str) -> ProviderRunResult
             detail="Command timed out.",
         )
 
-    ok = completed.returncode == 0
     stdout = _redact(completed.stdout or "")
     stderr = _redact(completed.stderr or "")
+    if _is_ollama_already_running(provider, command, stderr):
+        return ProviderRunResult(
+            ok=True,
+            provider=provider.name,
+            slot=slot,
+            command=command,
+            stdout=stdout,
+            stderr="",
+            returncode=0,
+            detail="Ollama ya esta en marcha en 127.0.0.1:11434.",
+        )
+
+    ok = completed.returncode == 0
     return ProviderRunResult(
         ok=ok,
         provider=provider.name,
@@ -74,6 +86,16 @@ def run_provider_command(provider: ProviderInfo, slot: str) -> ProviderRunResult
         stderr=stderr,
         returncode=completed.returncode,
         detail="ok" if ok else (stderr.strip() or "command failed"),
+    )
+
+
+def _is_ollama_already_running(provider: ProviderInfo, command: str, stderr: str) -> bool:
+    message = stderr.lower()
+    return (
+        command == "ollama serve"
+        and provider.name.startswith("ollama")
+        and "127.0.0.1:11434" in message
+        and "only one usage of each socket address" in message
     )
 
 

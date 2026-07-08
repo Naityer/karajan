@@ -182,7 +182,7 @@ class TaskScheduler:
         tiers = candidate_tiers(entities)
         best_tier = tiers[0]
         for tier_value in tiers:
-            for entity in (e for e in entities if e.tier == tier_value):
+            for entity in (e for e in entities if e.effective_tier() == tier_value):
                 if await self.availability.try_acquire(entity):
                     if tier_value != best_tier:
                         self._log(

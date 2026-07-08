@@ -147,7 +147,26 @@ def test_observability_accumulates_tokens_and_skill_usage(tmp_path: Path) -> Non
     assert sum(agent.skill_usage.values()) >= 0  # populated when a subtask has a recommended_skill
 
 
-def test_routing_entity_target_id_round_trips() -> None:
+def test_routing_entity_target_ids_round_trips() -> None:
+    layout = RoutingLayout.model_validate(
+        {
+            "entities": [
+                {"id": "worker", "role": "worker"},
+                {"id": "backup", "role": "backup"},
+                {"id": "guardian", "role": "guardian", "target_ids": ["worker", "backup"]},
+            ]
+        }
+    )
+    guardian = next(entity for entity in layout.entities if entity.id == "guardian")
+    assert guardian.target_ids == ["worker", "backup"]
+
+    # Round-trips through JSON (as it would over the API) without loss.
+    reloaded = RoutingLayout.model_validate_json(layout.model_dump_json())
+    assert next(e for e in reloaded.entities if e.id == "guardian").target_ids == ["worker", "backup"]
+
+
+def test_routing_entity_legacy_target_id_migrates() -> None:
+    # Old files stored a single `target_id`; loading must fold it into `target_ids`.
     layout = RoutingLayout.model_validate(
         {
             "entities": [
@@ -157,11 +176,8 @@ def test_routing_entity_target_id_round_trips() -> None:
         }
     )
     guardian = next(entity for entity in layout.entities if entity.id == "guardian")
-    assert guardian.target_id == "worker"
-
-    # Round-trips through JSON (as it would over the API) without loss.
-    reloaded = RoutingLayout.model_validate_json(layout.model_dump_json())
-    assert next(e for e in reloaded.entities if e.id == "guardian").target_id == "worker"
+    assert guardian.target_ids == ["worker"]
+    assert not hasattr(guardian, "target_id")
 
 
 def test_node_token_budget_from_provider(tmp_path: Path) -> None:

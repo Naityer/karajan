@@ -362,10 +362,10 @@ def _run_validator_loop(
 
 def _root_entity(layout: RoutingLayout | None):
     entities = layout.entities if layout else []
-    parent = next((e for e in entities if e.tier == 0 and e.role.strip().lower() == "parent"), None)
+    parent = next((e for e in entities if e.effective_tier() == 0 and e.role.strip().lower() == "parent"), None)
     if parent is not None:
         return parent
-    return next((e for e in entities if e.tier == 0), None)
+    return next((e for e in entities if e.effective_tier() == 0), None)
 
 
 def _pre_execution_gate(

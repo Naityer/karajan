@@ -63,7 +63,7 @@ def ensure_queue_hierarchy_entities(layout: RoutingLayout) -> tuple[RoutingLayou
     `layout`, sourced from the production baseline graph.
 
     Purely additive: entities the operator already has (even if customized —
-    role tags, target_id, positions) are left untouched; only baseline
+    role tags, target_ids, positions) are left untouched; only baseline
     entities whose `id` isn't present in `layout` get appended. Returns the
     merged layout and the list of entity ids that were added (empty if the
     hierarchy was already complete).

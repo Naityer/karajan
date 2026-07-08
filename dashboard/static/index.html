@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KARAJAN</title>
     <link rel="icon" type="image/png" href="/static/icons/karajan_v2.png?v=ui-2" />
-    <link rel="stylesheet" href="/static/styles.css?v=ui-4" />
+    <link rel="stylesheet" href="/static/styles.css?v=ui-5" />
   </head>
   <body>
     <!-- Compact tool frame: brand · view switch · live status · theme — not a generic web shell -->
@@ -76,90 +76,40 @@
         </div>
       </section>
 
-      <!-- VIEW 2 · MONITOR (at-a-glance default) -->
+      <!-- VIEW 2 · MONITOR (full-width, sub-navigated redesign — Phase A) -->
       <section class="view" id="view-monitor">
         <div class="monitor-shell" id="monitorShell">
-          <section class="monitor-main" id="monitorMain">
-            <div class="monitor-toolbar">
-              <div>
-                <span class="eyebrow">System state</span>
-                <h1>Monitor de observabilidad</h1>
-                <p>Auditoría del harness: tareas, delegaciones, coste, latencia y nodos implicados desde <code>/karajan</code>.</p>
-              </div>
+          <header class="monitor-toolbar">
+            <div>
+              <span class="eyebrow">System state</span>
+              <h1>Monitor de observabilidad</h1>
+              <p>Auditoría del harness: tareas, delegaciones, coste, latencia y nodos implicados desde <code>/karajan</code>.</p>
             </div>
+          </header>
 
-            <div class="monitor-blocks">
-              <section class="monitor-card summary-card">
-                <header>Métricas resumidas</header>
-                <div id="summaryMetrics"></div>
-              </section>
-              <section class="monitor-card health-card">
-                <header>System Health</header>
-                <div id="systemHealth"></div>
-              </section>
-            </div>
+          <nav class="monitor-subnav" id="monitorSubnav" role="tablist" aria-label="Sub-vistas del monitor">
+            <button type="button" class="monitor-subtab active" data-subview="resumen" role="tab" aria-selected="true">Resumen</button>
+            <button type="button" class="monitor-subtab" data-subview="agentes" role="tab" aria-selected="false">Agentes</button>
+            <button type="button" class="monitor-subtab" data-subview="tareas" role="tab" aria-selected="false">Tareas</button>
+          </nav>
 
-            <section class="nodes-section" id="monitorMainContent">
-              <div class="nodes-title">
-                <span class="nodes-mark">✣</span>
-                <h2>Nodos de Procesamiento</h2>
-              </div>
-              <div id="nodeOverview"></div>
-            </section>
-
-            <section class="card flow-strip">
-              <header class="card-h">Flujo de ejecución</header>
-              <div id="executionFlow"></div>
-            </section>
-
-            <div class="monitor-grid monitor-bottom">
-              <section class="card">
-                <header class="card-h">Tareas <span class="hint" id="taskCount"></span></header>
-                <div class="table-wrap">
-                  <table>
-                    <thead><tr><th>ID</th><th>Nivel</th><th>Modelo</th><th>Estado</th></tr></thead>
-                    <tbody id="taskRows"></tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section class="card detail">
-                <header class="card-h">Detalle &amp; auditoría</header>
-                <div id="detailEmpty" class="empty">Sin tarea seleccionada.</div>
-                <div id="detail" class="detail-body" hidden>
-                  <div class="kv"><span>ID</span><code id="dId"></code></div>
-                  <div class="kv"><span>Intención</span><b id="dIntent"></b></div>
-                  <div class="kv"><span>Dominios</span><b id="dDomains"></b></div>
-                  <div class="kv"><span>Estrategia</span><b id="dStrategy"></b></div>
-                  <div class="kv"><span>Clasificado por</span><b id="dBy"></b></div>
-                  <p id="dReason" class="reason"></p>
-                  <div class="skills" id="dSkills"></div>
-                  <h4>Criterios</h4>
-                  <div id="dCriteria" class="bars"></div>
-                  <h4>Subtareas</h4>
-                  <div id="dSubtasks" class="subtasks"></div>
-                  <h4>Decisiones del harness</h4>
-                  <div id="dDecisions" class="log"></div>
-                </div>
-              </section>
-            </div>
+          <!-- RESUMEN (Phase B — executive KPI/analytics dashboard, built by renderResumen()) -->
+          <section class="monitor-subview active" id="subview-resumen" role="tabpanel" aria-label="Resumen">
+            <div id="resumenView" class="resumen-view"><div class="chart-empty">Cargando resumen…</div></div>
           </section>
 
-          <div class="monitor-splitter" id="monitorSplitter" role="separator" aria-orientation="vertical" title="Ajustar panel lateral"></div>
+          <!-- AGENTES (analytics ONLY — configuration lives in its own top-nav "Agentes" tab) -->
+          <section class="monitor-subview" id="subview-agentes" role="tabpanel" aria-label="Agentes" hidden>
+            <div id="agentesView" class="agentes-view"><div class="chart-empty">Cargando agentes…</div></div>
+          </section>
 
-          <aside class="monitor-side" id="monitorSide">
-            <section class="side-card selected-node-card">
-              <header>
-                <span>Agente seleccionado</span>
-                <button id="toggleMonitorSide" class="icon-btn" title="Mostrar u ocultar panel lateral" aria-label="Mostrar u ocultar panel lateral">◧</button>
-              </header>
-              <div id="sideAgentHeader"></div>
-            </section>
-            <section class="side-card">
-              <header>Flujo de ejecución</header>
-              <div id="sideActivityList"></div>
-            </section>
-          </aside>
+          <!-- TAREAS (Phase D — task analytics + FTS search + full-width Langfuse-style trace drill-down, built by renderTareas()) -->
+          <section class="monitor-subview" id="subview-tareas" role="tabpanel" aria-label="Tareas" hidden>
+            <div id="tareasView" class="tareas-view"><div class="chart-empty">Cargando tareas…</div></div>
+            <!-- Kept (empty, hidden) so refreshMonitor()'s `#monitorMainContent` mount-guard
+                 stays truthy while Monitor is active regardless of the visible sub-view. -->
+            <section id="monitorMainContent" hidden aria-hidden="true"></section>
+          </section>
         </div>
       </section>
 
@@ -167,6 +117,9 @@
       <section class="view" id="view-decision">
         <div class="diagram-head">
           <p>Define el <b>padre de decisiones</b> (router que clasifica y pondera) y los <b>submodelos</b>. Asigna a cada hijo los niveles de complejidad de los que se responsabiliza.</p>
+          <div class="diagram-head-actions">
+            <button type="button" class="ghost-btn" id="addHierarchyGroup">+ Nueva jerarquía</button>
+          </div>
         </div>
         <div class="decision-workbench">
           <div class="diagram" id="diagram">
@@ -193,7 +146,7 @@
         </div>
       </section>
 
-      <!-- VIEW 4 · AGENTS / PROVIDERS -->
+      <!-- VIEW 4 · AGENTS / PROVIDERS (configuration & console — distinct from Monitor→Agentes analytics) -->
       <section class="view" id="view-agents">
         <div class="agents-window" id="agentsWindow">
           <section class="agents-main">
@@ -238,7 +191,22 @@
           </div>
         </div>
         <section class="config-mode-panel" id="config-mode-traditional">
-          <div class="flow-grid" id="flowGrid"></div>
+          <div class="traditional-config-shell">
+            <aside class="traditional-rail">
+              <nav class="config-index">
+                <input type="search" id="configFieldSearch" class="config-index-search" placeholder="Buscar ajuste…" autocomplete="off" />
+                <div class="config-tabs" id="configTabs">
+                  <button type="button" class="config-tab active" data-config-tab="general">General</button>
+                  <button type="button" class="config-tab" data-config-tab="flow">Control de flujo</button>
+                  <button type="button" class="config-tab" data-config-tab="weights">Pesos de criterios</button>
+                  <button type="button" class="config-tab" data-config-tab="rules">Umbrales y reglas</button>
+                  <button type="button" class="config-tab" data-config-tab="cost">Coste y latencia</button>
+                </div>
+              </nav>
+              <div class="traditional-library" id="traditionalLibraryPanel"></div>
+            </aside>
+            <div class="flow-grid" id="flowGrid"></div>
+          </div>
         </section>
         <section class="config-mode-panel active" id="config-mode-prompting">
           <div id="promptConfigPanel"></div>
@@ -301,6 +269,6 @@
     </div>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/static/app.js?v=ui-4"></script>
+    <script src="/static/app.js?v=ui-5"></script>
   </body>
 </html>

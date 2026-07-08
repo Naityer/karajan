@@ -148,6 +148,44 @@ Worker(Gemini) -> N2, N3
 Worker(Groq) -> N1
 ```
 
+## Jerarquías De Prioridad (Prio)
+
+La jerarquía de despacho ya **no** se expresa con etiquetas fijas de rol
+(`Raíz/L1/L2/L3`). En su lugar se modela con **grupos de jerarquía** con nombre y
+color, creados manualmente en la pantalla Decisión con el botón
+`+ Nueva jerarquía`. Cada grupo es una tarjeta arrastrable en el canvas, con el
+mismo lenguaje visual que las tarjetas de entidad.
+
+Modelo de datos (persiste en `data/routing_layout.json`, dentro del mismo
+`RoutingLayout` que `entities`):
+
+```text
+RoutingLayout.groups[]   -> HierarchyGroup { id, name, color, x, y }
+RoutingEntity.memberships[] -> GroupMembership { group_id, prio }  (prio >= 1)
+```
+
+Reglas:
+
+| Regla | Detalle |
+| --- | --- |
+| Multipertenencia | Una entidad puede pertenecer a **varios grupos a la vez**, con un `prio` distinto en cada uno. En su tarjeta se muestra un chip `"<Grupo> · Prio N"` por cada pertenencia, tintado con el color del grupo. |
+| Unicidad de Prio | Dentro de **un mismo grupo**, dos miembros no pueden compartir el mismo `prio`. La UI bloquea (opción deshabilitada) los valores ya ocupados; el backend lo rechaza además con un `model_validator` (422) como defensa en profundidad. |
+| Prio entre grupos | El mismo número de `prio` puede repetirse en **grupos diferentes** sin conflicto; la unicidad es solo intra-grupo. |
+| Independiente de N1-N5 | El eje `prio` (orden de despacho) es ortogonal a los niveles de complejidad `N1-N5` (ownership de tareas). Un mismo nivel puede seguir siendo propiedad de varios agentes según su `prio`. |
+
+Efecto en el despacho real (no es cosmético):
+
+```text
+RoutingEntity.effective_tier() = min(prio de sus memberships)  si tiene alguna
+                               = entity.tier (legacy)          si no pertenece a ningún grupo
+```
+
+`effective_tier()` es lo que consume el scheduler real (`app/scheduler.py`,
+`app/providers/registry.py`, `app/delegation.py`), de modo que unir una entidad a
+un grupo con `prio` bajo la hace preferente en la escalada de despacho. La raíz
+sigue siendo implícita: una entidad sin pertenencias mantiene su `tier` heredado
+(0 para parent/backup por defecto), sin control de UI dedicado.
+
 ## Niveles De Arquitectura
 
 ### Nivel 0 - Básico

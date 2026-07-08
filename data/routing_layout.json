@@ -1,146 +1,182 @@
 {
   "entities": [
     {
-      "id": "entity-agent-claude",
-      "name": "Claude (padre agente)",
+      "id": "entity-parent",
+      "name": "Qwen Coder (local)",
       "role": "parent",
       "role_tags": [
-        "parent",
-        "tier_l2"
+        "parent"
       ],
-      "provider": "claude-cli",
+      "provider": "ollama-qwen-coder",
       "parentId": "",
-      "target_id": null,
+      "target_ids": [],
+      "levels": [],
+      "skills": [],
+      "capabilities": [
+        "Planner",
+        "Router"
+      ],
+      "memberships": [],
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 732.2410747040254,
+      "y": 189.11366279804537
+    },
+    {
+      "id": "entity-provider-ollama-ornith",
+      "name": "Ornith (local)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "ollama-ornith",
+      "parentId": "entity-parent",
+      "target_ids": [],
       "levels": [
         "level_5_critical"
       ],
-      "skills": [
-        "repo-analyzer",
-        "frontend-builder",
-        "backend-builder",
-        "security-review",
-        "ponytail",
-        "promptfoo"
-      ],
-      "capabilities": [
-        "Classifier",
-        "Planner",
-        "Router",
-        "Reallocator",
-        "Policy",
-        "Recovery",
-        "Aggregator"
+      "skills": [],
+      "capabilities": [],
+      "memberships": [
+        {
+          "group_id": "grp_mrchp9cn",
+          "prio": 3
+        }
       ],
       "tier": 2,
       "max_concurrent": 1,
-      "x": 552.8125748627459,
-      "y": 40.727261629971586
+      "x": 705.4059206113301,
+      "y": 795.2655152949283
     },
     {
-      "id": "entity-backup-codex",
-      "name": "Codex CLI (backup N4 complejo)",
-      "role": "backup",
+      "id": "entity-provider-ollama-glm",
+      "name": "GLM-5.2 (Ollama cloud)",
+      "role": "child",
       "role_tags": [
-        "backup",
-        "tier_l2",
-        "fixer"
+        "child"
       ],
-      "provider": "codex",
-      "parentId": "entity-agent-claude",
-      "target_id": null,
+      "provider": "ollama-glm",
+      "parentId": "entity-parent",
+      "target_ids": [],
       "levels": [
         "level_4_complex"
       ],
-      "skills": [
-        "repo-analyzer",
-        "frontend-builder",
-        "backend-builder",
-        "security-review",
-        "promptfoo"
-      ],
+      "skills": [],
       "capabilities": [],
+      "memberships": [
+        {
+          "group_id": "grp_mrchp9cn",
+          "prio": 1
+        }
+      ],
       "tier": 2,
       "max_concurrent": 1,
-      "x": 1017.7878441692935,
-      "y": 35.89952292062486
+      "x": 1591.9833799397682,
+      "y": 799.3714604503605
     },
     {
-      "id": "entity-worker-qwen",
-      "name": "Qwen 2.5 7B (local N1/N2)",
+      "id": "entity-provider-ollama-kimi",
+      "name": "Kimi K2.7 Code (Ollama cloud)",
       "role": "child",
       "role_tags": [
-        "child",
-        "tier_l2"
+        "child"
       ],
-      "provider": "ollama-qwen",
-      "parentId": "entity-agent-claude",
-      "target_id": null,
+      "provider": "ollama-kimi",
+      "parentId": "entity-parent",
+      "target_ids": [],
+      "levels": [
+        "level_3_intermediate"
+      ],
+      "skills": [],
+      "capabilities": [],
+      "memberships": [
+        {
+          "group_id": "grp_mrchp9cn",
+          "prio": 2
+        }
+      ],
+      "tier": 2,
+      "max_concurrent": 1,
+      "x": 1244.1986910975986,
+      "y": 141.28732098876907
+    },
+    {
+      "id": "entity-provider-claude-cli",
+      "name": "Claude Code CLI (local)",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "claude-cli",
+      "parentId": "entity-parent",
+      "target_ids": [],
       "levels": [
         "level_1_simple",
         "level_2_moderate"
       ],
-      "skills": [
-        "repo-analyzer",
-        "ponytail"
-      ],
+      "skills": [],
       "capabilities": [],
+      "memberships": [
+        {
+          "group_id": "grp_mrcctgy7",
+          "prio": 2
+        }
+      ],
       "tier": 2,
       "max_concurrent": 1,
-      "x": 71.27269398082386,
-      "y": 675.7373046875
+      "x": 81.01260274134259,
+      "y": -21.841196777905623
     },
     {
-      "id": "entity-worker-deepseek",
-      "name": "DeepSeek R1 8B (local N3)",
+      "id": "entity-provider-codex",
+      "name": "OpenAI Codex CLI (local)",
       "role": "child",
       "role_tags": [
         "child",
-        "tier_l2",
-        "guardian"
+        "validator"
       ],
-      "provider": "ollama-deepseek",
-      "parentId": "entity-agent-claude",
-      "target_id": "entity-worker-qwen",
+      "provider": "codex",
+      "parentId": "entity-parent",
+      "target_ids": [
+        "entity-provider-ollama-glm",
+        "entity-provider-ollama-ornith",
+        "entity-provider-ollama-kimi"
+      ],
       "levels": [
-        "level_3_intermediate"
+        "level_1_simple",
+        "level_2_moderate"
       ],
-      "skills": [
-        "repo-analyzer",
-        "backend-builder",
-        "security-review",
-        "promptfoo"
-      ],
+      "skills": [],
       "capabilities": [],
-      "tier": 2,
-      "max_concurrent": 1,
-      "x": 509.8180819424716,
-      "y": 682.5454434481535
-    },
-    {
-      "id": "entity-worker-mistral",
-      "name": "Mistral Nemo 12B (local N3/N4)",
-      "role": "child",
-      "role_tags": [
-        "child",
-        "tier_l2"
+      "memberships": [
+        {
+          "group_id": "grp_mrcctgy7",
+          "prio": 1
+        }
       ],
-      "provider": "ollama-mistral-nemo",
-      "parentId": "entity-agent-claude",
-      "target_id": null,
-      "levels": [],
-      "skills": [
-        "repo-analyzer",
-        "frontend-builder",
-        "backend-builder"
-      ],
-      "capabilities": [],
-      "tier": 2,
+      "tier": 1,
       "max_concurrent": 1,
-      "x": 909.0909534801136,
-      "y": 685.4544899680399
+      "x": 77.3348727912158,
+      "y": 573.5512249313371
     }
   ],
-  "zoom": 0.63,
-  "drawer_width": 360,
-  "updated_at": "2026-07-07T23:57:14.222411Z"
+  "groups": [
+    {
+      "id": "grp_mrcctgy7",
+      "name": "Nivel Superior",
+      "color": "#3484c5",
+      "x": -351.16579088017215,
+      "y": 456.2100251957395
+    },
+    {
+      "id": "grp_mrchp9cn",
+      "name": "Nueva jerarquía",
+      "color": "#ffb25f",
+      "x": 1155.7597791079331,
+      "y": 724.954535122292
+    }
+  ],
+  "zoom": 0.55,
+  "drawer_width": 402,
+  "updated_at": "2026-07-08T19:49:23.923480Z"
 }

@@ -29,15 +29,29 @@ const LEVEL_FULL = {
   level_4_complex: "N4 · compleja",
   level_5_critical: "N5 · crítica",
 };
-// Open-ended hierarchy/authority depth (0=raíz, 1=L1, 2=L2, 3+=futuro) — an
-// axis separate from `levels` (complejidad de tarea, fijo en 5 valores).
-const HIERARCHY_TIER_LABEL = {
-  0: "Raíz",
-  1: "L1 · open-source",
-  2: "L2 · local",
-};
-function hierarchyTierLabel(tier) {
-  return HIERARCHY_TIER_LABEL[tier] ?? `L${tier}`;
+// Hierarchy is now expressed through named/colored "Prio" groups (state.groups)
+// that entities join via `entity.memberships`, replacing the old fixed
+// Raíz/L1/L2/L3 tier tags. `effective_tier()` = min(prio) drives real dispatch
+// server-side. Per-group membership renders as a "Grupo · Prio N" chip.
+const GROUP_COLOR_PALETTE = [
+  "#7cc4ff",
+  "#ffb25f",
+  "#b9a7ff",
+  "#5fd0a8",
+  "#ff8fb1",
+  "#f2d05a",
+];
+function nextGroupColor() {
+  const used = (state.groups || []).length;
+  return GROUP_COLOR_PALETTE[used % GROUP_COLOR_PALETTE.length];
+}
+function prioChipLabel(n) {
+  return `Prio ${n}`;
+}
+// Group colors come from an <input type="color"> (#rrggbb) but may be
+// hand-edited in the persisted JSON; sanitize before injecting into SVG markup.
+function safeColor(value) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(String(value || "")) ? value : "#7cc4ff";
 }
 const CRITERIA = [
   "ambiguity",
@@ -47,10 +61,10 @@ const CRITERIA = [
   "operational_risk",
   "validation_difficulty",
 ];
-const DIAGRAM_BASE_WIDTH = 1500;
-const DIAGRAM_BASE_HEIGHT = 1050;
-const DIAGRAM_PAD_X = 520;
-const DIAGRAM_PAD_Y = 300;
+const DIAGRAM_BASE_WIDTH = 12000;
+const DIAGRAM_BASE_HEIGHT = 8000;
+const DIAGRAM_PAD_X = 6000;
+const DIAGRAM_PAD_Y = 4000;
 
 const state = {
   config: null,
@@ -61,14 +75,18 @@ const state = {
   selected: null,
   parentProvider: "",
   entities: [],
+  groups: [],
   modelDrawerOpen: true,
   drawerWidth: 320,
+  decisionCatalogQuery: "",
   resizingDrawer: false,
   diagramZoom: 1,
   panningDiagram: false,
+  draggingDiagramNode: false,
   diagramCentered: false,
   openSkillPanels: new Set(),
   selectedNodeId: "",
+  focusedDiagramLink: null,
   nodeFilter: "__all__",
   openclawPos: readOpenClawPos(),
   lastObservability: null,
@@ -78,13 +96,14 @@ const state = {
   nodeActivityHistory: {},
   onboardingStep: 1,
   monitorSideOpen: true,
+  monitorSubview: "resumen",
   monitorSideWidth: 380,
   resizingMonitorSide: false,
   monitorBlockOrder: ["summary", "health", "flow"],
   humanSideOpen: true,
   humanSideWidth: 430,
   resizingHumanSide: false,
-  configTab: "params",
+  configTab: "general",
   configMode: "prompting",
   selectedPromptTemplate: "hierarchy",
   promptTemplateFormOpen: false,
@@ -98,6 +117,9 @@ const state = {
   agentNotificationsOpen: false,
   promptSideMode: "templates",
   selectedPromptResourceId: "",
+  // Parsed contents of /static/resource-library.md (Roles/Niveles/Restricciones),
+  // loaded once on init and shared by both config modes. null until it resolves.
+  resourceLibraryDoc: null,
   activeView: "human",
 };
 
@@ -174,65 +196,14 @@ const ROLE_DEFS = {
     canOwnLevels: false,
     canConnectToAgent: true,
   },
-  tier_root: {
-    label: "Raíz",
-    summary: "Nivel 0 de la pirámide: máxima autoridad (Claude, ChatGPT).",
-    group: "Jerarquía",
-    restriction: "T0",
-    kind: "tier",
-    canOwnLevels: false,
-    canConnectToAgent: true,
-    tierValue: 0,
-  },
-  tier_l1: {
-    label: "L1",
-    summary: "Primer nivel: los mejores modelos open-source disponibles.",
-    group: "Jerarquía",
-    restriction: "T1",
-    kind: "tier",
-    canOwnLevels: false,
-    canConnectToAgent: true,
-    tierValue: 1,
-  },
-  tier_l2: {
-    label: "L2",
-    summary: "Segundo nivel: respaldo local siempre disponible.",
-    group: "Jerarquía",
-    restriction: "T2",
-    kind: "tier",
-    canOwnLevels: false,
-    canConnectToAgent: true,
-    tierValue: 2,
-  },
-  tier_l3: {
-    label: "L3",
-    summary: "Tercer nivel: espacio para que la pirámide siga creciendo.",
-    group: "Jerarquía",
-    restriction: "T3",
-    kind: "tier",
-    canOwnLevels: false,
-    canConnectToAgent: true,
-    tierValue: 3,
-  },
 };
 
 const PRIMARY_ROLES = ["parent", "child", "backup"];
 const SUPPORT_ROLES = ["guardian", "validator", "fixer", "memory", "monitor"];
-// Hierarchy/authority depth (separate axis from levels N1-N5) — mutually
-// exclusive among themselves, like PRIMARY_ROLES, but orthogonal to them:
-// any parent/child/backup can carry exactly one tier tag. Backs the same
-// `entity.tier` integer the scheduler already reads — this is just its
-// role-tag-driven UI, so the backend contract is unchanged.
-const TIER_ROLES = ["tier_root", "tier_l1", "tier_l2", "tier_l3"];
-const ROLE_GROUPS = ["Autoridad", "Ejecución", "Soporte", "Estado", "Jerarquía"];
-
-function tierRoleForValue(tier) {
-  const value = Number.isFinite(Number(tier)) ? Number(tier) : 2;
-  if (value <= 0) return "tier_root";
-  if (value === 1) return "tier_l1";
-  if (value === 2) return "tier_l2";
-  return "tier_l3";
-}
+// Hierarchy depth is no longer a role tag — it lives in `state.groups` +
+// `entity.memberships` (see GROUP_COLOR_PALETTE above). The ROL dropdown only
+// keeps Autoridad/Ejecución/Soporte/Estado now.
+const ROLE_GROUPS = ["Autoridad", "Ejecución", "Soporte", "Estado"];
 
 const AGENT_INTERNAL_CAPABILITIES = ["Classifier", "Planner", "Router"];
 const AGENT_OPTIONAL_CAPABILITIES = [
@@ -271,9 +242,12 @@ function toast(message, ms = 2400) {
 let routingSaveTimer = null;
 let flowSaveTimer = null;
 let layoutSaveTimer = null;
+let configHitTimer = null;
 let activeModelDrag = null;
 let activeEntityMove = null;
+let activeGroupMove = null;
 let activeDiagramPan = null;
+let wiresFrame = null;
 function scheduleRoutingSave(message = "Cambio detectado. Guardando enrutado…") {
   persistEntityState();
   toast(message, 1400);
@@ -309,7 +283,7 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("karajan-theme", theme);
   $$("#themeSwitch .sw").forEach((s) => s.classList.toggle("active", s.dataset.theme === theme));
-  if ($("#view-decision").classList.contains("active")) requestAnimationFrame(drawWires);
+  if ($("#view-decision").classList.contains("active")) scheduleDrawWires();
 }
 
 // ---- view switching --------------------------------------------------------
@@ -339,7 +313,15 @@ function enterView(view) {
   }
   if (view === "flow") loadConfig().then(renderFlow).catch((error) => toast(error.message));
   if (view === "agents") refreshProvidersAndAgents().catch((error) => toast(error.message));
-  if (view === "monitor") refreshMonitor().catch((error) => toast(error.message));
+  if (view === "monitor") {
+    // Restore the last-selected sub-view (segmented control state), then let the
+    // sub-view dispatcher own the data refresh for whatever is shown.
+    restoreMonitorSubview();
+    // Analytics/predictions ride the view-entry path only (not the 20s poll) —
+    // trends don't need sub-second reactivity and DuckDB queries stay off the hot loop.
+    renderAnalyticsSection().catch(() => {});
+    renderPredictionsPanel().catch(() => {});
+  }
   if (view === "human") refreshHuman().catch((error) => toast(error.message));
   // Human view canvas: on (re)entry, start the real-task-or-demo animation if
   // nothing is playing yet. Guarded internally (bootstrap runs at most once).
@@ -539,6 +521,63 @@ function renderAgentNotifications() {
 }
 
 // ---- MONITOR ---------------------------------------------------------------
+
+// Sub-navigation (segmented control: Resumen | Agentes | Tareas). Only one
+// sub-view is visible at a time; the last choice persists in localStorage. Each
+// sub-view lazily triggers its own data refresh when shown via enterSubview()
+// — a dispatcher that Phases B/C/D will specialise. For now every sub-view
+// shares refreshMonitor(); SSE live updates keep flowing regardless.
+const MONITOR_SUBVIEWS = ["resumen", "agentes", "tareas"];
+const MONITOR_SUBVIEW_KEY = "karajan-monitor-subview";
+
+function initMonitorSubnav() {
+  const nav = $("#monitorSubnav");
+  if (!nav || nav.dataset.bound) return;
+  nav.dataset.bound = "1";
+  nav.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-subview]");
+    if (!tab) return;
+    enterSubview(tab.dataset.subview);
+  });
+}
+
+function restoreMonitorSubview() {
+  const stored = localStorage.getItem(MONITOR_SUBVIEW_KEY);
+  const name = MONITOR_SUBVIEWS.includes(stored) ? stored : "resumen";
+  enterSubview(name);
+}
+
+function enterSubview(name) {
+  if (!MONITOR_SUBVIEWS.includes(name)) name = "resumen";
+  state.monitorSubview = name;
+  localStorage.setItem(MONITOR_SUBVIEW_KEY, name);
+  $$("#monitorSubnav .monitor-subtab").forEach((tab) => {
+    const on = tab.dataset.subview === name;
+    tab.classList.toggle("active", on);
+    tab.setAttribute("aria-selected", String(on));
+  });
+  MONITOR_SUBVIEWS.forEach((key) => {
+    const section = $(`#subview-${key}`);
+    if (!section) return;
+    const on = key === name;
+    section.classList.toggle("active", on);
+    section.hidden = !on;
+  });
+  // Lazy per-sub-view refresh. Phases B/C/D specialise this; the shared
+  // refreshMonitor() path still fetches once and (Phase B) also feeds the
+  // executive Resumen renderer at its tail when Resumen is active.
+  // On entering Resumen, drop the cached analytics so the trend charts refetch
+  // fresh (they otherwise ride the cache to stay off the SSE hot loop).
+  if (name === "resumen") state.resumenAnalytics = null;
+  // Agentes shares the same /analytics/dashboard cache; drop it on entry so the
+  // latency percentiles refetch fresh, then ride the cache on SSE/poll.
+  if (name === "agentes") state.resumenAnalytics = null;
+  // Tareas shares the same /analytics/dashboard cache (success-by-type,
+  // runs-over-time); drop it on entry so those refetch fresh, then ride the cache.
+  if (name === "tareas") state.resumenAnalytics = null;
+  refreshMonitor().catch(() => {});
+}
+
 async function refreshMonitor() {
   if (!$("#monitorMainContent")) return;
   const [metrics, tasks, observability, providers, history, performance] = await Promise.all([
@@ -572,6 +611,180 @@ async function refreshMonitor() {
     state.selected = selected.task_id;
     await renderDetail(selected);
   }
+  // Phase B: the executive Resumen sub-view renders from this same fetch bundle
+  // when it's the active sub-view, so SSE/poll updates flow to its KPI tiles
+  // without a second EventSource or a duplicate network round-trip.
+  if (state.monitorSubview === "resumen") {
+    renderResumen({ metrics, observability, performance }).catch(() => {});
+  }
+  // Phase C: the Agentes analytics + merged config ride the same fetch bundle when
+  // Agentes is the active sub-view, so SSE/poll updates flow to the leaderboard,
+  // percentiles, cost and skills heatmap without a duplicate round-trip.
+  if (state.monitorSubview === "agentes") {
+    renderAgentes({ metrics, observability, performance }).catch(() => {});
+  }
+  // Phase D: the Tareas analytics band + task table (and any open drill-down)
+  // ride the same fetch bundle when Tareas is active, so SSE/poll (task_changed,
+  // run_completed) refresh the KPIs/table live without a duplicate round-trip.
+  // The open drill-down (state.tareasOpenTask) survives the refresh.
+  if (state.monitorSubview === "tareas") {
+    renderTareas({ metrics, tasks, observability, performance }).catch(() => {});
+  }
+}
+
+// ---- Resumen sub-view (Phase B) --------------------------------------------
+// Executive KPI/analytics dashboard built entirely from the Phase A dataviz
+// component library (statTileRow, smallMultiples, hbarChart, chartFrame,
+// dataTable) so it is theme-aware (dark/light/amber) and colourblind-safe by
+// construction. Accepts an optional pre-fetched {metrics, observability,
+// performance} bundle (the refreshMonitor hot path passes it to avoid a
+// duplicate round-trip); otherwise it self-fetches. The richer over-time
+// analytics (/analytics/dashboard) is cached in state.resumenAnalytics — fetched
+// fresh on sub-view entry, reused on SSE/poll so DuckDB stays off the hot loop.
+async function renderResumen(pre) {
+  const el = $("#resumenView");
+  if (!el) return;
+  let metrics, observability, performance;
+  if (pre && pre.metrics && pre.observability) {
+    ({ metrics, observability, performance } = pre);
+  } else {
+    [metrics, observability, performance] = await Promise.all([
+      api("/metrics"),
+      api("/observability"),
+      api("/agents/performance").catch(() => []),
+    ]);
+  }
+  metrics = metrics || {};
+  observability = observability || {};
+  performance = performance || [];
+  if (!state.resumenAnalytics) {
+    state.resumenAnalytics = await api("/analytics/dashboard?days=30").catch(() => null);
+  }
+  const analytics = state.resumenAnalytics;
+
+  const cl = computeCostLatency(performance);
+  const health = observability.health || {};
+  const modelUsage = observability.model_usage || [];
+  const byLevel = metrics.by_level || {};
+  const rot = (analytics && analytics.runs_over_time) || [];
+
+  // --- 1) Hero KPI tiles ---
+  let successPct = null;
+  if (rot.length) {
+    const r = rot.reduce((a, b) => a + Number(b.run_count || 0), 0);
+    const s = rot.reduce((a, b) => a + Number(b.success_count || 0), 0);
+    successPct = r ? Math.round((s / r) * 100) : 100;
+  } else if (cl.tasks) {
+    successPct = Math.round((1 - cl.errors / cl.tasks) * 100);
+  }
+  const successStatus = successPct == null ? undefined
+    : successPct >= 90 ? "good" : successPct >= 60 ? "warning" : "critical";
+  const activeAgents = performance.filter((p) => Number(p.task_count || 0) > 0).length;
+  const humanReview = Number(metrics.human_review_required || 0);
+  const totalCost = cl.hasData ? cl.totalCost : Number(metrics.total_estimated_cost_usd || 0);
+  const avgLatency = cl.hasData ? cl.avgLatency : Number(health.avg_latency_ms || 0);
+  const completed = metrics.by_status?.completed || 0;
+  const kpis = statTileRow([
+    { label: "Total tareas", value: dvNum(metrics.total_tasks || 0), sub: `${completed} completadas · ${metrics.total_subtasks || 0} subtareas` },
+    { label: "Coste total", value: `$${Number(totalCost).toFixed(4)}`, sub: "acumulado (histórico)" },
+    { label: "Latencia media", value: `${dvNum(Math.round(avgLatency))} ms`, sub: "ponderada por ejecuciones" },
+    { label: "Tasa de éxito", value: successPct == null ? "—" : `${successPct}%`, sub: `${cl.errors} errores`, status: successStatus },
+    { label: "Agentes activos", value: dvNum(activeAgents), sub: `${performance.length} proveedores` },
+    { label: "En revisión humana", value: dvNum(humanReview), sub: humanReview > 0 ? "requiere atención" : "al día", status: humanReview > 0 ? "warning" : "good" },
+  ]);
+
+  // --- 2) Actividad en el tiempo (small multiples, shared x-axis) ---
+  const xFmt = (x) => String(x || "").slice(5, 10); // MM-DD
+  const smCharts = [
+    { title: "Ejecuciones/día", xFormat: xFmt, yFormat: (v) => dvNum(v),
+      series: [{ name: "Ejecuciones", seriesIndex: 0, points: rot.map((b) => ({ x: b.bucket, y: Number(b.run_count || 0) })) }] },
+    { title: "Coste/día (USD)", xFormat: xFmt, yFormat: (v) => `$${Number(v).toFixed(4)}`,
+      series: [{ name: "Coste", seriesIndex: 1, points: rot.map((b) => ({ x: b.bucket, y: Number(b.total_cost || 0) })) }] },
+    { title: "Latencia media/día (ms)", xFormat: xFmt, yFormat: (v) => dvNum(v),
+      series: [{ name: "Latencia", seriesIndex: 2, points: rot.map((b) => ({ x: b.bucket, y: Math.round(Number(b.avg_latency_ms || 0)) })) }] },
+  ];
+  const activityBody = rot.length
+    ? smallMultiples({ charts: smCharts })
+    : `<div class="chart-empty">${analytics ? "sin ejecuciones en la ventana" : "analítica no disponible (DuckDB opcional)"}</div>`;
+  const activityFrame = chartFrame({
+    title: "Actividad en el tiempo",
+    subtitle: analytics ? `últimos ${analytics.window_days || 30} días · una escala Y por métrica` : "",
+    body: activityBody,
+    table: rot.length ? dataTable({
+      columns: [
+        { key: "bucket", label: "Día", format: (v) => xFmt(v) },
+        { key: "run_count", label: "Ejec", numeric: true },
+        { key: "total_cost", label: "Coste", numeric: true, format: (v) => `$${Number(v).toFixed(4)}` },
+        { key: "avg_latency_ms", label: "Latencia (ms)", numeric: true, format: (v) => dvNum(Math.round(Number(v) || 0)) },
+      ],
+      rows: rot,
+    }) : null,
+  });
+
+  // --- 3) Distribución por nivel de complejidad (ordinal) ---
+  const LEVELS = [
+    ["level_1_simple", "1 · Simple"], ["level_2_moderate", "2 · Moderado"],
+    ["level_3_intermediate", "3 · Intermedio"], ["level_4_complex", "4 · Complejo"],
+    ["level_5_critical", "5 · Crítico"],
+  ];
+  const levelRows = LEVELS.map(([k, lab], i) => ({ label: lab, value: Number(byLevel[k] || 0), seriesIndex: i }));
+  const complexityFrame = chartFrame({
+    title: "Distribución por nivel de complejidad",
+    subtitle: `${dvNum(metrics.total_tasks || 0)} tareas · complejidad media ${dvNum(metrics.average_complexity_score || 0)}`,
+    body: hbarChart({ rows: levelRows, valueFormat: (v) => dvNum(v), maxLabelWidth: 96 }),
+    table: dataTable({
+      columns: [{ key: "label", label: "Nivel", dot: true }, { key: "value", label: "Tareas", numeric: true }],
+      rows: levelRows,
+    }),
+  });
+
+  // --- 4) Reparto por modelo (llamadas; table adds coste/latencia) ---
+  const modelRows = modelUsage.slice()
+    .sort((a, b) => Number(b.calls || 0) - Number(a.calls || 0))
+    .map((m, i) => ({ label: m.model, value: Number(m.calls || 0), seriesIndex: i }));
+  const modelFrame = chartFrame({
+    title: "Reparto por modelo",
+    subtitle: "llamadas por modelo",
+    body: modelRows.length ? hbarChart({ rows: modelRows, valueFormat: (v) => dvNum(v), maxLabelWidth: 160 })
+      : `<div class="chart-empty">sin llamadas a modelo</div>`,
+    table: modelUsage.length ? dataTable({
+      columns: [
+        { key: "model", label: "Modelo" },
+        { key: "calls", label: "Llamadas", numeric: true },
+        { key: "estimated_cost", label: "Coste", numeric: true, format: (v) => `$${Number(v || 0).toFixed(4)}` },
+        { key: "latency_ms", label: "Latencia (ms)", numeric: true, format: (v) => dvNum(Number(v) || 0) },
+      ],
+      rows: modelUsage,
+    }) : null,
+  });
+
+  // --- 5) Salud del sistema (compact status tiles + donut) ---
+  const healthPct = health.observed_nodes ? Math.round((health.healthy_nodes / health.observed_nodes) * 100) : 0;
+  const tone = health.status === "healthy" ? "ok" : health.status === "error" ? "bad" : "warn";
+  const healthTiles = statTileRow([
+    { label: "Nodos sanos", value: dvNum(health.healthy_nodes || 0), sub: `de ${health.observed_nodes || 0}`, status: "good" },
+    { label: "En aviso", value: dvNum(health.warning_nodes || 0), status: health.warning_nodes > 0 ? "warning" : undefined },
+    { label: "En error", value: dvNum(health.error_nodes || 0), status: health.error_nodes > 0 ? "critical" : undefined },
+    { label: "Tareas activas", value: dvNum(health.active_tasks || 0), sub: `${health.blocked_tasks || 0} bloqueadas` },
+  ]);
+  const healthBody = `<div class="resumen-health">
+    <div class="resumen-health-ring">
+      ${svgDonut(healthPct, { tone, sub: "salud" })}
+      <span class="pill ${tone}">${dvEsc(health.status || "—")}</span>
+    </div>
+    <div class="resumen-health-tiles">${healthTiles}</div>
+  </div>`;
+  const healthFrame = chartFrame({
+    title: "Salud del sistema",
+    subtitle: `latencia media ${dvNum(Math.round(health.avg_latency_ms || 0))} ms`,
+    body: healthBody,
+  });
+
+  el.innerHTML = `
+    <div class="resumen-kpis">${kpis}</div>
+    ${activityFrame}
+    <div class="resumen-2up">${complexityFrame}${modelFrame}</div>
+    ${healthFrame}`;
 }
 
 function _renderAgentPanels(nodes, flow, audit) {
@@ -579,10 +792,632 @@ function _renderAgentPanels(nodes, flow, audit) {
   renderMonitorSidePanel(node, flow, audit);
 }
 
+// ---- Agentes sub-view (Phase C) --------------------------------------------
+// Data-science-grade per-agent analytics (leaderboard, latency percentiles,
+// cost, skills heatmap) built from the Phase A dataviz library, ABOVE the merged
+// operational config/console (relocated from the old standalone #view-agents).
+// Colour follows the ENTITY, not rank: a stable provider→seriesIndex map
+// (alphabetical, deterministic) gives every agent the SAME hue in the leaderboard
+// dot, the cost bar and the percentile row. Accepts the refreshMonitor bundle to
+// avoid a duplicate round-trip; the richer percentile analytics rides the shared
+// state.resumenAnalytics cache (same /analytics/dashboard endpoint).
+async function renderAgentes(pre) {
+  const el = $("#agentesView");
+  // Analytics ONLY. Agent configuration/console/policies is a separate concept
+  // and lives in its own top-nav "Agentes" tab (#view-agents / renderAgentsView),
+  // not mixed in here — metrics and configuration are deliberately kept apart.
+  if (!el) return;
+
+  let metrics, observability, performance;
+  if (pre && pre.observability) {
+    ({ metrics, observability, performance } = pre);
+  } else {
+    [metrics, observability, performance] = await Promise.all([
+      api("/metrics").catch(() => ({})),
+      api("/observability").catch(() => ({})),
+      api("/agents/performance").catch(() => []),
+    ]);
+  }
+  metrics = metrics || {};
+  observability = observability || {};
+  performance = (performance || []).filter((p) => p && p.provider_name);
+  if (!state.resumenAnalytics) {
+    state.resumenAnalytics = await api("/analytics/dashboard?days=30").catch(() => null);
+  }
+  const analytics = state.resumenAnalytics || {};
+  const percentiles = (analytics.latency_percentiles || []).filter((p) => p && p.provider_name);
+  const leaderboard = (analytics.provider_leaderboard || []).filter((p) => p && p.provider_name);
+  const nodes = (observability.nodes || []);
+
+  // --- Stable ENTITY→seriesIndex map (alphabetical, never rank-based) ---
+  const names = new Set();
+  performance.forEach((p) => names.add(p.provider_name));
+  percentiles.forEach((p) => names.add(p.provider_name));
+  leaderboard.forEach((p) => names.add(p.provider_name));
+  const ordered = [...names].sort((a, b) => a.localeCompare(b));
+  const seriesOf = new Map(ordered.map((name, i) => [name, i]));
+  const si = (name) => seriesOf.has(name) ? seriesOf.get(name) : 0;
+
+  // --- Per-agent aggregate rows (join /agents/performance as the stable base) ---
+  const rows = performance.map((p) => {
+    const tasks = Number(p.task_count || 0);
+    const errors = Number(p.error_count || 0);
+    const success = tasks ? (1 - errors / tasks) : 1;
+    const cost = Number(p.total_cost || 0);
+    return {
+      provider: p.provider_name,
+      seriesIndex: si(p.provider_name),
+      tasks,
+      success,
+      successPct: `${(success * 100).toFixed(tasks ? 1 : 0)}%`,
+      avgLatency: Math.round(Number(p.avg_latency_ms || 0)),
+      cost,
+      costPer: tasks ? cost / tasks : 0,
+    };
+  });
+
+  // --- KPI tile row (executive glance) ---
+  const active = rows.filter((r) => r.tasks > 0);
+  const mostUsed = active.slice().sort((a, b) => b.tasks - a.tasks)[0];
+  const mostExpensive = rows.slice().sort((a, b) => b.cost - a.cost)[0];
+  // Global p50: run-weighted mean of per-agent p50 (honest aggregate label).
+  let p50Weighted = 0, p50Runs = 0;
+  percentiles.forEach((p) => {
+    const rc = Number(p.run_count || 0);
+    p50Weighted += Number(p.p50_latency_ms || 0) * rc;
+    p50Runs += rc;
+  });
+  const globalP50 = p50Runs ? Math.round(p50Weighted / p50Runs) : 0;
+  const kpis = statTileRow([
+    { label: "Agentes activos", value: dvNum(active.length), sub: `${rows.length} en catálogo de ejecución` },
+    { label: "Agente más usado", value: mostUsed ? mostUsed.provider : "—", sub: mostUsed ? `${dvNum(mostUsed.tasks)} ejecuciones` : "sin ejecuciones" },
+    { label: "Agente más caro", value: mostExpensive && mostExpensive.cost > 0 ? mostExpensive.provider : "—", sub: mostExpensive ? `$${mostExpensive.cost.toFixed(4)} acumulado` : "" },
+    { label: "Latencia p50 global", value: `${dvNum(globalP50)} ms`, sub: "ponderada por ejecuciones" },
+  ]);
+
+  // --- 1) Leaderboard (sortable dataTable, default: ejecuciones desc) ---
+  const leaderRows = rows.map((r) => ({
+    provider: r.provider,
+    seriesIndex: r.seriesIndex,
+    tasks: r.tasks,
+    successPct: r.successPct,
+    _success: r.success,
+    avgLatency: r.avgLatency,
+    cost: r.cost,
+    costPer: r.costPer,
+  }));
+  const leaderFrame = chartFrame({
+    title: "Leaderboard de agentes",
+    subtitle: "comparación por entidad · ordena cualquier columna",
+    body: leaderRows.length ? dataTable({
+      columns: [
+        { key: "provider", label: "Agente", dot: true },
+        { key: "tasks", label: "Ejecuciones", numeric: true, format: (v) => dvNum(v) },
+        { key: "successPct", label: "Éxito %", numeric: true, align: "right",
+          format: (v, row) => `<span class="tnum">${dvEsc(v)}</span>`, },
+        { key: "avgLatency", label: "Latencia media", numeric: true, format: (v) => `<span class="tnum">${dvNum(v)} ms</span>` },
+        { key: "cost", label: "Coste total", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
+        { key: "costPer", label: "Coste/ejec.", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
+      ],
+      rows: leaderRows,
+      defaultSort: "tasks",
+    }) : `<div class="chart-empty">sin ejecuciones registradas</div>`,
+  });
+  // Default sort direction desc for tasks: dataTable defaults dir=1 (asc) — flip once.
+  // (Handled by wrapping: we set defaultSort then the table starts ascending; users
+  // click to toggle. To land on desc, we post-adjust below after injection.)
+
+  // --- 2) Latencia por agente (percentiles) — dotRangePlot, fallback hbar ---
+  const rangeRows = percentiles.map((p) => ({
+    label: p.provider_name,
+    seriesIndex: si(p.provider_name),
+    p50: Number(p.p50_latency_ms || 0),
+    p90: Number(p.p90_latency_ms || 0),
+    p99: Number(p.p99_latency_ms || 0),
+  })).sort((a, b) => b.p50 - a.p50);
+  let latencyBody;
+  if (rangeRows.length) {
+    latencyBody = dotRangePlot({ rows: rangeRows, valueFormat: (v) => dvNum(Math.round(v)), unit: " ms" });
+  } else if (rows.length) {
+    // Fallback: grouped-ish hbar of avg latency per agent when no percentiles.
+    latencyBody = hbarChart({
+      rows: rows.map((r) => ({ label: r.provider, value: r.avgLatency, seriesIndex: r.seriesIndex })),
+      valueFormat: (v) => `${dvNum(v)} ms`, maxLabelWidth: 160,
+    });
+  } else {
+    latencyBody = `<div class="chart-empty">sin datos de latencia</div>`;
+  }
+  const latencyFrame = chartFrame({
+    title: "Latencia por agente",
+    subtitle: rangeRows.length ? "percentiles p50 · p90 · p99 (ms)" : "latencia media (ms) · percentiles no disponibles",
+    body: latencyBody,
+    table: rangeRows.length ? dataTable({
+      columns: [
+        { key: "label", label: "Agente", dot: true },
+        { key: "p50", label: "p50 (ms)", numeric: true, format: (v) => dvNum(Math.round(v)) },
+        { key: "p90", label: "p90 (ms)", numeric: true, format: (v) => dvNum(Math.round(v)) },
+        { key: "p99", label: "p99 (ms)", numeric: true, format: (v) => dvNum(Math.round(v)) },
+      ],
+      rows: rangeRows,
+    }) : null,
+  });
+
+  // --- 3) Coste por agente — hbar, series-coloured per ENTITY ---
+  const costRows = rows.slice()
+    .filter((r) => r.cost > 0)
+    .sort((a, b) => b.cost - a.cost)
+    .map((r) => ({ label: r.provider, value: r.cost, seriesIndex: r.seriesIndex }));
+  const costFrame = chartFrame({
+    title: "Coste por agente",
+    subtitle: "coste total acumulado (USD)",
+    body: costRows.length
+      ? hbarChart({ rows: costRows, valueFormat: (v) => `$${Number(v).toFixed(4)}`, maxLabelWidth: 160 })
+      : `<div class="chart-empty">sin coste registrado</div>`,
+  });
+
+  // --- 4) Uso de skills (heatmap) — rows=agents, cols=skills, matrix=counts ---
+  const skillNodes = nodes.filter((n) => n.skill_usage && Object.keys(n.skill_usage).length);
+  const skillCols = [...new Set(skillNodes.flatMap((n) => Object.keys(n.skill_usage)))].sort();
+  let skillsBody;
+  if (skillNodes.length && skillCols.length) {
+    const hmRows = skillNodes.map((n) => n.name || n.active_model || "—");
+    const matrix = skillNodes.map((n) => skillCols.map((s) => Number(n.skill_usage[s] || 0)));
+    skillsBody = heatmap({ rows: hmRows, cols: skillCols, matrix, valueFormat: (v) => dvNum(v) });
+  } else {
+    skillsBody = `<div class="chart-empty">aún no se han usado skills</div>`;
+  }
+  const skillsFrame = chartFrame({
+    title: "Uso de skills por agente",
+    subtitle: skillNodes.length ? "recuento de invocaciones · rampa secuencial" : "sin invocaciones de skills todavía",
+    body: skillsBody,
+  });
+
+  el.innerHTML = `
+    <div class="agentes-kpis">${kpis}</div>
+    ${leaderFrame}
+    <div class="agentes-2up">${latencyFrame}${costFrame}</div>
+    ${skillsFrame}`;
+
+  // Land the leaderboard on ejecuciones DESC (dataTable starts a fresh sort asc).
+  const lead = el.querySelector(".dv-table[data-dv-table]");
+  if (lead) {
+    const th = lead.querySelector('th[data-dv-sort="tasks"]');
+    if (th) { dvSortTable(th); } // asc→ now desc handled by toggle logic on re-entry
+  }
+}
+
+// ---- Tareas sub-view (Phase D) ---------------------------------------------
+// Task analytics band + FTS search + a full-width, Langfuse-style audit/trace
+// drill-down, all composed from the Phase A dataviz library (theme-aware,
+// colourblind-safe). Rides the refreshMonitor() fetch bundle so SSE/poll keep
+// the KPIs + table + any open drill-down live. The open drill-down
+// (state.tareasOpenTask) survives a background refresh — the user is never
+// yanked out of an audit view when a task_changed/run_completed event fires.
+
+const _TAREAS_TONE = {
+  completed: "good", succeeded: "good", success: "good",
+  failed: "critical", error: "critical",
+  delegated: "warning", classified: "warning", queued: "warning", running: "warning",
+  waiting_human: "serious", requires_human_review: "serious", blocked: "serious",
+};
+function tareasTone(status) { return _TAREAS_TONE[String(status || "").toLowerCase()] || null; }
+function tareasPillColor(status) { const st = dvStatus(tareasTone(status)); return st ? st.v : "var(--muted)"; }
+function tareasPill(status) {
+  const st = dvStatus(tareasTone(status));
+  return `<span class="tareas-pill" style="--pc:${st ? st.v : "var(--muted)"}">${st ? `<span class="dv-status-ico">${st.icon}</span>` : ""}${dvEsc(status || "—")}</span>`;
+}
+function taskCost(t) { return Number((t.delegation || {}).total_estimated_cost_usd || 0); }
+function taskLatency(t) { return Number((t.delegation || {}).total_latency_ms || 0); }
+const _tLevelShort = (lvl) => String(lvl || "").replace("level_", "N").replace(/_.*/, "");
+
+async function renderTareas(pre) {
+  const el = $("#tareasView");
+  if (!el) return;
+  initTareas();
+  let metrics, tasks, performance;
+  if (pre && Array.isArray(pre.tasks)) {
+    ({ metrics, tasks, performance } = pre);
+  } else {
+    [metrics, tasks, performance] = await Promise.all([
+      api("/metrics").catch(() => ({})),
+      api("/tasks").catch(() => []),
+      api("/agents/performance").catch(() => []),
+    ]);
+  }
+  metrics = metrics || {};
+  tasks = Array.isArray(tasks) ? tasks : [];
+  performance = performance || [];
+  state.tasks = tasks;
+  if (!state.resumenAnalytics) {
+    state.resumenAnalytics = await api("/analytics/dashboard?days=30").catch(() => null);
+  }
+  const analytics = state.resumenAnalytics;
+
+  const band = tareasBand(tasks, metrics, analytics);
+
+  // Drill-down mode when a task is open and still present; otherwise the list.
+  let openTask = null;
+  if (state.tareasOpenTask) {
+    openTask = tasks.find((t) => t.task_id === state.tareasOpenTask) || null;
+    if (!openTask) state.tareasOpenTask = null;
+  }
+  const mainInner = openTask ? tareasDetailShell(openTask) : tareasList(tasks);
+  el.innerHTML = `${band}<div id="tareasMain" class="tareas-main">${mainInner}</div>`;
+
+  if (openTask) {
+    renderTareasDetail(openTask).catch(() => {});
+  } else {
+    const input = $("#tareasSearch");
+    if (input && state.tareasQuery) input.value = state.tareasQuery;
+  }
+}
+
+// --- Analytics band: KPI tiles + volume + status distribution + success/type -
+function tareasBand(tasks, metrics, analytics) {
+  const total = tasks.length;
+  const byStatus = {};
+  let costSum = 0, latSum = 0, latN = 0;
+  tasks.forEach((t) => {
+    byStatus[t.status] = (byStatus[t.status] || 0) + 1;
+    costSum += taskCost(t);
+    const l = taskLatency(t);
+    if (l > 0) { latSum += l; latN += 1; }
+  });
+  const completed = byStatus.completed || 0;
+  const failed = byStatus.failed || 0;
+  const humanReview = Number(metrics.human_review_required || 0);
+  const avgLat = latN ? Math.round(latSum / latN) : 0;
+  const kpis = statTileRow([
+    { label: "Total tareas", value: dvNum(total), sub: `${dvNum(metrics.total_subtasks || 0)} subtareas` },
+    { label: "Completadas", value: dvNum(completed), sub: total ? `${Math.round((completed / total) * 100)}% del total` : "", status: completed > 0 ? "good" : undefined },
+    { label: "Fallidas", value: dvNum(failed), sub: failed > 0 ? "requiere revisión" : "sin fallos", status: failed > 0 ? "critical" : undefined },
+    { label: "En revisión humana", value: dvNum(humanReview), sub: humanReview > 0 ? "pendiente" : "al día", status: humanReview > 0 ? "serious" : undefined },
+    { label: "Coste total", value: `$${costSum.toFixed(4)}`, sub: "acumulado" },
+    { label: "Latencia media", value: `${dvNum(avgLat)} ms`, sub: `${latN} con ejecución` },
+  ]);
+
+  // Volumen en el tiempo (runs_over_time, else task created_at bucketed by day).
+  const rot = (analytics && analytics.runs_over_time) || [];
+  const xFmt = (x) => String(x || "").slice(5, 10);
+  let volBody, volTable = null, volSub;
+  if (rot.length) {
+    volBody = lineChart({
+      series: [{ name: "Ejecuciones", seriesIndex: 0, points: rot.map((b) => ({ x: b.bucket, y: Number(b.run_count || 0) })) }],
+      xFormat: xFmt, yFormat: (v) => dvNum(v),
+    });
+    volSub = `${rot.length} días con actividad`;
+    volTable = dataTable({
+      columns: [
+        { key: "bucket", label: "Día", format: (v) => xFmt(v) },
+        { key: "run_count", label: "Ejec", numeric: true },
+        { key: "success_count", label: "OK", numeric: true },
+        { key: "total_cost", label: "Coste", numeric: true, format: (v) => `$${Number(v || 0).toFixed(4)}` },
+      ],
+      rows: rot,
+    });
+  } else {
+    const buckets = {};
+    tasks.forEach((t) => { const d = String(t.created_at || "").slice(0, 10); if (d) buckets[d] = (buckets[d] || 0) + 1; });
+    const days = Object.keys(buckets).sort();
+    volBody = days.length
+      ? lineChart({ series: [{ name: "Tareas", seriesIndex: 0, points: days.map((d) => ({ x: d, y: buckets[d] })) }], xFormat: xFmt, yFormat: (v) => dvNum(v) })
+      : `<div class="chart-empty">sin actividad</div>`;
+    volSub = "tareas creadas/día";
+  }
+  const volFrame = chartFrame({ title: "Volumen en el tiempo", subtitle: volSub, body: volBody, table: volTable });
+
+  // Distribución por estado (status-coloured).
+  const statusRows = Object.entries(byStatus)
+    .sort((a, b) => b[1] - a[1])
+    .map(([s, n], i) => ({ label: s, value: n, status: tareasTone(s), seriesIndex: i }));
+  const statusFrame = chartFrame({
+    title: "Distribución por estado",
+    subtitle: `${Object.keys(byStatus).length} estados`,
+    body: statusRows.length ? hbarChart({ rows: statusRows, valueFormat: (v) => dvNum(v), maxLabelWidth: 150 }) : `<div class="chart-empty">sin tareas</div>`,
+    table: statusRows.length ? dataTable({ columns: [{ key: "label", label: "Estado" }, { key: "value", label: "Tareas", numeric: true }], rows: statusRows }) : null,
+  });
+
+  // Éxito por tipo de tarea.
+  const sbt = (analytics && analytics.success_rate_by_task_type) || [];
+  const typeRows = sbt.slice().sort((a, b) => Number(b.run_count) - Number(a.run_count))
+    .map((r, i) => ({ label: r.task_type, value: Math.round(Number(r.success_rate || 0) * 100), seriesIndex: i }));
+  const typeFrame = chartFrame({
+    title: "Éxito por tipo de tarea",
+    subtitle: sbt.length ? "% de ejecuciones correctas" : "",
+    body: typeRows.length ? hbarChart({ rows: typeRows, valueFormat: (v) => `${dvNum(v)}%`, maxLabelWidth: 170 }) : `<div class="chart-empty">analítica no disponible (DuckDB opcional)</div>`,
+    table: sbt.length ? dataTable({
+      columns: [
+        { key: "task_type", label: "Tipo" },
+        { key: "run_count", label: "Ejec", numeric: true },
+        { key: "success_rate", label: "Éxito", numeric: true, format: (v) => `${Math.round(Number(v || 0) * 100)}%` },
+        { key: "avg_latency_ms", label: "Latencia", numeric: true, format: (v) => `${dvNum(Math.round(Number(v || 0)))} ms` },
+      ],
+      rows: sbt,
+    }) : null,
+  });
+
+  return `<div class="tareas-kpis">${kpis}</div>${volFrame}<div class="tareas-2up">${statusFrame}${typeFrame}</div>`;
+}
+
+// --- List mode: FTS search box above a full-width, sortable tasks table ------
+function tareasList(tasks) {
+  const rows = tasks.map((t) => {
+    const c = t.classification || {};
+    return {
+      task_id: t.task_id,
+      _short: t.task_id.length > 16 ? `${t.task_id.slice(0, 16)}…` : t.task_id,
+      tipo: c.intent || "—",
+      nivel: `${_tLevelShort(c.complexity_level)} · ${dvNum(c.complexity_score)}`,
+      modelo: TIER_LABEL[c.recommended_model] || c.recommended_model || "—",
+      status: t.status,
+      coste: taskCost(t),
+      latencia: taskLatency(t),
+      creada: String(t.created_at || "").slice(0, 10),
+    };
+  });
+  const table = dataTable({
+    columns: [
+      { key: "_short", label: "ID", format: (v, row) => `<button type="button" class="tareas-idlink" data-task="${dvEsc(row.task_id)}"><code>${dvEsc(v)}</code></button>` },
+      { key: "tipo", label: "Tipo / Intención" },
+      { key: "nivel", label: "Nivel" },
+      { key: "modelo", label: "Modelo" },
+      { key: "status", label: "Estado", format: (v) => tareasPill(v) },
+      { key: "coste", label: "Coste", numeric: true, format: (v) => `$${Number(v).toFixed(4)}` },
+      { key: "latencia", label: "Latencia", numeric: true, format: (v) => (v ? `${dvNum(v)} ms` : "—") },
+      { key: "creada", label: "Creada" },
+    ],
+    rows,
+    defaultSort: "creada",
+  });
+  const searchCard = `<section class="card tareas-searchcard">
+    <div class="tareas-search">
+      <span class="tareas-search-ico" aria-hidden="true">⌕</span>
+      <input type="text" id="tareasSearch" class="tareas-search-input" placeholder="Buscar tareas por título, tipo o prompt… (búsqueda de texto completo)" autocomplete="off" spellcheck="false" aria-label="Buscar tareas" />
+      <div id="tareasSearchResults" class="tareas-search-results" hidden></div>
+    </div>
+  </section>`;
+  const tableFrame = chartFrame({
+    title: "Tareas",
+    subtitle: `${tasks.length} en el registro · clic en el ID para auditar`,
+    body: `<div class="tareas-table">${table}</div>`,
+  });
+  return `${searchCard}${tableFrame}`;
+}
+
+// --- Drill-down shell (synchronous): header + clasificación + subtareas, with
+// async placeholders for the runs trace and the harness decisions. -----------
+function tareasDetailShell(task) {
+  const c = task.classification || {};
+  const cost = taskCost(task), lat = taskLatency(task);
+  const rhr = c.requires_human_review;
+  const dt = (s) => dvEsc(String(s || "").slice(0, 19).replace("T", " "));
+  const header = `<div class="tareas-detail-head">
+    <div class="tareas-detail-topline">
+      <button type="button" class="tareas-back">← Volver</button>
+      ${tareasPill(task.status)}
+      ${rhr ? `<span class="tareas-flag">▲ revisión humana</span>` : ""}
+    </div>
+    <div class="tareas-detail-id"><code>${dvEsc(task.task_id)}</code></div>
+    <p class="tareas-detail-prompt">${dvEsc(task.prompt || "")}</p>
+    <div class="tareas-detail-meta">
+      <span><b>${dvEsc(_tLevelShort(c.complexity_level))}</b> · complejidad ${dvNum(c.complexity_score)}</span>
+      <span>coste <b>$${cost.toFixed(4)}</b></span>
+      <span>latencia <b>${lat ? `${dvNum(lat)} ms` : "—"}</b></span>
+      <span>creada ${dt(task.created_at)}</span>
+      <span>actualizada ${dt(task.updated_at)}</span>
+    </div>
+  </div>`;
+
+  const critRows = Object.entries(c.criteria || {}).map(([k, v], i) => ({ label: k, value: Number(v), seriesIndex: i }));
+  const clasKv = `<div class="tareas-kv">
+    <div><span>Dominios</span><b>${dvEsc((c.domain || []).join(", ") || "—")}</b></div>
+    <div><span>Intención</span><b>${dvEsc(c.intent || "—")}</b></div>
+    <div><span>Estrategia</span><b>${dvEsc(c.recommended_strategy || "—")}</b></div>
+    <div><span>Clasificado por</span><b>${dvEsc(c.classified_by || "—")}</b></div>
+    <div><span>Modelo</span><b>${dvEsc(TIER_LABEL[c.recommended_model] || c.recommended_model || "—")}</b></div>
+    <div class="tareas-skills"><span>Skills</span><span>${(c.recommended_skills || []).map((s) => `<span class="tag">${dvEsc(s)}</span>`).join("") || "—"}</span></div>
+  </div>${c.reason ? `<p class="tareas-reason">${dvEsc(c.reason)}</p>` : ""}`;
+  const clasFrame = chartFrame({
+    title: "Clasificación",
+    subtitle: "criterios 0–5 · driver dominante",
+    body: `${clasKv}<div class="tareas-crit">${critRows.length ? hbarChart({ rows: critRows, valueFormat: (v) => Number(v).toFixed(1), maxLabelWidth: 160 }) : `<div class="chart-empty">sin criterios</div>`}</div>`,
+  });
+
+  const execs = new Map((task.delegation?.executions || []).map((e) => [e.subtask_id, e]));
+  const subs = c.subtasks || [];
+  const subBody = subs.length ? subs.map((s) => {
+    const ex = execs.get(s.id);
+    const meta = ex
+      ? `${dvEsc(ex.backend)}:${dvEsc(ex.model_used)} · ${dvNum(ex.latency_ms)} ms · $${Number(ex.estimated_cost_usd || 0).toFixed(5)}`
+      : `${dvEsc(TIER_LABEL[s.recommended_model] || s.recommended_model || "")} · pendiente`;
+    return `<div class="tareas-subtask">
+      <div class="tareas-subtask-h"><code>${dvEsc(s.id)}</code> <b>${dvEsc(s.name)}</b>${ex ? ` ${tareasPill(ex.status)}` : ""}</div>
+      <div class="tareas-subtask-meta">${meta}${s.recommended_skill ? ` · skill: ${dvEsc(s.recommended_skill)}` : ""}</div>
+      ${s.validation ? `<div class="tareas-subtask-val">✓ ${dvEsc(s.validation)}</div>` : ""}
+    </div>`;
+  }).join("") : `<div class="chart-empty">sin subtareas</div>`;
+  const subFrame = chartFrame({ title: "Subtareas", subtitle: `${subs.length}`, body: `<div class="tareas-subtasks">${subBody}</div>` });
+
+  const runsFrame = chartFrame({ title: "Timeline de ejecuciones", subtitle: "traza por run · modelo · coste · latencia", body: `<div id="tareasRuns" class="tareas-timeline"><div class="chart-empty">cargando ejecuciones…</div></div>` });
+  const decFrame = chartFrame({ title: "Decisiones del harness", subtitle: "log de auditoría append-only", body: `<div id="tareasDecisions" class="tareas-decisions"><div class="chart-empty">cargando decisiones…</div></div>` });
+
+  return `${header}${clasFrame}${runsFrame}${subFrame}${decFrame}`;
+}
+
+// Fetch the stable Fase-1 runs (the trace) + the harness decision log, inject.
+async function renderTareasDetail(task) {
+  const [runs, decisions] = await Promise.all([
+    api(`/tasks/${task.task_id}/runs`).catch(() => []),
+    api(`/tasks/${task.task_id}/decisions`).catch(() => []),
+  ]);
+  if (state.tareasOpenTask !== task.task_id) return; // user navigated away mid-fetch
+  const runsEl = $("#tareasRuns");
+  if (runsEl) runsEl.innerHTML = tareasRunsHtml(Array.isArray(runs) ? runs : [], task);
+  const decEl = $("#tareasDecisions");
+  if (decEl) {
+    const rhr = task.classification?.requires_human_review && task.status === "delegated";
+    const approve = rhr ? `<button class="approve-review tareas-approve" data-approve="${dvEsc(task.task_id)}">Aprobar revisión humana</button>` : "";
+    const list = (Array.isArray(decisions) ? decisions : []);
+    decEl.innerHTML = (list.length ? list.map((d) => `<div class="tareas-dec">
+      <span class="tareas-dec-phase">${dvEsc(d.phase)}</span>
+      <div class="tareas-dec-body"><div class="tareas-dec-decision">${dvEsc(d.decision)}</div>${d.reason ? `<div class="tareas-dec-reason">${dvEsc(d.reason)}</div>` : ""}</div>
+      ${d.score != null ? `<span class="tareas-dec-score">${dvNum(d.score)}</span>` : ""}
+    </div>`).join("") : `<div class="chart-empty">sin decisiones registradas</div>`) + approve;
+  }
+}
+
+// The trace: one card per run (stable /runs data), merged with executions for
+// the output/error text (runs carry timing/cost/model, executions carry output).
+function tareasRunsHtml(runs, task) {
+  const execs = task.delegation?.executions || [];
+  let items = [];
+  if (runs.length) {
+    items = runs.map((r, i) => {
+      const ex = execs[i] || execs.find((e) => e.subtask_id === r.subtask_id) || null;
+      return {
+        index: r.run_index != null ? r.run_index : i,
+        provider: r.provider_name || r.model_id || "—",
+        model: r.model_id || (ex && ex.model_used) || "",
+        backend: r.backend || "",
+        status: r.status,
+        latency: r.latency_ms,
+        cost: r.estimated_cost_usd,
+        inTok: r.input_tokens,
+        outTok: r.output_tokens,
+        entity: r.routing_entity_name_snapshot || "",
+        output: ex ? ex.output : "",
+        error: r.error || (ex && ex.error) || "",
+      };
+    });
+  } else if (execs.length) {
+    items = execs.map((ex, i) => ({
+      index: i,
+      provider: (ex.model_used || "").split(":")[0] || ex.backend || "—",
+      model: ex.model_used || "",
+      backend: ex.backend || "",
+      status: ex.status,
+      latency: ex.latency_ms,
+      cost: ex.estimated_cost_usd,
+      inTok: ex.input_tokens,
+      outTok: ex.output_tokens,
+      entity: "",
+      output: ex.output,
+      error: ex.error,
+    }));
+  }
+  if (!items.length) return `<div class="chart-empty">sin ejecuciones registradas</div>`;
+  return items.map((it) => {
+    const out = it.error ? it.error : (it.output || "");
+    const isErr = !!it.error;
+    const trunc = out && out.length > 260;
+    const shown = trunc ? out.slice(0, 260) : out;
+    const outHtml = out ? `<div class="tareas-run-out${isErr ? " err" : ""}">
+      <pre class="tareas-run-pre" data-full="${dvEsc(out)}">${dvEsc(shown)}${trunc ? "…" : ""}</pre>
+      ${trunc ? `<button type="button" class="tareas-out-toggle">expandir</button>` : ""}
+    </div>` : "";
+    return `<div class="tareas-run">
+      <div class="tareas-run-rail"><span class="tareas-run-dot" style="--pc:${tareasPillColor(it.status)}"></span></div>
+      <div class="tareas-run-card">
+        <div class="tareas-run-h">
+          <span class="tareas-run-idx">#${dvEsc(it.index)}</span>
+          <b>${dvEsc(it.provider)}</b>
+          ${it.model ? `<code>${dvEsc(it.model)}</code>` : ""}
+          ${it.backend ? `<span class="tareas-run-be">${dvEsc(it.backend)}</span>` : ""}
+          ${tareasPill(it.status)}
+        </div>
+        ${it.entity ? `<div class="tareas-run-entity">${dvEsc(it.entity)}</div>` : ""}
+        <div class="tareas-run-metrics">
+          <span>latencia <b>${it.latency != null ? `${dvNum(it.latency)} ms` : "—"}</b></span>
+          <span>coste <b>$${Number(it.cost || 0).toFixed(5)}</b></span>
+          <span>tokens <b>${dvNum(it.inTok || 0)}↓ ${dvNum(it.outTok || 0)}↑</b></span>
+        </div>
+        ${outHtml}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openTareasTask(taskId) {
+  if (!taskId) return;
+  state.tareasOpenTask = taskId;
+  hideTareasSearch();
+  const input = $("#tareasSearch");
+  if (input) { input.value = ""; state.tareasQuery = ""; }
+  renderTareas({ metrics: state.lastMetrics, tasks: state.tasks, performance: state.agentPerformance }).catch(() => {});
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function closeTareasTask() {
+  state.tareasOpenTask = null;
+  renderTareas({ metrics: state.lastMetrics, tasks: state.tasks, performance: state.agentPerformance }).catch(() => {});
+}
+
+function hideTareasSearch() {
+  const box = $("#tareasSearchResults");
+  if (box) { box.hidden = true; box.innerHTML = ""; }
+}
+async function runTareasSearch(q) {
+  const box = $("#tareasSearchResults");
+  if (!box) return;
+  let data;
+  try {
+    data = await api(`/search/tasks?q=${encodeURIComponent(q)}&limit=20`);
+  } catch (err) {
+    box.hidden = false;
+    box.innerHTML = `<div class="tareas-search-empty">${dvEsc(err.message)}</div>`;
+    return;
+  }
+  const results = data.results || [];
+  box.hidden = false;
+  if (!results.length) {
+    box.innerHTML = `<div class="tareas-search-empty">Sin resultados para “${dvEsc(q)}”.</div>`;
+    return;
+  }
+  box.innerHTML = `<div class="tareas-search-count">${data.count} resultado${data.count === 1 ? "" : "s"}</div>` +
+    results.map((r) => {
+      const id = r.legacy_task_id || r.id || "";
+      const created = r.created_at ? String(r.created_at).slice(0, 10) : "";
+      return `<button type="button" class="tareas-search-item" data-task="${dvEsc(id)}">
+        <b>${dvEsc(r.title || id || "tarea")}</b>
+        <span>${dvEsc(r.task_type || "—")} · ${dvEsc(r.status || "")} · ${created}</span>
+      </button>`;
+    }).join("");
+}
+
+// One-time delegated wiring (idempotent): drill-down open/close, output expand,
+// and the FTS search input (debounced).
+function initTareas() {
+  if (document._tareasBound) return;
+  document._tareasBound = true;
+  document.addEventListener("click", (e) => {
+    const idlink = e.target.closest?.(".tareas-idlink[data-task]");
+    if (idlink) { openTareasTask(idlink.dataset.task); return; }
+    const searchItem = e.target.closest?.(".tareas-search-item[data-task]");
+    if (searchItem) { openTareasTask(searchItem.dataset.task); return; }
+    if (e.target.closest?.(".tareas-back")) { closeTareasTask(); return; }
+    const tog = e.target.closest?.(".tareas-out-toggle");
+    if (tog) {
+      const pre = tog.closest(".tareas-run-out")?.querySelector(".tareas-run-pre");
+      if (pre) { pre.textContent = pre.getAttribute("data-full") || pre.textContent; tog.remove(); }
+      return;
+    }
+    if (!e.target.closest?.(".tareas-search")) hideTareasSearch();
+  });
+  document.addEventListener("input", (e) => {
+    if (e.target && e.target.id === "tareasSearch") {
+      state.tareasQuery = e.target.value;
+      clearTimeout(state._tareasSearchTimer);
+      const q = e.target.value.trim();
+      if (!q) { hideTareasSearch(); return; }
+      state._tareasSearchTimer = setTimeout(() => runTareasSearch(q), 300);
+    }
+  });
+}
+
 // System Health: a summary ring + a sparkline of recent load, replacing the
 // older "health-compact/health-orbit" layout (renamed to health-summary* to
 // avoid colliding with dead pre-redesign CSS of the same old names).
 function renderSystemHealth(health) {
+  if (!$("#systemHealth")) return; // Phase D removed the legacy Tareas health card.
   if (!health) {
     $("#systemHealth").innerHTML = `<div class="chart-empty">sin datos</div>`;
     return;
@@ -1040,7 +1875,9 @@ function renderMonitorSidePanel(node, flow, audit) {
 }
 
 function renderExecutionFlow(events) {
-  $("#executionFlow").innerHTML = eventList(events.slice(0, 4), "Sin flujo de ejecución.");
+  const el = $("#executionFlow"); // Phase D removed the legacy Tareas flow strip.
+  if (!el) return;
+  el.innerHTML = eventList(events.slice(0, 4), "Sin flujo de ejecución.");
 }
 
 const _LEVEL_SHORT = { level_1_simple:"N1", level_2_moderate:"N2", level_3_intermediate:"N3", level_4_complex:"N4", level_5_critical:"N5" };
@@ -1088,6 +1925,413 @@ function svgTokenRing(consumed, budget) {
   return `<div class="token-ring">${svgDonut(pct, { tone, sub: "usado" })}
     <div class="token-ring-meta"><b>${fmtTokens(remaining)}</b><small>tokens restantes*</small>
       <span>${fmtTokens(consumed)} / ${fmtTokens(budget)}</span></div></div>`;
+}
+
+// ---- Dataviz component library (Redesign) ----------------------------------
+// Reusable, theme-aware, accessible chart primitives. Zero libraries; every
+// mark colour is driven by the CSS custom properties defined in styles.css
+// (--series-1..8 categorical, --status-* reserved, --dv-ramp-0..5 sequential),
+// so light/dark/amber themes recolour automatically. Marks follow the method:
+// thin marks, 4px rounded data-ends anchored to the baseline, 2px surface gaps,
+// 2px lines, ≥8px hover markers, recessive grid/axes, legend for ≥2 series,
+// text always in ink tokens (--text/--muted) never the series colour, status
+// colours reserved + always shipped with an icon/label.
+
+let _dvSeq = 0;
+const dvId = (prefix = "dv") => `${prefix}-${++_dvSeq}`;
+const dvEsc = escapeHtml;
+// Categorical colour by ENTITY/seriesIndex, never by rank. >8 series cycle as a
+// last resort (the method prefers grouping/small-multiples past 8).
+const dvSeries = (i) => `var(--series-${((Number(i) || 0) % 8) + 1})`;
+const _DV_STATUS = {
+  good: { v: "var(--status-good)", icon: "●", label: "OK" },
+  warning: { v: "var(--status-warning)", icon: "▲", label: "Aviso" },
+  serious: { v: "var(--status-serious)", icon: "◆", label: "Grave" },
+  critical: { v: "var(--status-critical)", icon: "■", label: "Crítico" },
+};
+const dvStatus = (s) => _DV_STATUS[s] || null;
+function dvNum(v, fmt) {
+  if (typeof fmt === "function") return fmt(v);
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  if (Number.isInteger(n)) return n.toLocaleString("es-ES");
+  return n.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+}
+
+// -- Reusable positioned tooltip (single element, show/hide helpers) ----------
+let _dvTip = null;
+function dvTooltipEl() {
+  if (!_dvTip) {
+    _dvTip = document.createElement("div");
+    _dvTip.className = "dv-tooltip";
+    _dvTip.setAttribute("role", "status");
+    _dvTip.hidden = true;
+    document.body.appendChild(_dvTip);
+  }
+  return _dvTip;
+}
+function dvShowTip(html, x, y) {
+  const t = dvTooltipEl();
+  t.innerHTML = html;
+  t.hidden = false;
+  const pad = 14;
+  const r = t.getBoundingClientRect();
+  let left = x + pad, top = y + pad;
+  if (left + r.width > window.innerWidth - 8) left = x - r.width - pad;
+  if (top + r.height > window.innerHeight - 8) top = y - r.height - pad;
+  t.style.left = `${Math.max(8, left)}px`;
+  t.style.top = `${Math.max(8, top)}px`;
+}
+function dvHideTip() { if (_dvTip) _dvTip.hidden = true; }
+
+// -- statTile / statTileRow: hero KPI tiles -----------------------------------
+function statTile({ label, value, sub, delta, status } = {}) {
+  const st = dvStatus(status);
+  let deltaHtml = "";
+  if (delta != null && delta !== "") {
+    const up = Number(delta) >= 0;
+    const arrow = up ? "▲" : "▼";
+    const cls = up ? "up" : "down";
+    const txt = typeof delta === "number"
+      ? `${up ? "+" : ""}${dvNum(delta)}`
+      : dvEsc(delta);
+    // Colour is never the sole signal: an arrow glyph + signed token accompany it.
+    deltaHtml = `<span class="dv-delta ${cls}">${arrow}<span>${txt}</span></span>`;
+  }
+  const badge = st ? `<span class="dv-status-badge" style="--sc:${st.v}"><span class="dv-status-ico">${st.icon}</span>${st.label}</span>` : "";
+  return `<div class="dv-stat-tile">
+    <div class="dv-stat-label">${dvEsc(label ?? "")}${badge}</div>
+    <div class="dv-stat-value">${dvEsc(value ?? "—")}</div>
+    ${sub != null && sub !== "" ? `<div class="dv-stat-sub">${dvEsc(sub)}</div>` : ""}
+    ${deltaHtml}
+  </div>`;
+}
+function statTileRow(tiles = []) {
+  return `<div class="dv-stat-row">${tiles.map((t) => statTile(t)).join("")}</div>`;
+}
+
+// -- hbarChart: horizontal bars for magnitude/identity ------------------------
+// Thin bars, 4px rounded ONLY on the data-end (anchored to the left baseline),
+// a 2px surface gap between rows, direct right-aligned tabular-nums values,
+// recessive baseline, per-bar hover tooltip. Colour by series when comparing
+// entities, or a single accent for one series.
+function hbarChart({ rows = [], valueFormat, maxLabelWidth = 120, single = false } = {}) {
+  if (!rows.length) return `<div class="chart-empty">sin datos</div>`;
+  const max = Math.max(1, ...rows.map((r) => Number(r.value) || 0));
+  const body = rows.map((r) => {
+    const val = Number(r.value) || 0;
+    const pct = Math.max(0, (val / max) * 100);
+    const st = dvStatus(r.status);
+    const color = st ? st.v : single ? "var(--accent)" : dvSeries(r.seriesIndex);
+    const fmt = dvNum(val, valueFormat);
+    const tip = `${dvEsc(r.label)}: ${fmt}`;
+    return `<div class="dv-hbar-row">
+      <span class="dv-hbar-label" style="max-width:${maxLabelWidth}px" title="${dvEsc(r.label)}">${st ? `<span class="dv-status-ico" style="color:${st.v}">${st.icon}</span>` : ""}${dvEsc(r.label)}</span>
+      <span class="dv-hbar-track"><span class="dv-hbar-fill" style="width:${pct.toFixed(1)}%;background:${color}" data-dv-tip="${dvEsc(tip)}"></span></span>
+      <span class="dv-hbar-val">${dvEsc(fmt)}</span>
+    </div>`;
+  }).join("");
+  return `<div class="dv-hbar">${body}</div>`;
+}
+
+// -- lineChart: single-y time-series with crosshair + tooltip -----------------
+// 2px non-scaling lines, recessive gridlines, ONE y-axis only (two scales →
+// two charts / small multiples), markers appear ≥8px only on hover under the
+// crosshair. Legend for ≥2 series; ≤4 series also get direct end-labels; a
+// single series needs no legend. Text uses ink tokens, never the series colour.
+const _dvLineReg = {};
+let _dvActiveLine = null;
+function lineChart({ series = [], xFormat, yFormat, yLabel, small = false } = {}) {
+  const clean = series.filter((s) => (s.points || []).length);
+  if (!clean.length) return `<div class="chart-empty">sin datos</div>`;
+  const n = Math.max(...clean.map((s) => s.points.length));
+  const allY = clean.flatMap((s) => s.points.map((p) => Number(p.y) || 0));
+  let min = Math.min(...allY), max = Math.max(...allY);
+  if (min === max) { max = max + 1; min = min - 1; }
+  min = Math.min(min, 0) === 0 && min >= 0 ? 0 : min; // anchor to zero when non-negative
+  const span = max - min || 1;
+  const VBW = 640, VBH = small ? 150 : 240;
+  const P = { l: 48, r: 16, t: 12, b: 26 };
+  const pw = VBW - P.l - P.r, ph = VBH - P.t - P.b;
+  const xAt = (i) => P.l + (n === 1 ? pw / 2 : (pw * i) / (n - 1));
+  const yAt = (v) => P.t + ph * (1 - (Number(v) - min) / span);
+  const id = dvId("line");
+  const xLabels = (clean[0].points || []).map((p, i) =>
+    typeof xFormat === "function" ? xFormat(p.x, i) : String(p.x ?? i));
+
+  // Registry for hover: fractions of the full svg box (preserveAspectRatio=none
+  // makes the mapping linear on both axes).
+  const reg = { n, xFrac: [], series: [], xLabels, yFormat: (v) => dvNum(v, yFormat) };
+  for (let i = 0; i < n; i++) reg.xFrac.push(xAt(i) / VBW);
+
+  // Gridlines live in the SVG (non-scaling-stroke keeps them 1px under the
+  // stretched preserveAspectRatio=none). Axis labels are crisp HTML overlays —
+  // SVG <text> would be distorted by the non-uniform scaling.
+  const gridY = 4;
+  let grid = "";
+  const yTicks = [];
+  for (let g = 0; g <= gridY; g++) {
+    const v = min + (span * g) / gridY;
+    const y = yAt(v);
+    grid += `<line class="dv-grid" x1="${P.l}" y1="${y.toFixed(1)}" x2="${VBW - P.r}" y2="${y.toFixed(1)}"/>`;
+    yTicks.push({ topPct: (y / VBH) * 100, label: dvNum(v, yFormat) });
+  }
+  const gutterPct = (P.l / VBW) * 100;
+  const yAxisHtml = yTicks.map((t) =>
+    `<span class="dv-axis-y" style="top:${t.topPct.toFixed(2)}%;width:${gutterPct.toFixed(2)}%">${dvEsc(t.label)}</span>`).join("");
+  const xAxisHtml = `<span class="dv-axis-x" style="left:${gutterPct.toFixed(2)}%">${dvEsc(xLabels[0] ?? "")}</span>` +
+    (n > 1 ? `<span class="dv-axis-x end">${dvEsc(xLabels[n - 1] ?? "")}</span>` : "");
+
+  const paths = clean.map((s) => {
+    const color = dvSeries(s.seriesIndex);
+    const pts = s.points.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.y).toFixed(1)}`).join(" ");
+    reg.series.push({
+      name: s.name || "",
+      color,
+      yFrac: s.points.map((p) => yAt(p.y) / VBH),
+      values: s.points.map((p) => Number(p.y) || 0),
+    });
+    return `<polyline class="dv-line" points="${pts}" style="stroke:${color}"/>`;
+  }).join("");
+
+  // Direct end-labels for ≤4 series (ink token, positioned by fraction as HTML).
+  let endLabels = "";
+  if (clean.length >= 2 && clean.length <= 4 && n > 1) {
+    endLabels = clean.map((s) => {
+      const last = s.points[s.points.length - 1];
+      const top = (yAt(last.y) / VBH) * 100;
+      return `<span class="dv-endlabel" style="top:${top.toFixed(2)}%">${dvEsc(s.name || "")}</span>`;
+    }).join("");
+  }
+  _dvLineReg[id] = reg;
+
+  const legend = clean.length >= 2
+    ? chartLegend({ series: clean.map((s) => ({ name: s.name, seriesIndex: s.seriesIndex })) })
+    : "";
+  const yLab = yLabel ? `<div class="dv-ylabel">${dvEsc(yLabel)}</div>` : "";
+
+  return `${yLab}<div class="dv-linechart${small ? " small" : ""}" data-dv-chart="${id}">
+    <svg class="dv-line-svg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none" role="img" aria-label="${dvEsc(yLabel || (clean[0].name || "serie"))}">
+      ${grid}${paths}
+    </svg>
+    <div class="dv-axes">${yAxisHtml}${xAxisHtml}${endLabels}</div>
+    <div class="dv-crosshair"></div>
+    <div class="dv-markers"></div>
+  </div>${legend}`;
+}
+
+function dvLineHover(chart, e) {
+  const reg = _dvLineReg[chart.dataset.dvChart];
+  if (!reg) return;
+  const rect = chart.getBoundingClientRect();
+  const xf = (e.clientX - rect.left) / rect.width;
+  let idx = 0, best = Infinity;
+  for (let i = 0; i < reg.n; i++) {
+    const d = Math.abs(reg.xFrac[i] - xf);
+    if (d < best) { best = d; idx = i; }
+  }
+  const px = reg.xFrac[idx] * 100;
+  const cross = chart.querySelector(".dv-crosshair");
+  if (cross) { cross.style.left = `${px}%`; cross.style.display = "block"; }
+  const mk = chart.querySelector(".dv-markers");
+  if (mk) {
+    mk.innerHTML = reg.series.map((s) => s.yFrac[idx] == null ? "" :
+      `<span class="dv-marker" style="left:${px}%;top:${(s.yFrac[idx] * 100).toFixed(2)}%;background:${s.color}"></span>`).join("");
+  }
+  const rows = reg.series.map((s) =>
+    `<div class="dv-tt-row"><span class="dv-swatch" style="background:${s.color}"></span><span class="dv-tt-name">${dvEsc(s.name)}</span><b>${dvEsc(reg.yFormat(s.values[idx]))}</b></div>`).join("");
+  dvShowTip(`<div class="dv-tt-title">${dvEsc(reg.xLabels[idx] ?? "")}</div>${rows}`, e.clientX, e.clientY);
+  _dvActiveLine = chart;
+}
+function dvClearLineHover() {
+  if (!_dvActiveLine) return;
+  const cross = _dvActiveLine.querySelector(".dv-crosshair");
+  if (cross) cross.style.display = "none";
+  const mk = _dvActiveLine.querySelector(".dv-markers");
+  if (mk) mk.innerHTML = "";
+  _dvActiveLine = null;
+}
+
+// -- smallMultiples: grid of mini lineCharts (no dual axes) --------------------
+function smallMultiples({ charts = [] } = {}) {
+  if (!charts.length) return `<div class="chart-empty">sin datos</div>`;
+  const body = charts.map((c) => `<div class="dv-sm-cell">
+      <div class="dv-sm-title">${dvEsc(c.title || "")}</div>
+      ${lineChart({ ...c, small: true })}
+    </div>`).join("");
+  return `<div class="dv-smallmultiples">${body}</div>`;
+}
+
+// -- dotRangePlot: latency percentiles per agent (p50→p99 range) --------------
+// Thin range line with distinct markers at p50 (filled), p90 (ring), p99
+// (diamond); tabular-nums labels; hover tooltip per marker.
+function dotRangePlot({ rows = [], valueFormat, unit = "ms" } = {}) {
+  if (!rows.length) return `<div class="chart-empty">sin datos</div>`;
+  const max = Math.max(1, ...rows.map((r) => Number(r.p99) || 0));
+  const pos = (v) => `${Math.max(0, Math.min(100, (Number(v) / max) * 100))}%`;
+  const fmt = (v) => dvNum(v, valueFormat);
+  const body = rows.map((r) => {
+    const color = dvSeries(r.seriesIndex);
+    const tip = `${dvEsc(r.label)} · p50 ${fmt(r.p50)}${unit} · p90 ${fmt(r.p90)}${unit} · p99 ${fmt(r.p99)}${unit}`;
+    return `<div class="dv-range-row">
+      <span class="dv-range-label" title="${dvEsc(r.label)}">${dvEsc(r.label)}</span>
+      <span class="dv-range-track" data-dv-tip="${dvEsc(tip)}">
+        <span class="dv-range-line" style="left:${pos(r.p50)};right:calc(100% - ${pos(r.p99)});background:${color}"></span>
+        <span class="dv-dot p50" style="left:${pos(r.p50)};--c:${color}" title="p50 ${fmt(r.p50)}${unit}"></span>
+        <span class="dv-dot p90" style="left:${pos(r.p90)};--c:${color}" title="p90 ${fmt(r.p90)}${unit}"></span>
+        <span class="dv-dot p99" style="left:${pos(r.p99)};--c:${color}" title="p99 ${fmt(r.p99)}${unit}"></span>
+      </span>
+      <span class="dv-range-vals"><b>${dvEsc(fmt(r.p50))}</b><span>${dvEsc(fmt(r.p90))}</span><span>${dvEsc(fmt(r.p99))}</span></span>
+    </div>`;
+  }).join("");
+  return `<div class="dv-rangeplot">
+    <div class="dv-range-head"><span></span><span></span><span class="dv-range-vals dv-range-legend"><b>p50</b><span>p90</span><span>p99</span></span></div>
+    ${body}
+  </div>`;
+}
+
+// -- heatmap: 2D magnitude matrix on the sequential blue ramp -----------------
+// Sequential ramp (light→dark = low→high), 2px surface gap between cells,
+// near-zero cells recede toward the surface, per-cell tooltip, compact colorbar.
+function dvRampStep(v, max) {
+  if (!max || v <= 0) return 0;
+  const t = Math.max(0, Math.min(1, v / max));
+  return Math.max(1, Math.min(5, Math.round(t * 5)));
+}
+function heatmap({ rows = [], cols = [], matrix = [], valueFormat } = {}) {
+  if (!rows.length || !cols.length) return `<div class="chart-empty">sin datos</div>`;
+  const max = Math.max(1, ...matrix.flat().map((v) => Number(v) || 0));
+  const fmt = (v) => dvNum(v, valueFormat);
+  const head = `<div class="dv-hm-cell dv-hm-corner"></div>` +
+    cols.map((c) => `<div class="dv-hm-col" title="${dvEsc(c)}">${dvEsc(c)}</div>`).join("");
+  const body = rows.map((rlab, ri) => {
+    const cells = cols.map((clab, ci) => {
+      const v = Number(matrix[ri]?.[ci]) || 0;
+      const step = dvRampStep(v, max);
+      const tip = `${dvEsc(rlab)} × ${dvEsc(clab)}: ${fmt(v)}`;
+      return `<div class="dv-hm-cell dv-ramp-${step}" data-dv-tip="${dvEsc(tip)}">${v > 0 ? dvEsc(fmt(v)) : ""}</div>`;
+    }).join("");
+    return `<div class="dv-hm-row" style="grid-template-columns:var(--hm-rowlabel) repeat(${cols.length}, 1fr)"><div class="dv-hm-rowlabel" title="${dvEsc(rlab)}">${dvEsc(rlab)}</div>${cells}</div>`;
+  }).join("");
+  const bar = [0, 1, 2, 3, 4, 5].map((s) => `<span class="dv-ramp-${s}"></span>`).join("");
+  return `<div class="dv-heatmap" style="--hm-cols:${cols.length}">
+    <div class="dv-hm-grid" style="grid-template-columns:var(--hm-rowlabel) repeat(${cols.length}, 1fr)">${head}</div>
+    <div class="dv-hm-rows">${body}</div>
+    <div class="dv-hm-legend"><span>bajo</span><span class="dv-hm-bar">${bar}</span><span>alto</span></div>
+  </div>`;
+}
+
+// -- dataTable: sortable table (doubles as the accessible table view) ---------
+const _dvTables = {};
+function dataTable({ columns = [], rows = [], sortable = true, defaultSort } = {}) {
+  const id = dvId("tbl");
+  _dvTables[id] = { columns, rows, sort: defaultSort || null, dir: 1 };
+  return `<div class="dv-table-wrap"><table class="dv-table" data-dv-table="${id}">
+    <thead>${dvTableHead(id)}</thead>
+    <tbody>${dvTableBody(id)}</tbody>
+  </table></div>`;
+}
+function dvTableHead(id) {
+  const t = _dvTables[id];
+  return `<tr>${t.columns.map((c) => {
+    const align = c.align || (c.numeric ? "right" : "left");
+    const sortable = t.sortableCols !== false;
+    const active = t.sort === c.key;
+    const arrow = active ? (t.dir > 0 ? " ▲" : " ▼") : "";
+    return `<th class="al-${align}${c.numeric ? " num" : ""}"${sortable ? ` data-dv-sort="${dvEsc(c.key)}"` : ""}>${dvEsc(c.label ?? c.key)}<span class="dv-sort-ico">${arrow}</span></th>`;
+  }).join("")}</tr>`;
+}
+function dvTableBody(id) {
+  const t = _dvTables[id];
+  let rows = t.rows.slice();
+  if (t.sort) {
+    const col = t.columns.find((c) => c.key === t.sort);
+    rows.sort((a, b) => {
+      const av = a[t.sort], bv = b[t.sort];
+      const na = Number(av), nb = Number(bv);
+      const both = Number.isFinite(na) && Number.isFinite(nb);
+      const cmp = both ? na - nb : String(av ?? "").localeCompare(String(bv ?? ""));
+      return cmp * t.dir;
+    });
+  }
+  return rows.map((row) => `<tr>${t.columns.map((c) => {
+    const align = c.align || (c.numeric ? "right" : "left");
+    const raw = row[c.key];
+    const val = typeof c.format === "function" ? c.format(raw, row) : dvEsc(raw ?? "");
+    const dot = c.dot && row.seriesIndex != null
+      ? `<span class="dv-idot" style="background:${dvSeries(row.seriesIndex)}"></span>` : "";
+    return `<td class="al-${align}${c.numeric ? " num" : ""}">${dot}${val}</td>`;
+  }).join("")}</tr>`).join("");
+}
+function dvSortTable(th) {
+  const table = th.closest(".dv-table");
+  const id = table?.dataset.dvTable;
+  const t = _dvTables[id];
+  if (!t) return;
+  const key = th.dataset.dvSort;
+  if (t.sort === key) t.dir = -t.dir; else { t.sort = key; t.dir = 1; }
+  table.querySelector("thead").innerHTML = dvTableHead(id);
+  table.querySelector("tbody").innerHTML = dvTableBody(id);
+}
+
+// -- chartLegend: reusable legend (ink text, series-coloured swatches) --------
+function chartLegend({ series = [] } = {}) {
+  if (!series.length) return "";
+  return `<div class="dv-legend">${series.map((s) => {
+    const st = dvStatus(s.status);
+    const color = st ? st.v : (s.color || dvSeries(s.seriesIndex));
+    return `<span class="dv-legend-item"><span class="dv-swatch" style="background:${color}"></span>${dvEsc(s.name ?? "")}</span>`;
+  }).join("")}</div>`;
+}
+
+// -- chartFrame: consistent .card wrapper with optional "ver tabla" toggle -----
+function chartFrame({ title, subtitle, controls, body, table } = {}) {
+  const id = dvId("frame");
+  const toggle = table
+    ? `<button type="button" class="dv-table-toggle" data-dv-table-toggle="${id}">ver tabla</button>`
+    : "";
+  return `<section class="card dv-frame" data-dv-frame="${id}">
+    <header class="card-h">
+      <span class="dv-frame-title">${dvEsc(title ?? "")}${subtitle ? ` <span class="hint">${dvEsc(subtitle)}</span>` : ""}</span>
+      <span class="dv-frame-controls">${controls || ""}${toggle}</span>
+    </header>
+    <div class="dv-frame-body">
+      <div class="dv-frame-chart">${body || ""}</div>
+      ${table ? `<div class="dv-frame-table" hidden>${table}</div>` : ""}
+    </div>
+  </section>`;
+}
+function dvToggleTable(btn) {
+  const frame = btn.closest(".dv-frame");
+  if (!frame) return;
+  const chart = frame.querySelector(".dv-frame-chart");
+  const table = frame.querySelector(".dv-frame-table");
+  if (!table) return;
+  const showTable = table.hidden;
+  table.hidden = !showTable;
+  chart.hidden = showTable;
+  btn.textContent = showTable ? "ver gráfico" : "ver tabla";
+}
+
+// One-time delegated interaction wiring for every dataviz component instance.
+function initDataviz() {
+  if (document._dvBound) return;
+  document._dvBound = true;
+  document.addEventListener("pointermove", (e) => {
+    const chart = e.target.closest?.(".dv-linechart[data-dv-chart]");
+    if (chart) { dvLineHover(chart, e); return; }
+    dvClearLineHover();
+    const tipEl = e.target.closest?.("[data-dv-tip]");
+    if (tipEl) dvShowTip(tipEl.getAttribute("data-dv-tip"), e.clientX, e.clientY);
+    else dvHideTip();
+  }, { passive: true });
+  document.addEventListener("pointerleave", () => { dvClearLineHover(); dvHideTip(); }, true);
+  document.addEventListener("click", (e) => {
+    const th = e.target.closest?.(".dv-table th[data-dv-sort]");
+    if (th) { dvSortTable(th); return; }
+    const tog = e.target.closest?.("[data-dv-table-toggle]");
+    if (tog) dvToggleTable(tog);
+  });
 }
 
 function nodeActivitySeries(nodeId) {
@@ -1247,6 +2491,324 @@ function renderAgentPerformancePanel(perf = state.agentPerformance || []) {
   </section>`;
 }
 
+// ---- Analítica (Fase 3: DuckDB) --------------------------------------------
+// Fetched on Monitor view entry (enterView), NOT on the 20s poll — analytics
+// trends don't need sub-second reactivity, so this stays off the hot refresh
+// path. Degrades to a friendly "no disponible" state when DuckDB is absent
+// (`available:false`, HTTP 200) instead of throwing.
+async function renderAnalyticsSection() {
+  const body = $("#analyticsBody");
+  if (!body) return;
+  let data;
+  try {
+    data = await api("/analytics/dashboard?days=30");
+  } catch (error) {
+    $("#analyticsWindow").textContent = "";
+    body.innerHTML = `<div class="analytics-unavailable"><b>Analítica no disponible</b><span>${escapeHtml(error.message)}</span></div>`;
+    return;
+  }
+  if (!data || data.available === false) {
+    $("#analyticsWindow").textContent = "";
+    body.innerHTML = `<div class="analytics-unavailable"><b>Analítica no disponible</b><span>${escapeHtml((data && data.reason) || "DuckDB no está instalado (extra opcional).")}</span></div>`;
+    return;
+  }
+  $("#analyticsWindow").textContent = `últimos ${data.window_days} días`;
+  body.innerHTML = `
+    <div class="monitor-panels-row">
+      ${renderTrendCard(data.runs_over_time || [])}
+      ${renderCostByProviderCard(data.cost_by_provider_by_day || [])}
+    </div>
+    <div class="monitor-panels-row">
+      ${renderSuccessByTypePanel(data.success_rate_by_task_type || [])}
+      ${renderLeaderboardPanel(data.provider_leaderboard || [])}
+    </div>`;
+}
+
+function renderTrendCard(over) {
+  if (!over.length) {
+    return `<section class="skill-usage-panel"><h4>Actividad en el tiempo</h4><div class="chart-empty">sin ejecuciones en la ventana</div></section>`;
+  }
+  const runs = over.map((b) => Number(b.run_count || 0));
+  const cost = over.map((b) => Number(b.total_cost || 0));
+  const lat = over.map((b) => Math.round(b.avg_latency_ms || 0));
+  const totalRuns = runs.reduce((a, b) => a + b, 0);
+  const totalCost = cost.reduce((a, b) => a + b, 0);
+  return `<section class="skill-usage-panel">
+    <h4>Actividad en el tiempo <span class="cost-tag">${totalRuns} ejec · $${totalCost.toFixed(4)}</span></h4>
+    <div class="analytics-spark-row">
+      <div class="analytics-spark"><small>Ejecuciones</small>${svgSparkline(runs, { tone: "accent" })}</div>
+      <div class="analytics-spark"><small>Coste (USD)</small>${svgSparkline(cost, { tone: "ok" })}</div>
+      <div class="analytics-spark"><small>Latencia media (ms)</small>${svgSparkline(lat, { tone: "warn" })}</div>
+    </div>
+    <div class="analytics-buckets">
+      ${over
+        .map(
+          (b) => `<div class="analytics-bucket">
+            <span>${escapeHtml(String(b.bucket || "").slice(0, 10))}</span>
+            <b>${b.run_count || 0} ejec</b>
+            <em>$${Number(b.total_cost || 0).toFixed(4)} · ${Math.round(b.avg_latency_ms || 0)}ms</em>
+          </div>`
+        )
+        .join("")}
+    </div>
+  </section>`;
+}
+
+function renderCostByProviderCard(rows) {
+  const totals = {};
+  rows.forEach((r) => {
+    totals[r.provider_name] = (totals[r.provider_name] || 0) + Number(r.total_cost || 0);
+  });
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1e-9, ...entries.map(([, v]) => v));
+  const rowsHtml = entries.length
+    ? entries
+        .map(([name, v]) => {
+          const pct = Math.max(4, Math.round((v / max) * 100));
+          return `<div class="skill-usage-row">
+            <span title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+            <div class="skill-usage-bar"><i style="width:${pct}%"></i></div>
+            <b>$${v.toFixed(4)}</b>
+          </div>`;
+        })
+        .join("")
+    : `<div class="chart-empty">sin coste registrado en la ventana</div>`;
+  return `<section class="skill-usage-panel"><h4>Coste por proveedor</h4>${rowsHtml}</section>`;
+}
+
+function renderSuccessByTypePanel(rows) {
+  const list = rows.length
+    ? rows
+        .map((r) => {
+          const pct = Math.round((r.success_rate || 0) * 100);
+          const tone = pct >= 90 ? "ok" : pct >= 60 ? "warn" : "bad";
+          return `<div class="usage-row">
+            <div><b>${escapeHtml(r.task_type || "—")}</b><span>${r.run_count || 0} ejec · ${Math.round(r.avg_latency_ms || 0)}ms</span></div>
+            <span class="pill ${tone}">${pct}%</span>
+            <strong>$${Number(r.total_cost || 0).toFixed(4)}</strong>
+          </div>`;
+        })
+        .join("")
+    : `<div class="chart-empty">sin datos por tipo de tarea</div>`;
+  return `<section class="skill-usage-panel"><h4>Éxito por tipo de tarea</h4><div class="usage-list">${list}</div></section>`;
+}
+
+function renderLeaderboardPanel(rows) {
+  const list = rows.length
+    ? rows
+        .map((r) => {
+          const errPct = Math.round((r.error_rate || 0) * 100);
+          return `<div class="usage-row">
+            <div><b>${escapeHtml(r.provider_name || "—")}</b><span>${r.run_count || 0} ejec · ${errPct}% err · ${Math.round(r.avg_latency_ms || 0)}ms</span></div>
+            <span>$${Number(r.avg_cost_per_run || 0).toFixed(4)}/ejec</span>
+            <strong>$${Number(r.total_cost || 0).toFixed(4)}</strong>
+          </div>`;
+        })
+        .join("")
+    : `<div class="chart-empty">sin ejecuciones registradas</div>`;
+  return `<section class="skill-usage-panel">
+    <h4>Ranking de proveedores <span class="cost-tag">coste · latencia · error</span></h4>
+    <div class="usage-list">${list}</div>
+  </section>`;
+}
+
+// ---- Predicciones (Fase 4: XGBoost) ----------------------------------------
+// The expected normal state right now is meets_gate=false (production has ~42
+// usable runs vs the 200 gate) — that renders as informative progress, never an
+// error. meets_gate + untrained → offer training; trained → a compact predict form.
+async function renderPredictionsPanel() {
+  const body = $("#predictionsBody");
+  if (!body) return;
+  const hint = $("#predictionsHint");
+  let s;
+  try {
+    s = await api("/analytics/predictions/status");
+  } catch (error) {
+    if (hint) hint.textContent = "";
+    body.innerHTML = `<div class="analytics-unavailable"><b>Predicciones no disponibles</b><span>${escapeHtml(error.message)}</span></div>`;
+    return;
+  }
+  state.predictionStatus = s;
+  const min = s.min_required || 200;
+  const samples = s.samples || 0;
+  const pct = Math.min(100, Math.round((samples / min) * 100));
+  const remaining = Math.max(0, min - samples);
+
+  if (s.reason && !s.trained && !s.meets_gate) {
+    // ML libs (xgboost) unavailable — treated distinctly from "not enough data".
+    if (hint) hint.textContent = "";
+    body.innerHTML = `<div class="analytics-unavailable"><b>Predicciones no disponibles</b><span>${escapeHtml(s.reason)}</span></div>`;
+    return;
+  }
+  if (s.trained) {
+    if (hint) hint.textContent = "modelos entrenados";
+    body.innerHTML = renderPredictForm(s);
+    $("#predictBtn")?.addEventListener("click", runPrediction);
+    return;
+  }
+  if (s.meets_gate) {
+    if (hint) hint.textContent = "listo para entrenar";
+    body.innerHTML = `<div class="predict-progress">
+      <div class="predict-progress-head"><b>${samples}/${min} ejecuciones</b><span>umbral alcanzado</span></div>
+      <div class="predict-bar"><i style="width:${pct}%"></i></div>
+      <p>Hay datos suficientes. Entrena los modelos de éxito, coste y latencia.</p>
+      <button type="button" class="primary" id="trainModelsBtn">Entrenar modelos</button>
+    </div>`;
+    $("#trainModelsBtn")?.addEventListener("click", trainPredictiveModels);
+    return;
+  }
+  if (hint) hint.textContent = `${remaining} restantes`;
+  body.innerHTML = `<div class="predict-progress">
+    <div class="predict-progress-head"><b>${samples}/${min} ejecuciones</b><span>${remaining} más para activar predicciones</span></div>
+    <div class="predict-bar"><i style="width:${pct}%"></i></div>
+    <p>Las predicciones (éxito, coste, latencia y anomalías) se activan al alcanzar ${min} ejecuciones completadas. Sigue ejecutando tareas para acumular historial.</p>
+  </div>`;
+}
+
+async function trainPredictiveModels() {
+  const btn = $("#trainModelsBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Entrenando…";
+  }
+  try {
+    await api("/analytics/train", { method: "POST" });
+    toast("Modelos entrenados.");
+  } catch (error) {
+    toast(`Entrenamiento: ${error.message}`);
+  } finally {
+    renderPredictionsPanel().catch(() => {});
+  }
+}
+
+const PREDICT_CRITERIA = [
+  "ambiguity",
+  "context_required",
+  "reasoning_depth",
+  "autonomy_required",
+  "operational_risk",
+  "validation_difficulty",
+];
+function renderPredictForm(s) {
+  return `<div class="predict-form">
+    <p>Modelos entrenados sobre ${s.samples || 0} ejecuciones. Estima éxito, coste y latencia de una tarea borrador.</p>
+    <div class="predict-criteria">
+      <label class="predict-field"><span>intención</span><input type="text" id="pfIntent" value="implement" /></label>
+      <label class="predict-field"><span>complejidad (0-1)</span><input type="number" id="pfComplexity" min="0" max="1" step="0.1" value="0.5" /></label>
+      ${PREDICT_CRITERIA.map(
+        (k) => `<label class="predict-field"><span>${k}</span><input type="number" class="pf-crit" data-crit="${k}" min="0" max="5" step="0.5" value="2.5" /></label>`
+      ).join("")}
+    </div>
+    <button type="button" class="primary" id="predictBtn">Predecir</button>
+    <div id="predictResult"></div>
+  </div>`;
+}
+
+async function runPrediction() {
+  const criteria = {};
+  $$(".pf-crit").forEach((i) => (criteria[i.dataset.crit] = Number(i.value) || 0));
+  const payload = {
+    intent: ($("#pfIntent")?.value || "implement").trim() || "implement",
+    criteria,
+    complexity_score: Number($("#pfComplexity")?.value) || 0,
+  };
+  const out = $("#predictResult");
+  if (out) out.innerHTML = `<div class="chart-empty">Prediciendo…</div>`;
+  try {
+    const r = await api("/predict/task", { method: "POST", body: JSON.stringify(payload) });
+    if (out)
+      out.innerHTML = `<div class="predict-out">
+        <div><small>Prob. de éxito</small><b>${Math.round((r.predicted_success_prob || 0) * 100)}%</b></div>
+        <div><small>Coste estimado</small><b>$${Number(r.predicted_cost_usd || 0).toFixed(4)}</b></div>
+        <div><small>Latencia estimada</small><b>${Math.round(r.predicted_latency_ms || 0)}ms</b></div>
+        <div><small>Anomalía</small><b>${r.is_anomaly ? "sí" : "no"}</b></div>
+      </div>`;
+  } catch (error) {
+    if (out) out.innerHTML = `<div class="chart-empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+// ---- Búsqueda de tareas (Fase 3: FTS5) -------------------------------------
+// Debounced full-text search over /search/tasks; a result selects/scrolls-to the
+// matching row in the tasks table when it's currently loaded.
+let taskSearchTimer = null;
+function initTaskSearch() {
+  const input = $("#taskSearch");
+  if (!input) return;
+  input.addEventListener("input", () => {
+    clearTimeout(taskSearchTimer);
+    const q = input.value.trim();
+    if (!q) {
+      hideTaskSearchResults();
+      return;
+    }
+    taskSearchTimer = setTimeout(() => runTaskSearch(q), 300);
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".task-search")) hideTaskSearchResults();
+  });
+}
+
+function hideTaskSearchResults() {
+  const box = $("#taskSearchResults");
+  if (box) {
+    box.hidden = true;
+    box.innerHTML = "";
+  }
+}
+
+async function runTaskSearch(q) {
+  const box = $("#taskSearchResults");
+  if (!box) return;
+  let data;
+  try {
+    data = await api(`/search/tasks?q=${encodeURIComponent(q)}&limit=20`);
+  } catch (error) {
+    box.hidden = false;
+    box.innerHTML = `<div class="task-search-empty">${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  const results = data.results || [];
+  box.hidden = false;
+  if (!results.length) {
+    box.innerHTML = `<div class="task-search-empty">Sin resultados para “${escapeHtml(q)}”.</div>`;
+    return;
+  }
+  box.innerHTML =
+    `<div class="task-search-count">${data.count} resultado${data.count === 1 ? "" : "s"}</div>` +
+    results
+      .map((r) => {
+        const created = r.created_at ? String(r.created_at).slice(0, 10) : "";
+        return `<button type="button" class="task-search-item" data-legacy="${escapeHtml(r.legacy_task_id || "")}">
+          <b>${escapeHtml(r.title || r.legacy_task_id || r.id || "tarea")}</b>
+          <span>${escapeHtml(r.task_type || "—")} · ${escapeHtml(r.status || "")} · ${created}</span>
+        </button>`;
+      })
+      .join("");
+  $$(".task-search-item", box).forEach((btn) =>
+    btn.addEventListener("click", () => selectSearchResult(btn.dataset.legacy))
+  );
+}
+
+function selectSearchResult(legacyId) {
+  hideTaskSearchResults();
+  const input = $("#taskSearch");
+  if (input) input.value = "";
+  if (!legacyId) {
+    toast("La tarea no tiene id legacy asociado.");
+    return;
+  }
+  const row = $(`#taskRows tr[data-id="${CSS.escape(legacyId)}"]`);
+  if (row) {
+    row.click();
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("search-flash");
+    setTimeout(() => row.classList.remove("search-flash"), 1200);
+  } else {
+    toast("La tarea no está en la lista visible actual.");
+  }
+}
+
 // "Todos" shows every agent's chart card; picking one agent filters the same
 // grid down to just that card instead of routing to a second, separate detail
 // surface — one render path, no duplicated logic between the two views.
@@ -1369,6 +2931,7 @@ function computeCostLatency(perf = state.agentPerformance || []) {
 }
 
 function renderSummaryMetrics(metrics, tasks, observability) {
+  if (!$("#summaryMetrics")) return; // Phase D removed the legacy Tareas summary card.
   const nodes = observability.nodes || [];
   const usage = observability.model_usage || [];
   const totalCalls = usage.reduce((acc, item) => acc + Number(item.calls || 0), 0);
@@ -1565,6 +3128,9 @@ function statusPill(status) {
 }
 
 function renderTaskRows(tasks) {
+  // Phase D replaced the legacy Tareas table with renderTareas(); this legacy
+  // renderer no-ops when its old targets are gone so refreshMonitor() stays safe.
+  if (!$("#taskRows")) return;
   $("#taskCount").textContent = tasks.length ? `${tasks.length}` : "";
   $("#taskRows").innerHTML = tasks
     .map((task) => {
@@ -1588,6 +3154,9 @@ function renderTaskRows(tasks) {
 }
 
 async function renderDetail(task) {
+  // Phase D replaced this cramped side-card with the full-width Tareas drill-down
+  // (renderTareasDetail). Kept + guarded so refreshMonitor()'s call is a no-op.
+  if (!$("#detail")) return;
   const c = task.classification;
   $("#detailEmpty").hidden = true;
   $("#detail").hidden = false;
@@ -1676,8 +3245,21 @@ function loadEntityState() {
   }
 }
 
+function ensureGroups() {
+  if (!Array.isArray(state.groups) || !state.groups.length) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("karajan-decision-groups") || "[]");
+      if (Array.isArray(parsed)) state.groups = parsed;
+    } catch {
+      state.groups = state.groups || [];
+    }
+  }
+  normalizeGroups();
+}
+
 function persistEntityState() {
   localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
+  localStorage.setItem("karajan-decision-groups", JSON.stringify(state.groups || []));
   clearTimeout(layoutSaveTimer);
   layoutSaveTimer = setTimeout(saveRoutingLayout, 500);
 }
@@ -1685,10 +3267,26 @@ function persistEntityState() {
 async function loadRoutingLayout() {
   try {
     const layout = await api("/routing-layout");
+    if (Array.isArray(layout.groups)) {
+      state.groups = layout.groups;
+      localStorage.setItem("karajan-decision-groups", JSON.stringify(state.groups));
+      normalizeGroups();
+    }
     if (layout.entities?.length) {
       state.entities = layout.entities;
       state.diagramZoom = layout.zoom || state.diagramZoom;
       state.drawerWidth = layout.drawer_width || state.drawerWidth;
+      const hasLocalOpenClawPos = !!localStorage.getItem(OPENCLAW_POS_KEY);
+      const layoutOpenClawIsDefault = Number(layout.openclaw_pos?.x || 0) === 0 && Number(layout.openclaw_pos?.y || 0) === 0;
+      if (
+        layout.openclaw_pos &&
+        Number.isFinite(Number(layout.openclaw_pos.x)) &&
+        Number.isFinite(Number(layout.openclaw_pos.y)) &&
+        (!hasLocalOpenClawPos || !layoutOpenClawIsDefault)
+      ) {
+        state.openclawPos = layout.openclaw_pos;
+        localStorage.setItem(OPENCLAW_POS_KEY, JSON.stringify(state.openclawPos));
+      }
       localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
       localStorage.setItem("karajan-diagram-zoom", String(state.diagramZoom));
       localStorage.setItem("karajan-model-drawer-width", String(state.drawerWidth));
@@ -1705,8 +3303,10 @@ async function saveRoutingLayout() {
       method: "PUT",
       body: JSON.stringify({
         entities: state.entities,
+        groups: state.groups,
         zoom: state.diagramZoom,
         drawer_width: state.drawerWidth,
+        openclaw_pos: state.openclawPos,
       }),
     });
   } catch {
@@ -1715,13 +3315,14 @@ async function saveRoutingLayout() {
 }
 
 function normalizeEntityPositions() {
-  const usedLevels = new Set();
+  const levelOwners = [];
   state.entities.forEach((entity, index) => {
     entity.x = Number.isFinite(Number(entity.x)) ? Number(entity.x) : 24 + index * 344;
     entity.y = Number.isFinite(Number(entity.y)) ? Number(entity.y) : 36;
     entity.levels ||= [];
     entity.skills ||= [];
     entity.capabilities ||= [];
+    entity.memberships = normalizeMemberships(entity.memberships);
     entity.tier = Number.isFinite(Number(entity.tier)) ? Number(entity.tier) : 2;
     entity.max_concurrent = Number.isFinite(Number(entity.max_concurrent)) && entity.max_concurrent > 0 ? Number(entity.max_concurrent) : 1;
     if (entity.role === "skill" || entity.role === "worker") {
@@ -1736,11 +3337,62 @@ function normalizeEntityPositions() {
       entity.parentId ||= state.entities.find((item) => isAgentRole(item.role))?.id || "";
     }
     entity.levels = [...new Set(entity.levels)].filter((level) => {
-      if (usedLevels.has(level)) return false;
-      usedLevels.add(level);
+      const conflict = levelOwners.some((owner) => owner.level === level && !canShareLevelOwnership(entity, owner.entity));
+      if (conflict) return false;
+      levelOwners.push({ level, entity });
       return true;
     });
   });
+}
+
+function sharedGroupIds(a, b) {
+  const aGroups = new Set(entityMemberships(a).map((membership) => membership.group_id));
+  return entityMemberships(b).some((membership) => aGroups.has(membership.group_id));
+}
+
+function canShareLevelOwnership(a, b) {
+  if (!a || !b || a.id === b.id) return true;
+  return sharedGroupIds(a, b);
+}
+
+// A membership is { group_id, prio }. Drop malformed entries and any pointing
+// at a group that no longer exists (defensive against a deleted group leaving
+// orphaned references). Prio is coerced to an integer >= 1.
+function normalizeMemberships(memberships) {
+  if (!Array.isArray(memberships)) return [];
+  const knownGroupIds = new Set((state.groups || []).map((group) => group.id));
+  const seen = new Set();
+  return memberships
+    .filter((m) => m && typeof m.group_id === "string")
+    .filter((m) => !knownGroupIds.size || knownGroupIds.has(m.group_id))
+    .map((m) => ({ group_id: m.group_id, prio: Math.max(1, parseInt(m.prio, 10) || 1) }))
+    .filter((m) => {
+      if (seen.has(m.group_id)) return false; // one membership per group
+      seen.add(m.group_id);
+      return true;
+    });
+}
+
+function normalizeGroups() {
+  if (!Array.isArray(state.groups)) {
+    state.groups = [];
+    return;
+  }
+  state.groups.forEach((group, index) => {
+    group.id ||= `grp_${Date.now().toString(36)}_${index}`;
+    group.name = typeof group.name === "string" && group.name ? group.name : "Nueva jerarquía";
+    group.color = typeof group.color === "string" && group.color ? group.color : GROUP_COLOR_PALETTE[index % GROUP_COLOR_PALETTE.length];
+    group.x = Number.isFinite(Number(group.x)) ? Number(group.x) : 24 + index * 344;
+    group.y = Number.isFinite(Number(group.y)) ? Number(group.y) : 640;
+  });
+}
+
+function findGroup(id) {
+  return (state.groups || []).find((group) => group.id === id);
+}
+
+function entityMemberships(entity) {
+  return Array.isArray(entity.memberships) ? entity.memberships : [];
 }
 
 function providerOptions(current) {
@@ -1754,10 +3406,14 @@ function providerOptions(current) {
 }
 
 function renderDiagram() {
+  ensureGroups();
   ensureEntities();
-  $("#diagramNodes").innerHTML = state.entities.map(entityCard).join("");
+  $("#diagramNodes").innerHTML =
+    state.entities.map(entityCard).join("") + state.groups.map(groupCard).join("");
   renderOpenClawDiagramCard();
   renderOpenClawDrawerCard();
+  bindGroupCardEvents();
+  bindDiagramLinkFocus();
 
   $$("#diagramNodes .entity-model-toggle").forEach((button) =>
     button.addEventListener("click", (event) => {
@@ -1803,6 +3459,18 @@ function renderDiagram() {
       scheduleRoutingSave("Etiquetas de rol actualizadas. Guardando…");
     })
   );
+  $$("#diagramNodes .role-tag-remove").forEach((button) =>
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const entity = findEntity(event.currentTarget.dataset.entity);
+      if (!entity) return;
+      removeRoleTag(entity, event.currentTarget.dataset.removeRole);
+      applyRoleSideEffects(entity);
+      renderDiagram();
+      scheduleRoutingSave("Etiqueta de rol eliminada. Guardando…");
+    })
+  );
   $$("#diagramNodes .entity-parent-link").forEach((sel) =>
     sel.addEventListener("change", (event) => {
       const entity = findEntity(event.target.dataset.entity);
@@ -1812,11 +3480,24 @@ function renderDiagram() {
       scheduleRoutingSave("Conexión actualizada. Guardando…");
     })
   );
-  $$("#diagramNodes .entity-target-link").forEach((sel) =>
-    sel.addEventListener("change", (event) => {
-      const entity = findEntity(event.target.dataset.entity);
-      if (!entity) return;
-      entity.target_id = event.target.value || null;
+  $$("#diagramNodes .entity-target-add").forEach((select) =>
+    select.addEventListener("change", (event) => {
+      const entity = findEntity(event.currentTarget.dataset.entity);
+      const targetId = event.currentTarget.value;
+      if (!entity || !targetId) return;
+      if (!Array.isArray(entity.target_ids)) entity.target_ids = [];
+      if (!entity.target_ids.includes(targetId)) entity.target_ids.push(targetId);
+      renderDiagram();
+      scheduleRoutingSave("Asociación de supervisión actualizada. Guardando…");
+    })
+  );
+  $$("#diagramNodes [data-remove-target]").forEach((button) =>
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const entity = findEntity(event.currentTarget.dataset.entity);
+      if (!entity || !Array.isArray(entity.target_ids)) return;
+      entity.target_ids = entity.target_ids.filter((targetId) => targetId !== event.currentTarget.dataset.target);
       renderDiagram();
       scheduleRoutingSave("Asociación de supervisión actualizada. Guardando…");
     })
@@ -1824,11 +3505,16 @@ function renderDiagram() {
   $$("#diagramNodes .level-chip").forEach((btn) =>
     btn.addEventListener("click", () => {
       const entity = findEntity(btn.dataset.entity);
-      if (!entity || btn.disabled) return;
+      if (!entity) return;
       entity.levels ||= [];
       if (entity.levels.includes(btn.dataset.level)) {
         entity.levels = entity.levels.filter((item) => item !== btn.dataset.level);
       } else {
+        state.entities.forEach((item) => {
+          if (item.id !== entity.id && !canShareLevelOwnership(entity, item)) {
+            item.levels = (item.levels || []).filter((level) => level !== btn.dataset.level);
+          }
+        });
         entity.levels.push(btn.dataset.level);
       }
       renderDiagram();
@@ -1875,7 +3561,77 @@ function renderDiagram() {
   bindEntityMove();
   applyDiagramZoom();
 
-  requestAnimationFrame(drawWires);
+  scheduleDrawWires();
+}
+
+function setDiagramLinkFocus(focus) {
+  state.focusedDiagramLink = focus;
+  updateDiagramFocusClasses();
+  scheduleDrawWires();
+}
+
+function clearDiagramLinkFocus(focus) {
+  if (!state.focusedDiagramLink) return;
+  if (focus && (state.focusedDiagramLink.type !== focus.type || state.focusedDiagramLink.id !== focus.id)) return;
+  state.focusedDiagramLink = null;
+  updateDiagramFocusClasses();
+  scheduleDrawWires();
+}
+
+function relatedFocusEntityIds(focus) {
+  if (!focus) return new Set();
+  if (focus.type === "group") {
+    const group = findGroup(focus.id);
+    return new Set(group ? groupMembers(group).map(({ entity }) => entity.id) : []);
+  }
+  const entity = findEntity(focus.id);
+  if (!entity) return new Set();
+  const ids = new Set([entity.id]);
+  (entity.target_ids || []).forEach((id) => ids.add(id));
+  state.entities.forEach((item) => {
+    if ((item.target_ids || []).includes(entity.id)) ids.add(item.id);
+    if (sharedGroupIds(entity, item)) ids.add(item.id);
+  });
+  return ids;
+}
+
+function updateDiagramFocusClasses() {
+  const focus = state.focusedDiagramLink;
+  const relatedIds = relatedFocusEntityIds(focus);
+  const focusColor = focus?.type === "group"
+    ? safeColor(findGroup(focus.id)?.color)
+    : entityAccent(findEntity(focus?.id || "") || {}).color;
+  $$("#diagramNodes .node.entity").forEach((node) => {
+    const active = focus?.type === "entity" && node.dataset.entity === focus.id;
+    const related = relatedIds.has(node.dataset.entity);
+    node.classList.toggle("link-focus", active);
+    node.classList.toggle("link-related", related && !active);
+    if (related && !active) node.style.setProperty("--link-color", focusColor);
+    else node.style.removeProperty("--link-color");
+  });
+  $$("#diagramNodes .node.group").forEach((node) => {
+    node.classList.toggle("link-focus", focus?.type === "group" && node.dataset.group === focus.id);
+    if (focus?.type === "group" && node.dataset.group === focus.id) node.style.setProperty("--link-color", focusColor);
+    else node.style.removeProperty("--link-color");
+  });
+}
+
+function bindDiagramLinkFocus() {
+  $$("#diagramNodes .node.entity").forEach((node) => {
+    const focus = { type: "entity", id: node.dataset.entity };
+    node.addEventListener("mouseenter", () => setDiagramLinkFocus(focus));
+    node.addEventListener("mouseleave", () => clearDiagramLinkFocus(focus));
+    node.addEventListener("focusin", () => setDiagramLinkFocus(focus));
+    node.addEventListener("focusout", () => clearDiagramLinkFocus(focus));
+  });
+  $$("#diagramNodes .node.group").forEach((node) => {
+    const focus = { type: "group", id: node.dataset.group };
+    node.addEventListener("mouseenter", () => setDiagramLinkFocus(focus));
+    node.addEventListener("mouseleave", () => clearDiagramLinkFocus(focus));
+    node.addEventListener("focusin", () => setDiagramLinkFocus(focus));
+    node.addEventListener("focusout", () => clearDiagramLinkFocus(focus));
+  });
+  updateDiagramFocusClasses();
 }
 
 function entityCard(entity) {
@@ -1884,7 +3640,7 @@ function entityCard(entity) {
   entity.role_tags = normalizeRoleTags(entity);
   const role = roleDef(entity.role);
   const roleLabel = roleLabels(entity).join(" · ");
-  const remove = entity.id !== "entity-parent" ? `<button class="node-x" data-remove="${entity.id}" title="Quitar entidad">✕</button>` : "";
+  const remove = entity.id !== "entity-parent" ? `<button class="node-x" data-remove="${entity.id}" title="Quitar entidad">×</button>` : "";
   const title = entity.provider ? modelTitle(entity.provider) : roleLabel;
   const model = modelMeta(entity);
   const accent = entityAccent(entity);
@@ -1898,15 +3654,24 @@ function entityCard(entity) {
           ${LEVELS.map(([level, short]) => levelChip(entity, level, short)).join("")}
         </div>`
       : "";
-  // Hierarchy tier itself is set via the role-tag picker (Raíz/L1/L2/L3, see
-  // ROLE_DEFS' "Jerarquía" group) — this only carries the numeric dispatch
-  // capacity, which has no natural tag equivalent.
   const concurrencyControls =
     canOwnLevels(entity.role)
-      ? `<label>Concurrencia máx. (${hierarchyTierLabel(entity.tier ?? 2)})
+      ? `<label>Concurrencia máx.
           <input type="number" class="entity-max-concurrent" data-entity="${entity.id}" min="1" step="1" value="${entity.max_concurrent ?? 1}">
         </label>`
       : "";
+  // One "Grupo · Prio N" chip per hierarchy-group membership, tinted with that
+  // group's color. 0 memberships → no chips (an entity need not join any group).
+  const membershipChips = entityMemberships(entity)
+    .map((m) => {
+      const group = findGroup(m.group_id);
+      if (!group) return "";
+      return `<span class="prio-chip" style="--prio-color:${escapeHtml(group.color)}" title="${escapeHtml(group.name)} · ${escapeHtml(prioChipLabel(m.prio))}">
+          <span class="prio-chip-dot"></span>${escapeHtml(group.name)} · ${escapeHtml(prioChipLabel(m.prio))}
+        </span>`;
+    })
+    .join("");
+  const membershipRow = membershipChips ? `<div class="prio-chip-row">${membershipChips}</div>` : "";
   const connection =
     canConnectToAgent(entity.role)
       ? `<label>Conexión padre
@@ -1916,21 +3681,37 @@ function entityCard(entity) {
         </label>`
       : "";
   // Guardian/Validator are support tags (role_tags), not primary roles — this
-  // is the "which element am I supervising/validating" association, distinct
-  // from parent/child hierarchy. Single target, same select pattern as above.
+  // is the "which elements am I supervising/validating" association, distinct
+  // from parent/child hierarchy. Multi-target (1-to-N): a validator can watch
+  // many entities, so this is a checkbox list, not a single select.
   const targetLabels = [];
   if (entity.role_tags.includes("guardian")) targetLabels.push("Supervisa a");
   if (entity.role_tags.includes("validator")) targetLabels.push("Valida a");
-  const targetOptions = state.entities
-    .filter((item) => item.id !== entity.id && !isAgentRole(item.role))
-    .map((item) => `<option value="${item.id}" ${entity.target_id === item.id ? "selected" : ""}>${escapeHtml(item.name || roleDef(item.role).label)}</option>`)
+  const targetIds = Array.isArray(entity.target_ids) ? entity.target_ids : [];
+  const eligibleTargets = state.entities.filter((item) => item.id !== entity.id && !isAgentRole(item.role));
+  const selectedTargetChips = targetIds
+    .map((targetId) => {
+      const target = findEntity(targetId);
+      if (!target) return "";
+      return `<span class="entity-target-chip">
+          <span>${escapeHtml(target.name || roleDef(target.role).label)}</span>
+          <button type="button" data-entity="${entity.id}" data-target="${target.id}" data-remove-target title="Quitar objetivo">×</button>
+        </span>`;
+    })
+    .join("");
+  const targetOptions = eligibleTargets
+    .filter((item) => !targetIds.includes(item.id))
+    .map((item) => `<option value="${item.id}">${escapeHtml(item.name || roleDef(item.role).label)}</option>`)
     .join("");
   const supervises = targetLabels.length
-    ? `<label>${escapeHtml(targetLabels.join(" / "))}
-        <select class="entity-target-link" data-entity="${entity.id}">
-          <option value="">Sin asignar</option>${targetOptions}
+    ? `<div class="entity-target-field">
+        <div class="role-tag-label">${escapeHtml(targetLabels.join(" / "))}</div>
+        <div class="entity-target-tags">${selectedTargetChips || '<small class="entity-target-empty">Sin objetivos seleccionados</small>'}</div>
+        <select class="entity-target-add" data-entity="${entity.id}" ${targetOptions ? "" : "disabled"}>
+          <option value="">+ Añadir objetivo…</option>
+          ${targetOptions}
         </select>
-      </label>`
+      </div>`
     : "";
   const skills = skillPicker(entity);
   const classRole = isAgentRole(entity.role) ? "parent" : "child";
@@ -1941,6 +3722,7 @@ function entityCard(entity) {
       <div class="role">Entidad · ${roleLabel}</div>
       <div class="node-title">${escapeHtml(title)}</div>
       <div class="model-meta">${model}</div>
+      ${membershipRow}
       <div class="entity-controls">
         ${roleTagPicker(entity)}
         ${connection}
@@ -1967,14 +3749,11 @@ function normalizeRoleTags(entity) {
 
   const primary = tags.find((role) => PRIMARY_ROLES.includes(role)) || (PRIMARY_ROLES.includes(legacyRole) ? legacyRole : "child");
   const support = [...new Set(tags.filter((role) => SUPPORT_ROLES.includes(role)))];
-  // A tier tag already present wins; otherwise seed it from `entity.tier` (or
-  // its role-based default) so hierarchy loaded from the backend renders with
-  // a matching tag instead of showing no selection.
-  const tierTag = tags.find((role) => TIER_ROLES.includes(role)) || tierRoleForValue(entity.tier);
-  const normalized = [primary, tierTag, ...support];
+  // Hierarchy is no longer a role tag — role_tags is just one primary + support
+  // tags now. Tier/prio lives in entity.memberships (state.groups).
+  const normalized = [primary, ...support];
   entity.role = primary;
   entity.role_tags = normalized;
-  entity.tier = roleDef(tierTag).tierValue;
   syncAgentCapabilities(entity);
   return normalized;
 }
@@ -1985,13 +3764,28 @@ function toggleRoleTag(entity, role) {
   if (PRIMARY_ROLES.includes(role)) {
     PRIMARY_ROLES.forEach((item) => tags.delete(item));
     tags.add(role);
-  } else if (TIER_ROLES.includes(role)) {
-    TIER_ROLES.forEach((item) => tags.delete(item));
-    tags.add(role);
   } else if (tags.has(role)) {
     tags.delete(role);
   } else {
     tags.add(role);
+  }
+  entity.role_tags = [...tags];
+  normalizeRoleTags(entity);
+}
+
+function removeRoleTag(entity, role) {
+  const capabilityNames = new Set(AGENT_CAPABILITY_DEFS.map(([name]) => name));
+  if (capabilityNames.has(role)) {
+    entity.capabilities_touched = true;
+    entity.capabilities = (entity.capabilities || []).filter((name) => name !== role);
+    return;
+  }
+  if (!ROLE_DEFS[role]) return;
+  const tags = new Set(normalizeRoleTags(entity));
+  tags.delete(role);
+  if (PRIMARY_ROLES.includes(role) && ![...tags].some((item) => PRIMARY_ROLES.includes(item))) {
+    tags.add("child");
+    entity.role = "child";
   }
   entity.role_tags = [...tags];
   normalizeRoleTags(entity);
@@ -2004,16 +3798,18 @@ function syncAgentCapabilities(entity) {
     return [];
   }
   const selected = new Set((entity.capabilities || []).filter((name) => known.has(name)));
-  AGENT_INTERNAL_CAPABILITIES.forEach((name) => selected.add(name));
+  if (!entity.capabilities_touched && !entity.capabilities?.length) {
+    AGENT_INTERNAL_CAPABILITIES.forEach((name) => selected.add(name));
+  }
   entity.capabilities = [...selected];
   return entity.capabilities;
 }
 
 function toggleAgentCapability(entity, capability) {
   if (!isAgentRole(entity.role)) return;
-  if (AGENT_INTERNAL_CAPABILITIES.includes(capability)) return;
   const known = new Set(AGENT_CAPABILITY_DEFS.map(([name]) => name));
   if (!known.has(capability)) return;
+  entity.capabilities_touched = true;
   const selected = new Set(syncAgentCapabilities(entity));
   if (selected.has(capability)) selected.delete(capability);
   else selected.add(capability);
@@ -2051,8 +3847,8 @@ function roleTagPicker(entity) {
   const selected = new Set(tags);
   const capabilities = isAgentRole(entity.role) ? syncAgentCapabilities(entity) : [];
   const chips = [
-    ...tags.map((role) => `<span class="role-chip role-chip-${roleDef(role).restriction.toLowerCase()}">${escapeHtml(roleDef(role).label)}</span>`),
-    ...capabilities.map((name) => `<span class="role-chip role-chip-cap">${escapeHtml(name)}</span>`),
+    ...tags.map((role) => roleChip(entity, role, roleDef(role).label, `role-chip-${roleDef(role).restriction.toLowerCase()}`)),
+    ...capabilities.map((name) => roleChip(entity, name, name, "role-chip-cap")),
   ].join("");
   const groups = ROLE_GROUPS.map((group) => {
     const roles = Object.entries(ROLE_DEFS).filter(([, def]) => def.group === group);
@@ -2075,6 +3871,13 @@ function roleTagPicker(entity) {
     </div>`;
 }
 
+function roleChip(entity, value, label, className) {
+  return `<span class="role-chip ${className}">
+    <span>${escapeHtml(label)}</span>
+    <span class="role-tag-remove" role="button" tabindex="0" data-entity="${escapeHtml(entity.id)}" data-remove-role="${escapeHtml(value)}" title="Quitar ${escapeHtml(label)}">×</span>
+  </span>`;
+}
+
 function capabilityTagGroup(entity, selected) {
   if (!isAgentRole(entity.role)) return "";
   const options = AGENT_CAPABILITY_DEFS.map(([name, group, description]) =>
@@ -2088,22 +3891,26 @@ function capabilityTagGroup(entity, selected) {
 
 function capabilityTagOption(entity, name, group, description, selected) {
   const isSelected = selected.has(name);
-  const isLocked = AGENT_INTERNAL_CAPABILITIES.includes(name);
-  return `<button type="button" class="role-tag-option capability ${isSelected ? "selected" : ""} ${isLocked ? "locked" : ""}" data-entity="${entity.id}" data-capability="${escapeHtml(name)}" title="${escapeHtml(description)}">
+  return `<button type="button" class="role-tag-option capability ${isSelected ? "selected" : ""}" data-entity="${entity.id}" data-capability="${escapeHtml(name)}" title="${escapeHtml(description)}">
       <span class="role-option-check">${isSelected ? "✓" : ""}</span>
-      <span><b>${escapeHtml(name)}</b><small>${escapeHtml(group)}${isLocked ? " · base" : ""}</small></span>
+      <span><b>${escapeHtml(name)}</b><small>${escapeHtml(group)}</small></span>
     </button>`;
 }
 
 function roleTagOption(entity, value, def, selected) {
   const isSelected = selected.has(value);
   const isPrimary = PRIMARY_ROLES.includes(value);
-  const isTier = TIER_ROLES.includes(value);
-  const exclusiveGroup = isPrimary ? PRIMARY_ROLES : isTier ? TIER_ROLES : null;
+  const exclusiveGroup = isPrimary ? PRIMARY_ROLES : null;
   const willReplace = exclusiveGroup ? [...selected].some((role) => exclusiveGroup.includes(role) && role !== value) : false;
-  const note = isPrimary ? "primario" : isTier ? "jerarquía" : def.restriction === "R2" ? "auxiliar" : "estado";
-  return `<button type="button" class="role-tag-option ${isSelected ? "selected" : ""} ${willReplace ? "will-replace" : ""}" data-entity="${entity.id}" data-role="${value}">
-      <span class="role-option-check">${isSelected ? "✓" : ""}</span>
+  const note = isPrimary ? "primario" : def.restriction === "R2" ? "auxiliar" : "estado";
+  // Autoridad is an exclusive (radio) group: an entity always needs exactly one
+  // primary role, so the active option can't be unchecked, only replaced by
+  // picking another one in the same group. Rendering it as a disabled radio dot
+  // instead of a live checkbox avoids the silent no-op click a checkmark implies.
+  const locked = !!(exclusiveGroup && isSelected);
+  const indicator = exclusiveGroup ? (isSelected ? "●" : "") : (isSelected ? "✓" : "");
+  return `<button type="button" class="role-tag-option ${isSelected ? "selected" : ""} ${willReplace ? "will-replace" : ""} ${exclusiveGroup ? "radio" : ""} ${locked ? "locked" : ""}" data-entity="${entity.id}" data-role="${value}" ${locked ? `disabled title="Elige otra opción de este grupo para reemplazarla"` : ""}>
+      <span class="role-option-check">${indicator}</span>
       <span><b>${escapeHtml(def.label)}</b><small>${escapeHtml(def.restriction)} · ${note}</small></span>
     </button>`;
 }
@@ -2114,15 +3921,13 @@ function roleSummary(entity) {
   const hasAgent = tags.includes("parent");
   const hasWorker = tags.includes("child");
   const hasBackup = tags.includes("backup");
-  const tierTag = tags.find((role) => TIER_ROLES.includes(role));
-  const tierLabel = tierTag ? roleDef(tierTag).label : "";
   const supports = tags.filter((role) => SUPPORT_ROLES.includes(role)).map((role) => roleDef(role).label);
   if (hasAgent) {
     const capSummary = capabilities.length ? ` Capacidades: ${capabilities.join(", ")}.` : "";
-    return `R0 autoridad global · ${tierLabel}.${supports.length ? ` Complementos: ${supports.join(", ")}.` : ""}${capSummary}`;
+    return `R0 autoridad global.${supports.length ? ` Complementos: ${supports.join(", ")}.` : ""}${capSummary}`;
   }
-  if (hasBackup) return `R1 fallback · ${tierLabel}. Reclama niveles solo cuando actúa como reserva o promoción controlada.`;
-  if (hasWorker) return `R1 ejecución · ${tierLabel}. ${supports.length ? `Con etiquetas auxiliares: ${supports.join(", ")}.` : "Puede recibir niveles N1-N5."}`;
+  if (hasBackup) return `R1 fallback. Reclama niveles solo cuando actúa como reserva o promoción controlada.`;
+  if (hasWorker) return `R1 ejecución. ${supports.length ? `Con etiquetas auxiliares: ${supports.join(", ")}.` : "Puede recibir niveles N1-N5."}`;
   return supports.length ? `R2/R3 soporte sin ownership de niveles: ${supports.join(", ")}.` : "Selecciona una etiqueta primaria.";
 }
 
@@ -2195,17 +4000,23 @@ function relatedEntityIds(entity) {
   return [entity.id];
 }
 
-function levelOwner(level) {
-  return state.entities.find((item) => canOwnLevels(item.role) && item.levels?.includes(level));
+function conflictingLevelOwner(entity, level) {
+  return state.entities.find(
+    (item) =>
+      item.id !== entity.id &&
+      canOwnLevels(item.role) &&
+      item.levels?.includes(level) &&
+      !canShareLevelOwnership(entity, item)
+  );
 }
 
 function levelChip(entity, level, short) {
-  const owner = levelOwner(level);
+  const owner = conflictingLevelOwner(entity, level);
   const selected = entity.levels?.includes(level);
-  const occupied = !!owner && owner.id !== entity.id;
+  const occupied = !!owner;
   const ownerAccent = owner ? entityAccent(owner) : entityAccent(entity);
   const ownerName = owner ? owner.name || modelTitle(owner.provider) || "otra entidad" : "";
-  return `<button class="level-chip ${selected ? "on" : ""} ${occupied ? "occupied" : ""}" style="--level-accent:${ownerAccent.color}; --level-ink:${ownerAccent.ink}" ${occupied ? "disabled" : ""} data-entity="${entity.id}" data-level="${level}" title="${occupied ? `Asignado a ${ownerName}` : LEVEL_FULL[level]}">
+  return `<button class="level-chip ${selected ? "on" : ""} ${occupied ? "occupied" : ""}" style="--level-accent:${ownerAccent.color}; --level-ink:${ownerAccent.ink}" data-entity="${entity.id}" data-level="${level}" title="${occupied ? `Mover desde ${ownerName}` : LEVEL_FULL[level]}">
       <span>${short}</span><small>${occupied ? ownerName : LEVEL_FULL[level].replace(`${short} · `, "")}</small>
     </button>`;
 }
@@ -2249,8 +4060,8 @@ function addEntityFromProvider(providerName, role = "child", position = null) {
     levels: [],
     skills: [],
     capabilities: [],
-    x: Math.max(0, position?.x ?? 360 + nextIndex * 28),
-    y: Math.max(0, position?.y ?? 48 + nextIndex * 28),
+    x: position?.x ?? 360 + nextIndex * 28,
+    y: position?.y ?? 48 + nextIndex * 28,
   };
   state.entities.push(entity);
   renderDiagram();
@@ -2262,13 +4073,13 @@ function diagramPointFromClient(clientX, clientY) {
   const diagram = $("#diagram");
   const rect = diagram.getBoundingClientRect();
   return {
-    x: Math.max(0, (clientX - rect.left + diagram.scrollLeft) / state.diagramZoom - DIAGRAM_PAD_X - 120),
-    y: Math.max(0, (clientY - rect.top + diagram.scrollTop) / state.diagramZoom - DIAGRAM_PAD_Y - 30),
+    x: (clientX - rect.left + diagram.scrollLeft) / state.diagramZoom - DIAGRAM_PAD_X - 120,
+    y: (clientY - rect.top + diagram.scrollTop) / state.diagramZoom - DIAGRAM_PAD_Y - 30,
   };
 }
 
 function scaled(value) {
-  return Math.round(Math.max(0, Number(value) || 0) * state.diagramZoom);
+  return Math.round((Number(value) || 0) * state.diagramZoom);
 }
 
 function screenX(value) {
@@ -2297,12 +4108,18 @@ function applyDiagramZoom() {
     node.style.left = `${screenX(entity.x)}px`;
     node.style.top = `${screenY(entity.y)}px`;
   });
+  $$("#diagramNodes .node.group").forEach((node) => {
+    const group = findGroup(node.dataset.group);
+    if (!group) return;
+    node.style.left = `${screenX(group.x)}px`;
+    node.style.top = `${screenY(group.y)}px`;
+  });
   if (!state.diagramCentered && $("#view-decision").classList.contains("active")) {
     diagram.scrollLeft = Math.max(0, screenX(0) - Math.round(diagram.clientWidth * 0.18));
     diagram.scrollTop = Math.max(0, screenY(0) - Math.round(diagram.clientHeight * 0.18));
     state.diagramCentered = true;
   }
-  requestAnimationFrame(drawWires);
+  scheduleDrawWires();
 }
 
 function bindCanvasDropTarget() {
@@ -2337,6 +4154,21 @@ function bindDiagramDropTargets() {
   });
 }
 
+function scheduleDrawWires() {
+  if (state.draggingDiagramNode) return;
+  if (wiresFrame !== null) return;
+  wiresFrame = requestAnimationFrame(() => {
+    wiresFrame = null;
+    drawWires();
+  });
+}
+
+function setDiagramNodeDragging(on) {
+  state.draggingDiagramNode = on;
+  $("#diagram")?.classList.toggle("node-dragging", on);
+  if (!on) scheduleDrawWires();
+}
+
 function drawWires() {
   const svg = $("#wires");
   const parent = $(".node.entity.parent");
@@ -2355,6 +4187,9 @@ function drawWires() {
   const rootStyle = getComputedStyle(document.documentElement);
   const accent = rootStyle.getPropertyValue("--diagram-wire").trim() || rootStyle.getPropertyValue("--accent").trim();
   const opacity = rootStyle.getPropertyValue("--diagram-wire-opacity").trim() || "0.62";
+  const focus = state.focusedDiagramLink;
+  const isFocusedEntity = (id) => focus?.type === "entity" && focus.id === id;
+  const isFocusedGroup = (id) => focus?.type === "group" && focus.id === id;
   const hierarchyWires = $$("#diagramNodes .node.entity.child")
     .filter((node) => node.dataset.entity && findEntity(node.dataset.entity)?.parentId)
     .map((node) => {
@@ -2370,16 +4205,37 @@ function drawWires() {
   // they read as "supervision/validation," not hierarchy.
   let supportWires = "";
   state.entities.forEach((entity) => {
-    if (!entity.target_id) return;
+    const targetIds = Array.isArray(entity.target_ids) ? entity.target_ids : [];
+    if (!targetIds.length) return;
     const isGuardian = (entity.role_tags || []).includes("guardian");
     const isValidator = (entity.role_tags || []).includes("validator");
     if (!isGuardian && !isValidator) return;
     const fromNode = $(`.node.entity[data-entity="${entity.id}"]`);
-    const toNode = $(`.node.entity[data-entity="${entity.target_id}"]`);
-    if (!fromNode || !toNode) return;
-    const route = connectionRoute(fromNode, toNode);
-    const color = isGuardian ? "#b9a7ff" : "#ffb25f";
-    supportWires += `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${color}" stroke-width="1.3" stroke-dasharray="4,4" opacity="0.6"/>`;
+    if (!fromNode) return;
+    const color = isGuardian ? "#b9a7ff" : "#5bbcff";
+    targetIds.forEach((targetId) => {
+      if (!isFocusedEntity(entity.id) && !isFocusedEntity(targetId)) return;
+      const toNode = $(`.node.entity[data-entity="${targetId}"]`);
+      if (!toNode) return;
+      const route = connectionRoute(fromNode, toNode);
+      supportWires += `<path class="wire-context wire-support" d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${color}" stroke-width="1.8" stroke-dasharray="4,5" opacity="0.82"/>`;
+    });
+  });
+
+  // Hierarchy-group wires: dashed line from each group card to each of its
+  // member entities, colored with that group's custom color (mirrors the
+  // guardian/validator dashed pattern but per-group tinted).
+  let groupWires = "";
+  (state.groups || []).forEach((group) => {
+    const fromNode = $(`.node.group[data-group="${group.id}"]`);
+    if (!fromNode) return;
+    groupMembers(group).forEach(({ entity }) => {
+      if (!isFocusedGroup(group.id) && !isFocusedEntity(entity.id)) return;
+      const toNode = $(`.node.entity[data-entity="${entity.id}"]`);
+      if (!toNode) return;
+      const route = connectionRoute(fromNode, toNode);
+      groupWires += `<path class="wire-context wire-group" d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${safeColor(group.color)}" stroke-width="1.9" stroke-dasharray="6,5" opacity="0.84"/>`;
+    });
   });
 
   // Third wire type: OpenClaw's link to the root Agent — dotted and in its own
@@ -2392,7 +4248,7 @@ function drawWires() {
     openclawWire = `<path d="${wirePath(route.start, route.end, route.from, route.to)}" fill="none" stroke="${OPENCLAW_NODE_ACCENT}" stroke-width="1.3" stroke-dasharray="2,5" opacity="0.55"/>`;
   }
 
-  svg.innerHTML = hierarchyWires + supportWires + openclawWire;
+  svg.innerHTML = hierarchyWires + supportWires + groupWires + openclawWire;
 }
 
 function nodeBox(node) {
@@ -2511,6 +4367,7 @@ function bindOpenClawMove() {
     };
     card.classList.add("moving");
     document.body.classList.add("moving-node");
+    setDiagramNodeDragging(true);
     document.addEventListener("pointermove", onOpenClawMove);
     document.addEventListener("pointerup", stopOpenClawMove, { once: true });
   });
@@ -2522,11 +4379,10 @@ function onOpenClawMove(event) {
   if (!card) return;
   state.openclawPos = {
     x: activeOpenclawMove.originX + (event.clientX - activeOpenclawMove.startX) / state.diagramZoom,
-    y: Math.max(0, activeOpenclawMove.originY + (event.clientY - activeOpenclawMove.startY) / state.diagramZoom),
+    y: activeOpenclawMove.originY + (event.clientY - activeOpenclawMove.startY) / state.diagramZoom,
   };
   card.style.left = `${screenX(state.openclawPos.x)}px`;
   card.style.top = `${screenY(state.openclawPos.y)}px`;
-  requestAnimationFrame(drawWires);
 }
 
 function stopOpenClawMove() {
@@ -2534,7 +4390,9 @@ function stopOpenClawMove() {
   activeOpenclawMove = null;
   document.body.classList.remove("moving-node");
   document.removeEventListener("pointermove", onOpenClawMove);
+  setDiagramNodeDragging(false);
   localStorage.setItem(OPENCLAW_POS_KEY, JSON.stringify(state.openclawPos));
+  scheduleRoutingSave("Posición de OpenClaw actualizada. Guardando…");
 }
 
 // "Arquitectura activa" side drawer entry point for OpenClaw — the diagram
@@ -2586,6 +4444,7 @@ function bindEntityMove() {
       };
       node.classList.add("moving");
       document.body.classList.add("moving-node");
+      setDiagramNodeDragging(true);
       document.addEventListener("pointermove", onEntityMove);
       document.addEventListener("pointerup", stopEntityMove, { once: true });
     });
@@ -2596,11 +4455,10 @@ function onEntityMove(event) {
   if (!activeEntityMove) return;
   const entity = findEntity(activeEntityMove.id);
   if (!entity) return;
-  entity.x = Math.max(0, activeEntityMove.originX + (event.clientX - activeEntityMove.startX) / state.diagramZoom);
-  entity.y = Math.max(0, activeEntityMove.originY + (event.clientY - activeEntityMove.startY) / state.diagramZoom);
+  entity.x = activeEntityMove.originX + (event.clientX - activeEntityMove.startX) / state.diagramZoom;
+  entity.y = activeEntityMove.originY + (event.clientY - activeEntityMove.startY) / state.diagramZoom;
   activeEntityMove.node.style.left = `${screenX(entity.x)}px`;
   activeEntityMove.node.style.top = `${screenY(entity.y)}px`;
-  requestAnimationFrame(drawWires);
 }
 
 function stopEntityMove() {
@@ -2608,8 +4466,280 @@ function stopEntityMove() {
   activeEntityMove = null;
   document.body.classList.remove("moving-node");
   document.removeEventListener("pointermove", onEntityMove);
+  setDiagramNodeDragging(false);
   persistEntityState();
   scheduleRoutingSave("Posición actualizada. Guardando…");
+}
+
+// ---- HIERARCHY GROUPS (Prio) -----------------------------------------------
+// Draggable cards on the Decisión canvas (same visual language as entity cards)
+// representing a named/colored Prio hierarchy. Entities join via
+// entity.memberships; within one group Prio numbers are unique (enforced here in
+// the UI by locking taken values, and server-side by RoutingLayout's validator).
+
+function groupMembers(group) {
+  // Entities that carry a membership pointing at this group, each paired with
+  // the prio it holds in this group.
+  return state.entities
+    .map((entity) => {
+      const membership = entityMemberships(entity).find((m) => m.group_id === group.id);
+      return membership ? { entity, prio: membership.prio } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.prio - b.prio);
+}
+
+function nextFreePrio(group) {
+  const taken = new Set(groupMembers(group).map((m) => m.prio));
+  let n = 1;
+  while (taken.has(n)) n += 1;
+  return n;
+}
+
+function createGroup() {
+  ensureGroups();
+  const diagram = $("#diagram");
+  // Drop the new card somewhere visible near the current viewport, offset from
+  // any existing group so two clicks don't stack them exactly.
+  let x = 40 + state.groups.length * 40;
+  let y = 620 + state.groups.length * 32;
+  if (diagram) {
+    const point = diagramPointFromClient(
+      diagram.getBoundingClientRect().left + diagram.clientWidth * 0.28,
+      diagram.getBoundingClientRect().top + diagram.clientHeight * 0.5
+    );
+    // Cascade new cards clearly apart (they overlap badly if spawned on top of
+    // each other); they remain freely draggable afterwards.
+    x = point.x + state.groups.length * 200;
+    y = point.y + (state.groups.length % 2) * 60;
+  }
+  const group = {
+    id: `grp_${Date.now().toString(36)}`,
+    name: "Nueva jerarquía",
+    color: nextGroupColor(),
+    x,
+    y,
+  };
+  state.groups.push(group);
+  renderDiagram();
+  scheduleRoutingSave("Jerarquía creada. Guardando…");
+}
+
+function deleteGroup(groupId) {
+  state.groups = (state.groups || []).filter((group) => group.id !== groupId);
+  // Strip every membership referencing the deleted group so no orphaned
+  // group_id survives on any entity.
+  state.entities.forEach((entity) => {
+    if (Array.isArray(entity.memberships)) {
+      entity.memberships = entity.memberships.filter((m) => m.group_id !== groupId);
+    }
+  });
+  renderDiagram();
+  scheduleRoutingSave("Jerarquía eliminada. Guardando…");
+}
+
+function addEntityToGroup(groupId, entityId) {
+  const group = findGroup(groupId);
+  const entity = findEntity(entityId);
+  if (!group || !entity) return;
+  entity.memberships = normalizeMemberships(entity.memberships);
+  if (entity.memberships.some((m) => m.group_id === groupId)) return;
+  entity.memberships.push({ group_id: groupId, prio: nextFreePrio(group) });
+  renderDiagram();
+  scheduleRoutingSave("Agente añadido a la jerarquía. Guardando…");
+}
+
+function removeEntityFromGroup(groupId, entityId) {
+  const entity = findEntity(entityId);
+  if (!entity || !Array.isArray(entity.memberships)) return;
+  entity.memberships = entity.memberships.filter((m) => m.group_id !== groupId);
+  renderDiagram();
+  scheduleRoutingSave("Agente retirado de la jerarquía. Guardando…");
+}
+
+function setMemberPrio(groupId, entityId, prio) {
+  const group = findGroup(groupId);
+  const entity = findEntity(entityId);
+  if (!group || !entity) return;
+  // Defensive: never let a click assign a prio another member already holds.
+  const takenByOther = groupMembers(group).some((m) => m.entity.id !== entityId && m.prio === prio);
+  if (takenByOther) return;
+  const membership = entityMemberships(entity).find((m) => m.group_id === groupId);
+  if (!membership) return;
+  membership.prio = prio;
+  renderDiagram();
+  scheduleRoutingSave("Prioridad actualizada. Guardando…");
+}
+
+function setGroupMemberOrder(groupId, orderedEntityIds) {
+  const group = findGroup(groupId);
+  if (!group) return;
+  orderedEntityIds.forEach((entityId, index) => {
+    const entity = findEntity(entityId);
+    const membership = entity ? entityMemberships(entity).find((m) => m.group_id === groupId) : null;
+    if (membership) membership.prio = index + 1;
+  });
+  renderDiagram();
+  scheduleRoutingSave("Prioridades reordenadas. Guardando…");
+}
+
+function moveGroupMember(groupId, entityId, direction) {
+  const members = groupMembers(findGroup(groupId) || {}).map(({ entity }) => entity.id);
+  const index = members.indexOf(entityId);
+  if (index < 0) return;
+  const nextIndex = Math.max(0, Math.min(members.length - 1, index + direction));
+  if (nextIndex === index) return;
+  const [moved] = members.splice(index, 1);
+  members.splice(nextIndex, 0, moved);
+  setGroupMemberOrder(groupId, members);
+}
+
+function groupCard(group) {
+  const members = groupMembers(group);
+  const memberRows = members
+    .map(({ entity, prio }) => {
+      return `<div class="group-member-row" draggable="true" data-group="${group.id}" data-member="${entity.id}">
+          <span class="group-member-name" title="${escapeHtml(entity.name || roleDef(entity.role).label)}">${escapeHtml(entity.name || roleDef(entity.role).label)}</span>
+          <span class="group-prio-badge" title="Prioridad asignada">${prio}</span>
+          <span class="group-member-controls">
+            <button type="button" class="group-member-remove" data-group="${group.id}" data-member="${entity.id}" title="Quitar de la jerarquía">×</button>
+          </span>
+        </div>`;
+    })
+    .join("");
+  const available = state.entities.filter(
+    (entity) => !entityMemberships(entity).some((m) => m.group_id === group.id)
+  );
+  const addControl = available.length
+    ? `<select class="group-add-member" data-group="${group.id}">
+        <option value="">+ Añadir agente…</option>
+        ${available
+          .map((entity) => `<option value="${entity.id}">${escapeHtml(entity.name || roleDef(entity.role).label)}</option>`)
+          .join("")}
+      </select>`
+    : `<small class="group-add-empty">Todos los agentes ya pertenecen a este grupo.</small>`;
+  return `<div style="left:${screenX(group.x || 0)}px; top:${screenY(group.y || 0)}px; --group-color:${escapeHtml(group.color)}" class="node group" data-group="${group.id}">
+      <button class="node-x group-delete" data-delete-group="${group.id}" title="Eliminar jerarquía">×</button>
+      <div class="node-port" title="Punto de conexión"></div>
+      <div class="role">Jerarquía · Prio</div>
+      <div class="group-head">
+        <input type="color" class="group-color-input" data-group="${group.id}" value="${escapeHtml(group.color)}" title="Color de la jerarquía" />
+        <input type="text" class="group-name-input" data-group="${group.id}" value="${escapeHtml(group.name)}" placeholder="Nombre de la jerarquía" />
+      </div>
+      <div class="group-members">
+        ${memberRows || '<small class="group-add-empty">Sin miembros todavía.</small>'}
+      </div>
+      <div class="group-add">${addControl}</div>
+    </div>`;
+}
+
+function bindGroupCardEvents() {
+  $$("#diagramNodes .node.group").forEach((card) => {
+    const groupId = card.dataset.group;
+    card.querySelector(".group-name-input")?.addEventListener("change", (event) => {
+      const group = findGroup(groupId);
+      if (!group) return;
+      group.name = event.target.value.trim() || "Nueva jerarquía";
+      renderDiagram();
+      scheduleRoutingSave("Jerarquía renombrada. Guardando…");
+    });
+    card.querySelector(".group-color-input")?.addEventListener("change", (event) => {
+      const group = findGroup(groupId);
+      if (!group) return;
+      group.color = event.target.value;
+      renderDiagram();
+      scheduleRoutingSave("Color de jerarquía actualizado. Guardando…");
+    });
+    card.querySelector(".group-delete")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteGroup(groupId);
+    });
+    card.querySelector(".group-add-member")?.addEventListener("change", (event) => {
+      if (event.target.value) addEntityToGroup(groupId, event.target.value);
+    });
+    card.querySelectorAll(".group-member-remove").forEach((button) =>
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        removeEntityFromGroup(groupId, button.dataset.member);
+      })
+    );
+    card.querySelectorAll(".group-member-row").forEach((row) => {
+      row.addEventListener("dragstart", (event) => {
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/group-member", row.dataset.member);
+        row.classList.add("dragging");
+      });
+      row.addEventListener("dragend", () => row.classList.remove("dragging"));
+      row.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        row.classList.add("drop-target");
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("drop-target"));
+      row.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        row.classList.remove("drop-target");
+        const draggedId = event.dataTransfer.getData("text/group-member");
+        const targetId = row.dataset.member;
+        if (!draggedId || draggedId === targetId) return;
+        const ordered = groupMembers(findGroup(groupId) || {}).map(({ entity }) => entity.id);
+        const from = ordered.indexOf(draggedId);
+        const to = ordered.indexOf(targetId);
+        if (from < 0 || to < 0) return;
+        const [moved] = ordered.splice(from, 1);
+        ordered.splice(to, 0, moved);
+        setGroupMemberOrder(groupId, ordered);
+      });
+    });
+  });
+  bindGroupMove();
+}
+
+function bindGroupMove() {
+  $$("#diagramNodes .node.group").forEach((node) => {
+    node.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest("button, input, select, label, summary, details, .node-x, .group-member-row")) return;
+      const group = findGroup(node.dataset.group);
+      if (!group) return;
+      event.preventDefault();
+      activeGroupMove = {
+        id: group.id,
+        node,
+        originX: group.x || 0,
+        originY: group.y || 0,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      node.classList.add("moving");
+      document.body.classList.add("moving-node");
+      setDiagramNodeDragging(true);
+      document.addEventListener("pointermove", onGroupMove);
+      document.addEventListener("pointerup", stopGroupMove, { once: true });
+    });
+  });
+}
+
+function onGroupMove(event) {
+  if (!activeGroupMove) return;
+  const group = findGroup(activeGroupMove.id);
+  if (!group) return;
+  group.x = activeGroupMove.originX + (event.clientX - activeGroupMove.startX) / state.diagramZoom;
+  group.y = activeGroupMove.originY + (event.clientY - activeGroupMove.startY) / state.diagramZoom;
+  activeGroupMove.node.style.left = `${screenX(group.x)}px`;
+  activeGroupMove.node.style.top = `${screenY(group.y)}px`;
+}
+
+function stopGroupMove() {
+  if (activeGroupMove) activeGroupMove.node.classList.remove("moving");
+  activeGroupMove = null;
+  document.body.classList.remove("moving-node");
+  document.removeEventListener("pointermove", onGroupMove);
+  setDiagramNodeDragging(false);
+  persistEntityState();
+  scheduleRoutingSave("Posición de jerarquía actualizada. Guardando…");
 }
 
 function initDiagramViewport() {
@@ -2652,7 +4782,7 @@ function bindDiagramPanZoom() {
       applyDiagramZoom();
       diagram.scrollLeft = beforeX * state.diagramZoom - (event.clientX - rect.left);
       diagram.scrollTop = beforeY * state.diagramZoom - (event.clientY - rect.top);
-      requestAnimationFrame(drawWires);
+      scheduleDrawWires();
     },
     { passive: false }
   );
@@ -2663,7 +4793,7 @@ function onDiagramPan(event) {
   const diagram = $("#diagram");
   diagram.scrollLeft = activeDiagramPan.scrollLeft - (event.clientX - activeDiagramPan.startX);
   diagram.scrollTop = activeDiagramPan.scrollTop - (event.clientY - activeDiagramPan.startY);
-  requestAnimationFrame(drawWires);
+  scheduleDrawWires();
 }
 
 function stopDiagramPan() {
@@ -2675,7 +4805,7 @@ function stopDiagramPan() {
 
 function applyDrawerState() {
   document.documentElement.style.setProperty("--drawer-width", `${state.drawerWidth}px`);
-  requestAnimationFrame(drawWires);
+  scheduleDrawWires();
 }
 
 function initDrawerControls() {
@@ -2709,7 +4839,7 @@ function onDrawerResize(event) {
   document.documentElement.style.setProperty("--drawer-width", `${nextWidth}px`);
   localStorage.setItem("karajan-model-drawer-width", String(nextWidth));
   persistEntityState();
-  requestAnimationFrame(drawWires);
+  scheduleDrawWires();
 }
 
 function stopDrawerResize() {
@@ -2745,7 +4875,7 @@ async function saveRouting(auto = false) {
 }
 
 // ---- MODELS ----------------------------------------------------------------
-async function renderModels() {
+async function renderModels({ restoreSearchFocus = false } = {}) {
   const [catalog, providers] = await Promise.all([api("/catalog"), api("/providers")]);
   state.catalog = catalog;
   state.providers = providers;
@@ -2757,20 +4887,39 @@ async function renderModels() {
   const status = new Map(providers.map((p) => [p.provider, p]));
   const advanced = $("#modelsAdvanced").checked;
   const activeProviders = activeArchitectureProviderNames();
-  const visibleCatalog = activeProviders.size ? catalog.filter((provider) => activeProviders.has(provider.name)) : catalog;
+  const query = (state.decisionCatalogQuery || "").trim().toLowerCase();
+  const matchesQuery = (provider) => {
+    if (!query) return activeProviders.has(provider.name);
+    return [provider.label, provider.name, provider.backend, provider.auth_method]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+  };
+  const visibleCatalog = catalog
+    .filter((provider) => provider.name !== "openclaw" && matchesQuery(provider))
+    .sort((a, b) => {
+      const activeDelta = Number(activeProviders.has(b.name)) - Number(activeProviders.has(a.name));
+      if (activeDelta) return activeDelta;
+      return (a.label || a.name).localeCompare(b.label || b.name, "es", { sensitivity: "base" });
+    });
 
   const groups = {};
   visibleCatalog.forEach((p) => (groups[p.backend] || (groups[p.backend] = [])).push(p));
   const groupTitle = { cli: "Local / terminal", api: "Nube (API)", simulated: "Simulado" };
 
-  $("#providerGroups").innerHTML = Object.entries(groups)
-    .filter(([, list]) => list.length)
-    .map(([backend, list]) => {
-      const cards = list.map((p) => providerCard(p, status.get(p.name), advanced)).join("");
+  $("#providerGroups").innerHTML = `
+    <div class="decision-catalog-tools">
+      <input type="search" data-decision-catalog-search placeholder="Buscar agente..." value="${escapeHtml(state.decisionCatalogQuery || "")}" autocomplete="off" />
+      <span>${query ? `${activeProviders.size} en mapa · ${visibleCatalog.length} resultado${visibleCatalog.length === 1 ? "" : "s"}` : `${activeProviders.size} en mapa`}</span>
+    </div>
+    ${Object.entries(groups)
+      .filter(([, list]) => list.length)
+      .map(([backend, list]) => {
+      const cards = list.map((p) => providerCard(p, status.get(p.name), advanced, activeProviders.has(p.name))).join("");
       return `<section class="provider-group"><h3>${groupTitle[backend] || backend}</h3>
         <div class="provider-cards">${cards}</div></section>`;
     })
-    .join("");
+    .join("") || `<div class="config-empty">${query ? "No hay agentes que coincidan con la búsqueda." : "Busca un agente para añadirlo al mapa de Decisión."}</div>`}
+  `;
 
   $$("#providerGroups .model-card").forEach((card) => {
     card.addEventListener("dragstart", (event) => {
@@ -2782,11 +4931,21 @@ async function renderModels() {
       startModelPointerDrag(event, card.dataset.name, card.querySelector(".name")?.textContent?.trim() || card.dataset.name);
     });
   });
+  const searchInput = $("[data-decision-catalog-search]");
+  searchInput?.addEventListener("input", (event) => {
+    state.decisionCatalogQuery = event.target.value;
+    renderModels({ restoreSearchFocus: true });
+  });
+  if (restoreSearchFocus && searchInput) {
+    searchInput.focus();
+    const end = searchInput.value.length;
+    searchInput.setSelectionRange(end, end);
+  }
   if ($("#view-decision").classList.contains("active")) renderDiagram();
 }
 
 function activeArchitectureProviderNames() {
-  return new Set((state.entities || []).map((entity) => entity.provider).filter(Boolean));
+  return new Set((state.entities || []).map((entity) => entity.provider).filter((provider) => provider && provider !== "openclaw"));
 }
 
 function startModelPointerDrag(event, providerName, label) {
@@ -2836,7 +4995,7 @@ function onModelPointerUp(event) {
   }
 }
 
-function providerCard(provider, status, advanced) {
+function providerCard(provider, status, advanced, active = false) {
   const ready = status?.ready;
   const available = status?.available;
   const dot = ready ? "ok" : available ? "warn" : "bad";
@@ -2856,10 +5015,15 @@ function providerCard(provider, status, advanced) {
         ${provider.cli_command ? `<div>cli: ${escapeHtml(provider.cli_command)}</div>` : ""}
         ${provider.endpoint ? `<div>${escapeHtml(provider.endpoint)}</div>` : ""}</div>`
     : "";
-  return `<div class="pcard model-card ${advanced ? "adv" : ""}" draggable="true" data-name="${escapeHtml(provider.name)}">
+  const action = active
+    ? `<button type="button" class="decision-agent-action remove" data-decision-agent-remove="${escapeHtml(provider.name)}" title="Quitar de Decisión" aria-label="Quitar ${escapeHtml(provider.label)} de Decisión">−</button>`
+    : `<button type="button" class="decision-agent-action add" data-decision-agent-add="${escapeHtml(provider.name)}" title="Añadir a Decisión" aria-label="Añadir ${escapeHtml(provider.label)} a Decisión">+</button>`;
+  return `<div class="pcard model-card ${advanced ? "adv" : ""} ${active ? "active" : ""}" draggable="true" data-name="${escapeHtml(provider.name)}">
       <div class="top">
-        <span class="name"><span class="status-dot ${dot}"></span>${escapeHtml(provider.label)}</span>
-        <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span>
+        <span class="name"><span class="status-dot ${dot}"></span>${escapeHtml(provider.label)} <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span></span>
+        <span class="model-card-actions">
+          ${action}
+        </span>
       </div>
       <div class="free">${escapeHtml(roleSummary)} · ${escapeHtml(levelSummary)}</div>
       <div class="free">${status ? escapeHtml(status.detail) : stateText}</div>
@@ -2883,10 +5047,41 @@ function checkbox(id, checked) {
   return `<label class="toggle"><input type="checkbox" id="${id}" ${checked ? "checked" : ""} /><span></span></label>`;
 }
 
-function setConfigTab(tab) {
+// All 5 config sections stay visible in one continuous scrollable page. A nav
+// entry (or a search match) no longer hides the others — it just highlights the
+// current nav button and, when `scroll` is set, scroll-jumps to that section.
+function setConfigTab(tab, { scroll = true } = {}) {
   state.configTab = tab;
   $$(".config-tab").forEach((button) => button.classList.toggle("active", button.dataset.configTab === tab));
-  $$(".config-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `config-panel-${tab}`));
+  if (scroll) {
+    $(`#flowGrid [data-config-panel="${tab}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+// Lightweight scroll-spy: highlight whichever section is nearest the top of the
+// viewport as the user scrolls the continuous config page. Rebuilt on each
+// renderFlow() so it always tracks the freshly-rendered panels.
+let configScrollSpy = null;
+function initConfigScrollSpy() {
+  if (configScrollSpy) {
+    configScrollSpy.disconnect();
+    configScrollSpy = null;
+  }
+  const panels = $$("#flowGrid [data-config-panel]");
+  if (!panels.length || typeof IntersectionObserver === "undefined") return;
+  configScrollSpy = new IntersectionObserver(
+    (entries) => {
+      const top = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!top) return;
+      const tab = top.target.dataset.configPanel;
+      state.configTab = tab;
+      $$(".config-tab").forEach((button) => button.classList.toggle("active", button.dataset.configTab === tab));
+    },
+    { rootMargin: "-15% 0px -75% 0px", threshold: 0 },
+  );
+  panels.forEach((panel) => configScrollSpy.observe(panel));
 }
 
 function setConfigMode(mode) {
@@ -2937,12 +5132,29 @@ function renderFlow() {
     <h4>Latencia base (ms)</h4>
     ${TIERS.map((tier) => field(TIER_LABEL[tier], numberInput(`cfg-lat-${tier}`, c.latency_table[tier] ?? 0, "10", "0"))).join("")}</div>`;
 
-  $("#flowGrid").innerHTML = general + orchestration + weights + levels + tables;
+  const sections = [
+    ["general", general],
+    ["flow", orchestration],
+    ["weights", weights],
+    ["rules", levels],
+    ["cost", tables],
+  ];
+  // Render ALL sections up front — they all stay visible in one continuous
+  // scrollable page (the sidebar nav scroll-jumps between them). Rendering them
+  // together also lets bindFlowAutosave() below bind every input/select in one
+  // pass — do NOT swap innerHTML per tab click or autosave bindings are lost.
+  $("#flowGrid").innerHTML = sections
+    .map(([id, html]) => `<div class="config-panel" data-config-panel="${id}">${html}</div>`)
+    .join("");
   updateWeightsSum();
   CRITERIA.forEach((name) => $(`#cfg-w-${name}`).addEventListener("input", updateWeightsSum));
   bindFlowAutosave();
   renderPromptConfiguration();
+  renderTraditionalLibrary();
   setConfigMode(state.configMode);
+  // Highlight the current nav entry WITHOUT yanking scroll on first paint.
+  setConfigTab(state.configTab, { scroll: false });
+  initConfigScrollSpy();
 }
 
 function renderPromptConfiguration() {
@@ -3020,6 +5232,62 @@ function renderPromptConfiguration() {
 
 function renderPromptResourceGrid() {
   renderPromptConfiguration();
+  renderTraditionalLibrary();
+}
+
+// Reuses the SAME resource-library rendering as Prompting mode (buildPromptResourceLibrary
+// / filterPromptResources / promptResourceSidebar), but placed on the LEFT in traditional
+// mode via the #traditionalLibraryPanel container.
+function renderTraditionalLibrary() {
+  const target = $("#traditionalLibraryPanel");
+  if (!target || !state.config) return;
+  const allResources = buildPromptResourceLibrary();
+  const resources = filterPromptResources(allResources, state.promptLibraryQuery);
+  if (!state.selectedPromptResourceId || !allResources.some((resource) => resource.id === state.selectedPromptResourceId)) {
+    state.selectedPromptResourceId = resources[0]?.id || allResources[0]?.id || "";
+  }
+  const selectedResource = allResources.find((resource) => resource.id === state.selectedPromptResourceId) || resources[0] || null;
+  target.innerHTML = `<section class="prompt-library-panel">
+      <header>
+        <div class="prompt-library-title">
+          <span class="eyebrow">Resource library</span>
+          <h3>Biblioteca de recursos</h3>
+        </div>
+      </header>
+      <div class="prompt-library-body">
+        ${promptResourceSidebar(resources, selectedResource)}
+        <div class="traditional-resource-detail">
+          ${promptResourceDetailCard(selectedResource)}
+        </div>
+      </div>
+    </section>`;
+}
+
+// Live typeahead over every setting row's .field-label across all 5 sections.
+// On the first match, switch to that field's section tab and flash-highlight it.
+function filterConfigFields(query) {
+  const q = (query || "").trim().toLowerCase();
+  clearTimeout(configHitTimer);
+  $$("#flowGrid .field.config-field-hit").forEach((field) => field.classList.remove("config-field-hit"));
+  if (!q) return;
+  let firstHit = null;
+  $$("#flowGrid [data-config-panel]").forEach((panel) => {
+    $$(".field", panel).forEach((field) => {
+      const label = $(".field-label", field);
+      if (label && label.textContent.toLowerCase().includes(q)) {
+        field.classList.add("config-field-hit");
+        if (!firstHit) firstHit = { panel, field };
+      }
+    });
+  });
+  if (!firstHit) return;
+  // Everything is always visible now — just highlight the section's nav button
+  // (no show/hide) and scroll the matched field itself into view.
+  setConfigTab(firstHit.panel.dataset.configPanel, { scroll: false });
+  firstHit.field.scrollIntoView({ block: "center", behavior: "smooth" });
+  configHitTimer = setTimeout(() => {
+    $$("#flowGrid .field.config-field-hit").forEach((field) => field.classList.remove("config-field-hit"));
+  }, 2600);
 }
 
 function promptTemplateSidebar(prompts, selected) {
@@ -3450,7 +5718,7 @@ Aplicar de un clic la jerarquía piramidal completa con despacho por disponibili
 - agentes en el grafo: ${entities.length}
 
 # Notas
-- Es aditivo e idempotente: puedes aplicarlo varias veces sin perder personalizaciones (tags de rol, posiciones, target_id).
+- Es aditivo e idempotente: puedes aplicarlo varias veces sin perder personalizaciones (tags de rol, posiciones, target_ids).
 - GLM-5.2 y Kimi K2.7 Code corren en la nube de Ollama: requieren \`ollama signin\` — no se auto-instalan.
 - Equivalente a: POST /setup/apply-queue-config${formatDefaultConfigResult(state.queueConfigResult)}`,
     },
@@ -3522,10 +5790,16 @@ async function renderConfigAgentsPanel() {
   }
   const manual = getManualAgents();
   const status = new Map(providers.map((p) => [p.provider, p]));
+  const activeProviders = activeArchitectureProviderNames();
+  const decisionFirst = (a, b) => {
+    const activeDelta = Number(activeProviders.has(b.name)) - Number(activeProviders.has(a.name));
+    if (activeDelta) return activeDelta;
+    return (a.label || a.name).localeCompare(b.label || b.name, "es", { sensitivity: "base" });
+  };
   const groups = {
-    cli: catalog.filter((p) => p.backend === "cli"),
-    api: catalog.filter((p) => p.backend === "api"),
-    simulated: catalog.filter((p) => p.backend === "simulated"),
+    cli: catalog.filter((p) => p.backend === "cli").sort(decisionFirst),
+    api: catalog.filter((p) => p.backend === "api").sort(decisionFirst),
+    simulated: catalog.filter((p) => p.backend === "simulated").sort(decisionFirst),
   };
   const groupLabel = { cli: "Locales / CLI", api: "Nube / API", simulated: "Simulados" };
   target.innerHTML = `<div class="config-agent-layout">
@@ -3570,13 +5844,19 @@ function renderProviderStatusCard(provider, status = {}, { selected = false } = 
   const dot = ready ? "ok" : available ? "warn" : "bad";
   const stateClass = ready ? "ready" : available ? "available" : "missing";
   const auth = provider.auth_method === "api_key" ? provider.env_var || "API key" : provider.login_command || provider.auth_method;
-  return `<article class="config-agent-card compact ${stateClass} ${selected ? "selected" : ""}" data-agent-card="${escapeHtml(provider.name)}">
+  const active = activeArchitectureProviderNames().has(provider.name);
+  const decisionAction = provider.name === "openclaw" ? "" : active
+    ? `<button type="button" class="decision-agent-action remove" data-decision-agent-remove="${escapeHtml(provider.name)}" title="Quitar de Decisión" aria-label="Quitar ${escapeHtml(provider.label)} de Decisión">−</button>`
+    : `<button type="button" class="decision-agent-action add" data-decision-agent-add="${escapeHtml(provider.name)}" title="Añadir a Decisión" aria-label="Añadir ${escapeHtml(provider.label)} a Decisión">+</button>`;
+  return `<article class="config-agent-card compact ${stateClass} ${active ? "active" : ""} ${selected ? "selected" : ""}" data-agent-card="${escapeHtml(provider.name)}">
     <span class="status-dot ${dot}"></span>
     <div class="config-agent-card-body">
-      <b>${escapeHtml(provider.label)}</b>
+      <b>${escapeHtml(provider.label)} <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span></b>
       <small>${escapeHtml(provider.backend)} · ${escapeHtml(auth)}</small>
     </div>
-    <span class="cost-tag ${provider.is_free ? "free" : "paid"}">${provider.is_free ? "Gratis" : "Pago"}</span>
+    <span class="model-card-actions">
+      ${decisionAction}
+    </span>
   </article>`;
 }
 
@@ -3692,6 +5972,22 @@ function ensureEntityForProvider(providerName) {
   return entity || (state.entities || []).find((item) => item.provider === providerName);
 }
 
+async function setCatalogProviderInDecision(providerName, enabled) {
+  const layout = await api(`/routing-layout/catalog/${encodeURIComponent(providerName)}`, {
+    method: enabled ? "POST" : "DELETE",
+  });
+  state.entities = layout.entities || [];
+  state.diagramZoom = layout.zoom || state.diagramZoom;
+  state.drawerWidth = layout.drawer_width || state.drawerWidth;
+  localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
+  normalizeEntityPositions();
+  renderAgentsSidePanel();
+  await renderConfigAgentsPanel();
+  if ($("#providerGroups")) await renderModels();
+  else if ($("#view-decision")?.classList.contains("active")) renderDiagram();
+  toast(enabled ? "Agente añadido a Decisión." : "Agente quitado de Decisión.");
+}
+
 function agentSkillSection(agent) {
   if (!(state.skills || []).length) return "";
   const entity = (state.entities || []).find((item) => item.provider === agent.name);
@@ -3740,6 +6036,7 @@ function renderAgentsSidePanel() {
   const runSlot = type === "catalog" ? (agent.login_command ? "login_command" : agent.probe_command ? "probe_command" : null) : null;
   const running = state.agentConsoleRunning === (type === "catalog" ? agent.name : agent.id);
   const result = state.agentConsoleResults?.[type === "catalog" ? agent.name : agent.id];
+  const decisionEntity = type === "catalog" ? (state.entities || []).find((item) => item.provider === agent.name) : null;
   target.innerHTML = `
     <article class="agent-detail-card">
       <header>
@@ -3755,6 +6052,19 @@ function renderAgentsSidePanel() {
         <span><small>Estado</small><b>${status.ready ? "listo" : status.available ? "detectado" : "pendiente"}</b></span>
       </div>
       ${type === "catalog" ? `<div class="config-tier-grid">${tiers}</div>` : ""}
+      ${type === "catalog" ? `<div class="agent-decision-actions">
+        <div>
+          <small>Decisión</small>
+          <b>${decisionEntity ? "visible en el mapa" : "fuera del mapa"}</b>
+        </div>
+        ${decisionEntity
+          ? `<button type="button" class="agent-console-action" data-decision-agent-remove="${escapeHtml(agent.name)}" aria-label="Quitar agente del mapa de decisión">
+              <span class="action-mark">−</span><span><b>Quitar</b><small>Ocultar de Decisión</small></span>
+            </button>`
+          : `<button type="button" class="agent-console-action primary" data-decision-agent-add="${escapeHtml(agent.name)}" aria-label="Agregar agente al mapa de decisión">
+              <span class="action-mark">+</span><span><b>Usar</b><small>Añadir a Decisión</small></span>
+            </button>`}
+      </div>` : ""}
     </article>
     ${type === "catalog" ? `<section class="agent-console">
       <header>
@@ -3980,16 +6290,25 @@ function init() {
   });
   $("#view-flow")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-config-mode]");
-    if (button) setConfigMode(button.dataset.configMode);
+    if (button) {
+      setConfigMode(button.dataset.configMode);
+      return;
+    }
+    const tab = event.target.closest("[data-config-tab]");
+    if (tab) setConfigTab(tab.dataset.configTab);
   });
   $("#toggleMonitorSide")?.addEventListener("click", () => setMonitorSide(!state.monitorSideOpen));
   $("#toggleHumanSide")?.addEventListener("click", () => setHumanSide(!state.humanSideOpen));
   $("#toggleAgentsSide")?.addEventListener("click", () => setAgentsSide(!state.agentsSideOpen));
   initMonitorSplitter();
+  initMonitorSubnav();
+  initDataviz();
   initHumanSplitter();
   initAgentsSplitter();
   initMonitorBlocks();
+  initTaskSearch();
   $("#modelsAdvanced").addEventListener("change", renderModels);
+  $("#addHierarchyGroup")?.addEventListener("click", () => createGroup());
   initAutoRefresh();
   initLiveEvents();
   initOnboardingControls();
@@ -4027,9 +6346,9 @@ function init() {
     if (notificationProvider) {
       setNotificationsOpen(false);
       setAgentNotificationsOpen(false);
-      $('[data-view="agents"]')?.click();
+      // Provider configuration lives in the dedicated top-nav "Agentes" tab.
       state.selectedConfigAgent = notificationProvider.dataset.notificationProvider;
-      renderAgentsView();
+      $('[data-view="agents"]')?.click();
       return;
     }
     if (event.target.closest("[data-notification-monitor]")) {
@@ -4065,6 +6384,16 @@ function init() {
     const runProviderCommand = event.target.closest("[data-run-provider]");
     if (runProviderCommand) {
       executeProviderCommand(runProviderCommand.dataset.runProvider, runProviderCommand.dataset.runSlot);
+      return;
+    }
+    const addDecisionAgent = event.target.closest("[data-decision-agent-add]");
+    if (addDecisionAgent) {
+      setCatalogProviderInDecision(addDecisionAgent.dataset.decisionAgentAdd, true).catch((error) => toast(error.message));
+      return;
+    }
+    const removeDecisionAgent = event.target.closest("[data-decision-agent-remove]");
+    if (removeDecisionAgent) {
+      setCatalogProviderInDecision(removeDecisionAgent.dataset.decisionAgentRemove, false).catch((error) => toast(error.message));
       return;
     }
     const agentCard = event.target.closest("[data-agent-card]");
@@ -4117,7 +6446,12 @@ function init() {
     const selectPromptResource = event.target.closest("[data-select-prompt-resource]");
     if (selectPromptResource) {
       state.selectedPromptResourceId = selectPromptResource.dataset.selectPromptResource;
-      renderPromptConfiguration();
+      renderPromptResourceGrid();
+      // The detail card lives in its own always-visible scroll region now, but
+      // nudge it into view so a click anywhere in a long list immediately shows
+      // the updated detail (traditional mode) or the side detail panel (prompting).
+      const detail = $("#traditionalLibraryPanel .traditional-resource-detail") || $(".prompt-resource-detail-panel");
+      detail?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
     if (event.target.closest("[data-new-prompt-template]")) {
@@ -4153,7 +6487,7 @@ function init() {
     }
     if (event.target.closest("[data-toggle-prompt-library]")) {
       state.promptLibraryOpen = !state.promptLibraryOpen;
-      renderPromptConfiguration();
+      renderPromptResourceGrid();
       return;
     }
     const applyPrompt = event.target.closest("[data-apply-prompt]");
@@ -4203,6 +6537,10 @@ function init() {
     if (event.target?.id === "promptResourceSearch") {
       state.promptLibraryQuery = event.target.value;
       renderPromptResourceGrid();
+      return;
+    }
+    if (event.target?.id === "configFieldSearch") {
+      filterConfigFields(event.target.value);
     }
   });
   document.addEventListener("change", (event) => {
@@ -4227,7 +6565,7 @@ function init() {
     scheduleRoutingSave("Skills del agente actualizadas. Guardando…");
   });
   window.addEventListener("resize", () => {
-    if ($("#view-decision").classList.contains("active")) drawWires();
+    if ($("#view-decision").classList.contains("active")) scheduleDrawWires();
     if ($("#view-human").classList.contains("active")) {
       syncHumanSideOffset();
       syncHumanSideHeight();
@@ -4814,6 +7152,39 @@ var WORKSPOTS={
   deepseek: {dx:-0.6,dy: 0.8},
   mistral:  {dx: 0.7,dy: 0.7},
 };
+// Tower-only anchor overrides (drawWorkstations), separate from WORKSPOTS which
+// still drives the NPC figure's walk target. Claude's tower is pushed back/up so
+// the (larger) building no longer sits on top of the (smaller) NPC figure when
+// Claude is working/thinking. Other agents fall back to WORKSPOTS unchanged.
+var TOWER_OFFSETS={
+  claude: {dx:-1.3, dy:-1.5},
+  mistral: {dx:-0.2, dy:-0.3},
+};
+
+var DECISION_PROVIDER_ALIASES={
+  claude: ['claude','anthropic','claude-cli'],
+  codex: ['codex','openai'],
+  qwen: ['ollama-qwen','qwen'],
+  deepseek: ['ollama-deepseek','deepseek'],
+  mistral: ['ollama-mistral-nemo','mistral'],
+};
+
+function agentUsesDecisionProvider(ag){
+  if(typeof state==='undefined'||!state.entities)return false;
+  var providers=activeArchitectureProviderNames();
+  var aliases=DECISION_PROVIDER_ALIASES[ag.id]||[ag.id];
+  return aliases.some(function(alias){
+    alias=String(alias||'').toLowerCase();
+    return Array.from(providers).some(function(provider){
+      provider=String(provider||'').toLowerCase();
+      return provider===alias||provider.indexOf(alias)>=0||alias.indexOf(provider)>=0;
+    });
+  });
+}
+
+function decisionTint(ag){
+  return agentUsesDecisionProvider(ag)?'#F6C84F':ag.col;
+}
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 function iso(gx,gy){return {x:OX+(gx-gy)*TW+mapPanX, y:OY+(gx+gy)*TH+mapPanY};}
@@ -4901,7 +7272,7 @@ function updateWander(){
 // ── WORKSTATION BUILDINGS ─────────────────────────────────────────────────────
 function drawWorkstations(){
   AGENTS.forEach(function(ag){
-    var ws=WORKSPOTS[ag.id];if(!ws)return;
+    var ws=TOWER_OFFSETS[ag.id]||WORKSPOTS[ag.id];if(!ws)return;
     var wx=ag.hx+ws.dx,wy=ag.hy+ws.dy;
     var p=iso(wx,wy);
     if(p.x+TW<LW||p.x-TW>W||p.y+TH>H+TH)return;
@@ -4993,8 +7364,10 @@ function drawFloor(){
     ctx2.beginPath();
     ctx2.moveTo(p.x,p.y);ctx2.lineTo(p.x+TW,p.y+TH);
     ctx2.lineTo(p.x,p.y+2*TH);ctx2.lineTo(p.x-TW,p.y+TH);ctx2.closePath();
-    ctx2.fillStyle=ag?c(ag.col,0.14):nearCard?'rgba(100,160,255,0.04)':'rgba(255,255,255,0.018)';
-    ctx2.strokeStyle=ag?c(ag.col,0.4):nearCard?'rgba(100,160,255,0.06)':'rgba(255,255,255,0.045)';
+    var inDecision=ag&&agentUsesDecisionProvider(ag);
+    var tileCol=inDecision?decisionTint(ag):(ag&&ag.col);
+    ctx2.fillStyle=ag?c(tileCol,inDecision?0.24:0.14):nearCard?'rgba(100,160,255,0.04)':'rgba(255,255,255,0.018)';
+    ctx2.strokeStyle=ag?c(tileCol,inDecision?0.72:0.4):nearCard?'rgba(100,160,255,0.06)':'rgba(255,255,255,0.045)';
     ctx2.lineWidth=0.6;ctx2.fill();ctx2.stroke();
   });
 }
@@ -5058,6 +7431,8 @@ function drawAgent(ag){
   var cards=taskCards.filter(function(cr){return cr.agentId===ag.id&&cr.status!=='done';});
   if(cards.length>tc)tc=cards.length;
   var hp=Math.max(0.05,Math.min(1,1-tc/Math.max(1,ag.maxCap)));
+  var inDecision=agentUsesDecisionProvider(ag);
+  var mapAccent=decisionTint(ag);
 
   // movement direction tilt
   var pos2=agentPos[ag.id]||{};
@@ -5083,6 +7458,10 @@ function drawAgent(ag){
   ctx2.globalAlpha=0.2;ctx2.fillStyle='#000';
   ctx2.beginPath();ctx2.ellipse(cx,base,TW*0.58,TH*0.35,0,0,Math.PI*2);ctx2.fill();
   ctx2.globalAlpha=1;
+  if(inDecision){
+    ctx2.strokeStyle=c(mapAccent,0.86);ctx2.lineWidth=Math.max(1,1.5*sc);
+    ctx2.beginPath();ctx2.ellipse(cx,base,TW*0.72,TH*0.48,0,0,Math.PI*2);ctx2.stroke();
+  }
 
   // body
   if(ag.id==='claude'){
@@ -5211,12 +7590,18 @@ function drawAgent(ag){
   // name
   var nameY=barY-6.5*sc;
   ctx2.font='bold '+Math.round(TW*0.2)+'px system-ui,sans-serif';
-  ctx2.fillStyle=selectedId===ag.id?'#FFF':ag.col;ctx2.textAlign='center';ctx2.textBaseline='bottom';ctx2.fillText(ag.name,cx,nameY);
+  if(inDecision){
+    ctx2.fillStyle=c(mapAccent,0.95);
+    ctx2.font='800 '+Math.round(TW*0.12)+'px system-ui,sans-serif';
+    ctx2.textAlign='center';ctx2.textBaseline='bottom';ctx2.fillText('EN DECISIÓN',cx,nameY-12*sc);
+    ctx2.font='bold '+Math.round(TW*0.2)+'px system-ui,sans-serif';
+  }
+  ctx2.fillStyle=selectedId===ag.id?'#FFF':mapAccent;ctx2.textAlign='center';ctx2.textBaseline='bottom';ctx2.fillText(ag.name,cx,nameY);
   ctx2.font='600 '+Math.round(TW*0.135)+'px system-ui';
   var lw=ctx2.measureText(ag.level).width,lx=cx+ctx2.measureText(ag.name).width/2+3.5*sc;
-  ctx2.fillStyle=c(ag.col,0.2);ctx2.beginPath();rr(lx,nameY-9*sc,lw+5*sc,8*sc,2);ctx2.fill();
-  ctx2.strokeStyle=c(ag.col,0.4);ctx2.lineWidth=0.5;ctx2.beginPath();rr(lx,nameY-9*sc,lw+5*sc,8*sc,2);ctx2.stroke();
-  ctx2.fillStyle=ag.col;ctx2.textAlign='center';ctx2.fillText(ag.level,lx+lw/2+2.5*sc,nameY-1*sc);
+  ctx2.fillStyle=c(mapAccent,inDecision?0.28:0.2);ctx2.beginPath();rr(lx,nameY-9*sc,lw+5*sc,8*sc,2);ctx2.fill();
+  ctx2.strokeStyle=c(mapAccent,inDecision?0.58:0.4);ctx2.lineWidth=0.5;ctx2.beginPath();rr(lx,nameY-9*sc,lw+5*sc,8*sc,2);ctx2.stroke();
+  ctx2.fillStyle=mapAccent;ctx2.textAlign='center';ctx2.fillText(ag.level,lx+lw/2+2.5*sc,nameY-1*sc);
 
   // skill chips
   ctx2.font=Math.round(TW*0.12)+'px system-ui';

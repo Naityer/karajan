@@ -105,6 +105,55 @@ def test_routing_layout_atomic_save_keeps_backup(tmp_path: Path) -> None:
     assert store.backup_path.exists()
 
 
+def test_routing_layout_can_add_catalog_provider_to_decision_map(tmp_path: Path) -> None:
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    client = TestClient(main.app)
+
+    response = client.post("/routing-layout/catalog/ollama-ornith")
+
+    assert response.status_code == 200
+    layout = response.json()
+    ornith = next(entity for entity in layout["entities"] if entity["provider"] == "ollama-ornith")
+    assert ornith["id"] == "entity-provider-ollama-ornith"
+    assert ornith["name"] == "Ornith (local)"
+    assert ornith["role"] == "child"
+    assert ornith["role_tags"] == ["worker", "l2"]
+    assert ornith["levels"] == ["level_3_intermediate", "level_4_complex", "level_5_critical"]
+
+
+def test_routing_layout_catalog_add_is_idempotent(tmp_path: Path) -> None:
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    client = TestClient(main.app)
+
+    assert client.post("/routing-layout/catalog/ollama-ornith").status_code == 200
+    response = client.post("/routing-layout/catalog/ollama-ornith")
+
+    assert response.status_code == 200
+    entities = [entity for entity in response.json()["entities"] if entity["provider"] == "ollama-ornith"]
+    assert len(entities) == 1
+
+
+def test_routing_layout_can_remove_catalog_provider_from_decision_map(tmp_path: Path) -> None:
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    client = TestClient(main.app)
+    client.put(
+        "/routing-layout",
+        json={
+            "entities": [
+                {"id": "entity-provider-ollama-ornith", "role": "child", "provider": "ollama-ornith"},
+                {"id": "entity-agent-claude", "role": "parent", "provider": "claude-cli"},
+            ]
+        },
+    )
+
+    response = client.delete("/routing-layout/catalog/ollama-ornith")
+
+    assert response.status_code == 200
+    providers = {entity["provider"] for entity in response.json()["entities"]}
+    assert "ollama-ornith" not in providers
+    assert "claude-cli" in providers
+
+
 def test_approve_human_review(tmp_path: Path) -> None:
     main.store = TaskStore(tmp_path / "api.db")
     main.active_config = KarajanConfig(backend=Backend.SIMULATED)
