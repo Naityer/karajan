@@ -1,14 +1,22 @@
 ---
 name: karajan
-description: Router/orquestador de tareas. Clasifica el prompt por ámbito, complejidad y riesgo, registra la decisión en el harness local KARAJAN y delega a los submodelos según la estrategia. Úsalo cuando quieras enrutar una tarea de forma medida y auditable en lugar de resolverla directamente.
+description: Router/orquestador de tareas de KARAJAN. Para cualquier tarea de desarrollo no trivial (bugs, features, refactors, análisis, decisiones de arquitectura), actúa como el LLM padre en vez de resolverla directamente — clasifica por ámbito/complejidad/riesgo, registra la decisión en el harness local KARAJAN y delega según la estrategia y el modelo recomendados. Aplica tanto si el usuario invoca /karajan explícitamente como si plantea la tarea directamente, sin comando.
 ---
 
 # KARAJAN — Router de tareas (harness)
 
-Cuando se invoca, **no resuelvas la tarea directamente**: actúas como el
-**LLM padre / router**. Clasificas, ponderas, registras la decisión en el
-harness y delegas. El harness KARAJAN guarda cada decisión para monitoreo y
-auditoría; tú eres quien recibe el prompt y decide.
+Se activa tanto con el comando `/karajan` como automáticamente cuando el
+usuario plantea una tarea de desarrollo no trivial directamente, sin comando
+explícito. Cuando se activa, **no resuelvas la tarea directamente**: actúas
+como el **LLM padre / router**. Clasificas, ponderas, registras la decisión
+en el harness y delegas. El harness KARAJAN guarda cada decisión para
+monitoreo y auditoría; tú eres quien recibe el prompt y decide.
+
+No hace falta estar dentro del repo de KARAJAN para usar esta skill: todo el
+registro se hace por HTTP (`karajan` CLI o `curl` contra `KARAJAN_API`), así
+que funciona desde cualquier proyecto una vez que el harness está activo
+(`karajan activate --start` una vez recuerda dónde está el repo para
+próximas veces).
 
 ## Flujo
 
@@ -28,6 +36,12 @@ auditoría; tú eres quien recibe el prompt y decide.
    pide confirmación humana antes de acciones irreversibles.
 6. **(Opcional) Reporta** cada decisión real de ejecución con un POST a
    `/tasks/{task_id}/decisions` para enriquecer la auditoría en vivo.
+
+Si el CLI `karajan` está instalado (`pip install -e .` en la raíz del repo),
+prefiérelo sobre el `curl` crudo de los pasos 4 y 6: `karajan ingest --file
+payload.json` / `karajan tasks decisions <task_id>` manejan servidor caído,
+reintentos y formato de salida. El `curl` de abajo queda como fallback si el
+CLI no está disponible en el entorno del agente.
 
 ## Roles del diagrama
 
@@ -56,7 +70,9 @@ Capacidad especial:
 ## Registro en el harness
 
 `KARAJAN_API` por defecto es `http://127.0.0.1:8000` (si sirves la app en otro
-puerto, exporta `KARAJAN_API`, p.ej. `http://127.0.0.1:8001`).
+puerto, exporta `KARAJAN_API`, p.ej. `http://127.0.0.1:8001`). Antes de
+registrar nada, `karajan activate` (o `karajan activate --start`) confirma que
+el harness está arriba — evita fallos de conexión a mitad del flujo.
 
 ```bash
 curl -s "${KARAJAN_API:-http://127.0.0.1:8000}/ingest" \

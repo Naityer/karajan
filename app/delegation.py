@@ -46,6 +46,7 @@ def delegate(
     human_approved: bool = False,
     layout: RoutingLayout | None = None,
     store: Any | None = None,
+    preresolved: Resolution | None = None,
 ) -> tuple[DelegationResult, list[DecisionLogEntry]]:
     """Run every subtask on its resolved backend and record harness decisions.
 
@@ -59,6 +60,11 @@ def delegate(
     row with the real `resolution.provider_name` — the stable attribution this
     phase introduces. `None` (the default, used by every pre-existing caller/test)
     keeps delegation fully functional with no persistence side effect.
+
+    `preresolved`, when given, forces every subtask onto this one `Resolution`
+    instead of the tier-pinned `resolve()` — the CLI/MCP "assign to a specific
+    agent" bypass (`/delegate-task`'s `force_provider`/`force_entity_id`). It
+    applies to the whole task, not per-subtask.
     """
     config = config or KarajanConfig()
 
@@ -72,12 +78,12 @@ def delegate(
     if config.orchestration.parallel and len(subtasks) > 1:
         with ThreadPoolExecutor(max_workers=config.orchestration.max_parallel) as pool:
             paired = list(pool.map(
-                lambda item: run_subtask(classification, item[0], item[1], config, layout, store=store),
+                lambda item: run_subtask(classification, item[0], item[1], config, layout, preresolved, store=store),
                 enumerate(subtasks, start=1),
             ))
     else:
         paired = [
-            run_subtask(classification, index, subtask, config, layout, store=store)
+            run_subtask(classification, index, subtask, config, layout, preresolved, store=store)
             for index, subtask in enumerate(subtasks, start=1)
         ]
 

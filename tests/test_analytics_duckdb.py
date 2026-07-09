@@ -114,6 +114,32 @@ def test_runs_over_time(tmp_path):
         duckdb_ops.runs_over_time(bucket="fortnight", db_path=store.db_path)
 
 
+def test_agent_task_matrix(tmp_path):
+    store = _populate(tmp_path)
+    rows = duckdb_ops.agent_task_matrix(db_path=store.db_path)
+    by_combo = {(r["provider_name"], r["task_type"]): r for r in rows}
+    impl = by_combo[("provider-a", "implement_feature")]
+    assert impl["run_count"] == 2
+    assert impl["success_rate"] == 1.0
+    assert impl["error_count"] == 0
+    assert impl["avg_latency_ms"] == 200.0  # (100 + 300) / 2
+    cls = by_combo[("provider-b", "classify_and_plan")]
+    assert cls["run_count"] == 2
+    assert cls["success_rate"] == 0.5
+    assert cls["error_count"] == 1
+
+
+def test_agent_task_flow(tmp_path):
+    store = _populate(tmp_path)
+    rows = duckdb_ops.agent_task_flow(db_path=store.db_path)
+    by_key = {(r["task_type"], r["provider_name"], r["status"]): r["run_count"] for r in rows}
+    assert by_key[("implement_feature", "provider-a", "completed")] == 2
+    assert by_key[("classify_and_plan", "provider-b", "completed")] == 1
+    assert by_key[("classify_and_plan", "provider-b", "failed")] == 1
+    # Summing a provider's flow rows must match its matrix volume (consistency).
+    assert sum(v for (_, p, _), v in by_key.items() if p == "provider-b") == 2
+
+
 def test_dashboard_assembles_all_sections(tmp_path):
     store = _populate(tmp_path)
     payload = duckdb_ops.dashboard(db_path=store.db_path)
@@ -121,6 +147,7 @@ def test_dashboard_assembles_all_sections(tmp_path):
     for key in (
         "cost_by_provider_by_day", "latency_percentiles",
         "success_rate_by_task_type", "runs_over_time", "provider_leaderboard",
+        "agent_task_matrix", "agent_task_flow",
     ):
         assert key in payload
 

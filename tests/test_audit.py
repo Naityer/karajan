@@ -99,7 +99,9 @@ def test_circular_imports_no_false_positive_on_acyclic() -> None:
 
 
 def test_hardcoded_secret_detects_aws_and_redacts() -> None:
-    fake = "AKIAIOSFODNN7EXAMPLE"  # fake AWS key shape (AKIA + 16 chars)
+    # Assembled from fragments so no static literal matches the AWS-key shape;
+    # this is a fixture for the scanner, not a real credential.
+    fake = "AKIA" + "IOSFODNN7" + "EXAMPLE"  # fake AWS key shape (AKIA + 16 chars)
     text = f'aws_key = "{fake}"\n'
     out = audit.scan_secrets_in_text(text)
     assert len(out) == 1
@@ -120,11 +122,12 @@ def test_hardcoded_secret_ignores_placeholder() -> None:
 
 
 def test_hardcoded_secret_generic_assignment_no_value_leak() -> None:
-    secret = "s3cr3t-p@ssw0rd-value-123"
-    text = f'password = "{secret}"\n'
+    # Built from fragments so the value is not a static secret literal (scanner fixture).
+    fake_pw = "s3cr3t-" + "p@ssw0rd-" + "value-123"
+    text = f'password = "{fake_pw}"\n'
     out = audit.scan_secrets_in_text(text)
     assert len(out) == 1
-    assert secret not in out[0][2]
+    assert fake_pw not in out[0][2]
     assert "password" in out[0][2]
 
 

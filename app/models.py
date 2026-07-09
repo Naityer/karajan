@@ -146,6 +146,11 @@ class IngestRequest(BaseModel):
 
 class DelegationRequest(BaseModel):
     task_id: str
+    # Force delegation to one named catalog provider or routing entity, bypassing
+    # the tier-based routing in `flow_policy`/`registry.resolve`. Applies to the
+    # whole task (every subtask), not per-subtask. Pass at most one of the two.
+    force_provider: str | None = None
+    force_entity_id: str | None = None
 
 
 class SubtaskExecution(BaseModel):

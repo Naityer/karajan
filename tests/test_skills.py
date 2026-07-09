@@ -45,6 +45,21 @@ def test_install_skill_without_repo_url(tmp_path, monkeypatch) -> None:
     assert not result.ok
 
 
+def test_install_skill_local_source_copies_skill_and_command(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(skills_catalog, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(skills_catalog, "COMMANDS_DIR", tmp_path / "commands")
+    result = skills_catalog.install_skill("karajan")
+    assert result.ok
+    assert (tmp_path / "skills" / "karajan" / "SKILL.md").is_file()
+    assert (tmp_path / "commands" / "karajan.md").is_file()
+
+
+def test_karajan_local_skill_in_catalog() -> None:
+    by_name = {s.name: s for s in skills_catalog.list_skills()}
+    assert "karajan" in by_name
+    assert "task-router" in by_name
+
+
 def test_token_budget_for_known_and_unknown_provider() -> None:
     assert catalog.token_budget_for("claude-cli") > 0
     assert catalog.token_budget_for("ollama-qwen") == 0

@@ -12,8 +12,14 @@ When Karajan's `dispatch_mode` is `"queue"`, delegation is asynchronous and
 availability-driven (an agent only takes a task once it's actually free,
 regardless of arrival order) — `karajan_run` polls until the task finishes.
 
+Every tool here is a thin wrapper over `karajan_cli.client.KarajanClient` — the
+same HTTP layer the `karajan` terminal CLI uses — so an MCP-connected agent
+(Claude Code) and a plain shell/agent invoking `karajan ...` get identical
+behavior against the same running server.
+
 Usage: registered as an MCP server in ~/.claude/settings.json.
-Requires Karajan server to be running: python -m uvicorn app.main:app --reload
+Requires Karajan server to be running: `karajan activate --start`, or
+manually `python -m uvicorn app.main:app --reload`.
 """
 
 from __future__ import annotations
@@ -31,16 +37,17 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
 
 import time
 
-import httpx
 from mcp.server.fastmcp import FastMCP
 
-KARAJAN_URL = os.environ.get("KARAJAN_URL", "http://127.0.0.1:8000")
-TIMEOUT_CLASSIFY = 30
+from karajan_cli.client import DEFAULT_URL, KarajanApiError, KarajanClient
+
+KARAJAN_URL = os.environ.get("KARAJAN_URL", DEFAULT_URL)
 TIMEOUT_DELEGATE = 180
 QUEUE_POLL_INTERVAL_S = 2
 QUEUE_POLL_MAX_ATTEMPTS = TIMEOUT_DELEGATE // QUEUE_POLL_INTERVAL_S
 
 mcp = FastMCP("karajan")
+client = KarajanClient(base_url=KARAJAN_URL, timeout=TIMEOUT_DELEGATE)
 
 
 _ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -50,12 +57,26 @@ def _strip_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text)
 
 
-def _is_running() -> bool:
-    try:
-        httpx.get(f"{KARAJAN_URL}/health", timeout=3).raise_for_status()
-        return True
-    except Exception:
-        return False
+def _not_running_message() -> str:
+    return (
+        "ERROR: El servidor Karajan no está activo.\n"
+        "Inícialo con:\n"
+        "  karajan activate --start\n"
+        "o manualmente:\n"
+        "  cd C:\\Users\\tiand\\Desktop\\Workspace\\karajan\n"
+        "  .venv\\Scripts\\uvicorn app.main:app --reload"
+    )
+
+
+def _format_health(h: dict) -> str:
+    return (
+        f"status:   {h.get('status')}\n"
+        f"backend:  {h.get('backend')}\n"
+        f"profile:  {h.get('profile')}\n"
+        f"db_ok:    {h.get('db_ok')}\n"
+        f"tasks:    {h.get('total_tasks')}\n"
+        f"version:  {h.get('version')}"
+    )
 
 
 @mcp.tool()
@@ -71,26 +92,14 @@ def karajan_run(prompt: str) -> str:
     Args:
         prompt: The task or instruction to route and execute.
     """
-    if not _is_running():
-        return (
-            "ERROR: El servidor Karajan no está activo.\n"
-            "Inícialo con:\n"
-            "  cd C:\\Users\\tiand\\Desktop\\karajan\n"
-            "  .venv\\Scripts\\uvicorn app.main:app --reload"
-        )
+    if not client.is_running():
+        return _not_running_message()
 
-    # 1. Classify
     try:
-        r = httpx.post(
-            f"{KARAJAN_URL}/classify-task",
-            json={"prompt": prompt},
-            timeout=TIMEOUT_CLASSIFY,
-        )
-        r.raise_for_status()
-    except httpx.HTTPError as exc:
+        task = client.classify(prompt)
+    except KarajanApiError as exc:
         return f"ERROR clasificando tarea: {exc}"
 
-    task = r.json()
     task_id = task["task_id"]
     classification = task.get("classification", {})
     level = classification.get("complexity_level", "?")
@@ -104,21 +113,13 @@ def karajan_run(prompt: str) -> str:
             f"Requiere revisión humana antes de delegar a {assigned_model}.\n"
             f"task_id={task_id}\n"
             "Aprueba en el dashboard de Karajan o via:\n"
-            f"  POST {KARAJAN_URL}/tasks/{task_id}/approve-review"
+            f"  karajan tasks approve {task_id}"
         )
 
-    # 2. Delegate
     try:
-        r2 = httpx.post(
-            f"{KARAJAN_URL}/delegate-task",
-            json={"task_id": task_id},
-            timeout=TIMEOUT_DELEGATE,
-        )
-        r2.raise_for_status()
-    except httpx.HTTPError as exc:
+        result = client.delegate(task_id)
+    except KarajanApiError as exc:
         return f"ERROR delegando tarea (task_id={task_id}): {exc}"
-
-    result = r2.json()
 
     # Under dispatch_mode="queue" the task is enqueued and dispatched
     # asynchronously (availability-driven, not immediate) — poll until done.
@@ -126,11 +127,9 @@ def karajan_run(prompt: str) -> str:
         for _ in range(QUEUE_POLL_MAX_ATTEMPTS):
             time.sleep(QUEUE_POLL_INTERVAL_S)
             try:
-                r3 = httpx.get(f"{KARAJAN_URL}/tasks/{task_id}", timeout=10)
-                r3.raise_for_status()
-            except httpx.HTTPError as exc:
+                result = client.get_task(task_id)
+            except KarajanApiError as exc:
                 return f"ERROR consultando tarea en cola (task_id={task_id}): {exc}"
-            result = r3.json()
             if result.get("status") in ("completed", "failed"):
                 break
         else:
@@ -170,20 +169,14 @@ def karajan_classify(prompt: str) -> str:
     Args:
         prompt: The task or instruction to classify.
     """
-    if not _is_running():
+    if not client.is_running():
         return "ERROR: Karajan no está activo. Ver karajan_run para instrucciones."
 
     try:
-        r = httpx.post(
-            f"{KARAJAN_URL}/classify-task",
-            json={"prompt": prompt},
-            timeout=TIMEOUT_CLASSIFY,
-        )
-        r.raise_for_status()
-    except httpx.HTTPError as exc:
+        task = client.classify(prompt)
+    except KarajanApiError as exc:
         return f"ERROR: {exc}"
 
-    task = r.json()
     c = task.get("classification", {})
     lines = [
         f"task_id:         {task['task_id']}",
@@ -205,18 +198,8 @@ def karajan_classify(prompt: str) -> str:
 def karajan_health() -> str:
     """Check if the Karajan server is running and which backend/profile is active."""
     try:
-        r = httpx.get(f"{KARAJAN_URL}/health", timeout=5)
-        r.raise_for_status()
-        h = r.json()
-        return (
-            f"status:   {h.get('status')}\n"
-            f"backend:  {h.get('backend')}\n"
-            f"profile:  {h.get('profile')}\n"
-            f"db_ok:    {h.get('db_ok')}\n"
-            f"tasks:    {h.get('total_tasks')}\n"
-            f"version:  {h.get('version')}"
-        )
-    except Exception as exc:
+        return _format_health(client.health())
+    except KarajanApiError as exc:
         return f"Karajan no disponible en {KARAJAN_URL}: {exc}"
 
 
@@ -224,17 +207,201 @@ def karajan_health() -> str:
 def karajan_providers() -> str:
     """List all AI providers and their credential/readiness status in Karajan."""
     try:
-        r = httpx.get(f"{KARAJAN_URL}/providers", timeout=10)
-        r.raise_for_status()
-    except Exception as exc:
+        providers = client.list_providers()
+    except KarajanApiError as exc:
         return f"ERROR: {exc}"
 
-    providers = r.json()
     lines = []
     for p in providers:
         ready = "OK" if p.get("ready") else "FALTA"
         lines.append(f"[{ready}] {p['provider']:20s}  {p.get('detail', '')}")
     return "\n".join(lines) if lines else "Sin proveedores"
+
+
+# --- Parity with the `karajan` CLI's mutating commands -----------------------
+
+
+@mcp.tool()
+def karajan_assign(task_id: str, provider_or_entity: str, as_entity: bool = False) -> str:
+    """Force-delegate an already-classified task to one named agent/provider,
+    bypassing the automatic tier-based routing (the same bypass `karajan assign`
+    uses from the terminal).
+
+    Args:
+        task_id: id of a task already classified via karajan_classify/karajan_run.
+        provider_or_entity: catalog provider name (e.g. "claude-cli"), or a
+            routing-hierarchy entity id when as_entity=True.
+        as_entity: interpret provider_or_entity as a RoutingEntity id from the
+            Decisión hierarchy instead of a catalog provider name.
+    """
+    try:
+        if as_entity:
+            result = client.delegate(task_id, force_entity_id=provider_or_entity)
+        else:
+            result = client.delegate(task_id, force_provider=provider_or_entity)
+    except KarajanApiError as exc:
+        return f"ERROR: {exc}"
+
+    executions = (result.get("delegation") or {}).get("executions") or []
+    execution = executions[0] if executions else {}
+    return (
+        f"[Karajan → {provider_or_entity} forzado]\n"
+        f"task_id={result.get('task_id')} status={result.get('status')}\n"
+        f"backend={execution.get('backend')} modelo={execution.get('model_used')} "
+        f"latencia_ms={execution.get('latency_ms')}"
+    )
+
+
+@mcp.tool()
+def karajan_config_get(dotted_path: str | None = None) -> str:
+    """Read the active KarajanConfig, or one field by dotted path (e.g. "orchestration.dispatch_mode")."""
+    try:
+        config = client.get_config()
+    except KarajanApiError as exc:
+        return f"ERROR: {exc}"
+
+    if not dotted_path:
+        return "\n".join(f"{k}: {v}" for k, v in config.items())
+
+    node = config
+    try:
+        for part in dotted_path.split("."):
+            node = node[part]
+    except (KeyError, TypeError):
+        return f"ERROR: ruta '{dotted_path}' no encontrada en la config"
+    return f"{dotted_path} = {node}"
+
+
+@mcp.tool()
+def karajan_config_set(dotted_path: str, value: str) -> str:
+    """Write one KarajanConfig field by dotted path (GET, patch locally, PUT)."""
+    try:
+        config = client.get_config()
+    except KarajanApiError as exc:
+        return f"ERROR: {exc}"
+
+    parts = dotted_path.split(".")
+    node = config
+    try:
+        for part in parts[:-1]:
+            node = node[part]
+    except (KeyError, TypeError):
+        return f"ERROR: ruta '{dotted_path}' no encontrada en la config"
+
+    coerced: object = value
+    for cast in (int, float):
+        try:
+            coerced = cast(value)
+            break
+        except ValueError:
+            continue
+    else:
+        if value.lower() in ("true", "false"):
+            coerced = value.lower() == "true"
+    node[parts[-1]] = coerced
+
+    try:
+        client.put_config(config)
+    except KarajanApiError as exc:
+        return f"ERROR guardando config: {exc}"
+    return f"{dotted_path} = {coerced}"
+
+
+@mcp.tool()
+def karajan_layout_show() -> str:
+    """Show the Decisión routing hierarchy (entities + groups)."""
+    try:
+        layout = client.get_routing_layout()
+    except KarajanApiError as exc:
+        return f"ERROR: {exc}"
+
+    lines = [f"entidades: {len(layout.get('entities', []))}  grupos: {len(layout.get('groups', []))}"]
+    for entity in layout.get("entities", []):
+        lines.append(
+            f"  {entity['id']:24s} rol={entity['role']:10s} provider={entity.get('provider') or '-':16s} "
+            f"tier={entity.get('tier')} levels={','.join(entity.get('levels', []))}"
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def karajan_layout_set_provider(entity_id: str, provider: str) -> str:
+    """Change one routing entity's provider (narrowly-scoped layout mutation;
+    full layout editing stays CLI/dashboard-only to limit the blast radius of
+    an LLM-invoked tool call).
+    """
+    try:
+        layout = client.get_routing_layout()
+    except KarajanApiError as exc:
+        return f"ERROR: {exc}"
+
+    entity = next((e for e in layout.get("entities", []) if e["id"] == entity_id), None)
+    if entity is None:
+        return f"ERROR: no existe la entidad '{entity_id}'"
+    entity["provider"] = provider
+
+    try:
+        client.put_routing_layout(layout)
+    except KarajanApiError as exc:
+        return f"ERROR guardando layout: {exc}"
+    return f"'{entity_id}'.provider = {provider}"
+
+
+@mcp.tool()
+def karajan_provider_activate(name: str, slot: str = "probe_command") -> str:
+    """Run a provider's catalog-defined login or probe command.
+
+    Args:
+        name: catalog provider name (see karajan_providers).
+        slot: "login_command" or "probe_command".
+    """
+    if slot not in ("login_command", "probe_command"):
+        return "ERROR: slot debe ser 'login_command' o 'probe_command'"
+    try:
+        result = client.provider_run(name, slot)
+    except KarajanApiError as exc:
+        return f"ERROR: {exc}"
+
+    status = "OK" if result.get("ok") else "FALLO"
+    lines = [f"[{status}] {result.get('command')}"]
+    if result.get("stdout"):
+        lines.append(_strip_ansi(result["stdout"]))
+    if result.get("stderr"):
+        lines.append(_strip_ansi(result["stderr"]))
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def karajan_stats(kind: str = "dashboard", days: int = 30) -> str:
+    """Return harness statistics.
+
+    Args:
+        kind: one of "dashboard" (full DuckDB analytics), "leaderboard"
+            (provider ranking only), "health", "agents" (per-provider
+            cost/latency/error aggregation).
+        days: lookback window for "dashboard"/"leaderboard".
+    """
+    try:
+        if kind == "health":
+            return _format_health(client.health())
+        if kind == "agents":
+            data = client.agents_performance()
+            rows = [
+                f"{a.get('provider', '?'):20s} runs={a.get('total_runs', '?')} "
+                f"cost_usd={a.get('total_cost_usd', '?')} error_rate={a.get('error_rate', '?')}"
+                for a in data
+            ]
+            return "\n".join(rows) if rows else "Sin datos"
+
+        data = client.dashboard(days=days)
+        if not data.get("available", True):
+            return f"Analítica no disponible: {data.get('reason')}"
+        if kind == "leaderboard":
+            rows = data.get("provider_leaderboard", [])
+            return "\n".join(str(row) for row in rows) if rows else "Sin datos"
+        return str(data)
+    except KarajanApiError as exc:
+        return f"ERROR: {exc}"
 
 
 if __name__ == "__main__":

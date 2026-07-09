@@ -79,18 +79,19 @@
       <!-- VIEW 2 · MONITOR (full-width, sub-navigated redesign — Phase A) -->
       <section class="view" id="view-monitor">
         <div class="monitor-shell" id="monitorShell">
-          <header class="monitor-toolbar">
-            <div>
-              <span class="eyebrow">System state</span>
-              <h1>Monitor de observabilidad</h1>
-              <p>Auditoría del harness: tareas, delegaciones, coste, latencia y nodos implicados desde <code>/karajan</code>.</p>
-            </div>
-          </header>
-
           <nav class="monitor-subnav" id="monitorSubnav" role="tablist" aria-label="Sub-vistas del monitor">
-            <button type="button" class="monitor-subtab active" data-subview="resumen" role="tab" aria-selected="true">Resumen</button>
-            <button type="button" class="monitor-subtab" data-subview="agentes" role="tab" aria-selected="false">Agentes</button>
-            <button type="button" class="monitor-subtab" data-subview="tareas" role="tab" aria-selected="false">Tareas</button>
+            <button type="button" class="monitor-subtab active" data-subview="resumen" role="tab" aria-selected="true">
+              <span class="monitor-subtab-name">Resumen</span>
+              <span class="monitor-subtab-desc">KPIs y relación tareas ↔ agentes</span>
+            </button>
+            <button type="button" class="monitor-subtab" data-subview="agentes" role="tab" aria-selected="false">
+              <span class="monitor-subtab-name">Agentes</span>
+              <span class="monitor-subtab-desc">Rendimiento y coste por agente</span>
+            </button>
+            <button type="button" class="monitor-subtab" data-subview="tareas" role="tab" aria-selected="false">
+              <span class="monitor-subtab-name">Tareas</span>
+              <span class="monitor-subtab-desc">Traza y auditoría de ejecución</span>
+            </button>
           </nav>
 
           <!-- RESUMEN (Phase B — executive KPI/analytics dashboard, built by renderResumen()) -->

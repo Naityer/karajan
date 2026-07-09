@@ -38,6 +38,7 @@ from app import (
 )
 from app.auth import TOKEN_ENV_VAR, require_token
 from app.logging_config import get_logger, log_event
+from app.providers.registry import resolve_by_name, resolve_entity
 from app.models import ClassificationResult
 from app.database import TaskStore
 from app.graph_store import GraphStore, safe_resolve
@@ -288,12 +289,47 @@ def _enforce_daily_budget(classification: ClassificationResult) -> None:
 
 @app.post("/delegate-task", response_model=TaskRecord)
 def delegate_task(request: DelegationRequest, _: None = Depends(require_token)) -> TaskRecord:
+    """Delegate a classified task. `force_provider`/`force_entity_id` bypass the
+    tier-based routing to force the whole task onto one named catalog provider
+    or routing entity (the CLI/MCP "assign to a specific agent" command) — not
+    supported under `dispatch_mode="queue"`, whose async scheduler has no hook
+    for a caller-supplied resolution.
+    """
     try:
         record = store.get_task(request.task_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="task not found") from exc
 
     _enforce_daily_budget(record.classification)
+
+    if request.force_provider or request.force_entity_id:
+        if request.force_provider and request.force_entity_id:
+            raise HTTPException(status_code=400, detail="pass only one of force_provider or force_entity_id")
+        if active_config.orchestration.dispatch_mode == "queue":
+            raise HTTPException(
+                status_code=400,
+                detail="force_provider/force_entity_id is not supported with dispatch_mode=queue",
+            )
+        layout = layout_store.load()
+        tier = record.classification.subtasks[0].recommended_model
+        if request.force_entity_id:
+            entity = next((e for e in layout.entities if e.id == request.force_entity_id), None)
+            if entity is None:
+                raise HTTPException(status_code=404, detail=f"routing entity '{request.force_entity_id}' not found")
+            preresolved = resolve_entity(entity, tier)
+        else:
+            preresolved = resolve_by_name(request.force_provider, tier)
+        if preresolved is None:
+            raise HTTPException(
+                status_code=422,
+                detail="target provider/entity is unknown to the catalog or doesn't support this task's tier",
+            )
+        result, decisions = delegation.delegate(
+            record.classification, active_config, layout=layout, store=store, preresolved=preresolved
+        )
+        saved = store.save_delegation(result, decisions)
+        events.publish("task_changed", task_id=request.task_id)
+        return saved
 
     if active_config.orchestration.dispatch_mode == "queue":
         store.mark_status(request.task_id, TaskStatus.QUEUED)

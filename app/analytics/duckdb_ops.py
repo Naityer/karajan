@@ -257,6 +257,75 @@ def provider_leaderboard(db_path: Path | str = DEFAULT_DB_PATH) -> list[dict[str
         con.close()
 
 
+def agent_task_matrix(db_path: Path | str = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
+    """Cross-tab of provider (agent) x task_type with volume/quality/cost/latency.
+
+    One row per (provider_name, task_type) combination that actually ran, joining
+    `runs` back to `tasks_v2` on `legacy_task_id` (the same key used by
+    `success_rate_by_task_type`). This is the canonical source for the Monitor's
+    "relación Agente x Tarea" heatmap and the cost-vs-latency efficiency scatter:
+    it exposes, per combination, the run volume, success rate, mean cost/run and
+    mean latency so the frontend can pivot any of those into a magnitude matrix.
+    """
+    con = _connect(db_path)
+    try:
+        return _rows(
+            con,
+            """
+            SELECT
+                r.provider_name                                          AS provider_name,
+                COALESCE(t.task_type, 'unknown')                         AS task_type,
+                COUNT(*)                                                 AS run_count,
+                SUM(CASE WHEN r.status = 'completed' AND r.error IS NULL
+                         THEN 1 ELSE 0 END)                              AS success_count,
+                CAST(AVG(CASE WHEN r.status = 'completed' AND r.error IS NULL
+                              THEN 1.0 ELSE 0.0 END) AS DOUBLE)          AS success_rate,
+                CAST(AVG(r.latency_ms) AS DOUBLE)                        AS avg_latency_ms,
+                COALESCE(AVG(r.estimated_cost_usd), 0.0)                 AS avg_cost_per_run,
+                COALESCE(SUM(r.estimated_cost_usd), 0.0)                 AS total_cost,
+                SUM(CASE WHEN r.status = 'failed' OR r.error IS NOT NULL
+                         THEN 1 ELSE 0 END)                              AS error_count
+            FROM tl.runs r
+            LEFT JOIN tl.tasks_v2 t ON t.legacy_task_id = r.task_id
+            WHERE r.provider_name IS NOT NULL
+            GROUP BY provider_name, task_type
+            ORDER BY run_count DESC
+            """,
+        )
+    finally:
+        con.close()
+
+
+def agent_task_flow(db_path: Path | str = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
+    """Run counts grouped by (task_type, provider, run status) for the flow Sankey.
+
+    A single 3-way grouping the frontend collapses into the two link layers of a
+    `Tipo de tarea -> Agente -> Estado` Sankey: summing over `status` yields the
+    task_type -> provider links, summing over `task_type` yields the
+    provider -> status links. Keeping it one query (vs. two) avoids a second scan
+    and keeps the two link sets perfectly consistent.
+    """
+    con = _connect(db_path)
+    try:
+        return _rows(
+            con,
+            """
+            SELECT
+                COALESCE(t.task_type, 'unknown')                         AS task_type,
+                r.provider_name                                          AS provider_name,
+                r.status                                                 AS status,
+                COUNT(*)                                                 AS run_count
+            FROM tl.runs r
+            LEFT JOIN tl.tasks_v2 t ON t.legacy_task_id = r.task_id
+            WHERE r.provider_name IS NOT NULL
+            GROUP BY task_type, provider_name, r.status
+            ORDER BY run_count DESC
+            """,
+        )
+    finally:
+        con.close()
+
+
 def dashboard(days: int = 30, db_path: Path | str = DEFAULT_DB_PATH) -> dict[str, Any]:
     """Assemble the full analytics dashboard payload in one call.
 
@@ -271,4 +340,6 @@ def dashboard(days: int = 30, db_path: Path | str = DEFAULT_DB_PATH) -> dict[str
         "success_rate_by_task_type": success_rate_by_task_type(db_path),
         "runs_over_time": runs_over_time("day", db_path),
         "provider_leaderboard": provider_leaderboard(db_path),
+        "agent_task_matrix": agent_task_matrix(db_path),
+        "agent_task_flow": agent_task_flow(db_path),
     }

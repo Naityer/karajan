@@ -34,7 +34,33 @@ _GITHUB_SKILLS: tuple[dict, ...] = (
     {"name": "web-artifacts-builder", "description": "Artefactos web complejos (React, Tailwind, shadcn/ui).", "applies_to": ["claude", "codex"], "repo_url": "https://github.com/anthropics/skills"},
 )
 
+# Skills que viven en este propio repo (bajo skills/<name>/SKILL.md) y se
+# instalan copiando esos ficheros a ~/.claude/skills — no requieren red ni git.
+# `command_file`, si existe, se copia también a ~/.claude/commands para que el
+# slash-command quede disponible (p.ej. /karajan).
+_LOCAL_SKILLS: tuple[dict, ...] = (
+    {
+        "name": "karajan",
+        "description": (
+            "Router/orquestador de tareas propio de este proyecto: clasifica el prompt, "
+            "registra la decisión en el harness KARAJAN y delega según la arquitectura de Decisión."
+        ),
+        "applies_to": ["claude", "codex"],
+        "source_dir": "skills/karajan",
+        "command_file": "commands/karajan.md",
+    },
+    {
+        "name": "task-router",
+        "description": "Clasifica prompts por ámbito, complejidad y riesgo (sin registrar en el harness).",
+        "applies_to": ["claude", "codex", "ollama"],
+        "source_dir": "skills/task-router",
+        "command_file": None,
+    },
+)
+
 SKILLS_DIR = Path.home() / ".claude" / "skills"
+COMMANDS_DIR = Path.home() / ".claude" / "commands"
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def list_skills() -> list[SkillInfo]:
@@ -52,24 +78,43 @@ def list_skills() -> list[SkillInfo]:
             install_command=None if installed else f"claude skill install {skill['name']}",
             repo_url=skill.get("repo_url"),
         )
-        for skill in (*_SKILLS, *_GITHUB_SKILLS)
+        for skill in (*_SKILLS, *_GITHUB_SKILLS, *_LOCAL_SKILLS)
     ]
 
 
 def install_skill(name: str) -> SkillInstallResult:
-    """Install a catalog-listed, GitHub-distributed skill into ~/.claude/skills.
+    """Install a catalog-listed skill into ~/.claude/skills.
 
-    Restricted to names present in the static catalog (never arbitrary specs),
-    and to skills that declare a `repo_url` — the built-in `_SKILLS` are already
-    bundled with the agent and have nothing to fetch.
+    Restricted to names present in the static catalog (never arbitrary specs).
+    Three sources: `_SKILLS` are already bundled with the agent (nothing to
+    do), `_GITHUB_SKILLS` are cloned from `repo_url`, `_LOCAL_SKILLS` are
+    copied straight from this repo's own `skills/<name>/` (plus its matching
+    `commands/<name>.md`, if any) — no network needed.
     """
-    entry = next((s for s in (*_SKILLS, *_GITHUB_SKILLS) if s["name"] == name), None)
+    entry = next((s for s in (*_SKILLS, *_GITHUB_SKILLS, *_LOCAL_SKILLS) if s["name"] == name), None)
     if entry is None:
         return SkillInstallResult(ok=False, detail=f"Skill desconocida en el catálogo: {name}")
 
     target = SKILLS_DIR / name
     if target.is_dir():
         return SkillInstallResult(ok=True, detail=f"'{name}' ya está instalada.")
+
+    source_dir = entry.get("source_dir")
+    if source_dir:
+        source = _REPO_ROOT / source_dir
+        if not source.is_dir():
+            return SkillInstallResult(ok=False, detail=f"No se encontró '{source_dir}' en el repo.")
+        SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, target)
+        command_file = entry.get("command_file")
+        if command_file:
+            command_source = _REPO_ROOT / command_file
+            if command_source.is_file():
+                COMMANDS_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(command_source, COMMANDS_DIR / command_source.name)
+        return SkillInstallResult(
+            ok=True, detail=f"'{name}' instalada en {target}. Reinicia Claude Code para que aparezca."
+        )
 
     repo_url = entry.get("repo_url")
     if not repo_url:

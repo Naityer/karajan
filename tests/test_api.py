@@ -281,3 +281,113 @@ def test_apply_queue_config_enables_queue_dispatch_and_fills_hierarchy(tmp_path:
     assert response2.status_code == 200
     layout2 = client.get("/routing-layout").json()
     assert len(layout2["entities"]) == len(layout["entities"])
+
+
+def _classify(client: TestClient) -> str:
+    response = client.post("/classify-task", json={"prompt": "Escribe un script pequeño de utilidad."})
+    assert response.status_code == 200
+    return response.json()["task_id"]
+
+
+def test_delegate_task_force_provider_bypasses_routing(tmp_path: Path, monkeypatch) -> None:
+    main.store = TaskStore(tmp_path / "api.db")
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    client = TestClient(main.app)
+    task_id = _classify(client)
+
+    fake = _FakeFixerProvider("output forzado")
+    monkeypatch.setattr(
+        main, "resolve_by_name", lambda name, tier: Resolution(fake, Backend.SIMULATED, "fake-model", name)
+    )
+
+    response = client.post("/delegate-task", json={"task_id": task_id, "force_provider": "claude-cli"})
+    assert response.status_code == 200
+    executions = response.json()["delegation"]["executions"]
+    assert executions
+    assert all(execution["model_used"] == "fake-model" for execution in executions)
+
+
+def test_delegate_task_force_entity_id_bypasses_routing(tmp_path: Path, monkeypatch) -> None:
+    main.store = TaskStore(tmp_path / "api.db")
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    client = TestClient(main.app)
+    task_id = _classify(client)
+
+    client.put(
+        "/routing-layout",
+        json={"entities": [{"id": "entity-forced", "role": "worker", "provider": "claude-cli", "tier": 1}]},
+    )
+
+    fake = _FakeFixerProvider("output forzado por entidad")
+    monkeypatch.setattr(
+        main, "resolve_entity", lambda entity, tier: Resolution(fake, Backend.SIMULATED, "fake-model-entity", entity.id)
+    )
+
+    response = client.post("/delegate-task", json={"task_id": task_id, "force_entity_id": "entity-forced"})
+    assert response.status_code == 200
+    executions = response.json()["delegation"]["executions"]
+    assert executions
+    assert all(execution["model_used"] == "fake-model-entity" for execution in executions)
+
+
+def test_delegate_task_force_unknown_entity_returns_404(tmp_path: Path) -> None:
+    main.store = TaskStore(tmp_path / "api.db")
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    client = TestClient(main.app)
+    task_id = _classify(client)
+
+    response = client.post("/delegate-task", json={"task_id": task_id, "force_entity_id": "does-not-exist"})
+    assert response.status_code == 404
+
+
+def test_delegate_task_force_unknown_provider_returns_422(tmp_path: Path) -> None:
+    main.store = TaskStore(tmp_path / "api.db")
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    client = TestClient(main.app)
+    task_id = _classify(client)
+
+    response = client.post("/delegate-task", json={"task_id": task_id, "force_provider": "no-such-provider"})
+    assert response.status_code == 422
+
+
+def test_delegate_task_force_both_fields_returns_400(tmp_path: Path) -> None:
+    main.store = TaskStore(tmp_path / "api.db")
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    client = TestClient(main.app)
+    task_id = _classify(client)
+
+    response = client.post(
+        "/delegate-task",
+        json={"task_id": task_id, "force_provider": "claude-cli", "force_entity_id": "entity-forced"},
+    )
+    assert response.status_code == 400
+
+
+def test_delegate_task_force_with_queue_dispatch_returns_400(tmp_path: Path) -> None:
+    main.store = TaskStore(tmp_path / "api.db")
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    config = KarajanConfig(backend=Backend.SIMULATED)
+    config.orchestration.dispatch_mode = "queue"
+    main.active_config = config
+    client = TestClient(main.app)
+    task_id = _classify(client)
+
+    response = client.post("/delegate-task", json={"task_id": task_id, "force_provider": "claude-cli"})
+    assert response.status_code == 400
+
+
+def test_delegate_task_without_force_fields_is_unchanged(tmp_path: Path) -> None:
+    main.store = TaskStore(tmp_path / "api.db")
+    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    client = TestClient(main.app)
+    task_id = _classify(client)
+
+    response = client.post("/delegate-task", json={"task_id": task_id})
+    assert response.status_code == 200
+    assert response.json()["delegation"]["executions"]

@@ -658,7 +658,7 @@ async function refreshMonitor() {
   // Agentes is the active sub-view, so SSE/poll updates flow to the leaderboard,
   // percentiles, cost and skills heatmap without a duplicate round-trip.
   if (state.monitorSubview === "agentes") {
-    renderAgentes({ metrics, observability, performance }).catch(() => {});
+    renderAgentes({ metrics, tasks, observability, performance }).catch(() => {});
   }
   // Phase D: the Tareas analytics band + task table (and any open drill-down)
   // ride the same fetch bundle when Tareas is active, so SSE/poll (task_changed,
@@ -817,11 +817,196 @@ async function renderResumen(pre) {
     body: healthBody,
   });
 
+  const relationSection = analytics ? resumenAgentTaskSection(analytics) : "";
+
   el.innerHTML = `
     <div class="resumen-kpis">${kpis}</div>
     ${activityFrame}
+    ${relationSection}
     <div class="resumen-2up">${complexityFrame}${modelFrame}</div>
     ${healthFrame}`;
+}
+
+// ---- Resumen: relación Tareas ↔ Agentes ------------------------------------
+// Built on the additive DuckDB cross-tabs (agent_task_matrix / agent_task_flow):
+// a KPI band, a metric-switchable Agente×Tipo heatmap, a cost-vs-latency
+// efficiency scatter and a Tipo→Agente→Estado flow Sankey. Every mark reads real
+// run data; the whole section is omitted when analytics is unavailable/empty.
+const RESUMEN_HM_METRICS = {
+  volumen: { label: "Volumen", pick: (r) => Number(r.run_count) || 0, fmt: (v) => dvNum(v), note: "ejecuciones por combinación" },
+  exito: { label: "Éxito %", pick: (r) => Math.round((Number(r.success_rate) || 0) * 100), fmt: (v) => `${dvNum(v)}%`, note: "% de ejecuciones completadas sin error" },
+  coste: { label: "Coste medio", pick: (r) => Number(r.avg_cost_per_run) || 0, fmt: (v) => `$${Number(v).toFixed(4)}`, note: "coste medio por ejecución (USD)" },
+  latencia: { label: "Latencia media", pick: (r) => Math.round(Number(r.avg_latency_ms) || 0), fmt: (v) => `${dvNum(v)} ms`, note: "latencia media por ejecución" },
+};
+const _shortLabel = (s, n = 22) => { s = String(s || "—"); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
+
+function resumenAgentTaskPivot(rows, metricKey) {
+  const m = RESUMEN_HM_METRICS[metricKey] || RESUMEN_HM_METRICS.volumen;
+  const agentVol = {}, typeVol = {};
+  rows.forEach((r) => {
+    agentVol[r.provider_name] = (agentVol[r.provider_name] || 0) + Number(r.run_count || 0);
+    typeVol[r.task_type] = (typeVol[r.task_type] || 0) + Number(r.run_count || 0);
+  });
+  const agents = Object.keys(agentVol).sort((a, b) => agentVol[b] - agentVol[a]).slice(0, 10);
+  const types = Object.keys(typeVol).sort((a, b) => typeVol[b] - typeVol[a]).slice(0, 8);
+  const look = new Map(rows.map((r) => [`${r.provider_name}||${r.task_type}`, r]));
+  const matrix = agents.map((a) => types.map((t) => { const r = look.get(`${a}||${t}`); return r ? m.pick(r) : 0; }));
+  return { agents, types, matrix, valueFormat: m.fmt, note: m.note, label: m.label };
+}
+
+// Heatmap body as an HTML string (used for the first paint and on metric switch).
+function resumenHeatmapHtml() {
+  const rows = (state.resumenAnalytics && state.resumenAnalytics.agent_task_matrix) || [];
+  if (!rows.length) return `<div class="chart-empty">sin datos de agente × tarea</div>`;
+  const metric = state.resumenHeatMetric || "volumen";
+  const p = resumenAgentTaskPivot(rows, metric);
+  return heatmap({ rows: p.agents, cols: p.types, matrix: p.matrix, valueFormat: p.valueFormat }) +
+    `<p class="dv-hm-note"><b>${dvEsc(p.label)}</b> — ${dvEsc(p.note)}</p>`;
+}
+
+// Cost-vs-latency efficiency scatter: one bubble per agent×tipo, hue by tipo.
+function resumenScatterHtml(rows) {
+  const active = rows.filter((r) => Number(r.run_count) > 0);
+  if (!active.length) return `<div class="chart-empty">sin ejecuciones</div>`;
+  const types = [...new Set(active.map((r) => r.task_type))].sort();
+  const ti = new Map(types.map((t, i) => [t, i]));
+  const points = active.map((r) => ({
+    x: Math.round(Number(r.avg_latency_ms) || 0),
+    y: Number(r.avg_cost_per_run) || 0,
+    size: Number(r.run_count) || 1,
+    seriesIndex: ti.get(r.task_type),
+    tip: `${r.provider_name} · ${r.task_type} · ${dvNum(r.run_count)} ejec · $${Number(r.avg_cost_per_run).toFixed(4)}/ejec · ${dvNum(Math.round(Number(r.avg_latency_ms) || 0))} ms`,
+  }));
+  return scatterPlot({
+    points, xLabel: "Latencia media (ms)", yLabel: "Coste medio (USD)",
+    xFormat: (v) => dvNum(v), yFormat: (v) => `$${Number(v).toFixed(4)}`,
+  }) + chartLegend({ series: types.map((t, i) => ({ name: t, seriesIndex: i })) });
+}
+
+// Tipo → Agente → Estado flow Sankey from the 3-way agent_task_flow grouping.
+function resumenSankeyHtml(flow) {
+  if (!flow.length) return `<div class="chart-empty">sin datos de flujo</div>`;
+  // Sort task types the same way the scatter does so a given tipo keeps ONE hue
+  // across both charts (cross-chart colour consistency).
+  const types = [...new Set(flow.map((f) => f.task_type))].sort();
+  const provs = [...new Set(flow.map((f) => f.provider_name))];
+  const stats = [...new Set(flow.map((f) => f.status))];
+  const ti = new Map(types.map((t, i) => [t, i]));
+  const typeNodes = types.map((t) => ({ id: `t:${t}`, label: _shortLabel(t, 18), color: dvSeries(ti.get(t)) }));
+  const provNodes = provs.map((p) => ({ id: `p:${p}`, label: _shortLabel(p, 18) }));
+  const statNodes = stats.map((s) => ({ id: `s:${s}`, label: s, color: tareasPillColor(s) }));
+  const l1 = {}, l2 = {};
+  flow.forEach((f) => {
+    l1[`t:${f.task_type}>p:${f.provider_name}`] = (l1[`t:${f.task_type}>p:${f.provider_name}`] || 0) + Number(f.run_count);
+    l2[`p:${f.provider_name}>s:${f.status}`] = (l2[`p:${f.provider_name}>s:${f.status}`] || 0) + Number(f.run_count);
+  });
+  const links = [];
+  Object.entries(l1).forEach(([k, v]) => { const [from, to] = k.split(">"); links.push({ from, to, value: v, color: dvSeries(ti.get(from.slice(2))) }); });
+  Object.entries(l2).forEach(([k, v]) => { const [from, to] = k.split(">"); links.push({ from, to, value: v, color: tareasPillColor(to.slice(2)) }); });
+  return sankeyChart({
+    columns: [
+      { title: "Tipo de tarea", nodes: typeNodes },
+      { title: "Agente", nodes: provNodes },
+      { title: "Estado", nodes: statNodes },
+    ],
+    links,
+  });
+}
+
+// KPI band summarising the agent↔task relationship (top agent/type/combo, cost
+// focus, coverage, concentration) — all derived from the same cross-tab.
+function resumenRelationKpis(rows) {
+  const totalRuns = rows.reduce((a, r) => a + Number(r.run_count || 0), 0) || 1;
+  const agentVol = {}, typeVol = {};
+  rows.forEach((r) => {
+    agentVol[r.provider_name] = (agentVol[r.provider_name] || 0) + Number(r.run_count || 0);
+    typeVol[r.task_type] = (typeVol[r.task_type] || 0) + Number(r.run_count || 0);
+  });
+  const topAgent = Object.entries(agentVol).sort((a, b) => b[1] - a[1])[0];
+  const topType = Object.entries(typeVol).sort((a, b) => b[1] - a[1])[0];
+  const topCombo = rows.slice().sort((a, b) => Number(b.run_count) - Number(a.run_count))[0];
+  const costCombo = rows.slice().sort((a, b) => Number(b.total_cost) - Number(a.total_cost))[0];
+  const nAgents = Object.keys(agentVol).length, nTypes = Object.keys(typeVol).length;
+  const concentration = topCombo ? Math.round((Number(topCombo.run_count) / totalRuns) * 100) : 0;
+  return statTileRow([
+    { label: "Agente más activo", value: _shortLabel(topAgent ? topAgent[0] : "—", 16), sub: topAgent ? `${Math.round((topAgent[1] / totalRuns) * 100)}% de ejecuciones` : "—" },
+    { label: "Tipo dominante", value: _shortLabel(topType ? topType[0] : "—", 16), sub: topType ? `${dvNum(topType[1])} ejecuciones` : "—" },
+    { label: "Combinación estrella", value: topCombo ? `${dvNum(topCombo.run_count)} ejec` : "—", sub: topCombo ? `${_shortLabel(topCombo.provider_name, 12)} · ${_shortLabel(topCombo.task_type, 12)}` : "—" },
+    { label: "Foco de coste", value: costCombo ? `$${Number(costCombo.total_cost).toFixed(4)}` : "—", sub: costCombo ? `${_shortLabel(costCombo.provider_name, 12)} · ${_shortLabel(costCombo.task_type, 12)}` : "—" },
+    { label: "Cobertura", value: `${nAgents}×${nTypes}`, sub: `${rows.length} combinaciones activas` },
+    { label: "Concentración", value: `${concentration}%`, sub: "en la combinación top", status: concentration >= 60 ? "warning" : undefined },
+  ]);
+}
+
+function resumenAgentTaskSection(analytics) {
+  const rows = (analytics && analytics.agent_task_matrix) || [];
+  const flow = (analytics && analytics.agent_task_flow) || [];
+  if (!rows.length) return ""; // omit entirely when the cross-tab is empty
+  const metric = state.resumenHeatMetric || "volumen";
+  const switchHtml = `<div class="dv-seg" role="tablist" aria-label="Métrica del heatmap">${Object.entries(RESUMEN_HM_METRICS).map(([k, m]) => `<button type="button" class="dv-seg-btn${k === metric ? " active" : ""}" data-resumen-hm-metric="${k}" role="tab" aria-selected="${k === metric}">${dvEsc(m.label)}</button>`).join("")}</div>`;
+  const heatFrame = chartFrame({
+    title: "Agente × Tipo de tarea",
+    subtitle: "especialización y carga · elige la métrica",
+    controls: switchHtml,
+    body: `<div id="resumenHeatmap" class="resumen-heatmap">${resumenHeatmapHtml()}</div>`,
+  });
+  // Colour-heavy frames ship a "ver tabla" view: the dataviz method requires a
+  // table (or direct labels) as relief whenever categorical hues sit below the
+  // 3:1 contrast floor — true for several series on both surfaces.
+  const scatterFrame = chartFrame({
+    title: "Eficiencia: coste vs latencia",
+    subtitle: "cada burbuja es agente × tipo · tamaño = volumen",
+    body: resumenScatterHtml(rows),
+    table: dataTable({
+      columns: [
+        { key: "provider_name", label: "Agente" },
+        { key: "task_type", label: "Tipo" },
+        { key: "run_count", label: "Ejec.", numeric: true, format: (v) => dvNum(v) },
+        { key: "avg_cost_per_run", label: "Coste/ejec.", numeric: true, format: (v) => `$${Number(v).toFixed(4)}` },
+        { key: "avg_latency_ms", label: "Latencia media", numeric: true, format: (v) => `${dvNum(Math.round(Number(v) || 0))} ms` },
+        { key: "success_rate", label: "Éxito %", numeric: true, format: (v) => `${Math.round((Number(v) || 0) * 100)}%` },
+      ],
+      rows: rows.filter((r) => Number(r.run_count) > 0),
+      defaultSort: "run_count",
+    }),
+  });
+  const sankeyFrame = chartFrame({
+    title: "Flujo: tipo → agente → estado",
+    subtitle: "reparto de ejecuciones por la cadena",
+    body: resumenSankeyHtml(flow),
+    table: dataTable({
+      columns: [
+        { key: "task_type", label: "Tipo de tarea" },
+        { key: "provider_name", label: "Agente" },
+        { key: "status", label: "Estado" },
+        { key: "run_count", label: "Ejec.", numeric: true, format: (v) => dvNum(v) },
+      ],
+      rows: flow,
+      defaultSort: "run_count",
+    }),
+  });
+  return `<section class="resumen-relation">
+    <div class="resumen-relation-head">
+      <span class="eyebrow">Relación Tareas ↔ Agentes</span>
+      <h3>Quién ejecuta qué, con qué eficiencia y cómo fluye</h3>
+    </div>
+    <div class="resumen-relation-kpis">${resumenRelationKpis(rows)}</div>
+    ${heatFrame}
+    <div class="resumen-2up">${scatterFrame}${sankeyFrame}</div>
+  </section>`;
+}
+
+// Metric switch: repaint only the heatmap body (keeps the rest of Resumen stable).
+function updateResumenHeatmap(metric) {
+  if (!RESUMEN_HM_METRICS[metric]) return;
+  state.resumenHeatMetric = metric;
+  const box = $("#resumenHeatmap");
+  if (box) box.innerHTML = resumenHeatmapHtml();
+  $$("[data-resumen-hm-metric]").forEach((b) => {
+    const on = b.dataset.resumenHmMetric === metric;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-selected", String(on));
+  });
 }
 
 function _renderAgentPanels(nodes, flow, audit) {
@@ -845,17 +1030,19 @@ async function renderAgentes(pre) {
   // not mixed in here — metrics and configuration are deliberately kept apart.
   if (!el) return;
 
-  let metrics, observability, performance;
+  let metrics, tasks, observability, performance;
   if (pre && pre.observability) {
-    ({ metrics, observability, performance } = pre);
+    ({ metrics, tasks, observability, performance } = pre);
   } else {
-    [metrics, observability, performance] = await Promise.all([
+    [metrics, tasks, observability, performance] = await Promise.all([
       api("/metrics").catch(() => ({})),
+      api("/tasks").catch(() => []),
       api("/observability").catch(() => ({})),
       api("/agents/performance").catch(() => []),
     ]);
   }
   metrics = metrics || {};
+  tasks = Array.isArray(tasks) ? tasks : [];
   observability = observability || {};
   performance = (performance || []).filter((p) => p && p.provider_name);
   if (!state.resumenAnalytics) {
@@ -923,22 +1110,26 @@ async function renderAgentes(pre) {
     cost: r.cost,
     costPer: r.costPer,
   }));
+  const leaderMode = state.agentesLeaderboardMode || localStorage.getItem("karajan-agentes-leaderboard-mode") || "table";
+  const leaderTable = leaderRows.length ? dataTable({
+    columns: [
+      { key: "provider", label: "Agente", dot: true },
+      { key: "tasks", label: "Ejecuciones", numeric: true, format: (v) => dvNum(v) },
+      { key: "successPct", label: "Éxito %", numeric: true, align: "right",
+        format: (v) => `<span class="tnum">${dvEsc(v)}</span>`, },
+      { key: "avgLatency", label: "Latencia media", numeric: true, format: (v) => `<span class="tnum">${dvNum(v)} ms</span>` },
+      { key: "cost", label: "Coste total", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
+      { key: "costPer", label: "Coste/ejec.", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
+    ],
+    rows: leaderRows,
+    defaultSort: "tasks",
+  }) : `<div class="chart-empty">sin ejecuciones registradas</div>`;
   const leaderFrame = chartFrame({
     title: "Leaderboard de agentes",
-    subtitle: "comparación por entidad · ordena cualquier columna",
-    body: leaderRows.length ? dataTable({
-      columns: [
-        { key: "provider", label: "Agente", dot: true },
-        { key: "tasks", label: "Ejecuciones", numeric: true, format: (v) => dvNum(v) },
-        { key: "successPct", label: "Éxito %", numeric: true, align: "right",
-          format: (v, row) => `<span class="tnum">${dvEsc(v)}</span>`, },
-        { key: "avgLatency", label: "Latencia media", numeric: true, format: (v) => `<span class="tnum">${dvNum(v)} ms</span>` },
-        { key: "cost", label: "Coste total", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
-        { key: "costPer", label: "Coste/ejec.", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
-      ],
-      rows: leaderRows,
-      defaultSort: "tasks",
-    }) : `<div class="chart-empty">sin ejecuciones registradas</div>`,
+    subtitle: leaderMode === "graph" ? "ranking visual por ejecuciones" : "comparación por entidad · ordena cualquier columna",
+    controls: `<button type="button" class="dv-table-toggle" data-agentes-leader-toggle>${leaderMode === "graph" ? "ver tabla" : "ver gráfico"}</button>`,
+    body: `<div class="agent-leader-view" data-agent-leader-view="table"${leaderMode === "graph" ? " hidden" : ""}>${leaderTable}</div>
+      <div class="agent-leader-view" data-agent-leader-view="graph"${leaderMode === "graph" ? "" : " hidden"}>${agentLeaderboardGraph(leaderRows)}</div>`,
   });
   // Default sort direction desc for tasks: dataTable defaults dir=1 (asc) — flip once.
   // (Handled by wrapping: we set defaultSort then the table starts ascending; users
@@ -979,48 +1170,241 @@ async function renderAgentes(pre) {
     }) : null,
   });
 
-  // --- 3) Coste por agente — hbar, series-coloured per ENTITY ---
-  const costRows = rows.slice()
-    .filter((r) => r.cost > 0)
-    .sort((a, b) => b.cost - a.cost)
-    .map((r) => ({ label: r.provider, value: r.cost, seriesIndex: r.seriesIndex }));
-  const costFrame = chartFrame({
-    title: "Coste por agente",
-    subtitle: "coste total acumulado (USD)",
-    body: costRows.length
-      ? hbarChart({ rows: costRows, valueFormat: (v) => `$${Number(v).toFixed(4)}`, maxLabelWidth: 160 })
-      : `<div class="chart-empty">sin coste registrado</div>`,
-  });
-
-  // --- 4) Uso de skills (heatmap) — rows=agents, cols=skills, matrix=counts ---
-  const skillNodes = nodes.filter((n) => n.skill_usage && Object.keys(n.skill_usage).length);
-  const skillCols = [...new Set(skillNodes.flatMap((n) => Object.keys(n.skill_usage)))].sort();
-  let skillsBody;
-  if (skillNodes.length && skillCols.length) {
-    const hmRows = skillNodes.map((n) => n.name || n.active_model || "—");
-    const matrix = skillNodes.map((n) => skillCols.map((s) => Number(n.skill_usage[s] || 0)));
-    skillsBody = heatmap({ rows: hmRows, cols: skillCols, matrix, valueFormat: (v) => dvNum(v) });
-  } else {
-    skillsBody = `<div class="chart-empty">aún no se han usado skills</div>`;
-  }
   const skillsFrame = chartFrame({
-    title: "Uso de skills por agente",
-    subtitle: skillNodes.length ? "recuento de invocaciones · rampa secuencial" : "sin invocaciones de skills todavía",
-    body: skillsBody,
+    title: "Skills por prompt en el tiempo",
+    subtitle: "clic en una tarea para ver matriz skill × agente",
+    body: agentSkillsTimeline(tasks, nodes),
   });
 
   el.innerHTML = `
     <div class="agentes-kpis">${kpis}</div>
-    ${leaderFrame}
-    <div class="agentes-2up">${latencyFrame}${costFrame}</div>
+    <div class="agentes-analytics-row">${leaderFrame}${latencyFrame}</div>
     ${skillsFrame}`;
 
   // Land the leaderboard on ejecuciones DESC (dataTable starts a fresh sort asc).
-  const lead = el.querySelector(".dv-table[data-dv-table]");
+  const lead = el.querySelector(".agentes-analytics-row .dv-frame:first-child .dv-table[data-dv-table]");
   if (lead) {
     const th = lead.querySelector('th[data-dv-sort="tasks"]');
     if (th) { dvSortTable(th); } // asc→ now desc handled by toggle logic on re-entry
   }
+}
+
+function agentLeaderboardGraph(rows) {
+  const clean = (rows || []).slice().sort((a, b) => Number(b.tasks || 0) - Number(a.tasks || 0));
+  if (!clean.length) return `<div class="chart-empty">sin ejecuciones registradas</div>`;
+  const maxTasks = Math.max(1, ...clean.map((r) => Number(r.tasks || 0)));
+  const maxLatency = Math.max(1, ...clean.map((r) => Number(r.avgLatency || 0)));
+  const rowH = 58;
+  const top = 50;
+  const left = 235;
+  const right = 230;
+  const width = 980;
+  const plotW = width - left - right;
+  const height = top + clean.length * rowH + 58;
+  const taskTicks = [0, Math.ceil(maxTasks / 2), maxTasks];
+  const latencyTicks = [0, Math.ceil(maxLatency / 2), maxLatency];
+  const taskTickHtml = taskTicks.map((v) => {
+    const x = left + (v / maxTasks) * plotW;
+    return `<g>
+      <line class="agent-chart-grid" x1="${x}" y1="${top - 18}" x2="${x}" y2="${height - 50}"></line>
+      <text class="agent-chart-tick" x="${x}" y="${top - 25}" text-anchor="middle">${dvEsc(dvNum(v))}</text>
+    </g>`;
+  }).join("");
+  const latencyTickHtml = latencyTicks.map((v) => {
+    const x = left + (v / maxLatency) * plotW;
+    return `<g>
+      <line class="agent-chart-lat-grid" x1="${x}" y1="${top - 18}" x2="${x}" y2="${height - 50}"></line>
+      <text class="agent-chart-tick latency" x="${x}" y="${height - 22}" text-anchor="middle">${dvEsc(dvNum(v))}</text>
+    </g>`;
+  }).join("");
+  const rowsHtml = clean.map((r, index) => {
+    const y = top + index * rowH;
+    const barW = Math.max(3, (Number(r.tasks || 0) / maxTasks) * plotW);
+    const latencyX = left + (Number(r.avgLatency || 0) / maxLatency) * plotW;
+    const color = dvSeries(r.seriesIndex);
+    const label = r.provider.length > 26 ? `${r.provider.slice(0, 25)}…` : r.provider;
+    const success = Math.max(0, Math.min(100, Number(r._success || 0) * 100));
+    return `<g class="agent-chart-row">
+      <text class="agent-chart-rank" x="20" y="${y + 22}">#${index + 1}</text>
+      <circle cx="58" cy="${y + 18}" r="4.5" fill="${color}"></circle>
+      <text class="agent-chart-label" x="72" y="${y + 22}">${dvEsc(label)}</text>
+      <rect class="agent-chart-track" x="${left}" y="${y + 8}" width="${plotW}" height="16" rx="4"></rect>
+      <rect class="agent-chart-bar" x="${left}" y="${y + 8}" width="${barW.toFixed(1)}" height="16" rx="4" fill="${color}"></rect>
+      <line class="agent-chart-lat-line" x1="${latencyX.toFixed(1)}" y1="${y + 2}" x2="${latencyX.toFixed(1)}" y2="${y + 30}"></line>
+      <circle class="agent-chart-lat-dot" cx="${latencyX.toFixed(1)}" cy="${y + 16}" r="4.2"></circle>
+      <text class="agent-chart-small-label" x="${left}" y="${y + 39}">éxito</text>
+      <rect class="agent-chart-success-track" x="${left + 40}" y="${y + 34}" width="96" height="6" rx="3"></rect>
+      <rect class="agent-chart-success" x="${left + 40}" y="${y + 34}" width="${(success * 0.96).toFixed(1)}" height="6" rx="3"></rect>
+      <text class="agent-chart-meta" x="${left + 145}" y="${y + 38}">${dvEsc(r.successPct)}</text>
+      <text class="agent-chart-value" x="${left + plotW + 18}" y="${y + 14}">${dvEsc(dvNum(r.tasks))} ejec.</text>
+      <text class="agent-chart-meta" x="${left + plotW + 18}" y="${y + 34}">${dvNum(r.avgLatency)} ms</text>
+      <text class="agent-chart-cost" x="${width - 14}" y="${y + 14}" text-anchor="end">$${Number(r.cost || 0).toFixed(4)}</text>
+      <text class="agent-chart-meta" x="${width - 14}" y="${y + 34}" text-anchor="end">$${Number(r.costPer || 0).toFixed(4)}/ejec.</text>
+    </g>`;
+  }).join("");
+  return `<div class="agent-leader-chart" role="img" aria-label="Gráfica de doble eje X del leaderboard de agentes: ejecuciones, latencia, éxito y coste">
+    <svg viewBox="0 0 ${width} ${height}" style="height:${height}px" preserveAspectRatio="xMidYMin meet">
+      <text class="agent-chart-axis-title" x="${left}" y="14">Ejecuciones</text>
+      <text class="agent-chart-axis-title latency" x="${left}" y="${height - 36}">Latencia media (ms)</text>
+      <text class="agent-chart-axis-title cost" x="${width - 14}" y="14" text-anchor="end">Coste</text>
+      ${taskTickHtml}
+      ${latencyTickHtml}
+      ${rowsHtml}
+    </svg>
+    <div class="agent-chart-legend">
+      <span><i class="bar"></i> ejecuciones</span>
+      <span><i class="dot"></i> latencia media</span>
+      <span><i class="success"></i> éxito</span>
+      <span>coste total y coste/ejec. a la derecha</span>
+    </div>
+  </div>`;
+}
+
+function taskSkillSet(task) {
+  const c = task?.classification || {};
+  const skills = new Set((c.recommended_skills || []).filter(Boolean));
+  (c.subtasks || []).forEach((sub) => {
+    if (sub?.recommended_skill) skills.add(sub.recommended_skill);
+  });
+  return [...skills].sort();
+}
+
+function taskPromptLabel(task) {
+  const c = task?.classification || {};
+  const text = task?.prompt || c.original_prompt || c.prompt || c.intent || task?.task_id || "Tarea";
+  return String(text).replace(/\s+/g, " ").trim();
+}
+
+function taskAgentSkillCounts(task) {
+  const c = task?.classification || {};
+  const subtasks = c.subtasks || [];
+  const bySubtask = new Map(subtasks.map((sub) => [sub.id, sub]));
+  const counts = {};
+  const add = (agent, skill, n = 1) => {
+    if (!agent || !skill) return;
+    counts[agent] ||= {};
+    counts[agent][skill] = (counts[agent][skill] || 0) + n;
+  };
+  (task?.delegation?.executions || []).forEach((ex) => {
+    const agent = ex.model_used || ex.backend || "sin agente";
+    const sub = bySubtask.get(ex.subtask_id);
+    if (sub?.recommended_skill) add(agent, sub.recommended_skill);
+    else taskSkillSet(task).forEach((skill) => add(agent, skill, 0));
+  });
+  if (!Object.keys(counts).length) {
+    const agent = c.classified_by || c.recommended_model || "sin ejecución";
+    taskSkillSet(task).forEach((skill) => add(agent, skill));
+  }
+  return counts;
+}
+
+function skillMatrixFromTasks(tasks, selectedTaskId) {
+  const selected = selectedTaskId ? tasks.find((task) => task.task_id === selectedTaskId) : null;
+  const source = selected ? [selected] : tasks;
+  const counts = {};
+  source.forEach((task) => {
+    const taskCounts = taskAgentSkillCounts(task);
+    Object.entries(taskCounts).forEach(([agent, skills]) => {
+      counts[agent] ||= {};
+      Object.entries(skills).forEach(([skill, value]) => {
+        counts[agent][skill] = (counts[agent][skill] || 0) + Number(value || 0);
+      });
+    });
+  });
+  const rows = Object.keys(counts).sort();
+  const cols = [...new Set(rows.flatMap((row) => Object.keys(counts[row] || {})))].sort();
+  const matrix = rows.map((row) => cols.map((col) => Number(counts[row]?.[col] || 0)));
+  return { rows, cols, matrix, selected };
+}
+
+function agentSkillsTimeline(tasks, nodes = []) {
+  const withSkills = (tasks || [])
+    .filter((task) => task && task.task_id && taskSkillSet(task).length)
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  if (!withSkills.length) {
+    const skillNodes = (nodes || []).filter((n) => n.skill_usage && Object.keys(n.skill_usage).length);
+    const skillCols = [...new Set(skillNodes.flatMap((n) => Object.keys(n.skill_usage)))].sort();
+    if (!skillNodes.length || !skillCols.length) return `<div class="chart-empty">aún no se han usado skills</div>`;
+    const hmRows = skillNodes.map((n) => n.name || n.active_model || "—");
+    const matrix = skillNodes.map((n) => skillCols.map((s) => Number(n.skill_usage[s] || 0)));
+    return heatmap({ rows: hmRows, cols: skillCols, matrix, valueFormat: (v) => dvNum(v) });
+  }
+  if (state.agentesSkillTask && !withSkills.some((task) => task.task_id === state.agentesSkillTask)) {
+    state.agentesSkillTask = null;
+  }
+  const selectedId = state.agentesSkillTask || withSkills[withSkills.length - 1].task_id;
+  state.agentesSkillTask = selectedId;
+  const allSkills = [...new Set(withSkills.flatMap(taskSkillSet))].sort();
+  const width = Math.max(880, 160 + withSkills.length * 96);
+  const height = 320;
+  const pad = { l: 58, r: 28, t: 24, b: 78 };
+  const plotW = width - pad.l - pad.r;
+  const plotH = height - pad.t - pad.b;
+  const xAt = (i) => pad.l + (withSkills.length === 1 ? plotW / 2 : (plotW * i) / (withSkills.length - 1));
+  const countsByTask = withSkills.map((task) => {
+    const counts = {};
+    const taskCounts = taskAgentSkillCounts(task);
+    Object.values(taskCounts).forEach((skills) => {
+      Object.entries(skills).forEach(([skill, value]) => {
+        counts[skill] = (counts[skill] || 0) + Number(value || 0);
+      });
+    });
+    taskSkillSet(task).forEach((skill) => { if (!counts[skill]) counts[skill] = 1; });
+    return counts;
+  });
+  const maxY = Math.max(1, ...countsByTask.flatMap((counts) => Object.values(counts)));
+  const yAt = (v) => pad.t + plotH * (1 - (Number(v) || 0) / maxY);
+  const yTicks = [0, Math.ceil(maxY / 2), maxY];
+  const grid = yTicks.map((v) => {
+    const y = yAt(v);
+    return `<g><line class="agent-skill-grid" x1="${pad.l}" y1="${y}" x2="${width - pad.r}" y2="${y}"></line><text class="agent-skill-axis" x="${pad.l - 10}" y="${y}" text-anchor="end">${dvEsc(dvNum(v))}</text></g>`;
+  }).join("");
+  const lines = allSkills.map((skill, si2) => {
+    const points = countsByTask.map((counts, i) => `${xAt(i).toFixed(1)},${yAt(counts[skill] || 0).toFixed(1)}`).join(" ");
+    const color = dvSeries(si2);
+    const circles = countsByTask.map((counts, i) => {
+      const x = xAt(i), y = yAt(counts[skill] || 0);
+      const active = withSkills[i].task_id === selectedId;
+      return `<circle class="agent-skill-point${active ? " active" : ""}" data-agent-skill-task="${dvEsc(withSkills[i].task_id)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${active ? 5.4 : 4.2}" fill="${color}"><title>${dvEsc(skill)} · ${dvEsc(taskPromptLabel(withSkills[i]))}: ${dvNum(counts[skill] || 0)}</title></circle>`;
+    }).join("");
+    return `<g><polyline class="agent-skill-line" points="${points}" style="stroke:${color}"></polyline>${circles}</g>`;
+  }).join("");
+  const xLabels = withSkills.map((task, i) => {
+    const x = xAt(i);
+    const label = taskPromptLabel(task);
+    const short = label.length > 18 ? `${label.slice(0, 17)}…` : label;
+    const active = task.task_id === selectedId;
+    return `<g class="agent-skill-xlabel${active ? " active" : ""}" data-agent-skill-task="${dvEsc(task.task_id)}">
+      <line class="agent-skill-xmark" x1="${x}" y1="${pad.t + plotH}" x2="${x}" y2="${pad.t + plotH + 6}"></line>
+      <text class="agent-skill-axis x" x="${x}" y="${pad.t + plotH + 20}" text-anchor="middle">${dvEsc(String(task.created_at || "").slice(5, 10) || "—")}</text>
+      <text class="agent-skill-axis prompt" x="${x}" y="${pad.t + plotH + 38}" text-anchor="middle">${dvEsc(short)}</text>
+    </g>`;
+  }).join("");
+  const legend = allSkills.map((skill, i) => `<span><i style="background:${dvSeries(i)}"></i>${dvEsc(skill)}</span>`).join("");
+  const { rows, cols, matrix, selected } = skillMatrixFromTasks(withSkills, selectedId);
+  const matrixHtml = rows.length && cols.length
+    ? heatmap({ rows, cols, matrix, valueFormat: (v) => dvNum(v) })
+    : `<div class="chart-empty">sin matriz para esta tarea</div>`;
+  return `<div class="agent-skill-workbench">
+    <div class="agent-skill-linechart">
+      <svg viewBox="0 0 ${width} ${height}" style="width:${width}px;height:${height}px" preserveAspectRatio="xMinYMin meet" role="img" aria-label="Uso de skills por prompt en el tiempo">
+        <text class="agent-skill-title" x="${pad.l}" y="12">Uso por prompt</text>
+        <text class="agent-skill-axis" x="10" y="${pad.t + 4}">usos</text>
+        ${grid}
+        <line class="agent-skill-base" x1="${pad.l}" y1="${pad.t + plotH}" x2="${width - pad.r}" y2="${pad.t + plotH}"></line>
+        ${lines}
+        ${xLabels}
+      </svg>
+      <div class="agent-skill-legend">${legend}</div>
+    </div>
+    <div class="agent-skill-matrix">
+      <div class="agent-skill-matrix-head">
+        <span class="eyebrow">Matriz skill × agente</span>
+        <b>${dvEsc(selected ? taskPromptLabel(selected) : "Todas las tareas")}</b>
+      </div>
+      ${matrixHtml}
+    </div>
+  </div>`;
 }
 
 // ---- Tareas sub-view (Phase D) ---------------------------------------------
@@ -1072,16 +1456,20 @@ async function renderTareas(pre) {
 
   const band = tareasBand(tasks, metrics, analytics);
 
-  // Drill-down mode when a task is open and still present; otherwise the list.
+  // Keep the task table as the primary surface. When a task is open, the view
+  // splits 50/50: list on the left, trace/detail on the right.
   let openTask = null;
   if (state.tareasOpenTask) {
     openTask = tasks.find((t) => t.task_id === state.tareasOpenTask) || null;
     if (!openTask) state.tareasOpenTask = null;
   }
-  const mainInner = openTask ? tareasDetailShell(openTask) : tareasList(tasks);
-  el.innerHTML = `${band}<div id="tareasMain" class="tareas-main">${mainInner}</div>`;
+  const listPane = `<div class="tareas-list-pane">${tareasList(tasks)}</div>`;
+  const detailPane = openTask ? `<aside class="tareas-detail-pane">${tareasDetailShell(openTask)}</aside>` : "";
+  el.innerHTML = `${band}<div id="tareasMain" class="tareas-main${openTask ? " has-detail" : ""}">${listPane}${detailPane}</div>`;
 
   if (openTask) {
+    const selectedRow = $(`.tareas-idlink[data-task="${CSS.escape(openTask.task_id)}"]`)?.closest("tr");
+    selectedRow?.classList.add("selected");
     renderTareasDetail(openTask).catch(() => {});
   } else {
     const input = $("#tareasSearch");
@@ -1089,7 +1477,7 @@ async function renderTareas(pre) {
   }
 }
 
-// --- Analytics band: KPI tiles + volume + status distribution + success/type -
+// --- Analytics band: KPI tiles + compact analytics KPIs ----------------------
 function tareasBand(tasks, metrics, analytics) {
   const total = tasks.length;
   const byStatus = {};
@@ -1104,76 +1492,84 @@ function tareasBand(tasks, metrics, analytics) {
   const failed = byStatus.failed || 0;
   const humanReview = Number(metrics.human_review_required || 0);
   const avgLat = latN ? Math.round(latSum / latN) : 0;
-  const kpis = statTileRow([
-    { label: "Total tareas", value: dvNum(total), sub: `${dvNum(metrics.total_subtasks || 0)} subtareas` },
-    { label: "Completadas", value: dvNum(completed), sub: total ? `${Math.round((completed / total) * 100)}% del total` : "", status: completed > 0 ? "good" : undefined },
-    { label: "Fallidas", value: dvNum(failed), sub: failed > 0 ? "requiere revisión" : "sin fallos", status: failed > 0 ? "critical" : undefined },
-    { label: "En revisión humana", value: dvNum(humanReview), sub: humanReview > 0 ? "pendiente" : "al día", status: humanReview > 0 ? "serious" : undefined },
-    { label: "Coste total", value: `$${costSum.toFixed(4)}`, sub: "acumulado" },
-    { label: "Latencia media", value: `${dvNum(avgLat)} ms`, sub: `${latN} con ejecución` },
-  ]);
-
-  // Volumen en el tiempo (runs_over_time, else task created_at bucketed by day).
+  // Volumen en el tiempo (runs_over_time, else task created_at bucketed by day)
+  // as a compact KPI instead of a chart/table.
   const rot = (analytics && analytics.runs_over_time) || [];
-  const xFmt = (x) => String(x || "").slice(5, 10);
-  let volBody, volTable = null, volSub;
+  let volumeTotal = 0, volumeSub = "sin actividad", volumeDelta = null;
   if (rot.length) {
-    volBody = lineChart({
-      series: [{ name: "Ejecuciones", seriesIndex: 0, points: rot.map((b) => ({ x: b.bucket, y: Number(b.run_count || 0) })) }],
-      xFormat: xFmt, yFormat: (v) => dvNum(v),
-    });
-    volSub = `${rot.length} días con actividad`;
-    volTable = dataTable({
-      columns: [
-        { key: "bucket", label: "Día", format: (v) => xFmt(v) },
-        { key: "run_count", label: "Ejec", numeric: true },
-        { key: "success_count", label: "OK", numeric: true },
-        { key: "total_cost", label: "Coste", numeric: true, format: (v) => `$${Number(v || 0).toFixed(4)}` },
-      ],
-      rows: rot,
-    });
+    volumeTotal = rot.reduce((acc, b) => acc + Number(b.run_count || 0), 0);
+    const volumeLast = Number(rot[rot.length - 1]?.run_count || 0);
+    const prev = Number(rot[rot.length - 2]?.run_count || 0);
+    volumeDelta = volumeLast - prev;
+    volumeSub = `${rot.length} días activos · último ${String(rot[rot.length - 1]?.bucket || "").slice(5, 10)}`;
   } else {
     const buckets = {};
     tasks.forEach((t) => { const d = String(t.created_at || "").slice(0, 10); if (d) buckets[d] = (buckets[d] || 0) + 1; });
     const days = Object.keys(buckets).sort();
-    volBody = days.length
-      ? lineChart({ series: [{ name: "Tareas", seriesIndex: 0, points: days.map((d) => ({ x: d, y: buckets[d] })) }], xFormat: xFmt, yFormat: (v) => dvNum(v) })
-      : `<div class="chart-empty">sin actividad</div>`;
-    volSub = "tareas creadas/día";
+    volumeTotal = days.reduce((acc, d) => acc + buckets[d], 0);
+    volumeSub = days.length ? `${days.length} días activos · tareas creadas` : "sin actividad";
   }
-  const volFrame = chartFrame({ title: "Volumen en el tiempo", subtitle: volSub, body: volBody, table: volTable });
 
-  // Distribución por estado (status-coloured).
+  // Distribución por estado as a KPI: dominant status + concise spread.
   const statusRows = Object.entries(byStatus)
     .sort((a, b) => b[1] - a[1])
     .map(([s, n], i) => ({ label: s, value: n, status: tareasTone(s), seriesIndex: i }));
-  const statusFrame = chartFrame({
-    title: "Distribución por estado",
-    subtitle: `${Object.keys(byStatus).length} estados`,
-    body: statusRows.length ? hbarChart({ rows: statusRows, valueFormat: (v) => dvNum(v), maxLabelWidth: 150 }) : `<div class="chart-empty">sin tareas</div>`,
-    table: statusRows.length ? dataTable({ columns: [{ key: "label", label: "Estado" }, { key: "value", label: "Tareas", numeric: true }], rows: statusRows }) : null,
-  });
+  const topStatus = statusRows[0];
+  const statusSub = statusRows.slice(0, 3).map((r) => `${r.label} ${r.value}`).join(" · ") || "sin tareas";
 
-  // Éxito por tipo de tarea.
+  // Éxito por tipo de tarea as a KPI: weighted success across all task types.
   const sbt = (analytics && analytics.success_rate_by_task_type) || [];
-  const typeRows = sbt.slice().sort((a, b) => Number(b.run_count) - Number(a.run_count))
-    .map((r, i) => ({ label: r.task_type, value: Math.round(Number(r.success_rate || 0) * 100), seriesIndex: i }));
-  const typeFrame = chartFrame({
-    title: "Éxito por tipo de tarea",
-    subtitle: sbt.length ? "% de ejecuciones correctas" : "",
-    body: typeRows.length ? hbarChart({ rows: typeRows, valueFormat: (v) => `${dvNum(v)}%`, maxLabelWidth: 170 }) : `<div class="chart-empty">analítica no disponible (DuckDB opcional)</div>`,
-    table: sbt.length ? dataTable({
-      columns: [
-        { key: "task_type", label: "Tipo" },
-        { key: "run_count", label: "Ejec", numeric: true },
-        { key: "success_rate", label: "Éxito", numeric: true, format: (v) => `${Math.round(Number(v || 0) * 100)}%` },
-        { key: "avg_latency_ms", label: "Latencia", numeric: true, format: (v) => `${dvNum(Math.round(Number(v || 0)))} ms` },
-      ],
-      rows: sbt,
-    }) : null,
-  });
+  const totalRuns = sbt.reduce((acc, r) => acc + Number(r.run_count || 0), 0);
+  const weightedOk = sbt.reduce((acc, r) => acc + Number(r.run_count || 0) * Number(r.success_rate || 0), 0);
+  const successPct = totalRuns ? Math.round((weightedOk / totalRuns) * 100) : null;
+  const bestType = sbt.slice().sort((a, b) => Number(b.run_count || 0) - Number(a.run_count || 0))[0];
+  const summaryItems = [
+    { label: "Tareas", value: dvNum(total), sub: `${dvNum(metrics.total_subtasks || 0)} subtareas` },
+    { label: "Completadas", value: dvNum(completed), sub: total ? `${Math.round((completed / total) * 100)}% del total` : "sin base" },
+    { label: "Fallidas", value: dvNum(failed), sub: failed > 0 ? "requiere revisión" : "sin fallos", tone: failed > 0 ? "critical" : "good" },
+    { label: "Revisión humana", value: dvNum(humanReview), sub: humanReview > 0 ? "pendiente" : "al día", tone: humanReview > 0 ? "serious" : "good" },
+    { label: "Coste", value: `$${costSum.toFixed(4)}`, sub: "acumulado" },
+    { label: "Latencia media", value: `${dvNum(avgLat)} ms`, sub: `${latN} con ejecución` },
+  ];
+  const insightItems = [
+    {
+      label: "Volumen",
+      value: dvNum(volumeTotal),
+      sub: `${volumeSub}${volumeDelta == null ? "" : ` · ${volumeDelta >= 0 ? "+" : ""}${volumeDelta}`}`,
+      tone: volumeDelta == null || volumeDelta >= 0 ? "good" : "warning",
+    },
+    {
+      label: "Estado dominante",
+      value: topStatus ? topStatus.label : "—",
+      sub: statusSub,
+      tone: topStatus ? tareasTone(topStatus.label) : null,
+    },
+    {
+      label: "Éxito por tipo",
+      value: successPct == null ? "—" : `${successPct}%`,
+      sub: bestType ? `${bestType.task_type} · ${bestType.run_count} ejec.` : "analítica no disponible",
+      tone: successPct == null ? null : successPct >= 90 ? "good" : successPct >= 70 ? "warning" : "critical",
+    },
+  ];
+  const itemHtml = (item) => {
+    const st = dvStatus(item.tone);
+    return `<div class="tareas-summary-item${st ? " tone" : ""}"${st ? ` style="--pc:${st.v}"` : ""}>
+      <span>${dvEsc(item.label)}</span>
+      <b>${dvEsc(item.value)}</b>
+      <small>${dvEsc(item.sub || "")}</small>
+    </div>`;
+  };
 
-  return `<div class="tareas-kpis">${kpis}</div>${volFrame}<div class="tareas-2up">${statusFrame}${typeFrame}</div>`;
+  return `<section class="tareas-summary-panel">
+    <div class="tareas-summary-head">
+      <div>
+        <span class="eyebrow">Monitor de tareas</span>
+        <h2>Operación y trazabilidad</h2>
+      </div>
+      <p>La tabla es la fuente principal; los indicadores resumen estado, volumen y calidad.</p>
+    </div>
+    <div class="tareas-summary-grid">${summaryItems.concat(insightItems).map(itemHtml).join("")}</div>
+  </section>`;
 }
 
 // --- List mode: FTS search box above a full-width, sortable tasks table ------
@@ -1206,19 +1602,22 @@ function tareasList(tasks) {
     rows,
     defaultSort: "creada",
   });
-  const searchCard = `<section class="card tareas-searchcard">
-    <div class="tareas-search">
-      <span class="tareas-search-ico" aria-hidden="true">⌕</span>
-      <input type="text" id="tareasSearch" class="tareas-search-input" placeholder="Buscar tareas por título, tipo o prompt… (búsqueda de texto completo)" autocomplete="off" spellcheck="false" aria-label="Buscar tareas" />
-      <div id="tareasSearchResults" class="tareas-search-results" hidden></div>
-    </div>
+  // Merged toolbar + table: one cohesive surface (title + count on the left,
+  // full-text search on the right) instead of two stacked cards.
+  return `<section class="card tareas-panel">
+    <header class="tareas-panel-h">
+      <div class="tareas-panel-title">
+        <span class="tareas-panel-name">Tareas</span>
+        <span class="tareas-panel-count">${tasks.length} en el registro · clic para abrir detalle</span>
+      </div>
+      <div class="tareas-search">
+        <span class="tareas-search-ico" aria-hidden="true">⌕</span>
+        <input type="text" id="tareasSearch" class="tareas-search-input" placeholder="Buscar por título, tipo o prompt…" autocomplete="off" spellcheck="false" aria-label="Buscar tareas" />
+        <div id="tareasSearchResults" class="tareas-search-results" hidden></div>
+      </div>
+    </header>
+    <div class="tareas-table">${table}</div>
   </section>`;
-  const tableFrame = chartFrame({
-    title: "Tareas",
-    subtitle: `${tasks.length} en el registro · clic en el ID para auditar`,
-    body: `<div class="tareas-table">${table}</div>`,
-  });
-  return `${searchCard}${tableFrame}`;
 }
 
 // --- Drill-down shell (synchronous): header + clasificación + subtareas, with
@@ -1230,7 +1629,7 @@ function tareasDetailShell(task) {
   const dt = (s) => dvEsc(String(s || "").slice(0, 19).replace("T", " "));
   const header = `<div class="tareas-detail-head">
     <div class="tareas-detail-topline">
-      <button type="button" class="tareas-back">← Volver</button>
+      <button type="button" class="tareas-back">Cerrar detalle</button>
       ${tareasPill(task.status)}
       ${rhr ? `<span class="tareas-flag">▲ revisión humana</span>` : ""}
     </div>
@@ -2055,6 +2454,7 @@ function statTileRow(tiles = []) {
 function hbarChart({ rows = [], valueFormat, maxLabelWidth = 120, single = false } = {}) {
   if (!rows.length) return `<div class="chart-empty">sin datos</div>`;
   const max = Math.max(1, ...rows.map((r) => Number(r.value) || 0));
+  const ticks = [0, max / 2, max].map((v) => dvNum(v, valueFormat));
   const body = rows.map((r) => {
     const val = Number(r.value) || 0;
     const pct = Math.max(0, (val / max) * 100);
@@ -2062,13 +2462,16 @@ function hbarChart({ rows = [], valueFormat, maxLabelWidth = 120, single = false
     const color = st ? st.v : single ? "var(--accent)" : dvSeries(r.seriesIndex);
     const fmt = dvNum(val, valueFormat);
     const tip = `${dvEsc(r.label)}: ${fmt}`;
-    return `<div class="dv-hbar-row">
+    return `<div class="dv-hbar-row${val === 0 ? " is-zero" : ""}" style="--bar-color:${color}">
       <span class="dv-hbar-label" style="max-width:${maxLabelWidth}px" title="${dvEsc(r.label)}">${st ? `<span class="dv-status-ico" style="color:${st.v}">${st.icon}</span>` : ""}${dvEsc(r.label)}</span>
-      <span class="dv-hbar-track"><span class="dv-hbar-fill" style="width:${pct.toFixed(1)}%;background:${color}" data-dv-tip="${dvEsc(tip)}"></span></span>
+      <span class="dv-hbar-track" data-dv-tip="${dvEsc(tip)}"><span class="dv-hbar-fill" style="width:${pct.toFixed(1)}%;background:${color}"></span></span>
       <span class="dv-hbar-val">${dvEsc(fmt)}</span>
     </div>`;
   }).join("");
-  return `<div class="dv-hbar">${body}</div>`;
+  return `<div class="dv-hbar">
+    <div class="dv-hbar-scale" aria-hidden="true"><span>${dvEsc(ticks[0])}</span><span>${dvEsc(ticks[1])}</span><span>${dvEsc(ticks[2])}</span></div>
+    ${body}
+  </div>`;
 }
 
 // -- lineChart: single-y time-series with crosshair + tooltip -----------------
@@ -2086,6 +2489,7 @@ function lineChart({ series = [], xFormat, yFormat, yLabel, small = false } = {}
   let min = Math.min(...allY), max = Math.max(...allY);
   if (min === max) { max = max + 1; min = min - 1; }
   min = Math.min(min, 0) === 0 && min >= 0 ? 0 : min; // anchor to zero when non-negative
+  if (max > 0) max += (max - min || max) * 0.08;
   const span = max - min || 1;
   const VBW = 640, VBH = small ? 150 : 240;
   const P = { l: 48, r: 16, t: 12, b: 26 };
@@ -2113,6 +2517,8 @@ function lineChart({ series = [], xFormat, yFormat, yLabel, small = false } = {}
     grid += `<line class="dv-grid" x1="${P.l}" y1="${y.toFixed(1)}" x2="${VBW - P.r}" y2="${y.toFixed(1)}"/>`;
     yTicks.push({ topPct: (y / VBH) * 100, label: dvNum(v, yFormat) });
   }
+  const zeroY = min <= 0 && max >= 0 ? yAt(0) : null;
+  const baseline = zeroY == null ? "" : `<line class="dv-baseline" x1="${P.l}" y1="${zeroY.toFixed(1)}" x2="${VBW - P.r}" y2="${zeroY.toFixed(1)}"/>`;
   const gutterPct = (P.l / VBW) * 100;
   const yAxisHtml = yTicks.map((t) =>
     `<span class="dv-axis-y" style="top:${t.topPct.toFixed(2)}%;width:${gutterPct.toFixed(2)}%">${dvEsc(t.label)}</span>`).join("");
@@ -2122,13 +2528,16 @@ function lineChart({ series = [], xFormat, yFormat, yLabel, small = false } = {}
   const paths = clean.map((s) => {
     const color = dvSeries(s.seriesIndex);
     const pts = s.points.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.y).toFixed(1)}`).join(" ");
+    const area = clean.length === 1 && zeroY != null
+      ? `<polygon class="dv-line-area" points="${P.l.toFixed(1)},${zeroY.toFixed(1)} ${pts} ${xAt(s.points.length - 1).toFixed(1)},${zeroY.toFixed(1)}" style="fill:${color}"/>`
+      : "";
     reg.series.push({
       name: s.name || "",
       color,
       yFrac: s.points.map((p) => yAt(p.y) / VBH),
       values: s.points.map((p) => Number(p.y) || 0),
     });
-    return `<polyline class="dv-line" points="${pts}" style="stroke:${color}"/>`;
+    return `${area}<polyline class="dv-line" points="${pts}" style="stroke:${color}"/>`;
   }).join("");
 
   // Direct end-labels for ≤4 series (ink token, positioned by fraction as HTML).
@@ -2149,7 +2558,7 @@ function lineChart({ series = [], xFormat, yFormat, yLabel, small = false } = {}
 
   return `${yLab}<div class="dv-linechart${small ? " small" : ""}" data-dv-chart="${id}">
     <svg class="dv-line-svg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none" role="img" aria-label="${dvEsc(yLabel || (clean[0].name || "serie"))}">
-      ${grid}${paths}
+      ${grid}${baseline}${paths}
     </svg>
     <div class="dv-axes">${yAxisHtml}${xAxisHtml}${endLabels}</div>
     <div class="dv-crosshair"></div>
@@ -2251,10 +2660,131 @@ function heatmap({ rows = [], cols = [], matrix = [], valueFormat } = {}) {
     return `<div class="dv-hm-row" style="grid-template-columns:var(--hm-rowlabel) repeat(${cols.length}, 1fr)"><div class="dv-hm-rowlabel" title="${dvEsc(rlab)}">${dvEsc(rlab)}</div>${cells}</div>`;
   }).join("");
   const bar = [0, 1, 2, 3, 4, 5].map((s) => `<span class="dv-ramp-${s}"></span>`).join("");
-  return `<div class="dv-heatmap" style="--hm-cols:${cols.length}">
+  return `<div class="dv-heatmap" style="--hm-cols:${cols.length}" role="img" aria-label="Mapa de calor de ${dvEsc(rows.length)} filas por ${dvEsc(cols.length)} columnas; valor máximo ${dvEsc(fmt(max))}">
     <div class="dv-hm-grid" style="grid-template-columns:var(--hm-rowlabel) repeat(${cols.length}, 1fr)">${head}</div>
     <div class="dv-hm-rows">${body}</div>
-    <div class="dv-hm-legend"><span>bajo</span><span class="dv-hm-bar">${bar}</span><span>alto</span></div>
+    <div class="dv-hm-legend"><span>0</span><span class="dv-hm-bar">${bar}</span><span>${dvEsc(fmt(max))}</span></div>
+  </div>`;
+}
+
+// -- scatterPlot: 2D efficiency plot (x/y numeric, radius∝volume, hue∝series) --
+// Uniform scaling (preserveAspectRatio=meet) so bubbles stay round; grid, axes,
+// tick + axis-title text are SVG-native so they scale crisply with the plot.
+// Every bubble carries a data-dv-tip for the shared hover tooltip.
+function scatterPlot({ points = [], xLabel = "", yLabel = "", xFormat, yFormat } = {}) {
+  const pts = points.filter((p) => Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y)));
+  if (!pts.length) return `<div class="chart-empty">sin datos</div>`;
+  const xs = pts.map((p) => Number(p.x)), ys = pts.map((p) => Number(p.y));
+  let xmin = Math.min(...xs), xmax = Math.max(...xs);
+  let ymin = Math.min(...ys), ymax = Math.max(...ys);
+  xmin = xmin >= 0 ? 0 : xmin; ymin = ymin >= 0 ? 0 : ymin; // anchor non-neg axes to 0
+  if (xmax === xmin) xmax = xmin + 1;
+  if (ymax === ymin) ymax = ymin + 1;
+  xmax += (xmax - xmin) * 0.06; ymax += (ymax - ymin) * 0.08; // headroom for bubbles
+  const xspan = xmax - xmin, yspan = ymax - ymin;
+  const VBW = 720, VBH = 340;
+  const P = { l: 64, r: 18, t: 16, b: 44 };
+  const pw = VBW - P.l - P.r, ph = VBH - P.t - P.b;
+  const xAt = (v) => P.l + pw * ((Number(v) - xmin) / xspan);
+  const yAt = (v) => P.t + ph * (1 - (Number(v) - ymin) / yspan);
+  const maxVol = Math.max(1, ...pts.map((p) => Number(p.size) || 1));
+  const rOf = (v) => 5 + 13 * Math.sqrt((Number(v) || 1) / maxVol); // 5..18 user units
+  const median = (arr) => {
+    const s = arr.slice().sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  };
+  const mx = median(xs), my = median(ys);
+  const mxPos = xAt(mx), myPos = yAt(my);
+  const G = 4;
+  let grid = "", ticks = "";
+  for (let g = 0; g <= G; g++) {
+    const vy = ymin + (yspan * g) / G, y = yAt(vy);
+    grid += `<line class="dv-sc-grid" x1="${P.l}" y1="${y.toFixed(1)}" x2="${VBW - P.r}" y2="${y.toFixed(1)}"/>`;
+    ticks += `<text class="dv-sc-tick dv-sc-tick-y" x="${P.l - 8}" y="${(y + 3.5).toFixed(1)}">${dvEsc(dvNum(vy, yFormat))}</text>`;
+    const vx = xmin + (xspan * g) / G, x = xAt(vx);
+    ticks += `<text class="dv-sc-tick dv-sc-tick-x" x="${x.toFixed(1)}" y="${VBH - P.b + 18}">${dvEsc(dvNum(vx, xFormat))}</text>`;
+  }
+  // Larger bubbles first so small ones stay visible/hoverable on top.
+  const dots = pts.slice().sort((a, b) => (Number(b.size) || 0) - (Number(a.size) || 0)).map((p) => {
+    const cx = xAt(p.x), cy = yAt(p.y), r = rOf(p.size);
+    const color = p.color || dvSeries(p.seriesIndex);
+    return `<circle class="dv-sc-dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" style="fill:${color}" data-dv-tip="${dvEsc(p.tip || p.label || "")}"/>`;
+  }).join("");
+  const axisTitles = `
+    <text class="dv-sc-axis-title" x="${((P.l + (VBW - P.r)) / 2).toFixed(1)}" y="${VBH - 6}">${dvEsc(xLabel)}</text>
+    <text class="dv-sc-axis-title" transform="translate(16 ${((P.t + (VBH - P.b)) / 2).toFixed(1)}) rotate(-90)" x="0" y="0">${dvEsc(yLabel)}</text>`;
+  const refs = pts.length > 2 ? `
+      <line class="dv-sc-ref" x1="${mxPos.toFixed(1)}" y1="${P.t}" x2="${mxPos.toFixed(1)}" y2="${VBH - P.b}"/>
+      <line class="dv-sc-ref" x1="${P.l}" y1="${myPos.toFixed(1)}" x2="${VBW - P.r}" y2="${myPos.toFixed(1)}"/>
+      <text class="dv-sc-ref-label" x="${(mxPos + 5).toFixed(1)}" y="${P.t + 12}">mediana</text>` : "";
+  return `<div class="dv-scatter">
+    <svg class="dv-sc-svg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${dvEsc(yLabel)} vs ${dvEsc(xLabel)}">
+      ${grid}
+      ${refs}
+      <line class="dv-sc-axis" x1="${P.l}" y1="${P.t}" x2="${P.l}" y2="${VBH - P.b}"/>
+      <line class="dv-sc-axis" x1="${P.l}" y1="${VBH - P.b}" x2="${VBW - P.r}" y2="${VBH - P.b}"/>
+      ${ticks}${axisTitles}${dots}
+    </svg>
+  </div>`;
+}
+
+// -- sankeyChart: multi-column flow diagram (Tipo → Agente → Estado) -----------
+// columns: [{ title, nodes:[{id,label,color?}] }, ...]; links: [{from,to,value,color?}].
+// Node height ∝ throughput (max of in/out), shared scale across columns; ribbons
+// are filled cubic beziers stacked on both endpoints. SVG-native labels.
+function sankeyChart({ columns = [], links = [] } = {}) {
+  const cols = columns.filter((c) => (c.nodes || []).length);
+  if (cols.length < 2) return `<div class="chart-empty">sin datos de flujo</div>`;
+  const idIndex = new Map();
+  cols.forEach((c, ci) => c.nodes.forEach((n) => idIndex.set(n.id, { col: ci, node: n })));
+  const goodLinks = links.filter((l) => idIndex.has(l.from) && idIndex.has(l.to) && Number(l.value) > 0);
+  if (!goodLinks.length) return `<div class="chart-empty">sin datos de flujo</div>`;
+  const outSum = {}, inSum = {};
+  goodLinks.forEach((l) => {
+    outSum[l.from] = (outSum[l.from] || 0) + Number(l.value);
+    inSum[l.to] = (inSum[l.to] || 0) + Number(l.value);
+  });
+  const valueOf = (id) => Math.max(outSum[id] || 0, inSum[id] || 0);
+  const VBW = 760, VBH = 360, NODE_W = 13, PAD_T = 10, PAD_B = 10, GAP = 10;
+  const colTotals = cols.map((c) => c.nodes.reduce((a, n) => a + valueOf(n.id), 0));
+  const maxNodes = Math.max(...cols.map((c) => c.nodes.length));
+  const usableH = VBH - PAD_T - PAD_B - (maxNodes - 1) * GAP;
+  const scale = usableH / Math.max(1, ...colTotals); // shared vertical scale
+  const colX = (ci) => cols.length === 1 ? 0 : (VBW - NODE_W) * (ci / (cols.length - 1));
+  const layout = new Map();
+  cols.forEach((c, ci) => {
+    const heights = c.nodes.map((n) => Math.max(2, valueOf(n.id) * scale));
+    const totalH = heights.reduce((a, h) => a + h, 0) + (c.nodes.length - 1) * GAP;
+    let y = PAD_T + (VBH - PAD_T - PAD_B - totalH) / 2;
+    c.nodes.forEach((n, i) => {
+      layout.set(n.id, { x: colX(ci), y, h: heights[i], node: n, outAt: y, inAt: y });
+      y += heights[i] + GAP;
+    });
+  });
+  const ribbons = goodLinks.slice().sort((a, b) => Number(b.value) - Number(a.value)).map((l) => {
+    const s = layout.get(l.from), t = layout.get(l.to);
+    const th = Math.max(1, Number(l.value) * scale);
+    const sy = s.outAt + th / 2, ty = t.inAt + th / 2;
+    s.outAt += th; t.inAt += th;
+    const x1 = s.x + NODE_W, x2 = t.x, xm = (x1 + x2) / 2;
+    const color = l.color || s.node.color || "var(--muted)";
+    return `<path class="dv-sk-link" d="M${x1.toFixed(1)},${sy.toFixed(1)} C${xm.toFixed(1)},${sy.toFixed(1)} ${xm.toFixed(1)},${ty.toFixed(1)} ${x2.toFixed(1)},${ty.toFixed(1)}" style="stroke:${color};stroke-width:${th.toFixed(1)}" data-dv-tip="${dvEsc(`${s.node.label} → ${t.node.label}: ${dvNum(l.value)}`)}"/>`;
+  }).join("");
+  const nodes = [...layout.values()].map(({ x, y, h, node }) => {
+    const color = node.color || "var(--muted)";
+    const atRight = x > VBW * 0.6;
+    const tx = atRight ? x - 6 : x + NODE_W + 6;
+    return `<g data-dv-tip="${dvEsc(`${node.label}: ${dvNum(valueOf(node.id))}`)}">
+      <rect class="dv-sk-node" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${NODE_W}" height="${h.toFixed(1)}" rx="2" style="fill:${color}"/>
+      <text class="dv-sk-label" x="${tx.toFixed(1)}" y="${(y + h / 2 + 3.5).toFixed(1)}" text-anchor="${atRight ? "end" : "start"}">${dvEsc(node.label)}</text>
+    </g>`;
+  }).join("");
+  const heads = cols.map((c, ci) => `<text class="dv-sk-head" x="${(colX(ci) + NODE_W / 2).toFixed(1)}" y="8" text-anchor="${ci === 0 ? "start" : ci === cols.length - 1 ? "end" : "middle"}">${dvEsc(c.title || "")}</text>`).join("");
+  return `<div class="dv-sankey">
+    <svg class="dv-sk-svg" viewBox="0 -6 ${VBW} ${VBH + 12}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Flujo tipo de tarea a agente a estado">
+      ${heads}<g class="dv-sk-links">${ribbons}</g><g class="dv-sk-nodes">${nodes}</g>
+    </svg>
   </div>`;
 }
 
@@ -2366,6 +2896,29 @@ function initDataviz() {
   document.addEventListener("click", (e) => {
     const th = e.target.closest?.(".dv-table th[data-dv-sort]");
     if (th) { dvSortTable(th); return; }
+    const hmMetric = e.target.closest?.("[data-resumen-hm-metric]");
+    if (hmMetric) { updateResumenHeatmap(hmMetric.dataset.resumenHmMetric); return; }
+    const leaderToggle = e.target.closest?.("[data-agentes-leader-toggle]");
+    if (leaderToggle) {
+      const frame = leaderToggle.closest(".dv-frame");
+      const tableView = frame?.querySelector('[data-agent-leader-view="table"]');
+      const graphView = frame?.querySelector('[data-agent-leader-view="graph"]');
+      const showGraph = graphView?.hidden;
+      if (tableView && graphView) {
+        tableView.hidden = !!showGraph;
+        graphView.hidden = !showGraph;
+      }
+      state.agentesLeaderboardMode = showGraph ? "graph" : "table";
+      localStorage.setItem("karajan-agentes-leaderboard-mode", state.agentesLeaderboardMode);
+      leaderToggle.textContent = showGraph ? "ver tabla" : "ver gráfico";
+      return;
+    }
+    const skillNode = e.target.closest?.("[data-agent-skill-task]");
+    if (skillNode) {
+      state.agentesSkillTask = skillNode.dataset.agentSkillTask || null;
+      renderAgentes({ metrics: state.lastMetrics, tasks: state.tasks, observability: state.lastObservability, performance: state.agentPerformance }).catch(() => {});
+      return;
+    }
     const tog = e.target.closest?.("[data-dv-table-toggle]");
     if (tog) dvToggleTable(tog);
   });
@@ -2913,9 +3466,9 @@ function miniBarPanel(title, entries, labelMap = {}) {
   const max = Math.max(1, ...entries.map(([, value]) => Number(value || 0)));
   const rows = entries.length
     ? entries
-        .map(([key, value]) => {
+        .map(([key, value], index) => {
           const pct = Math.max(4, Math.round((Number(value || 0) / max) * 100));
-          return `<div class="mini-bar-row"><span>${escapeHtml(labelMap[key] || key)}</span><b>${value}</b><i style="width:${pct}%"></i></div>`;
+          return `<div class="mini-bar-row" style="--bar-color:${dvSeries(index)}"><span>${escapeHtml(labelMap[key] || key)}</span><b>${value}</b><i style="width:${pct}%"></i></div>`;
         })
         .join("")
     : `<div class="chart-empty">sin datos</div>`;
@@ -2927,7 +3480,7 @@ function latencyPanel(health) {
   const pct = Math.min(100, Math.round((latency / 2000) * 100));
   return `<section class="mini-graph-card latency-card">
     <h4>Latencia media</h4>
-    <div class="latency-ring" style="--pct:${pct}%"><b>${latency}ms</b><span>media</span></div>
+    <div class="latency-ring" style="--pct:${pct}%">${svgDonut(pct, { label: "Latencia media", sub: "2s SLA", tone: pct > 80 ? "bad" : pct > 55 ? "warn" : "ok", size: 92 })}<b>${latency}ms</b><span>media</span></div>
     <p>${health?.blocked_tasks || 0} bloqueadas · $${Number(health?.total_cost || 0).toFixed(4)} coste</p>
   </section>`;
 }
@@ -3124,17 +3677,16 @@ function renderKpis(metrics) {
 
 // inline SVG horizontal bar chart — no external lib
 function barCard(title, entries, labelMap) {
-  const max = Math.max(1, ...entries.map(([, v]) => v));
   const rows = entries.length
-    ? entries
-        .map(([key, value]) => {
-          const label = labelMap ? labelMap[key] || key : key;
-          const pct = Math.round((value / max) * 100);
-          return `<div class="chart-row"><span class="chart-lbl">${escapeHtml(label)}</span>
-            <span class="chart-bar"><span style="width:${pct}%"></span></span>
-            <span class="chart-val">${value}</span></div>`;
-        })
-        .join("")
+    ? hbarChart({
+        rows: entries.map(([key, value], index) => ({
+          label: labelMap ? labelMap[key] || key : key,
+          value,
+          seriesIndex: index,
+        })),
+        valueFormat: (v) => dvNum(v),
+        maxLabelWidth: 128,
+      })
     : `<div class="chart-empty">sin datos</div>`;
   return `<section class="chart-card"><header class="card-h">${title}</header><div class="chart-body">${rows}</div></section>`;
 }
@@ -4148,6 +4700,8 @@ function applyDiagramZoom() {
   if (!diagram || !layer) return;
   const zoom = state.diagramZoom;
   diagram.style.setProperty("--diagram-zoom", String(zoom));
+  diagram.classList.toggle("zoom-loupe", zoom < 0.72);
+  diagram.style.setProperty("--diagram-loupe", String(Math.min(1.85, Math.max(1.12, 0.9 / Math.max(zoom, 0.2))).toFixed(3)));
   layer.style.width = `${scaled(DIAGRAM_BASE_WIDTH + DIAGRAM_PAD_X * 2)}px`;
   layer.style.height = `${scaled(DIAGRAM_BASE_HEIGHT + DIAGRAM_PAD_Y * 2)}px`;
   $$("#diagramNodes .node.entity").forEach((node) => {
@@ -7202,7 +7756,7 @@ var W=800,H=600,TW=45,TH=22,OX=400,OY=60;
 var mapZoom=1,TWbase=45,MAP_ZOOM_MIN=0.55,MAP_ZOOM_MAX=2.2;
 var tick=0,running=false,lastFlow=0;
 var nodeData=[],sparkles=[],links=[];
-var selectedId=null,agentTasks={};
+var selectedId=null,hoverAgentId=null,agentTasks={};
 var BTNS=[],lastErr='';
 var taskCards=[];
 var decisions=[];     // persistent until resolved
@@ -7498,6 +8052,19 @@ function c(h,a){
   if(!h||h.length<7)return 'rgba(128,128,128,'+a+')';
   return 'rgba('+parseInt(h.slice(1,3),16)+','+parseInt(h.slice(3,5),16)+','+parseInt(h.slice(5,7),16)+','+a+')';
 }
+function agentLiftOffset(ag){
+  var phase=(ag&&Number.isFinite(ag.ph))?ag.ph:0;
+  return -(18*mapZoom)-Math.sin(tick*0.035+phase*3.1)*(3.5*mapZoom);
+}
+function agentBasePoint(ag){
+  var pos=agentPos[ag.id]||{x:ag.hx,y:ag.hy};
+  var p=iso(pos.x,pos.y);
+  return {x:p.x,y:p.y+TH};
+}
+function agentFloatPoint(ag,raise){
+  var p=agentBasePoint(ag);
+  return {x:p.x,y:p.y+agentLiftOffset(ag)-(raise||0)};
+}
 function rr(x,y,w,h,r){
   if(w<=0||h<=0)return;
   r=Math.min(Math.abs(r||0),Math.abs(w/2),Math.abs(h/2));
@@ -7732,7 +8299,7 @@ function drawAgent(ag){
   var pos=agentPos[ag.id]||{x:ag.hx,y:ag.hy};
   var mode=(agentModes[ag.id]||{mode:'idle'}).mode;
   var sc=TW/50;
-  var p=iso(pos.x,pos.y),cx=p.x,base=p.y+TH;
+  var p=iso(pos.x,pos.y),cx=p.x,groundBase=p.y+TH,base=groundBase+agentLiftOffset(ag);
   var nd=nodeData.find(function(n){return n.id===ag.dataId;});
   var tc=(nd&&nd.task_count)||0;
   var cards=taskCards.filter(function(cr){return cr.agentId===ag.id&&cr.status!=='done';});
@@ -7763,12 +8330,16 @@ function drawAgent(ag){
   }
   // shadow
   ctx2.globalAlpha=0.2;ctx2.fillStyle='#000';
-  ctx2.beginPath();ctx2.ellipse(cx,base,TW*0.58,TH*0.35,0,0,Math.PI*2);ctx2.fill();
+  ctx2.beginPath();ctx2.ellipse(cx,groundBase,TW*0.58,TH*0.35,0,0,Math.PI*2);ctx2.fill();
   ctx2.globalAlpha=1;
   if(inDecision){
     ctx2.strokeStyle=c(mapAccent,0.86);ctx2.lineWidth=Math.max(1,1.5*sc);
-    ctx2.beginPath();ctx2.ellipse(cx,base,TW*0.72,TH*0.48,0,0,Math.PI*2);ctx2.stroke();
+    ctx2.beginPath();ctx2.ellipse(cx,groundBase,TW*0.72,TH*0.48,0,0,Math.PI*2);ctx2.stroke();
   }
+  ctx2.strokeStyle=c(mapAccent,0.22);
+  ctx2.lineWidth=Math.max(1,0.8*sc);
+  ctx2.setLineDash([2.5*sc,3*sc]);
+  ctx2.beginPath();ctx2.moveTo(cx,groundBase-TH*0.12);ctx2.lineTo(cx,base+2*sc);ctx2.stroke();ctx2.setLineDash([]);
 
   // body
   if(ag.id==='claude'){
@@ -7937,9 +8508,9 @@ function drawAgent(ag){
   // selection
   if(selectedId===ag.id){
     ctx2.strokeStyle=c(ag.col,0.7);ctx2.lineWidth=2*sc;ctx2.setLineDash([4*sc,3*sc]);ctx2.lineDashOffset=-(tick*1.4)%18;
-    ctx2.beginPath();ctx2.ellipse(cx,base,TW*0.8,TH*0.55,0,0,Math.PI*2);ctx2.stroke();ctx2.setLineDash([]);
+    ctx2.beginPath();ctx2.ellipse(cx,groundBase,TW*0.8,TH*0.55,0,0,Math.PI*2);ctx2.stroke();ctx2.setLineDash([]);
   }
-  ctx2.font=Math.round(TW*0.11)+'px system-ui';ctx2.fillStyle=c(ag.col,0.38);ctx2.textAlign='center';ctx2.textBaseline='top';ctx2.fillText(ag.role,cx,base+1.5*sc);
+  ctx2.font=Math.round(TW*0.11)+'px system-ui';ctx2.fillStyle=c(ag.col,0.38);ctx2.textAlign='center';ctx2.textBaseline='top';ctx2.fillText(ag.role,cx,groundBase+1.5*sc);
 }
 
 // ── TASK CARDS ───────────────────────────────────────────────────────────────
@@ -8155,28 +8726,42 @@ function drawLeftPanel(){
 }
 
 // ── CONNECTIONS ───────────────────────────────────────────────────────────────
-// Mirror Decisión's drawWires() relationship "flow" onto the iso map (Fix 3):
-// - Hierarchy wires: SOLID, always-visible gold line from the hub (root/parent
-//   entity) to every entity with a non-empty parentId — a stable structural link,
-//   not per-agent-colored nor dimmed by activity (the old demo-era styling).
-// - Guardian/validator supervision wires: DASHED, role-colored (#b9a7ff guardian,
-//   #5bbcff validator), always-on, following each such entity's target_ids.
-// Drawn before figures (see frame()) so they sit underneath the towers.
+// Mirror Decisión's focused relationship flow on the iso map: structural links
+// are curved and lifted above the floor, and only the hovered/selected agent's
+// neighborhood is drawn so dense architectures do not turn into a knot.
+function drawFloatingCurve(src,dst,color,dashed){
+  var sp=agentFloatPoint(src,18*mapZoom),dp=agentFloatPoint(dst,18*mapZoom);
+  var midX=(sp.x+dp.x)/2,midY=Math.min(sp.y,dp.y)-Math.max(38,62*mapZoom);
+  ctx2.save();
+  ctx2.strokeStyle=color;ctx2.lineWidth=Math.max(1.2,1.75*mapZoom);
+  ctx2.shadowColor=color;ctx2.shadowBlur=8*mapZoom;
+  if(dashed){ctx2.setLineDash([6*mapZoom,5*mapZoom]);ctx2.lineDashOffset=-(tick*0.7)%22;}
+  else ctx2.setLineDash([]);
+  ctx2.beginPath();ctx2.moveTo(sp.x,sp.y);ctx2.quadraticCurveTo(midX,midY,dp.x,dp.y);ctx2.stroke();
+  ctx2.setLineDash([]);
+  ctx2.shadowBlur=0;
+  ctx2.fillStyle=color;
+  ctx2.beginPath();ctx2.arc(sp.x,sp.y,2.6*mapZoom,0,Math.PI*2);ctx2.fill();
+  ctx2.beginPath();ctx2.arc(dp.x,dp.y,2.6*mapZoom,0,Math.PI*2);ctx2.fill();
+  ctx2.restore();
+}
 function drawConnections(){
   if(!AGENTS.length)return; // dynamic roster may be empty before layout loads
   var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  var focusId=hoverAgentId||selectedId;
+  if(!focusId)return;
   var byId={};AGENTS.forEach(function(a){byId[a.id]=a;});
   var hub=AGENTS.find(function(a){return a.id===hubId;})||AGENTS[0];
-  var cp=iso(hub.hx,hub.hy);
-  // Hierarchy: hub → each entity with a parentId (gold, solid, always visible).
-  ctx2.strokeStyle='rgba(249,199,79,0.72)';ctx2.lineWidth=1.6;ctx2.setLineDash([]);
+  var hasAny=false;
+  // Hierarchy: hub -> each entity with a parentId (gold, solid, focused).
   entities.forEach(function(ent){
     if(!ent.parentId)return;
     var ag=byId[ent.id];if(!ag||ag.id===hub.id)return;
-    var dp=iso(ag.hx,ag.hy);
-    ctx2.beginPath();ctx2.moveTo(cp.x,cp.y+TH);ctx2.lineTo(dp.x,dp.y+TH);ctx2.stroke();
+    if(focusId!==hub.id&&focusId!==ag.id)return;
+    hasAny=true;
+    drawFloatingCurve(hub,ag,'rgba(249,199,79,0.82)',false);
   });
-  // Supervision: guardian/validator entities → their target_ids (dashed, always on).
+  // Supervision: guardian/validator entities -> their target_ids (dashed, focused).
   entities.forEach(function(ent){
     var tids=Array.isArray(ent.target_ids)?ent.target_ids:[];
     if(!tids.length)return;
@@ -8184,14 +8769,20 @@ function drawConnections(){
     var isG=tags.indexOf('guardian')>=0,isV=tags.indexOf('validator')>=0;
     if(!isG&&!isV)return;
     var src=byId[ent.id];if(!src)return;
-    var sp=iso(src.hx,src.hy);
-    ctx2.strokeStyle=isG?'#b9a7ff':'#5bbcff';ctx2.lineWidth=1.6;ctx2.setLineDash([5,5]);
     tids.forEach(function(tid){
       var dst=byId[tid];if(!dst)return;
-      var dp=iso(dst.hx,dst.hy);
-      ctx2.beginPath();ctx2.moveTo(sp.x,sp.y+TH);ctx2.lineTo(dp.x,dp.y+TH);ctx2.stroke();
+      if(focusId!==src.id&&focusId!==dst.id)return;
+      hasAny=true;
+      drawFloatingCurve(src,dst,isG?'rgba(185,167,255,0.84)':'rgba(91,188,255,0.86)',true);
     });
   });
+  if(hasAny&&byId[focusId]){
+    var fp=agentFloatPoint(byId[focusId],18*mapZoom);
+    ctx2.save();
+    ctx2.strokeStyle='rgba(255,255,255,0.22)';ctx2.lineWidth=1.2*mapZoom;
+    ctx2.beginPath();ctx2.arc(fp.x,fp.y,9*mapZoom,0,Math.PI*2);ctx2.stroke();
+    ctx2.restore();
+  }
   ctx2.setLineDash([]);
 }
 function spawnSpark(ag){
@@ -8598,8 +9189,8 @@ function canvasXY(e){
 // can "arm" a potential drag without duplicating/altering handleClick's own logic.
 function hitTestAgent(mx,my){
   for(var i=0;i<AGENTS.length;i++){
-    var ag=AGENTS[i];var pos=agentPos[ag.id]||{x:ag.hx,y:ag.hy};var p=iso(pos.x,pos.y);
-    var dxx=mx-p.x,dyy=my-(p.y+TH);
+    var ag=AGENTS[i];var p=agentFloatPoint(ag,8*mapZoom);
+    var dxx=mx-p.x,dyy=my-p.y;
     if(dxx*dxx+dyy*dyy<(TW*1.4)*(TW*1.4))return ag;
   }
   return null;
@@ -8635,7 +9226,14 @@ function onMapPointerMove(e){
     dragHoverZoneId=zoneIdAtPoint(dragCurMX,dragCurMY);
     return;
   }
-  if(!isDraggingMap)return;
+  if(!isDraggingMap){
+    var hxy=canvasXY(e);
+    var hover=hitTestAgent(hxy.mx,hxy.my);
+    hoverAgentId=hover?hover.id:null;
+    if(cvs)cvs.style.cursor=hover?'pointer':'';
+    return;
+  }
+  hoverAgentId=null;
   var ddx2=e.clientX-dragStartClientX,ddy2=e.clientY-dragStartClientY;
   if(Math.abs(ddx2)>3||Math.abs(ddy2)>3)dragMoved=true;
   mapPanX=dragStartPanX+ddx2;mapPanY=dragStartPanY+ddy2;
@@ -8717,8 +9315,8 @@ function handleClick(e){
     }
   }
   for(var ai=0;ai<AGENTS.length;ai++){
-    var ag3=AGENTS[ai];var pos=agentPos[ag3.id]||{x:ag3.hx,y:ag3.hy};var p=iso(pos.x,pos.y);
-    var dxx=mx-p.x,dyy=my-(p.y+TH);
+    var ag3=AGENTS[ai];var p=agentFloatPoint(ag3,8*mapZoom);
+    var dxx=mx-p.x,dyy=my-p.y;
     if(dxx*dxx+dyy*dyy<(TW*1.4)*(TW*1.4)){selectedId=(selectedId===ag3.id)?null:ag3.id;return;}
   }
   selectedId=null;
@@ -8732,6 +9330,7 @@ function activate(){
     new ResizeObserver(resize).observe(cvs.parentElement);
     cvs.addEventListener('click',handleClick);
     cvs.addEventListener('pointerdown',onMapPointerDown);
+    cvs.addEventListener('pointerleave',function(){hoverAgentId=null;if(cvs)cvs.style.cursor='';});
     cvs.addEventListener('wheel',onMapWheel,{passive:false});
     document.addEventListener('pointermove',onMapPointerMove);
     document.addEventListener('pointerup',onMapPointerUp);
