@@ -65,6 +65,8 @@ const DIAGRAM_BASE_WIDTH = 12000;
 const DIAGRAM_BASE_HEIGHT = 8000;
 const DIAGRAM_PAD_X = 6000;
 const DIAGRAM_PAD_Y = 4000;
+const OPENCLAW_NODE_ACCENT = "#3ecf9a"; // teal — visually distinct from routing-entity accents
+const OPENCLAW_POS_KEY = "karajan-openclaw-pos";
 
 const state = {
   config: null,
@@ -127,6 +129,8 @@ const ROLE_DEFS = {
   parent: {
     label: "Agent",
     summary: "Orquesta, clasifica, planifica, enruta y delega.",
+    detail: "Autoridad raíz de la jerarquía. Recibe la petición, decide la complejidad, planifica el flujo y reparte trabajo entre Workers, Backups y roles de soporte. No es el mejor sitio para ejecutar trabajo de dominio: su valor está en decidir quién debe hacerlo, con qué restricciones y cuándo pedir revisión humana.",
+    example: "Define un Agent raíz que reciba la tarea, la clasifique y delegue cada parte al nodo adecuado.",
     group: "Autoridad",
     restriction: "R0",
     kind: "agent",
@@ -136,6 +140,8 @@ const ROLE_DEFS = {
   child: {
     label: "Worker",
     summary: "Ejecuta tareas concretas asignadas por el Agent.",
+    detail: "Ejecutor principal de trabajo. Un Worker recibe una subtarea concreta y la resuelve con el modelo asignado a su nivel o prioridad. Puede ser propietario de niveles de complejidad; evita duplicar varios Workers con el mismo nivel salvo que formen parte de jerarquías/prioridades distintas.",
+    example: "Asigna un Worker por nivel de complejidad para que ejecute sin solaparse con otros.",
     group: "Ejecución",
     restriction: "R1",
     kind: "worker",
@@ -145,6 +151,8 @@ const ROLE_DEFS = {
   backup: {
     label: "Backup",
     summary: "Reserva en standby; puede asumir Agent si falla el principal.",
+    detail: "Reserva operativa. Permanece fuera del camino crítico hasta que el Agent o un Worker principal falla, se satura o supera el timeout. No revisa ni valida por defecto: aporta continuidad y capacidad de relevo sin convertir el flujo normal en doble ejecución.",
+    example: "Mantén un Backup en standby para asumir la coordinación si el Agent principal cae.",
     group: "Ejecución",
     restriction: "R1",
     kind: "backup",
@@ -153,7 +161,9 @@ const ROLE_DEFS = {
   },
   guardian: {
     label: "Guardian",
-    summary: "Apoya o revisa un Worker concreto.",
+    summary: "Supervisa un Worker durante la ejecución y detecta riesgos antes de que avance.",
+    detail: "Supervisor preventivo de un nodo concreto. Un Guardian acompaña a un Worker mientras trabaja: vigila coherencia, deriva de alcance, riesgo operativo y señales de salida dudosa. No emite la aprobación final ni aplica parches; su función es levantar alertas tempranas y pedir freno o revisión cuando el ejecutor se desvía.",
+    example: "Añade un Guardian a un Worker crítico para supervisar su proceso y frenar desviaciones antes de entregar.",
     group: "Soporte",
     restriction: "R2",
     kind: "guardian",
@@ -162,7 +172,9 @@ const ROLE_DEFS = {
   },
   validator: {
     label: "Validator",
-    summary: "Valida salidas parciales o finales de otros nodos.",
+    summary: "Acepta o rechaza una salida comparándola contra criterios verificables.",
+    detail: "Puerta de calidad sobre resultados. Un Validator revisa una salida parcial o final ya producida y decide si pasa: contrato cumplido, tests esperados, evidencias suficientes, formato correcto y restricciones respetadas. No acompaña el proceso como Guardian ni corrige el código como Fixeador; devuelve aprobación, rechazo o feedback accionable.",
+    example: "Coloca un Validator al final del flujo para aceptar o rechazar la salida antes de cerrarla.",
     group: "Soporte",
     restriction: "R2",
     kind: "validator",
@@ -171,7 +183,9 @@ const ROLE_DEFS = {
   },
   fixer: {
     label: "Fixeador",
-    summary: "Recibe hallazgos de código, aplica parches y verifica con la auditoría.",
+    summary: "Recibe desde Grafo el reporte completo de hallazgos, aplica correcciones y dispara la verificación posterior.",
+    detail: "Rol de reparación activa conectado al panel de Grafo. Cuando se pulsa Solucionar todos en Hallazgos, Karajan debe enviar al agente marcado como Fixeador el reporte completo de errores de detección de código para que aplique parches acotados. Después se vuelve a ejecutar la auditoría/test del Grafo para comprobar qué hallazgos desaparecieron. No sustituye al Validator: el Validator acepta o rechaza resultados; el Fixeador interviene sobre código con un reporte de fallos concreto.",
+    example: "Etiqueta un agente como Fixeador para que Grafo le delegue Solucionar todos con el reporte completo de hallazgos.",
     group: "Soporte",
     restriction: "R2",
     kind: "fixer",
@@ -181,6 +195,8 @@ const ROLE_DEFS = {
   memory: {
     label: "Memory",
     summary: "Mantiene estado, checkpoints y contexto.",
+    detail: "Memoria de trabajo del sistema. Conserva contexto, decisiones, checkpoints y estado entre iteraciones largas. No ejecuta, no valida y no supervisa: evita que la jerarquía pierda continuidad cuando la tarea se divide, se pausa o requiere retomar información previa.",
+    example: "Usa Memory para conservar contexto y checkpoints en flujos largos o reanudables.",
     group: "Estado",
     restriction: "R3",
     kind: "memory",
@@ -190,6 +206,8 @@ const ROLE_DEFS = {
   monitor: {
     label: "Monitor",
     summary: "Vigila salud, timeouts, errores y disponibilidad.",
+    detail: "Observabilidad operativa. Vigila disponibilidad, timeouts, errores, latencia y señales de saturación del resto de nodos. No evalúa la calidad del contenido como Validator ni interviene en la tarea como Guardian; informa al Agent para que reasigne, pause o escale cuando el sistema se degrada.",
+    example: "Despliega un Monitor para detectar timeouts, nodos caídos o saturación antes de que bloqueen la cola.",
     group: "Estado",
     restriction: "R3",
     kind: "monitor",
@@ -391,8 +409,27 @@ function initLiveEvents() {
       if (view === "decision") renderModels().catch(() => {});
       else if (view === "agents") refreshProvidersAndAgents().catch(() => {});
       else if (view === "flow") loadConfig().then(renderFlow).catch(() => {});
-    } else if (ev.type === "layout_changed" && view === "decision") {
-      renderModels().catch(() => {});
+    } else if (ev.type === "layout_changed") {
+      if (view === "decision") renderModels().catch(() => {});
+      // Phase 4: keep Control Humano's dynamic roster (zones/figures) in sync with
+      // routing-layout edits made ANYWHERE — another browser tab's Decisión edit,
+      // or a Phase-3 drag-drop in another window — regardless of which view this
+      // tab currently shows, so it's already correct the instant the user switches
+      // to Control Humano. Unconditional (not gated by view, unlike renderModels()
+      // above). loadRoutingLayout() is a plain GET + state assignment and
+      // rebuildRoster() is deterministic/idempotent (Phase 1), so re-running both
+      // for this tab's own echo of a change it just made itself (drag →
+      // scheduleRoutingSave → PUT → backend re-publishes layout_changed to every
+      // open tab, including the sender) is harmless — no extra network calls
+      // beyond the one GET, no jitter (same entities/groups → same deterministic
+      // layout), no feedback loop (loadRoutingLayout never PUTs).
+      loadRoutingLayout()
+        .then(() => {
+          if (window.karajanCanvas && window.karajanCanvas.rebuildRoster) {
+            try { window.karajanCanvas.rebuildRoster(); } catch (_) {}
+          }
+        })
+        .catch(() => {});
     }
     // repo_scanned / repo_audited are consumed by the Grafo iframe directly.
   };
@@ -3264,6 +3301,10 @@ function persistEntityState() {
   layoutSaveTimer = setTimeout(saveRoutingLayout, 500);
 }
 
+function persistOpenClawPos() {
+  localStorage.setItem(OPENCLAW_POS_KEY, JSON.stringify(state.openclawPos));
+}
+
 async function loadRoutingLayout() {
   try {
     const layout = await api("/routing-layout");
@@ -3276,16 +3317,23 @@ async function loadRoutingLayout() {
       state.entities = layout.entities;
       state.diagramZoom = layout.zoom || state.diagramZoom;
       state.drawerWidth = layout.drawer_width || state.drawerWidth;
-      const hasLocalOpenClawPos = !!localStorage.getItem(OPENCLAW_POS_KEY);
-      const layoutOpenClawIsDefault = Number(layout.openclaw_pos?.x || 0) === 0 && Number(layout.openclaw_pos?.y || 0) === 0;
+      const localOpenClawPos = readStoredOpenClawPos();
       if (
+        localOpenClawPos &&
+        Number.isFinite(Number(localOpenClawPos.x)) &&
+        Number.isFinite(Number(localOpenClawPos.y))
+      ) {
+        state.openclawPos = localOpenClawPos;
+      } else if (
         layout.openclaw_pos &&
         Number.isFinite(Number(layout.openclaw_pos.x)) &&
-        Number.isFinite(Number(layout.openclaw_pos.y)) &&
-        (!hasLocalOpenClawPos || !layoutOpenClawIsDefault)
+        Number.isFinite(Number(layout.openclaw_pos.y))
       ) {
-        state.openclawPos = layout.openclaw_pos;
-        localStorage.setItem(OPENCLAW_POS_KEY, JSON.stringify(state.openclawPos));
+        state.openclawPos = {
+          x: Number(layout.openclaw_pos.x),
+          y: Number(layout.openclaw_pos.y),
+        };
+        persistOpenClawPos();
       }
       localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
       localStorage.setItem("karajan-diagram-zoom", String(state.diagramZoom));
@@ -4091,7 +4139,7 @@ function screenY(value) {
 }
 
 function clampZoom(value) {
-  return Math.min(1.65, Math.max(0.55, value));
+  return Math.min(1.8, Math.max(0.2, value));
 }
 
 function applyDiagramZoom() {
@@ -4301,16 +4349,21 @@ function controlPoint(point, side, distance) {
   return { x: point.x, y: point.y + distance };
 }
 
-const OPENCLAW_NODE_ACCENT = "#3ecf9a"; // teal — visually distinct from routing-entity accents
-const OPENCLAW_POS_KEY = "karajan-openclaw-pos";
-
-function readOpenClawPos() {
+function readStoredOpenClawPos() {
   try {
     const stored = JSON.parse(localStorage.getItem(OPENCLAW_POS_KEY) || "null");
-    if (stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)) return stored;
+    if (stored && Number.isFinite(Number(stored.x)) && Number.isFinite(Number(stored.y))) {
+      return { x: Number(stored.x), y: Number(stored.y) };
+    }
   } catch {
-    /* fall through to default */
+    return null;
   }
+  return null;
+}
+
+function readOpenClawPos() {
+  const stored = readStoredOpenClawPos();
+  if (stored) return stored;
   return { x: -300, y: 40 };
 }
 
@@ -4364,12 +4417,15 @@ function bindOpenClawMove() {
       originY: state.openclawPos.y,
       startX: event.clientX,
       startY: event.clientY,
+      pointerId: event.pointerId,
     };
+    card.setPointerCapture?.(event.pointerId);
     card.classList.add("moving");
     document.body.classList.add("moving-node");
     setDiagramNodeDragging(true);
     document.addEventListener("pointermove", onOpenClawMove);
     document.addEventListener("pointerup", stopOpenClawMove, { once: true });
+    document.addEventListener("pointercancel", stopOpenClawMove, { once: true });
   });
 }
 
@@ -4383,16 +4439,25 @@ function onOpenClawMove(event) {
   };
   card.style.left = `${screenX(state.openclawPos.x)}px`;
   card.style.top = `${screenY(state.openclawPos.y)}px`;
+  persistOpenClawPos();
 }
 
 function stopOpenClawMove() {
-  $("#openclawDiagramCard")?.classList.remove("moving");
+  const card = $("#openclawDiagramCard");
+  if (card && activeOpenclawMove?.pointerId != null) {
+    card.releasePointerCapture?.(activeOpenclawMove.pointerId);
+  }
+  card?.classList.remove("moving");
   activeOpenclawMove = null;
   document.body.classList.remove("moving-node");
   document.removeEventListener("pointermove", onOpenClawMove);
+  document.removeEventListener("pointerup", stopOpenClawMove);
+  document.removeEventListener("pointercancel", stopOpenClawMove);
   setDiagramNodeDragging(false);
-  localStorage.setItem(OPENCLAW_POS_KEY, JSON.stringify(state.openclawPos));
-  scheduleRoutingSave("Posición de OpenClaw actualizada. Guardando…");
+  persistOpenClawPos();
+  clearTimeout(layoutSaveTimer);
+  saveRoutingLayout();
+  toast("Posición de OpenClaw guardada.");
 }
 
 // "Arquitectura activa" side drawer entry point for OpenClaw — the diagram
@@ -5235,18 +5300,20 @@ function renderPromptResourceGrid() {
   renderTraditionalLibrary();
 }
 
-// Reuses the SAME resource-library rendering as Prompting mode (buildPromptResourceLibrary
-// / filterPromptResources / promptResourceSidebar), but placed on the LEFT in traditional
-// mode via the #traditionalLibraryPanel container.
+// Reuses the SAME resource-library rendering as Prompting mode. In traditional
+// mode the index lives on the right and the selected definition is promoted to a
+// full-width panel above the config columns.
 function renderTraditionalLibrary() {
   const target = $("#traditionalLibraryPanel");
-  if (!target || !state.config) return;
+  const detailTarget = $("#traditionalResourceDetailPanel");
+  if (!target || !detailTarget || !state.config) return;
   const allResources = buildPromptResourceLibrary();
   const resources = filterPromptResources(allResources, state.promptLibraryQuery);
   if (!state.selectedPromptResourceId || !allResources.some((resource) => resource.id === state.selectedPromptResourceId)) {
     state.selectedPromptResourceId = resources[0]?.id || allResources[0]?.id || "";
   }
   const selectedResource = allResources.find((resource) => resource.id === state.selectedPromptResourceId) || resources[0] || null;
+  detailTarget.innerHTML = promptResourceDetailCard(selectedResource, { insertAction: false });
   target.innerHTML = `<section class="prompt-library-panel">
       <header>
         <div class="prompt-library-title">
@@ -5256,9 +5323,6 @@ function renderTraditionalLibrary() {
       </header>
       <div class="prompt-library-body">
         ${promptResourceSidebar(resources, selectedResource)}
-        <div class="traditional-resource-detail">
-          ${promptResourceDetailCard(selectedResource)}
-        </div>
       </div>
     </section>`;
 }
@@ -5349,13 +5413,13 @@ function promptResourceSidebar(resources, selectedResource) {
   </div>`;
 }
 
-function promptResourceDetailCard(selectedResource) {
+function promptResourceDetailCard(selectedResource, { insertAction = true } = {}) {
   return selectedResource ? `<article class="prompt-resource-detail">
       <span>${escapeHtml(selectedResource.group)}</span>
       <h4>${escapeHtml(selectedResource.title)}</h4>
       <p>${escapeHtml(selectedResource.description)}</p>
       <code>${escapeHtml(selectedResource.example)}</code>
-      <button type="button" data-insert-prompt-resource="${escapeHtml(selectedResource.id)}">Insertar en plantilla</button>
+      ${insertAction ? `<button type="button" data-insert-prompt-resource="${escapeHtml(selectedResource.id)}">Insertar en plantilla</button>` : ""}
     </article>` : `<div class="prompt-resource-detail config-empty">Selecciona un recurso para ver el detalle.</div>`;
 }
 
@@ -5390,9 +5454,9 @@ function buildPromptResourceLibrary() {
     id: `role:${key}`,
     group: "Roles",
     title: role.label,
-    description: `${role.restriction || "R?"} · ${role.group || "Rol"} · ${role.summary}`,
-    example: `Usa ${role.label} para ${role.summary.toLowerCase()}`,
-    snippet: `\n\n## Rol sugerido: ${role.label}\n- Restricción: ${role.restriction || "R?"}\n- Uso: ${role.summary}\n- Prompt breve: asigna este rol solo si aporta valor operativo claro.`,
+    description: `${role.restriction || "R?"} · ${role.group || "Rol"} · ${role.detail || role.summary}`,
+    example: role.example || `Usa ${role.label} para ${role.summary.toLowerCase()}`,
+    snippet: `\n\n## Rol sugerido: ${role.label}\n- Restricción: ${role.restriction || "R?"}\n- Tipo: ${role.group || "Rol"}\n- Uso principal: ${role.summary}\n- Criterio operativo: ${role.detail || "asigna este rol solo si aporta valor claro y no duplica otra responsabilidad."}\n- Prompt breve: ${role.example || `usa ${role.label} solo cuando su responsabilidad esté claramente separada del resto.`}`,
   }));
   const levelResources = LEVELS.map(([key, label], index) => ({
     id: `level:${key}`,
@@ -6450,7 +6514,7 @@ function init() {
       // The detail card lives in its own always-visible scroll region now, but
       // nudge it into view so a click anywhere in a long list immediately shows
       // the updated detail (traditional mode) or the side detail panel (prompting).
-      const detail = $("#traditionalLibraryPanel .traditional-resource-detail") || $(".prompt-resource-detail-panel");
+      const detail = $("#traditionalResourceDetailPanel") || $(".prompt-resource-detail-panel");
       detail?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
@@ -6584,6 +6648,11 @@ function init() {
     .then(() => {
       applyDrawerState();
       applyDiagramZoom();
+      // Control Humano roster is derived from state.entities/state.groups; rebuild
+      // now that the routing layout has loaded so its figures reflect real data.
+      if (window.karajanCanvas && window.karajanCanvas.rebuildRoster) {
+        try { window.karajanCanvas.rebuildRoster(); } catch (_) {}
+      }
     })
     .catch((error) => toast(error.message));
 }
@@ -7092,14 +7161,16 @@ async function executeProviderCommand(name, slot) {
 (function isoViewModule(){
 'use strict';
 
-// ── AGENTS (spread across larger 15×15 grid) ─────────────────────────────────
-var AGENTS=[
-  {id:'claude',   hx:7, hy:4, col:'#D4A828',acc:'#F0C840',name:'Claude',      role:'Orquestador',level:'N5',skills:['Análisis','Código','Planif.'],dataId:'entity-agent-claude',   maxCap:50,ph:0   },
-  {id:'codex',    hx:11,hy:4, col:'#9060D8',acc:'#A870F0',name:'Codex CLI',   role:'Elite',      level:'N4',skills:['CLI','Git','Scripts'],       dataId:'entity-backup-codex',   maxCap:30,ph:1.3 },
-  {id:'qwen',     hx:3, hy:9, col:'#48C878',acc:'#60E090',name:'Qwen 2.5',    role:'Worker',     level:'N1',skills:['Chat','Texto','Local'],       dataId:'entity-worker-qwen',    maxCap:40,ph:2.6 },
-  {id:'deepseek', hx:7, hy:10,col:'#D07828',acc:'#E89040',name:'DeepSeek R1', role:'Razón',      level:'N3',skills:['Lógica','Math','CoT'],        dataId:'entity-worker-deepseek',maxCap:40,ph:0.8 },
-  {id:'mistral',  hx:11,hy:8, col:'#4898D0',acc:'#60B0E8',name:'Mistral',     role:'Multilingue',level:'N3',skills:['Idiomas','Resumen','RAG'],    dataId:'entity-worker-mistral', maxCap:40,ph:2.1 },
-];
+// ── AGENTS (dynamic roster derived from Decisión's state.entities) ────────────
+// Phase 1: the diorama figures/towers are rebuilt from the real RoutingEntity
+// architecture (state.entities + state.groups) instead of a hardcoded 5-provider
+// list. rebuildRoster() (below) repopulates AGENTS + zoneLayout deterministically
+// whenever the layout data is (re)loaded. See buildAgents()/layoutZones().
+var AGENTS=[];          // per-figure shapes: {id,hx,hy,col,acc,name,role,level,skills,dataId,maxCap,ph}
+var zoneLayout={};      // {entityId:{hx,hy}} — deterministic grid coords by primary group
+var zoneRegions=[];     // Phase 2: [{id,name,color,x0,y0,x1,y1,count}] — one per HierarchyGroup + "Sin asignar"
+var hubId=null;         // entity id used as the connection hub (parent / lowest-prio)
+var NEUTRAL_COL='#7A8899'; // fallback color for entities with no hierarchy membership
 
 // ── DEMO SCRIPT ──────────────────────────────────────────────────────────────
 var DEMO=[
@@ -7124,6 +7195,11 @@ var DEMO=[
 // ── STATE ────────────────────────────────────────────────────────────────────
 var cvs=null,ctx2=null;
 var W=800,H=600,TW=45,TH=22,OX=400,OY=60;
+// Mouse-wheel zoom: mapZoom scales the base tile dims (TWbase) each resize/wheel;
+// TW/TH always equal TWbase*mapZoom so BOTH drawing AND hit-testing (which project
+// grid→screen via iso()) stay consistent at any zoom. Clamped so towers never
+// shrink to slivers or balloon uncontrollably.
+var mapZoom=1,TWbase=45,MAP_ZOOM_MIN=0.55,MAP_ZOOM_MAX=2.2;
 var tick=0,running=false,lastFlow=0;
 var nodeData=[],sparkles=[],links=[];
 var selectedId=null,agentTasks={};
@@ -7144,22 +7220,198 @@ var panelStates={metrics:'open',spec:'open'}; // 'open'|'mini'|'closed'
 var mapPanX=0,mapPanY=0,isDraggingMap=false,dragMoved=false;
 var dragStartClientX=0,dragStartClientY=0,dragStartPanX=0,dragStartPanY=0;
 var PAN_RANGE_X=220,PAN_RANGE_Y=160;
-// fixed workstation offsets per agent (relative to home tile)
-var WORKSPOTS={
-  claude:   {dx:-0.5,dy:-0.8},
-  codex:    {dx:-0.9,dy: 0.6},
-  qwen:     {dx: 0.8,dy:-0.5},
-  deepseek: {dx:-0.6,dy: 0.8},
-  mistral:  {dx: 0.7,dy: 0.7},
-};
-// Tower-only anchor overrides (drawWorkstations), separate from WORKSPOTS which
-// still drives the NPC figure's walk target. Claude's tower is pushed back/up so
-// the (larger) building no longer sits on top of the (smaller) NPC figure when
-// Claude is working/thinking. Other agents fall back to WORKSPOTS unchanged.
-var TOWER_OFFSETS={
-  claude: {dx:-1.3, dy:-1.5},
-  mistral: {dx:-0.2, dy:-0.3},
-};
+// Phase 3: drag-a-figure-to-a-zone state. A pointerdown hit on a figure "arms" a
+// potential drag (dragCandidateId) without yet committing to drag vs click; only
+// once movement exceeds DRAG_THRESHOLD does it become an actual figure drag
+// (isDraggingFigure) — reusing dragMoved to suppress the subsequent click-to-select,
+// same mechanism the existing map-pan drag already relies on.
+var dragCandidateId=null,isDraggingFigure=false,dragArmedClientX=0,dragArmedClientY=0;
+var dragCurMX=0,dragCurMY=0,dragHoverZoneId=null;
+var DRAG_THRESHOLD=6;
+// ── DYNAMIC ROSTER (derived from Decisión architecture) ──────────────────────
+// Deterministic string hash → stable per-entity spread (phase, workspot angle).
+function hashId(s){s=String(s||'');var h=0;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0;}return h;}
+// Lighten a #rrggbb hex toward white by amt∈[0,1] → the "acc" accent variant.
+function lighten(hex,amt){
+  if(!hex||hex.length<7)return hex||NEUTRAL_COL;
+  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  r=Math.round(r+(255-r)*amt);g=Math.round(g+(255-g)*amt);b=Math.round(b+(255-b)*amt);
+  return '#'+[r,g,b].map(function(v){return ('0'+Math.max(0,Math.min(255,v)).toString(16)).slice(-2);}).join('');
+}
+// Primary membership = the one with the LOWEST prio (mirrors server effective_tier()
+// = min(prio); used here purely for visual identity/placement, never for dispatch).
+function primaryMembership(ent){
+  var ms=(ent&&ent.memberships)||[];var best=null;
+  ms.forEach(function(m){if(best===null||Number(m.prio)<Number(best.prio))best=m;});
+  return best;
+}
+function groupById(gid){
+  var gs=(typeof state!=='undefined'&&Array.isArray(state.groups))?state.groups:[];
+  for(var i=0;i<gs.length;i++)if(gs[i].id===gid)return gs[i];
+  return null;
+}
+function memberPrio(ent,gid){
+  if(!gid)return 0;
+  var ms=(ent&&ent.memberships)||[];
+  for(var i=0;i<ms.length;i++)if(ms[i].group_id===gid)return Number(ms[i].prio);
+  return 999;
+}
+// Deterministic per-figure workstation offset (replaces the old 5-id WORKSPOTS/
+// TOWER_OFFSETS lookup tables) so any entity id gets a stable spot near its home.
+function workSpot(ag){
+  var ang=(hashId(ag&&ag.id)%8)/8*Math.PI*2;
+  return {dx:Math.cos(ang)*0.85,dy:Math.sin(ang)*0.7};
+}
+// Cluster entities by primary group into deterministic iso-grid regions and place
+// members in a small ring ordered by their prio in that group. Empty "unassigned"
+// region always reserved so the packing is stable regardless of orphan entities.
+function layoutZones(){
+  var groups=(typeof state!=='undefined'&&Array.isArray(state.groups))?state.groups:[];
+  var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  var buckets={},order=[];
+  groups.forEach(function(g){buckets[g.id]=[];order.push(g.id);});
+  buckets['']=[];order.push('');           // unassigned region
+  entities.forEach(function(ent){
+    var pm=primaryMembership(ent);
+    var gid=(pm&&buckets[pm.group_id]!==undefined)?pm.group_id:'';
+    buckets[gid].push(ent);
+  });
+  var lo=2,span=10;                          // usable grid band (clamp is 0.5..13.5)
+  var cols=Math.max(1,Math.ceil(Math.sqrt(order.length)));
+  var rows=Math.max(1,Math.ceil(order.length/cols));
+  var cellW=span/cols,cellH=span/rows;
+  var layout={},regions=[];
+  order.forEach(function(gid,ri){
+    var col=ri%cols,row=Math.floor(ri/cols);
+    var cx=lo+cellW*(col+0.5),cy=lo+cellH*(row+0.5);
+    var members=buckets[gid].slice().sort(function(a,b){
+      return memberPrio(a,gid)-memberPrio(b,gid)||hashId(a.id)-hashId(b.id);
+    });
+    var n=members.length,radius=Math.min(cellW,cellH)*0.30;
+    members.forEach(function(ent,i){
+      var hx,hy;
+      if(n===1){hx=cx;hy=cy;}
+      else{var ang=(i/n)*Math.PI*2-Math.PI/2;hx=cx+Math.cos(ang)*radius;hy=cy+Math.sin(ang)*radius;}
+      layout[ent.id]={hx:Math.round(hx*100)/100,hy:Math.round(hy*100)/100};
+    });
+    // Region rect for drawZones()/populateLegend() — margin (0.42 of cell) keeps a
+    // visible gap between neighboring zones while comfortably containing the ring.
+    var grp=gid?groupById(gid):null;
+    var halfW=cellW*0.42,halfH=cellH*0.42;
+    regions.push({
+      id:gid,
+      name:gid?(grp?grp.name:''):'Sin asignar',
+      color:gid?((grp&&grp.color)||NEUTRAL_COL):NEUTRAL_COL,
+      x0:cx-halfW,y0:cy-halfH,x1:cx+halfW,y1:cy+halfH,
+      count:n,
+    });
+  });
+  zoneLayout=layout;
+  zoneRegions=regions;
+  return layout;
+}
+// Draw a translucent colored platform per HierarchyGroup region (+ neutral
+// "Sin asignar" region when it has members), with a name label. Renders before
+// drawFloor()/drawWorkstations()/figures (see frame()) so it sits underneath them.
+// Phase 3: a region with zero members is still drawn (as a temporary affordance)
+// while a figure-drag is actively hovering over it, so "Sin asignar" is a valid
+// visible drop target even when currently empty; and the hovered region is
+// brightened so the user gets clear feedback of where a drop would land.
+function drawZones(){
+  zoneRegions.forEach(function(zn){
+    var hovered=isDraggingFigure&&dragHoverZoneId===zn.id;
+    if(!zn.count&&!hovered)return; // don't draw empty regions unless actively hovered
+    var p0=iso(zn.x0,zn.y0),p1=iso(zn.x1,zn.y0),p2=iso(zn.x1,zn.y1),p3=iso(zn.x0,zn.y1);
+    var maxX=Math.max(p0.x,p1.x,p2.x,p3.x),minX=Math.min(p0.x,p1.x,p2.x,p3.x);
+    if(maxX<LW||minX>W)return; // cull off-screen
+    ctx2.beginPath();
+    ctx2.moveTo(p0.x,p0.y);ctx2.lineTo(p1.x,p1.y);ctx2.lineTo(p2.x,p2.y);ctx2.lineTo(p3.x,p3.y);ctx2.closePath();
+    ctx2.fillStyle=c(zn.color,hovered?0.22:0.07);ctx2.fill();
+    ctx2.strokeStyle=c(zn.color,hovered?0.8:0.3);ctx2.lineWidth=hovered?2:1;
+    ctx2.setLineDash(hovered?[]:[6,5]);ctx2.stroke();ctx2.setLineDash([]);
+    var topP=p0.y<=p1.y?p0:p1;                 // topmost of the two "front" corners
+    ctx2.font='600 11px system-ui';ctx2.textAlign='center';ctx2.textBaseline='bottom';
+    ctx2.fillStyle=c(zn.color,hovered?1:0.8);
+    ctx2.fillText(zn.name,(p0.x+p2.x)/2,topP.y-6);
+  });
+}
+// Point-in-polygon (ray casting) — used to test the drag cursor against the same
+// iso-projected quadrilateral drawZones() renders for each region.
+function pointInPoly(px,py,pts){
+  var inside=false;
+  for(var i=0,j=pts.length-1;i<pts.length;j=i++){
+    var xi=pts[i].x,yi=pts[i].y,xj=pts[j].x,yj=pts[j].y;
+    var hit=((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi);
+    if(hit)inside=!inside;
+  }
+  return inside;
+}
+// Which zoneRegions entry (group id, or '' for "Sin asignar") the given canvas-space
+// point falls inside, or null if it's outside every region (drop cancelled).
+function zoneIdAtPoint(mx,my){
+  for(var i=0;i<zoneRegions.length;i++){
+    var zn=zoneRegions[i];
+    var pts=[iso(zn.x0,zn.y0),iso(zn.x1,zn.y0),iso(zn.x1,zn.y1),iso(zn.x0,zn.y1)];
+    if(pointInPoly(mx,my,pts))return zn.id;
+  }
+  return null;
+}
+// Fill #iso-legend with one item per non-empty zone region (color dot + name),
+// reusing the existing .iso-legend-item/.iso-legend-dot CSS (index.html/styles.css).
+function populateLegend(){
+  var el=document.getElementById('iso-legend');
+  if(!el)return;
+  el.innerHTML=zoneRegions.filter(function(zn){return zn.count>0;}).map(function(zn){
+    return '<div class="iso-legend-item"><span class="iso-legend-dot" style="background:'+zn.color+'"></span>'
+      +escapeHtml(zn.name)+'</div>';
+  }).join('');
+}
+// Map every state.entities[] entry to the per-figure shape the old AGENTS used.
+function buildAgents(){
+  var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  var layout=zoneLayout||{};
+  return entities.map(function(ent,idx){
+    var pm=primaryMembership(ent);
+    var grp=pm?groupById(pm.group_id):null;
+    var col=(grp&&grp.color)?grp.color:NEUTRAL_COL;
+    var pos=layout[ent.id]||{hx:7,hy:7};
+    var skills=(ent.skills&&ent.skills.length)?ent.skills:(ent.capabilities||[]);
+    var tier=Number(ent.tier)||3;
+    return {
+      id:ent.id,
+      dataId:ent.id,                                   // fixes the /observability join (old dataIds were fake)
+      hx:pos.hx,hy:pos.hy,
+      col:col,
+      acc:lighten(col,0.25),
+      name:ent.name||roleDef(ent.role).label,
+      role:roleDef(ent.role).label,                    // cosmetic HUD label
+      level:'N'+Math.max(1,Math.min(5,6-tier)),        // lower tier → higher N (authority)
+      skills:Array.isArray(skills)?skills:[],
+      maxCap:Math.max(20,(Number(ent.max_concurrent)||1)*30), // relative capacity denominator
+      ph:(idx*1.3)%(Math.PI*2),                         // deterministic phase spread
+    };
+  });
+}
+// Connection hub: prefer the parent-role entity, else lowest primary prio, else first.
+function pickHubId(){
+  var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  if(!entities.length)return null;
+  var parent=entities.find(function(e){return e.role==='parent'||(Array.isArray(e.role_tags)&&e.role_tags.indexOf('parent')>=0);});
+  if(parent)return parent.id;
+  var best=null,bestKey=Infinity;
+  entities.forEach(function(e){var pm=primaryMembership(e);var k=pm?Number(pm.prio):999;if(k<bestKey){bestKey=k;best=e;}});
+  return best?best.id:entities[0].id;
+}
+// (Re)build the whole roster from current state; deterministic, idempotent, safe to
+// call repeatedly (view entry, initial load). Reseeds wander + recenters the view.
+function rebuildRoster(){
+  layoutZones();
+  AGENTS=buildAgents();
+  hubId=pickHubId();
+  populateLegend();
+  initWander();
+  if(cvs)resize();
+}
 
 var DECISION_PROVIDER_ALIASES={
   claude: ['claude','anthropic','claude-cli'],
@@ -7186,6 +7438,60 @@ function decisionTint(ag){
   return agentUsesDecisionProvider(ag)?'#F6C84F':ag.col;
 }
 
+// ── PROVIDER → ENTITY RESOLVER (Phase 2) ──────────────────────────────────────
+// Single resolver replacing the 3 independent hardcoded provider/model→legacy-id
+// switches that used to live in mapAgentNode(), poll(), and playTaskRecord's
+// resolveNode(). Matches a free-form provider/model/backend string against the
+// REAL state.entities[].provider field (substring either direction), plus the
+// legacy DECISION_PROVIDER_ALIASES table as extra known short-name aliases (so a
+// task record saying "claude" still resolves against an entity whose real
+// provider is "claude-cli", or "openai" against a "codex" provider entity).
+// Returns an array of matching entity ids — 0, 1, or many. Callers must treat an
+// empty result as a graceful no-op (no fallback guess), same as the old code did
+// for genuinely unmatched strings.
+function entitiesForProviderName(str){
+  var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  str=String(str||'').toLowerCase();
+  if(!str||!entities.length)return [];
+  var candidates=[str];
+  // Real task records store model_used as "backend:model" (e.g.
+  // "ollama-qwen:qwen2.5:7b", "claude-cli:haiku") — the segment before the first
+  // ':' is the actual backend/provider identifier, so try it as its own candidate.
+  if(str.indexOf(':')>=0){var head=str.split(':')[0];if(candidates.indexOf(head)<0)candidates.push(head);}
+  Object.keys(DECISION_PROVIDER_ALIASES).forEach(function(key){
+    var arr=DECISION_PROVIDER_ALIASES[key]||[];
+    var known=candidates.some(function(cand){return arr.indexOf(cand)>=0;});
+    if(known){
+      arr.forEach(function(a){if(candidates.indexOf(a)<0)candidates.push(a);});
+      if(candidates.indexOf(key)<0)candidates.push(key);
+    }
+  });
+  return entities.filter(function(ent){
+    var provider=String(ent.provider||'').toLowerCase();
+    if(!provider)return false;
+    return candidates.some(function(cand){
+      return provider===cand||provider.indexOf(cand)>=0||cand.indexOf(provider)>=0;
+    });
+  }).map(function(ent){return ent.id;});
+}
+// Pick a single entity id out of entitiesForProviderName()'s matches: the one
+// holding its lowest Prio (mirrors primaryMembership()'s effective_tier() rule),
+// falling back to the first match. Returns null for an empty/absent list.
+function pickPrimaryEntityId(ids){
+  if(!ids||!ids.length)return null;
+  if(ids.length===1)return ids[0];
+  var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  var best=null,bestKey=Infinity;
+  ids.forEach(function(id){
+    var ent=entities.find(function(e){return e.id===id;});
+    if(!ent)return;
+    var pm=primaryMembership(ent);
+    var k=pm?Number(pm.prio):999;
+    if(k<bestKey){bestKey=k;best=id;}
+  });
+  return best||ids[0];
+}
+
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 function iso(gx,gy){return {x:OX+(gx-gy)*TW+mapPanX, y:OY+(gx+gy)*TH+mapPanY};}
 function c(h,a){
@@ -7209,7 +7515,7 @@ function resize(){
   if(!cvs)return;
   var rect=cvs.parentElement.getBoundingClientRect();
   W=Math.max(400,rect.width||800);H=Math.max(300,rect.height||600);
-  TW=Math.min(42,Math.max(22,W*0.030));TH=TW*0.5;
+  TWbase=Math.min(42,Math.max(22,W*0.030));TW=TWbase*mapZoom;TH=TW*0.5;
   // Center the actual bounding box of the agent towers (not a fixed formula)
   // within the viewport band that's free of the header/footer HUD chrome —
   // the towers aren't symmetric around (0,0) in iso-space, so a fixed
@@ -7219,6 +7525,7 @@ function resize(){
     minGX=Math.min(minGX,ag.hx);maxGX=Math.max(maxGX,ag.hx);
     minGY=Math.min(minGY,ag.hy);maxGY=Math.max(maxGY,ag.hy);
   });
+  if(!isFinite(minGX)){minGX=maxGX=7;minGY=maxGY=7;} // empty roster → center on grid
   var isoMinX=(minGX-maxGY)*TW,isoMaxX=(maxGX-minGY)*TW;
   var isoMinY=(minGX+minGY)*TH,isoMaxY=(maxGX+maxGY)*TH;
   var boxCx=(isoMinX+isoMaxX)/2,boxCy=(isoMinY+isoMaxY)/2;
@@ -7272,7 +7579,7 @@ function updateWander(){
 // ── WORKSTATION BUILDINGS ─────────────────────────────────────────────────────
 function drawWorkstations(){
   AGENTS.forEach(function(ag){
-    var ws=TOWER_OFFSETS[ag.id]||WORKSPOTS[ag.id];if(!ws)return;
+    var ws=workSpot(ag);
     var wx=ag.hx+ws.dx,wy=ag.hy+ws.dy;
     var p=iso(wx,wy);
     if(p.x+TW<LW||p.x-TW>W||p.y+TH>H+TH)return;
@@ -7848,18 +8155,47 @@ function drawLeftPanel(){
 }
 
 // ── CONNECTIONS ───────────────────────────────────────────────────────────────
+// Mirror Decisión's drawWires() relationship "flow" onto the iso map (Fix 3):
+// - Hierarchy wires: SOLID, always-visible gold line from the hub (root/parent
+//   entity) to every entity with a non-empty parentId — a stable structural link,
+//   not per-agent-colored nor dimmed by activity (the old demo-era styling).
+// - Guardian/validator supervision wires: DASHED, role-colored (#b9a7ff guardian,
+//   #5bbcff validator), always-on, following each such entity's target_ids.
+// Drawn before figures (see frame()) so they sit underneath the towers.
 function drawConnections(){
-  var claude=AGENTS[0];
-  var cp=iso(claude.hx,claude.hy);
-  for(var i=1;i<AGENTS.length;i++){
-    var ag=AGENTS[i];var nd=nodeData.find(function(n){return n.id===ag.dataId;});
-    var active=(nd&&(nd.task_count||0)>0)||taskCards.some(function(cr){return cr.agentId===ag.id&&cr.status!=='done';});
+  if(!AGENTS.length)return; // dynamic roster may be empty before layout loads
+  var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  var byId={};AGENTS.forEach(function(a){byId[a.id]=a;});
+  var hub=AGENTS.find(function(a){return a.id===hubId;})||AGENTS[0];
+  var cp=iso(hub.hx,hub.hy);
+  // Hierarchy: hub → each entity with a parentId (gold, solid, always visible).
+  ctx2.strokeStyle='rgba(249,199,79,0.72)';ctx2.lineWidth=1.6;ctx2.setLineDash([]);
+  entities.forEach(function(ent){
+    if(!ent.parentId)return;
+    var ag=byId[ent.id];if(!ag||ag.id===hub.id)return;
     var dp=iso(ag.hx,ag.hy);
-    ctx2.strokeStyle=active?c(ag.col,0.22):c(ag.col,0.07);ctx2.lineWidth=active?1.2:0.5;ctx2.setLineDash(active?[]:[4,8]);
-    ctx2.beginPath();ctx2.moveTo(cp.x,cp.y+TH);ctx2.lineTo(dp.x,dp.y+TH);ctx2.stroke();ctx2.setLineDash([]);
-  }
+    ctx2.beginPath();ctx2.moveTo(cp.x,cp.y+TH);ctx2.lineTo(dp.x,dp.y+TH);ctx2.stroke();
+  });
+  // Supervision: guardian/validator entities → their target_ids (dashed, always on).
+  entities.forEach(function(ent){
+    var tids=Array.isArray(ent.target_ids)?ent.target_ids:[];
+    if(!tids.length)return;
+    var tags=Array.isArray(ent.role_tags)?ent.role_tags:[];
+    var isG=tags.indexOf('guardian')>=0,isV=tags.indexOf('validator')>=0;
+    if(!isG&&!isV)return;
+    var src=byId[ent.id];if(!src)return;
+    var sp=iso(src.hx,src.hy);
+    ctx2.strokeStyle=isG?'#b9a7ff':'#5bbcff';ctx2.lineWidth=1.6;ctx2.setLineDash([5,5]);
+    tids.forEach(function(tid){
+      var dst=byId[tid];if(!dst)return;
+      var dp=iso(dst.hx,dst.hy);
+      ctx2.beginPath();ctx2.moveTo(sp.x,sp.y+TH);ctx2.lineTo(dp.x,dp.y+TH);ctx2.stroke();
+    });
+  });
+  ctx2.setLineDash([]);
 }
 function spawnSpark(ag){
+  if(!ag)return; // dynamic roster: guard against undefined (e.g. AGENTS[0] on empty roster)
   var pos=agentPos[ag.id]||{x:ag.hx,y:ag.hy};var p=iso(pos.x,pos.y);
   for(var i=0;i<6;i++)sparkles.push({x:p.x+(Math.random()-0.5)*TW,y:p.y+TH*0.8,vx:(Math.random()-0.5)*2,vy:-1.5-Math.random()*2.5,life:1,col:ag.col,sz:1.5+Math.random()*2.5});
 }
@@ -7966,7 +8302,7 @@ var DACT={
     var pos=agentPos[id];
     if(!ag||!pos)return;
     if(m==='working'||m==='thinking'){
-      var ws=WORKSPOTS[id]||{dx:-0.5,dy:0.5};
+      var ws=workSpot(ag);
       setAgentTarget(id,ag.hx+ws.dx,ag.hy+ws.dy);
     } else if(m==='idle'){
       setAgentTarget(id,ag.hx,ag.hy); // return home to sleep
@@ -8017,16 +8353,6 @@ function stopDemo(){demoTimers.forEach(clearTimeout);demoTimers=[];demoRunning=f
 var realRunning=false,realTimers=[],pendingTaskId=null,bootstrapped=false,lastPlayedSig='';
 function stopReal(){realTimers.forEach(clearTimeout);realTimers=[];realRunning=false;}
 function realSched(ms,fn){realTimers.push(setTimeout(fn,ms));}
-// provider / model_used → animation agent-node id (best-effort)
-function mapAgentNode(s){
-  s=(s||'').toLowerCase();
-  if(s.indexOf('claude')>=0)return 'claude';
-  if(s.indexOf('codex')>=0)return 'codex';
-  if(s.indexOf('deepseek')>=0)return 'deepseek';
-  if(s.indexOf('mistral')>=0)return 'mistral';
-  if(s.indexOf('qwen')>=0)return 'qwen';
-  return null;
-}
 function tierLabelES(t){
   t=(t||'').toLowerCase();
   if(t.indexOf('cheap')>=0)return 'económico';
@@ -8070,18 +8396,19 @@ function playTaskRecord(task){
   var execs=(del&&del.executions)||[];
   if(execs.length){
     var subMap={};(cls.subtasks||[]).forEach(function(s){subMap[s.id]=s;});
-    var usedFallback={};
+    // Resolve the real entity id this execution actually ran on, via the single
+    // provider→entity resolver (Phase 2) — no more hardcoded rotation fallback:
+    // an execution whose model_used/backend matches no known entity provider
+    // simply isn't animated (more correct than guessing a wrong figure).
     var resolveNode=function(ex){
-      var node=mapAgentNode(ex.model_used)||mapAgentNode(ex.backend);
-      if(node)return node;
-      // fall back to a distinct worker node, else the elite codex node
-      var order=['codex','qwen','deepseek','mistral'];
-      for(var i=0;i<order.length;i++){if(!usedFallback[order[i]]){usedFallback[order[i]]=1;return order[i];}}
-      return 'codex';
+      var ids=entitiesForProviderName(ex.model_used).concat(entitiesForProviderName(ex.backend));
+      var uniq=[];ids.forEach(function(id){if(uniq.indexOf(id)<0)uniq.push(id);});
+      return pickPrimaryEntityId(uniq);
     };
     var delBase=2400;
     execs.forEach(function(ex,i){
       var node=resolveNode(ex);ex._node=node;
+      if(!node)return; // no matching entity — skip animating this execution
       var sub=subMap[ex.subtask_id]||{};
       var subName=sub.name||ex.subtask_id||'Subtarea';
       var tgt=ex.model_used||sub.recommended_model||cls.recommended_model||'';
@@ -8093,6 +8420,7 @@ function playTaskRecord(task){
     var doneBase=delBase+execs.length*750+1600;
     execs.forEach(function(ex,i){
       var node=ex._node;
+      if(!node)return; // no matching entity — nothing to mark done
       var ok=!ex.error&&['success','completed','ok','done'].indexOf((ex.status||'').toLowerCase())>=0;
       var cost=ex.estimated_cost_usd!=null?('$'+Number(ex.estimated_cost_usd).toFixed(4)):'';
       var lat=ex.latency_ms!=null?(Math.round(ex.latency_ms)+'ms'):'';
@@ -8136,6 +8464,7 @@ function onTaskChangedReal(taskId){
 // Called on entering / activating the human view: real history → animate the
 // newest task; empty → play the scripted demo so the view is never dead.
 function bootstrapCanvas(){
+  rebuildRoster(); // refresh figures from current Decisión data on every (re)entry
   if(bootstrapped||demoRunning||realRunning)return;
   bootstrapped=true;
   fetch('/tasks?limit=1').then(function(r){return r.ok?r.json():null;}).then(function(list){
@@ -8146,7 +8475,15 @@ function bootstrapCanvas(){
 // Expose the hooks the outer app scope needs (SSE + view switching). refreshNodes
 // lets the shared initLiveEvents() dispatcher refresh the left-panel per-agent
 // metrics (nodeData) on run events, replacing this module's old private 5s poll.
-window.karajanCanvas={onTaskChanged:onTaskChangedReal,bootstrap:bootstrapCanvas,playTaskRecord:playTaskRecord,refreshNodes:poll};
+window.karajanCanvas={onTaskChanged:onTaskChangedReal,bootstrap:bootstrapCanvas,playTaskRecord:playTaskRecord,refreshNodes:poll,rebuildRoster:rebuildRoster};
+window.__isoTest={ // TEMP test-only hook (removed after verification)
+  zoom:function(){return mapZoom;},
+  cvs:function(){var r=cvs.getBoundingClientRect();return {left:r.left,top:r.top,width:r.width,height:r.height,W:W,H:H};},
+  agentScreen:function(id){var ag=AGENTS.find(function(a){return a.id===id;});if(!ag)return null;var pos=agentPos[ag.id]||{x:ag.hx,y:ag.hy};var p=iso(pos.x,pos.y);return {x:p.x,y:p.y+TH};},
+  zoneCenter:function(id){var zn=zoneRegions.find(function(z){return z.id===id;});if(!zn)return null;var a=iso(zn.x0,zn.y0),b=iso(zn.x1,zn.y1);return {x:(a.x+b.x)/2,y:(a.y+b.y)/2};},
+  zones:function(){return zoneRegions.map(function(z){return {id:z.id,name:z.name,count:z.count};});},
+  agents:function(){return AGENTS.map(function(a){return a.id;});}
+};
 
 // ── MISSION INPUT ─────────────────────────────────────────────────────────────
 function showMissionInput(){
@@ -8185,13 +8522,17 @@ function poll(){
       var flow=obs.execution_flow||[];
       flow.slice(lastFlow).forEach(function(ev){
         if((ev.event_type||'')!=='task_delegated')return;
-        var tgt=(ev.target_node||'').toLowerCase();
-        var toId=tgt.indexOf('qwen')>=0?'qwen':tgt.indexOf('deepseek')>=0?'deepseek':tgt.indexOf('mistral')>=0?'mistral':tgt.indexOf('codex')>=0?'codex':null;
-        if(toId){links.push({from:'claude',to:toId,prog:0});var dst=AGENTS.find(function(a){return a.id===toId;});if(dst)spawnSpark(dst);}
+        var toId=pickPrimaryEntityId(entitiesForProviderName(ev.target_node));
+        if(toId){links.push({from:hubId,to:toId,prog:0});var dst=AGENTS.find(function(a){return a.id===toId;});if(dst)spawnSpark(dst);}
       });
       lastFlow=flow.length;
     }
-    if(res[1]){agentTasks={};res[1].forEach(function(t){var tgt=((t.delegation&&t.delegation.target_node)||'').toLowerCase();var id=tgt.indexOf('qwen')>=0?'qwen':tgt.indexOf('deepseek')>=0?'deepseek':tgt.indexOf('mistral')>=0?'mistral':tgt.indexOf('codex')>=0?'codex':'claude';if(!agentTasks[id])agentTasks[id]=[];if(agentTasks[id].length<5)agentTasks[id].push({prompt:t.classification&&t.classification.prompt});});}
+    if(res[1]){agentTasks={};res[1].forEach(function(t){
+      var tgt=(t.delegation&&t.delegation.target_node)||'';
+      var id=pickPrimaryEntityId(entitiesForProviderName(tgt))||hubId;
+      if(!id)return;
+      if(!agentTasks[id])agentTasks[id]=[];if(agentTasks[id].length<5)agentTasks[id].push({prompt:t.classification&&t.classification.prompt});
+    });}
   }).catch(function(){});
 }
 
@@ -8207,9 +8548,10 @@ function frame(){
     bg.addColorStop(0,'rgba(18,28,48,0.85)');bg.addColorStop(1,'rgba(0,0,0,0)');
     ctx2.fillStyle=bg;ctx2.fillRect(0,0,W,H);
     updateWander();tickDataStacks();
-    drawFloor();drawWorkstations();drawConnections();
+    drawZones();drawFloor();drawWorkstations();drawConnections();
     var sorted=AGENTS.slice().sort(function(a,b){var pa=agentPos[a.id]||{y:a.hy},pb=agentPos[b.id]||{y:b.hy};return (pa.x+pa.y)-(pb.x+pb.y);});
     for(var i=0;i<sorted.length;i++){try{drawAgent(sorted[i]);}catch(ae){lastErr=sorted[i].id+':'+ae.message;}}
+    drawDragGhost();
     drawDataStacks();drawLinks();drawSparkles();ctx2.globalAlpha=1;
     drawTaskCards();drawLeftPanel();drawHUD();
     AGENTS.forEach(function(ag){var nd=nodeData.find(function(n){return n.id===ag.dataId;});if(nd&&(nd.task_count||0)>0&&Math.random()<0.014)spawnSpark(ag);});
@@ -8219,30 +8561,137 @@ function frame(){
 
 // ── MAP PAN (drag to scroll within a clamped range) ──────────────────────────
 function clampMapPan(){
-  mapPanX=Math.max(-PAN_RANGE_X,Math.min(PAN_RANGE_X,mapPanX));
-  mapPanY=Math.max(-PAN_RANGE_Y,Math.min(PAN_RANGE_Y,mapPanY));
+  // Scale the allowed pan range with zoom so that when zoomed in (larger content)
+  // the user can still explore edges, and zoom-toward-cursor isn't fought by the clamp.
+  var rx=PAN_RANGE_X*Math.max(1,mapZoom),ry=PAN_RANGE_Y*Math.max(1,mapZoom);
+  mapPanX=Math.max(-rx,Math.min(rx,mapPanX));
+  mapPanY=Math.max(-ry,Math.min(ry,mapPanY));
+}
+// Scroll-wheel zoom, centered on the cursor: keep whatever scene point sits under
+// the pointer fixed while zooming (same "zoom toward pointer" pattern Decisión's
+// diagram wheel handler uses). Recompute TW/TH from the new zoom, then adjust
+// mapPan so the pre-zoom world point stays under the cursor.
+function onMapWheel(e){
+  if(!cvs)return;
+  var xy=canvasXY(e),cx=xy.mx,cy=xy.my;
+  if(cx<LW)return; // ignore wheel over the left metrics panel
+  e.preventDefault();
+  var oldZoom=mapZoom;
+  var dir=e.deltaY<0?1:-1;
+  var newZoom=Math.min(MAP_ZOOM_MAX,Math.max(MAP_ZOOM_MIN,oldZoom*(1+dir*0.12)));
+  if(newZoom===oldZoom)return;
+  mapZoom=newZoom;
+  TW=TWbase*mapZoom;TH=TW*0.5;
+  var ratio=mapZoom/oldZoom;
+  mapPanX=cx-OX-(cx-OX-mapPanX)*ratio;
+  mapPanY=cy-OY-(cy-OY-mapPanY)*ratio;
+  clampMapPan();
+}
+// Convert a pointer event's client coords into the same canvas-space (mx,my)
+// handleClick already uses, so hit-testing stays consistent everywhere.
+function canvasXY(e){
+  var rect=cvs.getBoundingClientRect();
+  return {mx:(e.clientX-rect.left)*(W/rect.width),my:(e.clientY-rect.top)*(H/rect.height)};
+}
+// Same figure hit-test handleClick's tower loop performs (squared-distance circle
+// test against each figure's projected base point) — factored out so pointerdown
+// can "arm" a potential drag without duplicating/altering handleClick's own logic.
+function hitTestAgent(mx,my){
+  for(var i=0;i<AGENTS.length;i++){
+    var ag=AGENTS[i];var pos=agentPos[ag.id]||{x:ag.hx,y:ag.hy};var p=iso(pos.x,pos.y);
+    var dxx=mx-p.x,dyy=my-(p.y+TH);
+    if(dxx*dxx+dyy*dyy<(TW*1.4)*(TW*1.4))return ag;
+  }
+  return null;
 }
 function onMapPointerDown(e){
   if(!cvs)return;
-  var rect=cvs.getBoundingClientRect();
-  var mx=(e.clientX-rect.left)*(W/rect.width);
+  var xy=canvasXY(e),mx=xy.mx,my=xy.my;
   if(mx<LW)return; // don't hijack drags starting over the left metrics panel
+  // A figure is under the cursor: arm a potential drag instead of map-panning.
+  // Whether it ends up being a drag or a plain click is decided in pointermove/up.
+  var hit=hitTestAgent(mx,my);
+  if(hit){
+    dragCandidateId=hit.id;isDraggingFigure=false;
+    dragArmedClientX=e.clientX;dragArmedClientY=e.clientY;
+    dragCurMX=mx;dragCurMY=my;dragHoverZoneId=null;
+    return;
+  }
   isDraggingMap=true;dragMoved=false;
   dragStartClientX=e.clientX;dragStartClientY=e.clientY;
   dragStartPanX=mapPanX;dragStartPanY=mapPanY;
   cvs.style.cursor='grabbing';
 }
 function onMapPointerMove(e){
+  if(dragCandidateId){
+    var xy=canvasXY(e);
+    dragCurMX=xy.mx;dragCurMY=xy.my;
+    if(!isDraggingFigure){
+      var ddx=e.clientX-dragArmedClientX,ddy=e.clientY-dragArmedClientY;
+      if(Math.abs(ddx)<=DRAG_THRESHOLD&&Math.abs(ddy)<=DRAG_THRESHOLD)return; // still just a potential click
+      isDraggingFigure=true;dragMoved=true; // suppress the click-to-select that follows pointerup
+      if(cvs)cvs.style.cursor='grabbing';
+    }
+    dragHoverZoneId=zoneIdAtPoint(dragCurMX,dragCurMY);
+    return;
+  }
   if(!isDraggingMap)return;
-  var ddx=e.clientX-dragStartClientX,ddy=e.clientY-dragStartClientY;
-  if(Math.abs(ddx)>3||Math.abs(ddy)>3)dragMoved=true;
-  mapPanX=dragStartPanX+ddx;mapPanY=dragStartPanY+ddy;
+  var ddx2=e.clientX-dragStartClientX,ddy2=e.clientY-dragStartClientY;
+  if(Math.abs(ddx2)>3||Math.abs(ddy2)>3)dragMoved=true;
+  mapPanX=dragStartPanX+ddx2;mapPanY=dragStartPanY+ddy2;
   clampMapPan();
 }
-function onMapPointerUp(){
+function onMapPointerUp(e){
+  if(dragCandidateId){
+    var id=dragCandidateId,wasDragging=isDraggingFigure;
+    dragCandidateId=null;isDraggingFigure=false;
+    if(cvs)cvs.style.cursor='';
+    if(wasDragging){
+      var xy=e?canvasXY(e):null;
+      var zoneId=zoneIdAtPoint(xy?xy.mx:dragCurMX,xy?xy.my:dragCurMY);
+      dragHoverZoneId=null;
+      applyZoneDrop(id,zoneId);
+    }
+    return;
+  }
   if(!isDraggingMap)return;
   isDraggingMap=false;
   if(cvs)cvs.style.cursor='';
+}
+// Reassign entityId's PRIMARY hierarchy membership (lowest-prio one, per
+// primaryMembership()) to zoneId's group — reusing the existing Decisión
+// mutators (addEntityToGroup/removeEntityFromGroup) so persistence/validation
+// stays identical to editing the diagram directly. zoneId==='' means the
+// neutral "Sin asignar" region (remove primary membership, add nothing). Any
+// OTHER non-primary membership the entity holds in a different group is left
+// untouched. No-ops cleanly if dropped outside every region, or back onto the
+// same zone the entity was already primarily in.
+function applyZoneDrop(entityId,zoneId){
+  if(zoneId===null||zoneId===undefined)return; // dropped outside every region
+  var entities=(typeof state!=='undefined'&&Array.isArray(state.entities))?state.entities:[];
+  var ent=entities.find(function(e){return e.id===entityId;});
+  if(!ent)return;
+  var pm=primaryMembership(ent);
+  var curGid=pm?pm.group_id:'';
+  if(curGid===zoneId)return; // same zone it's already primarily in — no-op
+  if(pm)removeEntityFromGroup(pm.group_id,entityId);
+  if(zoneId)addEntityToGroup(zoneId,entityId);
+  rebuildRoster();
+}
+// Drag-in-progress visual: a glow following the cursor (the dragged figure's own
+// tower/position isn't moved — wander/animation state stays untouched — this is
+// purely an overlay so the user can see what they're carrying and where it'll land).
+function drawDragGhost(){
+  if(!isDraggingFigure||!dragCandidateId)return;
+  var ag=AGENTS.find(function(a){return a.id===dragCandidateId;});
+  if(!ag)return;
+  ctx2.save();
+  ctx2.beginPath();ctx2.arc(dragCurMX,dragCurMY,14,0,Math.PI*2);
+  ctx2.fillStyle=c(ag.col,0.35);ctx2.fill();
+  ctx2.strokeStyle=c(ag.col,0.9);ctx2.lineWidth=2;ctx2.stroke();
+  ctx2.font='bold 11px system-ui';ctx2.textAlign='center';ctx2.textBaseline='bottom';
+  ctx2.fillStyle=c(ag.col,0.95);ctx2.fillText(ag.name,dragCurMX,dragCurMY-16);
+  ctx2.restore();
 }
 
 // ── CLICK ─────────────────────────────────────────────────────────────────────
@@ -8283,10 +8732,11 @@ function activate(){
     new ResizeObserver(resize).observe(cvs.parentElement);
     cvs.addEventListener('click',handleClick);
     cvs.addEventListener('pointerdown',onMapPointerDown);
+    cvs.addEventListener('wheel',onMapWheel,{passive:false});
     document.addEventListener('pointermove',onMapPointerMove);
     document.addEventListener('pointerup',onMapPointerUp);
   }
-  resize();initWander();
+  rebuildRoster();resize();
   if(!running){running=true;requestAnimationFrame(frame);}
   // Live task/run animation is driven by the shared SSE dispatcher (initLiveEvents
   // → onTaskChanged/refreshNodes); this poll only seeds nodeData once and acts as

@@ -1276,6 +1276,40 @@ function findingAdvice(f){
   return "Revisa el nodo afectado, aplica un refactor mínimo y vuelve a ejecutar auditoría.";
 }
 function findingById(id){ return findings.find((f) => f.id === id) || null; }
+function nodeLabelForFinding(f){
+  const node = allNodes.find((n) => n.id === f.node_id);
+  return node ? `${node.label || node.name || node.id}` : (f.node_id || "sin nodo");
+}
+function fixerFindingsReport(items){
+  const ordered = [...items].sort((a, b) => (SEV_ORDER[b.severity] || 0) - (SEV_ORDER[a.severity] || 0));
+  const counts = ordered.reduce((acc, f) => {
+    acc[f.severity] = (acc[f.severity] || 0) + 1;
+    return acc;
+  }, {});
+  const lines = ordered.map((f, index) => {
+    const file = f.file_path || nodeRepoPath(allNodes.find((n) => n.id === f.node_id)) || "sin fichero";
+    return [
+      `#${index + 1} [${String(f.severity || "info").toUpperCase()}] ${f.detector || "hallazgo"}`,
+      `id: ${f.id}`,
+      `archivo: ${file}`,
+      `nodo: ${nodeLabelForFinding(f)}`,
+      `mensaje: ${f.message || ""}`,
+      `herramienta: ${findingTool(f)}`,
+      `criterio de arreglo: ${findingAdvice(f)}`,
+    ].join("\n");
+  });
+  return [
+    `REPORTE COMPLETO PARA FIXEADOR`,
+    `Repositorio: ${currentRepo?.name || ""}`,
+    `Repo id: ${currentRepo?.id || ""}`,
+    `Ruta raíz: ${currentRepo?.root_path || ""}`,
+    `Hallazgos: ${ordered.length} total · ${counts.critical || 0} críticos · ${counts.warning || 0} advertencias · ${counts.info || 0} info`,
+    ``,
+    `Objetivo operativo: aplica parches acotados para resolver los hallazgos detectados en el grafo. No hagas refactors amplios no necesarios. Tras corregir, se volverá a ejecutar la auditoría para verificar si desaparecen los hallazgos.`,
+    ``,
+    lines.join("\n\n---\n\n"),
+  ].join("\n");
+}
 async function solveFinding(id){
   const f = findingById(id);
   if (!f) return;
@@ -1292,45 +1326,69 @@ async function solveFinding(id){
         : `Fixeador · ${result.error || result.message || "no verificado"}`,
       result.verified ? "ok" : "err"
     );
+    if (!result.verified || result.error) {
+      llmSummary = `Fixeador individual: ${result.error || result.message || "no verificado"}\n` +
+        `Hallazgo: ${f.detector} · ${f.message}`;
+      renderFindings();
+    }
     await loadGraph();
     await loadFindings();
   } catch (err) {
+    llmSummary = `Fixeador individual: ${err.message}`;
+    renderFindings();
     setEditorStatus(`Fixeador · ${err.message}`, "err");
   }
 }
 async function solveAllFindings(){
   if (!findings.length || !currentRepo) return;
-  let ok = 0, failed = 0;
-  const notes = [];
-  const attempted = new Set();
-  const maxAttempts = Math.max(1, findings.length);
-  while (ok + failed < maxAttempts) {
-    const ordered = [...findings]
-      .filter((f) => !attempted.has(`${f.detector}|${f.node_id}|${f.message}`))
-      .sort((a, b) => (SEV_ORDER[b.severity] || 0) - (SEV_ORDER[a.severity] || 0));
-    const f = ordered[0];
-    if (!f) break;
-    attempted.add(`${f.detector}|${f.node_id}|${f.message}`);
-    setEditorStatus(`Fixeador · ${ok + failed + 1}/${maxAttempts}: ${f.detector} (${f.severity})...`);
-    try {
-      const result = await api(`/repos/${encodeURIComponent(currentRepo.id)}/findings/fix`, {
-        method:"POST",
-        body: JSON.stringify({ finding_id:f.id, apply:true }),
-      });
-      if (result.verified) ok += 1;
-      else failed += 1;
-      notes.push(`${result.verified ? "OK" : "PENDIENTE"} · ${f.detector} · ${result.file_path || "sin fichero"} · ${result.error || result.message}`);
-      await loadGraph();
-    } catch (err) {
-      failed += 1;
-      notes.push(`ERROR · ${f.detector} · ${err.message}`);
-      await loadFindings();
-    }
+  const beforeTotal = findings.length;
+  const report = fixerFindingsReport(findings);
+  const findingIds = findings.map((f) => f.id);
+  setEditorStatus(`Fixeador · enviando reporte completo (${beforeTotal} hallazgos) al agente con etiqueta Fixeador...`);
+  let fixResult = null;
+  try {
+    fixResult = await api(`/repos/${encodeURIComponent(currentRepo.id)}/findings/fix`, {
+      method:"POST",
+      body: JSON.stringify({
+        finding_id: findingIds[0],
+        finding_ids: findingIds,
+        apply: true,
+        mode: "full_report",
+        rerun_audit: false,
+        report,
+      }),
+    });
+  } catch (err) {
+    llmSummary = `Fixeador no pudo recibir el reporte completo.\n${err.message}`;
+    renderFindings();
+    setEditorStatus(`Fixeador · ${err.message}`, "err");
+    return;
   }
+
+  setEditorStatus("Fixeador · cambios recibidos. Re-ejecutando auditoría para verificar...");
+  let auditResult = null;
+  try {
+    auditResult = await api(`/repos/${encodeURIComponent(currentRepo.id)}/audit`,
+      { method:"POST", body: JSON.stringify({ include_llm: iaToggle.checked }) });
+    llmSummary = auditResult.llm_summary || null;
+  } catch (err) {
+    llmSummary = `Fixeador ejecutado, pero falló la verificación posterior.\n${err.message}`;
+    setEditorStatus(`Fixeador · falló la auditoría posterior: ${err.message}`, "err");
+  }
+
   await loadGraph();
-  llmSummary = `Fixeador terminado: ${ok} verificados, ${failed} pendientes.\n` + notes.slice(0, 20).join("\n");
+  await loadFindings();
+  const afterTotal = findings.length;
+  const resolved = Math.max(0, beforeTotal - afterTotal);
+  const backendNote = fixResult?.message || fixResult?.summary || fixResult?.error || "Reporte enviado al Fixeador.";
+  const auditCounts = auditResult?.counts_by_severity || {};
+  llmSummary = [
+    `Fixeador terminado: ${resolved} resueltos, ${afterTotal} pendientes.`,
+    backendNote,
+    auditResult ? `Auditoría posterior: ${auditCounts.critical || 0} críticos · ${auditCounts.warning || 0} advertencias · ${auditCounts.info || 0} info.` : "Auditoría posterior no completada.",
+  ].join("\n");
   renderFindings();
-  setEditorStatus(`Fixeador · ${ok} corregidos/verificados, ${failed} pendientes.`, failed ? "err" : "ok");
+  setEditorStatus(`Fixeador · ${resolved} resueltos, ${afterTotal} pendientes tras auditoría.`, afterTotal ? "err" : "ok");
 }
 
 function renderFindings(){

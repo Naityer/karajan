@@ -4,6 +4,8 @@ import shlex
 import shutil
 import subprocess
 import time
+import os
+from pathlib import Path
 
 from app.models import Backend, ProviderInfo
 from app.providers.base import ModelProvider, ProviderRun
@@ -21,6 +23,29 @@ class CliModelProvider(ModelProvider):
     def __init__(self, provider: ProviderInfo) -> None:
         self.provider = provider
 
+    def _resolve_binary(self, binary: str) -> str | None:
+        found = shutil.which(binary)
+        if found:
+            return found
+
+        # GUI-launched servers on Windows often miss the user's npm global bin
+        # even though the same command works in an interactive terminal.
+        candidate_dirs = []
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            candidate_dirs.append(Path(appdata) / "npm")
+        localappdata = os.environ.get("LOCALAPPDATA")
+        if localappdata:
+            candidate_dirs.append(Path(localappdata) / "npm")
+
+        suffixes = ("", ".cmd", ".exe", ".bat") if os.name == "nt" else ("",)
+        for directory in candidate_dirs:
+            for suffix in suffixes:
+                candidate = directory / f"{binary}{suffix}"
+                if candidate.exists():
+                    return str(candidate)
+        return None
+
     def run(self, instruction: str, model_id: str, timeout_s: int) -> ProviderRun:
         template = self.provider.cli_command
         if not template:
@@ -29,8 +54,10 @@ class CliModelProvider(ModelProvider):
         command = template.format(model=model_id)
         argv = shlex.split(command, posix=False)
         binary = argv[0] if argv else ""
-        if not shutil.which(binary):
+        resolved_binary = self._resolve_binary(binary)
+        if not resolved_binary:
             return ProviderRun("", f"{self.provider.name}:{model_id}", 0, error=f"`{binary}` not found in PATH")
+        argv[0] = resolved_binary
 
         start = time.perf_counter()
         try:

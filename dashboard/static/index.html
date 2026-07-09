@@ -64,7 +64,7 @@
         <div class="human-iso-fullscreen">
           <canvas id="iso-cvs"></canvas>
           <div class="iso-legend" id="iso-legend"></div>
-          <div class="iso-hint">haz clic en una torre · arrastra para desplazar el mapa</div>
+          <div class="iso-hint">haz clic en una torre · arrastra para desplazar el mapa · rueda para zoom</div>
           <!-- hidden elements kept for JS compatibility -->
           <div hidden id="humanHomeGrid"></div>
           <div hidden id="humanDecisionCount"></div>
@@ -203,9 +203,10 @@
                   <button type="button" class="config-tab" data-config-tab="cost">Coste y latencia</button>
                 </div>
               </nav>
-              <div class="traditional-library" id="traditionalLibraryPanel"></div>
             </aside>
+            <div class="traditional-resource-detail-panel" id="traditionalResourceDetailPanel"></div>
             <div class="flow-grid" id="flowGrid"></div>
+            <aside class="traditional-library" id="traditionalLibraryPanel"></aside>
           </div>
         </section>
         <section class="config-mode-panel active" id="config-mode-prompting">

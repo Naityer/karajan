@@ -578,7 +578,7 @@ class RoutingEntity(BaseModel):
 class RoutingLayout(BaseModel):
     entities: list[RoutingEntity] = Field(default_factory=list)
     groups: list[HierarchyGroup] = Field(default_factory=list)
-    zoom: float = Field(default=1.0, ge=0.4, le=2.0)
+    zoom: float = Field(default=1.0, ge=0.15, le=2.0)
     drawer_width: int = Field(default=320, ge=220, le=680)
     openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -904,7 +904,11 @@ class FixFindingRequest(BaseModel):
     """Request to delegate a graph finding to the Fixer role/agent."""
 
     finding_id: str
+    finding_ids: list[str] = Field(default_factory=list)
     apply: bool = True
+    mode: str = "single"
+    rerun_audit: bool = False
+    report: str | None = None
 
 
 class FixFindingResult(BaseModel):
@@ -921,6 +925,9 @@ class FixFindingResult(BaseModel):
     detector: str | None = None
     message: str = ""
     error: str | None = None
+    summary: str | None = None
+    attempted_count: int = 1
+    resolved_count: int = 0
 
 
 class ExplainRequest(BaseModel):

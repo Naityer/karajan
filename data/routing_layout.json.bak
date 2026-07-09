@@ -16,7 +16,12 @@
         "Planner",
         "Router"
       ],
-      "memberships": [],
+      "memberships": [
+        {
+          "group_id": "grp_mrcp9isp",
+          "prio": 2
+        }
+      ],
       "tier": 2,
       "max_concurrent": 1,
       "x": 732.2410747040254,
@@ -41,12 +46,16 @@
         {
           "group_id": "grp_mrchp9cn",
           "prio": 3
+        },
+        {
+          "group_id": "grp_mrcp9isp",
+          "prio": 1
         }
       ],
       "tier": 2,
       "max_concurrent": 1,
-      "x": 705.4059206113301,
-      "y": 795.2655152949283
+      "x": 723.1837970317847,
+      "y": 958.4978816834226
     },
     {
       "id": "entity-provider-ollama-glm",
@@ -105,7 +114,8 @@
       "name": "Claude Code CLI (local)",
       "role": "child",
       "role_tags": [
-        "child"
+        "child",
+        "fixer"
       ],
       "provider": "claude-cli",
       "parentId": "entity-parent",
@@ -170,13 +180,24 @@
     },
     {
       "id": "grp_mrchp9cn",
-      "name": "Nueva jerarquía",
+      "name": "Nivel Medio",
       "color": "#ffb25f",
       "x": 1155.7597791079331,
       "y": 724.954535122292
+    },
+    {
+      "id": "grp_mrcp9isp",
+      "name": "Delegador / Tareas basicas",
+      "color": "#b9a7ff",
+      "x": 736.9858709161929,
+      "y": 695.6564608487216
     }
   ],
-  "zoom": 0.55,
+  "zoom": 0.47000000000000003,
   "drawer_width": 402,
-  "updated_at": "2026-07-08T19:49:23.269929Z"
+  "openclaw_pos": {
+    "x": 731.1111450195311,
+    "y": -48.88885498046874
+  },
+  "updated_at": "2026-07-09T00:59:33.347560Z"
 }

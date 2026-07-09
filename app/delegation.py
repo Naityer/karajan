@@ -99,6 +99,103 @@ def delegate(
     return result, decisions
 
 
+def _run_fallback_chain(
+    classification: ClassificationResult,
+    subtask: Subtask,
+    assignment: flow_policy.FlowAssignment,
+    resolution: Resolution,
+    instruction: str,
+    run,
+    attempted: set[str],
+    config: KarajanConfig,
+    layout: RoutingLayout | None,
+) -> tuple[Resolution, Any, list[DecisionLogEntry]]:
+    """Walk the runtime fallback chain after a primary provider error, retrying
+    each candidate until one succeeds or the chain is exhausted. Returns the
+    final `(resolution, run)` plus the fallback/reassign decisions produced."""
+    decisions: list[DecisionLogEntry] = []
+    for fallback in fallback_resolutions(subtask.recommended_model, config, attempted, layout):
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="fallback",
+                decision=(
+                    f"{subtask.id}:fallback;"
+                    f"from={resolution.provider_name};to={fallback.provider_name};tier={subtask.recommended_model.value}"
+                ),
+                score=float(subtask.complexity),
+                backend=fallback.backend,
+                reason=f"primary error: {run.error}",
+            )
+        )
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="reassign",
+                decision=flow_policy.reassign_summary(
+                    subtask,
+                    resolution.provider_name,
+                    fallback.provider_name,
+                    assignment,
+                ),
+                score=float(subtask.complexity),
+                backend=fallback.backend,
+                reason="Runtime fallback changed the execution target after provider failure.",
+            )
+        )
+        attempted.add(fallback.provider_name)
+        fallback_run = execution_helpers.run_with_retries(fallback, instruction, config)
+        resolution = fallback
+        run = fallback_run
+        if not run.error:
+            break
+    return resolution, run, decisions
+
+
+def _persist_run(
+    store: Any,
+    classification: ClassificationResult,
+    subtask: Subtask,
+    assignment: flow_policy.FlowAssignment,
+    resolution: Resolution,
+    subtask_execution: SubtaskExecution,
+    started_at: str,
+) -> None:
+    """Persist a `runs` row for this subtask's execution and emit its SSE
+    lifecycle events. A store/SSE failure must never break delegation, so the
+    whole body is guarded and only logs on error."""
+    try:
+        completed_at = datetime.now(timezone.utc).isoformat()
+        run_id = store.record_run(
+            task_id=classification.task_id,
+            provider_name=resolution.provider_name,
+            routing_entity_id=assignment.owner.id if assignment.owner else None,
+            routing_entity_name_snapshot=assignment.owner.name if assignment.owner else None,
+            model_id=resolution.model_id,
+            backend=resolution.backend.value,
+            status=subtask_execution.status.value,
+            started_at=started_at,
+            completed_at=completed_at,
+            latency_ms=subtask_execution.latency_ms,
+            input_tokens=subtask_execution.input_tokens,
+            output_tokens=subtask_execution.output_tokens,
+            estimated_cost_usd=subtask_execution.estimated_cost_usd,
+            error=subtask_execution.error,
+        )
+        events.publish("run_started", task_id=classification.task_id, run_id=run_id)
+        events.publish(
+            "run_completed",
+            task_id=classification.task_id,
+            run_id=run_id,
+            status=subtask_execution.status.value,
+        )
+    except Exception:  # noqa: BLE001 - a store/SSE failure must never break delegation
+        log_event(
+            logger, logging.WARNING, "record_run_failed",
+            task_id=classification.task_id, subtask_id=subtask.id,
+        )
+
+
 def run_subtask(
     classification: ClassificationResult,
     index: int,
@@ -139,41 +236,10 @@ def run_subtask(
     ]
 
     if run.error and config.orchestration.enable_runtime_fallback:
-        for fallback in fallback_resolutions(subtask.recommended_model, config, attempted, layout):
-            decisions.append(
-                DecisionLogEntry(
-                    task_id=classification.task_id,
-                    phase="fallback",
-                    decision=(
-                        f"{subtask.id}:fallback;"
-                        f"from={resolution.provider_name};to={fallback.provider_name};tier={subtask.recommended_model.value}"
-                    ),
-                    score=float(subtask.complexity),
-                    backend=fallback.backend,
-                    reason=f"primary error: {run.error}",
-                )
-            )
-            decisions.append(
-                DecisionLogEntry(
-                    task_id=classification.task_id,
-                    phase="reassign",
-                    decision=flow_policy.reassign_summary(
-                        subtask,
-                        resolution.provider_name,
-                        fallback.provider_name,
-                        assignment,
-                    ),
-                    score=float(subtask.complexity),
-                    backend=fallback.backend,
-                    reason="Runtime fallback changed the execution target after provider failure.",
-                )
-            )
-            attempted.add(fallback.provider_name)
-            fallback_run = execution_helpers.run_with_retries(fallback, instruction, config)
-            resolution = fallback
-            run = fallback_run
-            if not run.error:
-                break
+        resolution, run, fallback_decisions = _run_fallback_chain(
+            classification, subtask, assignment, resolution, instruction, run, attempted, config, layout
+        )
+        decisions.extend(fallback_decisions)
 
     tier = subtask.recommended_model.value
     cost = execution_helpers.cost_for(tier, subtask.complexity, config)
@@ -227,36 +293,9 @@ def run_subtask(
         )
 
     if store is not None:
-        try:
-            completed_at = datetime.now(timezone.utc).isoformat()
-            run_id = store.record_run(
-                task_id=classification.task_id,
-                provider_name=resolution.provider_name,
-                routing_entity_id=assignment.owner.id if assignment.owner else None,
-                routing_entity_name_snapshot=assignment.owner.name if assignment.owner else None,
-                model_id=resolution.model_id,
-                backend=resolution.backend.value,
-                status=subtask_execution.status.value,
-                started_at=started_at,
-                completed_at=completed_at,
-                latency_ms=subtask_execution.latency_ms,
-                input_tokens=subtask_execution.input_tokens,
-                output_tokens=subtask_execution.output_tokens,
-                estimated_cost_usd=subtask_execution.estimated_cost_usd,
-                error=subtask_execution.error,
-            )
-            events.publish("run_started", task_id=classification.task_id, run_id=run_id)
-            events.publish(
-                "run_completed",
-                task_id=classification.task_id,
-                run_id=run_id,
-                status=subtask_execution.status.value,
-            )
-        except Exception:  # noqa: BLE001 - a store/SSE failure must never break delegation
-            log_event(
-                logger, logging.WARNING, "record_run_failed",
-                task_id=classification.task_id, subtask_id=subtask.id,
-            )
+        _persist_run(
+            store, classification, subtask, assignment, resolution, subtask_execution, started_at
+        )
 
     return subtask_execution, decisions
 

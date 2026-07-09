@@ -53,8 +53,8 @@ Rol de soporte (R2) especializado en verificar salidas parciales o finales de ot
 ### Fixeador
 key: fixer
 restriction: R2
-example: Conecta un Fixeador que reciba los hallazgos de la auditoría y aplique parches verificados.
-Rol de soporte (R2) orientado a la corrección. Recibe hallazgos de código (de una auditoría o de un Validator), aplica parches acotados y vuelve a verificar contra la misma auditoría para confirmar que el problema queda resuelto sin introducir regresiones. Cierra el ciclo detectar → corregir → re-verificar.
+example: Etiqueta un agente como Fixeador para que Grafo le delegue "Solucionar todos" con el reporte completo de hallazgos.
+Rol de soporte (R2) orientado a intervención sobre código desde el panel de Grafo. Cuando el panel de Hallazgos detecta problemas y se pulsa "Solucionar todos", Karajan debe enviar al agente con etiqueta Fixeador el reporte completo de errores para que intente aplicar parches acotados. Después se vuelve a ejecutar la auditoría/test del Grafo para comprobar qué hallazgos quedaron resueltos y cuáles siguen pendientes. No es un Validator: el Validator acepta o rechaza una salida; el Fixeador corrige código a partir de fallos concretos.
 
 ### Memory
 key: memory
