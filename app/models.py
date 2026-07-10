@@ -7,6 +7,16 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from code_graph.models import (  # re-exportado: implementacion en el paquete code_graph
+    AuditResult,
+    Finding,
+    GraphEdge,
+    GraphNode,
+    GraphSnapshot,
+    RepoConfig,
+    ScanSummary,
+)
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -747,24 +757,9 @@ class PredictTaskResponse(BaseModel):
 
 
 # --- Graph / multi-repo -------------------------------------------------------
-
-
-class RepoConfig(BaseModel):
-    """A registered repository tracked by the multi-repo code graph.
-
-    In this phase a repo is pure metadata: no static analysis has run yet, so
-    scan-related fields stay unset until a later phase populates them.
-    """
-
-    id: str = Field(default_factory=lambda: f"repo_{uuid4().hex[:12]}")
-    name: str
-    root_path: str  # resolved absolute path, so later path-safety checks are reliable
-    language_hint: str | None = None
-    provider_override: str | None = None
-    exclude_globs: list[str] = Field(default_factory=list)
-    created_at: str = Field(default_factory=lambda: _utcnow().isoformat())
-    last_scanned_at: str | None = None
-    last_scan_status: str | None = None
+#
+# RepoConfig, GraphNode, GraphEdge, GraphSnapshot y ScanSummary se re-exportan
+# desde `code_graph.models` (ver import al inicio de este fichero).
 
 
 class RepoCreateRequest(BaseModel):
@@ -775,67 +770,6 @@ class RepoCreateRequest(BaseModel):
     language_hint: str | None = None
     provider_override: str | None = None
     exclude_globs: list[str] = Field(default_factory=list)
-
-
-class GraphNode(BaseModel):
-    """A single node in a repo's code graph (repo/dir/file/class/function/method).
-
-    Symbol-level nodes (class/function/method) carry rough health metrics
-    (`loc`, `complexity_estimate`, `method_count`) that later phases turn into
-    findings. `extraction_method` records how a node was recovered so the
-    frontend can show a reduced-confidence badge on regex-extracted TS nodes.
-    """
-
-    id: str
-    repo_id: str
-    file_id: str | None = None
-    kind: str  # repo | dir | file | class | function | method
-    name: str | None = None
-    qualified_name: str | None = None
-    parent_id: str | None = None
-    start_line: int | None = None
-    end_line: int | None = None
-    method_count: int | None = None
-    loc: int | None = None
-    complexity_estimate: int | None = None
-    extraction_method: str | None = None  # "ast" | "tree_sitter" | "regex" | None
-
-
-class GraphEdge(BaseModel):
-    """A directed edge between two nodes (`contains` structural / `imports`).
-
-    `dst_node_id` is set when the target resolves to an internal node; otherwise
-    `dst_unresolved` keeps the raw specifier (external package or unresolved
-    alias) so nothing is silently dropped.
-    """
-
-    id: str
-    repo_id: str
-    src_node_id: str
-    dst_node_id: str | None = None
-    edge_type: str  # contains | imports
-    dst_unresolved: str | None = None
-
-
-class GraphSnapshot(BaseModel):
-    """The full node+edge set for one repo — powers the frontend graph fetch."""
-
-    repo_id: str
-    nodes: list[GraphNode] = Field(default_factory=list)
-    edges: list[GraphEdge] = Field(default_factory=list)
-    generated_at: str = Field(default_factory=lambda: _utcnow().isoformat())
-
-
-class ScanSummary(BaseModel):
-    """Result of a `scan_repo` run, returned by POST /repos/{id}/scan."""
-
-    repo_id: str
-    files_scanned: int = 0
-    files_skipped_unchanged: int = 0
-    nodes_created: int = 0
-    edges_created: int = 0
-    duration_ms: int = 0
-    errors: list[str] = Field(default_factory=list)
 
 
 class RepoFileResponse(BaseModel):
@@ -867,36 +801,9 @@ class RepoFileSaveResponse(BaseModel):
 
 
 # --- Code audit (Fase D) ------------------------------------------------------
-
-
-class Finding(BaseModel):
-    """One deterministic (or LLM-flagged) issue attached to a graph node.
-
-    Mirrors the `graph_findings` table columns. `severity` is one of
-    info|warning|critical; `node_id` is the graph node the finding attaches to
-    (a file node for file-level detectors, a symbol node otherwise).
-    """
-
-    id: str = Field(default_factory=lambda: f"find_{uuid4().hex[:12]}")
-    repo_id: str
-    node_id: str | None = None
-    severity: str  # info | warning | critical
-    category: str
-    message: str
-    detector: str
-    created_at: str = Field(default_factory=lambda: _utcnow().isoformat())
-    resolved: int = 0
-
-
-class AuditResult(BaseModel):
-    """Outcome of `run_audit`: deterministic findings + optional LLM narrative."""
-
-    repo_id: str
-    findings: list[Finding] = Field(default_factory=list)
-    counts_by_severity: dict[str, int] = Field(default_factory=dict)
-    llm_summary: str | None = None
-    truncated: bool = False
-    generated_at: str = Field(default_factory=lambda: _utcnow().isoformat())
+#
+# Finding y AuditResult se re-exportan desde `code_graph.models` (ver import al
+# inicio de este fichero).
 
 
 class AuditRequest(BaseModel):
@@ -933,6 +840,20 @@ class FixFindingResult(BaseModel):
     summary: str | None = None
     attempted_count: int = 1
     resolved_count: int = 0
+
+
+class FixJobStarted(BaseModel):
+    """Response for kicking off a background Fixer run."""
+
+    job_id: str
+
+
+class FixJobStatus(BaseModel):
+    """Poll target for a background Fixer run's progress log and outcome."""
+
+    status: str  # running | done | error
+    log: list[str] = Field(default_factory=list)
+    result: FixFindingResult | None = None
 
 
 class ExplainRequest(BaseModel):

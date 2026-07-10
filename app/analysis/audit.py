@@ -1,340 +1,31 @@
-"""Deterministic code-audit engine (Fase D) — the core value of the Grafo window.
+"""Facade de auditoria: detectores deterministas en `code_graph`, narrativa LLM en Karajan.
 
-Reads the nodes/edges already computed and persisted in Fase B (via
-`GraphStore.get_snapshot`) rather than re-parsing source, and only touches file
-bytes for the two detectors that genuinely need them (secret scan, TODO
-density). Every detector is pure Python and runs with ZERO providers configured;
-an optional LLM narrative (`include_llm=True`) is layered on top and degrades
-gracefully — a provider failure never invalidates the deterministic findings.
-
-Severity vocabulary: info < warning < critical. Detectors attach each finding to
-the graph `node_id` it concerns (a file node for file-level checks, a symbol
-node otherwise) so the frontend can badge the right node.
+Los detectores se re-exportan desde `code_graph.analysis.audit`. La narrativa
+opcional en lenguaje natural (que SI depende de los proveedores de Karajan) se
+implementa aqui como un `AuditNarrator` y se inyecta en el `run_audit` puro del
+paquete, conservando la firma publica que Karajan ya usa (`include_llm`/`config`).
 """
 
 from __future__ import annotations
 
 import logging
-import re
-from collections import defaultdict
-from pathlib import Path
 
-from app.graph_store import GraphStore, safe_resolve
-from app.models import (
-    AuditResult,
-    Finding,
-    GraphEdge,
-    GraphNode,
-    KarajanConfig,
-    RecommendedModel,
+from code_graph.analysis.audit import (  # noqa: F401  (re-exportados para compatibilidad)
+    _SEVERITY_ORDER,
+    detect_circular_imports,
+    detect_file_text_issues,
+    detect_god_class,
+    detect_high_complexity,
+    detect_large_file,
+    detect_long_function,
+    run_audit as _run_audit_core,
+    scan_secrets_in_text,
 )
+from code_graph.models import AuditResult, Finding, GraphNode
+from code_graph.store import GraphStore, safe_resolve  # noqa: F401
+from app.models import KarajanConfig, RecommendedModel
 
 logger = logging.getLogger("karajan.audit")
-
-# --- Thresholds (single source of truth) -------------------------------------
-_GOD_CLASS_METHODS = 15
-_LARGE_FILE_LOC = 600
-_LARGE_FILE_SYMBOLS = 25
-_LONG_FN_WARN = 80
-_LONG_FN_CRIT = 150
-# McCabe-approx warning raised from 10 → 13: >10 fired on ~60 of 75 findings in a
-# real FastAPI codebase (many branching route handlers), drowning the god-class /
-# circular-import / security signals. 13 keeps genuine hotspots as warnings while
-# critical (>20) stays a tight, high-signal set.
-_COMPLEXITY_WARN = 13
-_COMPLEXITY_CRIT = 20
-_TODO_DENSITY = 8
-
-_SEVERITY_ORDER = {"info": 1, "warning": 2, "critical": 3}
-_MAX_SECRET_SCAN_BYTES = 1_500_000
-
-# --- Secret-scan regexes -----------------------------------------------------
-_AWS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
-# `name = "value"` / `name: 'value'` where name looks like a credential.
-_SECRET_ASSIGN_RE = re.compile(
-    r"""(?ix)
-    \b(password|passwd|secret|api[_-]?key|apikey|token|private[_-]?key)\b
-    \s* [:=] \s*
-    (["'])(?P<val>.+?)\2
-    """
-)
-_TODO_RE = re.compile(r"\b(TODO|FIXME|XXX|HACK)\b")
-_ONLY_X_RE = re.compile(r"^x+$", re.IGNORECASE)
-_ENV_NAME_RE = re.compile(r"^[A-Z0-9_]+$")
-
-
-def _mk(
-    repo_id: str,
-    node_id: str | None,
-    severity: str,
-    category: str,
-    detector: str,
-    message: str,
-) -> Finding:
-    return Finding(
-        repo_id=repo_id,
-        node_id=node_id,
-        severity=severity,
-        category=category,
-        detector=detector,
-        message=message,
-    )
-
-
-# --- Deterministic detectors -------------------------------------------------
-# Each takes the node list (and edges / repo where needed) and returns findings.
-
-
-def detect_god_class(repo_id: str, nodes: list[GraphNode]) -> list[Finding]:
-    out: list[Finding] = []
-    for n in nodes:
-        if n.kind == "class" and (n.method_count or 0) > _GOD_CLASS_METHODS:
-            out.append(
-                _mk(
-                    repo_id, n.id, "warning", "srp", "god_class",
-                    f"La clase '{n.name}' tiene {n.method_count} métodos "
-                    f"(> {_GOD_CLASS_METHODS}): posible violación de responsabilidad única.",
-                )
-            )
-    return out
-
-
-def detect_large_file(repo_id: str, nodes: list[GraphNode]) -> list[Finding]:
-    out: list[Finding] = []
-    top_symbols: dict[str, int] = defaultdict(int)
-    for n in nodes:
-        if n.kind in ("class", "function") and n.parent_id:
-            top_symbols[n.parent_id] += 1
-    for n in nodes:
-        if n.kind != "file":
-            continue
-        loc = n.loc or n.end_line or 0
-        symbols = top_symbols.get(n.id, 0)
-        if loc > _LARGE_FILE_LOC or symbols > _LARGE_FILE_SYMBOLS:
-            out.append(
-                _mk(
-                    repo_id, n.id, "warning", "size", "large_file",
-                    f"Fichero grande '{n.qualified_name or n.name}': {loc} líneas, "
-                    f"{symbols} símbolos de nivel superior. Considera dividirlo.",
-                )
-            )
-    return out
-
-
-def detect_long_function(repo_id: str, nodes: list[GraphNode]) -> list[Finding]:
-    out: list[Finding] = []
-    for n in nodes:
-        if n.kind not in ("function", "method"):
-            continue
-        loc = n.loc or 0
-        if loc > _LONG_FN_CRIT:
-            sev = "critical"
-        elif loc > _LONG_FN_WARN:
-            sev = "warning"
-        else:
-            continue
-        out.append(
-            _mk(
-                repo_id, n.id, sev, "size", "long_function",
-                f"La función '{n.qualified_name or n.name}' tiene {loc} líneas "
-                f"(> {_LONG_FN_WARN if sev == 'warning' else _LONG_FN_CRIT}).",
-            )
-        )
-    return out
-
-
-def detect_high_complexity(repo_id: str, nodes: list[GraphNode]) -> list[Finding]:
-    out: list[Finding] = []
-    for n in nodes:
-        if n.kind not in ("function", "method"):
-            continue
-        cx = n.complexity_estimate or 0
-        if cx > _COMPLEXITY_CRIT:
-            sev = "critical"
-        elif cx > _COMPLEXITY_WARN:
-            sev = "warning"
-        else:
-            continue
-        out.append(
-            _mk(
-                repo_id, n.id, sev, "complexity", "high_complexity",
-                f"'{n.qualified_name or n.name}' tiene complejidad ~{cx} "
-                f"(McCabe aprox., > {_COMPLEXITY_WARN if sev == 'warning' else _COMPLEXITY_CRIT}).",
-            )
-        )
-    return out
-
-
-def detect_circular_imports(
-    repo_id: str, nodes: list[GraphNode], edges: list[GraphEdge]
-) -> list[Finding]:
-    """Flag file-level import cycles via Tarjan strongly-connected components.
-
-    Only `imports` edges resolved to an internal node (`dst_node_id` set) count;
-    external packages have no `dst_node_id` and cannot form a cycle. Every file
-    node inside a non-trivial SCC gets a warning naming the cycle members.
-    """
-    file_ids = {n.id for n in nodes if n.kind == "file"}
-    name_by_id = {n.id: (n.qualified_name or n.name or n.id) for n in nodes}
-    adj: dict[str, list[str]] = defaultdict(list)
-    for e in edges:
-        if (
-            e.edge_type == "imports"
-            and e.dst_node_id
-            and e.src_node_id in file_ids
-            and e.dst_node_id in file_ids
-        ):
-            adj[e.src_node_id].append(e.dst_node_id)
-
-    sccs = _tarjan_scc(list(file_ids), adj)
-    out: list[Finding] = []
-    for comp in sccs:
-        if len(comp) < 2:
-            continue
-        names = sorted(name_by_id.get(nid, nid) for nid in comp)
-        cycle = " ↔ ".join(names)
-        for nid in comp:
-            out.append(
-                _mk(
-                    repo_id, nid, "warning", "architecture", "circular_imports",
-                    f"Import circular entre {len(comp)} ficheros: {cycle}.",
-                )
-            )
-    return out
-
-
-def _tarjan_scc(vertices: list[str], adj: dict[str, list[str]]) -> list[list[str]]:
-    """Iterative Tarjan SCC (iterative to avoid recursion limits on big repos)."""
-    index_counter = [0]
-    index: dict[str, int] = {}
-    lowlink: dict[str, int] = {}
-    on_stack: set[str] = set()
-    stack: list[str] = []
-    result: list[list[str]] = []
-
-    for root in vertices:
-        if root in index:
-            continue
-        work = [(root, 0)]
-        while work:
-            v, pi = work[-1]
-            if pi == 0:
-                index[v] = lowlink[v] = index_counter[0]
-                index_counter[0] += 1
-                stack.append(v)
-                on_stack.add(v)
-            recursed = False
-            neighbors = adj.get(v, [])
-            for i in range(pi, len(neighbors)):
-                w = neighbors[i]
-                if w not in index:
-                    work[-1] = (v, i + 1)
-                    work.append((w, 0))
-                    recursed = True
-                    break
-                if w in on_stack:
-                    lowlink[v] = min(lowlink[v], index[w])
-            if recursed:
-                continue
-            if lowlink[v] == index[v]:
-                comp: list[str] = []
-                while True:
-                    w = stack.pop()
-                    on_stack.discard(w)
-                    comp.append(w)
-                    if w == v:
-                        break
-                result.append(comp)
-            work.pop()
-            if work:
-                parent = work[-1][0]
-                lowlink[parent] = min(lowlink[parent], lowlink[v])
-    return result
-
-
-def _is_placeholder_secret(value: str) -> bool:
-    """True when a matched string is an obvious non-secret (env ref, placeholder)."""
-    v = value.strip()
-    if len(v) < 12:
-        return True
-    low = v.lower()
-    if _ONLY_X_RE.match(v):
-        return True
-    if v.startswith("<") and v.endswith(">"):
-        return True
-    if "${" in v or "os.environ" in v or "process.env" in v or "getenv" in low:
-        return True
-    if _ENV_NAME_RE.match(v):  # an ALL_CAPS env-var NAME, not a value
-        return True
-    for token in ("changeme", "your-", "your_", "yourtoken", "placeholder",
-                  "example", "xxxxx", "dummy", "redacted", "todo", "none", "null"):
-        if token in low:
-            return True
-    return False
-
-
-def scan_secrets_in_text(text: str) -> list[tuple[int, str, str]]:
-    """Return (line_no, severity, message) for likely secrets in `text`.
-
-    Never includes the raw secret value — AWS keys are redacted to `AKIA****…`
-    and generic assignments report only the variable name + line. Precision over
-    recall: obvious placeholders and env-var references are excluded.
-    """
-    findings: list[tuple[int, str, str]] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        flagged_line = False
-        for m in _AWS_KEY_RE.finditer(line):
-            redacted = m.group(0)[:4] + "****…"
-            findings.append(
-                (lineno, "critical",
-                 f"Posible AWS Access Key ({redacted}) embebida en la línea {lineno}.")
-            )
-            flagged_line = True
-        if flagged_line:
-            continue  # avoid double-flagging the same line via the generic rule
-        m = _SECRET_ASSIGN_RE.search(line)
-        if m and not _is_placeholder_secret(m.group("val")):
-            key_name = m.group(1)
-            findings.append(
-                (lineno, "critical",
-                 f"Posible secreto embebido: '{key_name}' asignado a un literal "
-                 f"en la línea {lineno} (valor redactado).")
-            )
-    return findings
-
-
-def detect_file_text_issues(
-    repo_id: str, nodes: list[GraphNode], root: Path | None
-) -> list[Finding]:
-    """Secret scan + TODO density — the only detectors that read file bytes."""
-    out: list[Finding] = []
-    if root is None:
-        return out
-    for n in nodes:
-        if n.kind != "file" or not n.qualified_name:
-            continue
-        try:
-            abs_path = safe_resolve(root, n.qualified_name)
-            if not abs_path.is_file() or abs_path.stat().st_size > _MAX_SECRET_SCAN_BYTES:
-                continue
-            text = abs_path.read_text(encoding="utf-8", errors="replace")
-        except (OSError, ValueError):
-            continue
-        for lineno, sev, msg in scan_secrets_in_text(text):
-            out.append(_mk(repo_id, n.id, sev, "security", "hardcoded_secret", msg))
-        todo_count = len(_TODO_RE.findall(text))
-        if todo_count > _TODO_DENSITY:
-            out.append(
-                _mk(
-                    repo_id, n.id, "info", "maintainability", "todo_density",
-                    f"'{n.qualified_name}' contiene {todo_count} marcadores "
-                    f"TODO/FIXME/XXX/HACK (> {_TODO_DENSITY}).",
-                )
-            )
-    return out
-
-
-# --- Orchestration -----------------------------------------------------------
 
 
 def run_audit(
@@ -344,49 +35,21 @@ def run_audit(
     include_llm: bool = False,
     config: KarajanConfig | None = None,
 ) -> AuditResult:
-    """Run every deterministic detector, persist findings, and optionally add an
-    LLM narrative. Never raises on an empty/unscanned repo or an LLM failure."""
-    snapshot = store.get_snapshot(repo_id)
-    nodes, edges = snapshot.nodes, snapshot.edges
+    """Firma publica historica de Karajan. Delega en el run_audit puro de
+    `code_graph`, inyectando el narrador LLM de Karajan cuando `include_llm`."""
+    narrator = _KarajanNarrator(repo_id, config) if include_llm else None
+    return _run_audit_core(repo_id, store, narrator=narrator)
 
-    if not nodes:
-        store.replace_findings(repo_id, [])
-        return AuditResult(
-            repo_id=repo_id,
-            findings=[],
-            counts_by_severity={"info": 0, "warning": 0, "critical": 0},
-            llm_summary="El repositorio no tiene grafo aún; ejecuta un escaneo antes de auditar.",
-        )
 
-    repo = store.get_repo(repo_id)
-    root = Path(repo.root_path) if repo else None
+class _KarajanNarrator:
+    """Adapta la narrativa LLM de Karajan al contrato `AuditNarrator`."""
 
-    findings: list[Finding] = []
-    findings += detect_god_class(repo_id, nodes)
-    findings += detect_large_file(repo_id, nodes)
-    findings += detect_long_function(repo_id, nodes)
-    findings += detect_high_complexity(repo_id, nodes)
-    findings += detect_circular_imports(repo_id, nodes, edges)
-    findings += detect_file_text_issues(repo_id, nodes, root)
+    def __init__(self, repo_id: str, config: KarajanConfig | None) -> None:
+        self._repo_id = repo_id
+        self._config = config
 
-    store.replace_findings(repo_id, findings)
-
-    counts = {"info": 0, "warning": 0, "critical": 0}
-    for f in findings:
-        counts[f.severity] = counts.get(f.severity, 0) + 1
-
-    result = AuditResult(
-        repo_id=repo_id,
-        findings=findings,
-        counts_by_severity=counts,
-    )
-
-    if include_llm:
-        summary, truncated = _llm_narrative(repo_id, findings, nodes, repo, config)
-        result.llm_summary = summary
-        result.truncated = truncated
-
-    return result
+    def narrate(self, findings, nodes, repo):
+        return _llm_narrative(self._repo_id, findings, nodes, repo, self._config)
 
 
 def _llm_narrative(
