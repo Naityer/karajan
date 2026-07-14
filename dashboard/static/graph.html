@@ -597,6 +597,8 @@ let findings = [];                 // GET /repos/{id}/findings
 const findingsByNode = {};         // node_id -> [finding]
 const nodeSeverity = {};           // node_id -> max severity string
 let llmSummary = null;             // narrative from the last audit (not persisted)
+const busyFindingIds = new Set();  // finding ids with a Solucionar request in flight
+let solvingAll = false;            // true while Solucionar todos is in flight
 const SEV_ORDER = { info:1, warning:2, critical:3 };
 // Semantic severity colors are intentionally fixed (not themed): red/amber/muted.
 const SEV_COLOR = { info:"#8a8f98", warning:"#f5a623", critical:"#e5484d" };
@@ -1310,85 +1312,119 @@ function fixerFindingsReport(items){
     lines.join("\n\n---\n\n"),
   ].join("\n");
 }
+function fixLogText(lines){
+  return lines.length ? lines.join("\n") : "Fixeador · iniciando...";
+}
+// Starts a background Fixer job and polls it, live-updating `llmSummary`
+// (and thus the always-visible Resumen IA panel) with each new log line as
+// the backend reports it, instead of blocking silently for minutes.
+async function runFixJob(repoId, payload){
+  const started = await api(`/repos/${encodeURIComponent(repoId)}/findings/fix/jobs`, {
+    method:"POST",
+    body: JSON.stringify(payload),
+  });
+  while (true) {
+    const job = await api(`/repos/${encodeURIComponent(repoId)}/findings/fix/jobs/${encodeURIComponent(started.job_id)}`);
+    llmSummary = fixLogText(job.log);
+    renderFindings();
+    if (job.status !== "running") return job;
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+}
 async function solveFinding(id){
   const f = findingById(id);
   if (!f) return;
   if (!currentRepo) return;
-  setEditorStatus(`Fixeador · trabajando en ${f.detector} (${f.severity})...`);
+  if (busyFindingIds.has(id) || solvingAll) return;
+  busyFindingIds.add(id);
+  llmSummary = `Fixeador · iniciando trabajo en ${f.detector} (${f.severity})...`;
+  renderFindings();
+  setEditorStatus(llmSummary);
+  let job = null, errMsg = null;
   try {
-    const result = await api(`/repos/${encodeURIComponent(currentRepo.id)}/findings/fix`, {
-      method:"POST",
-      body: JSON.stringify({ finding_id:id, apply:true }),
-    });
-    setEditorStatus(
-      result.verified
-        ? `Fixeador · corregido y verificado: ${result.file_path}`
-        : `Fixeador · ${result.error || result.message || "no verificado"}`,
-      result.verified ? "ok" : "err"
-    );
-    if (!result.verified || result.error) {
-      llmSummary = `Fixeador individual: ${result.error || result.message || "no verificado"}\n` +
-        `Hallazgo: ${f.detector} · ${f.message}`;
-      renderFindings();
-    }
-    await loadGraph();
-    await loadFindings();
+    job = await runFixJob(currentRepo.id, { finding_id: id, apply: true });
   } catch (err) {
-    llmSummary = `Fixeador individual: ${err.message}`;
-    renderFindings();
-    setEditorStatus(`Fixeador · ${err.message}`, "err");
+    errMsg = err.message;
   }
+  busyFindingIds.delete(id);
+  // loadGraph() resets llmSummary, so it must run before we set the final
+  // result message below — otherwise the summary is wiped before it's shown.
+  await loadGraph();
+  await loadFindings();
+  const result = job?.result;
+  const ok = !errMsg && job?.status === "done" && result?.verified;
+  const tail = errMsg
+    ? `Fixeador individual: ${errMsg}`
+    : job?.status === "error"
+      ? "Fixeador individual: la ejecución terminó en error (ver log arriba)."
+      : result?.verified
+        ? `Fixeador · corregido y verificado: ${result.file_path}`
+        : `Fixeador individual: ${result?.error || result?.message || "no verificado"}\nHallazgo: ${f.detector} · ${f.message}`;
+  llmSummary = job?.log?.length ? `${fixLogText(job.log)}\n${tail}` : tail;
+  setEditorStatus(tail, ok ? "ok" : "err");
+  renderFindings();
 }
 async function solveAllFindings(){
-  if (!findings.length || !currentRepo) return;
+  if (!findings.length || !currentRepo || solvingAll) return;
+  solvingAll = true;
   const beforeTotal = findings.length;
   const report = fixerFindingsReport(findings);
   const findingIds = findings.map((f) => f.id);
-  setEditorStatus(`Fixeador · enviando reporte completo (${beforeTotal} hallazgos) al agente con etiqueta Fixeador...`);
-  let fixResult = null;
+  llmSummary = `Fixeador · iniciando reporte completo (${beforeTotal} hallazgos)...`;
+  renderFindings();
+  setEditorStatus(llmSummary);
   try {
-    fixResult = await api(`/repos/${encodeURIComponent(currentRepo.id)}/findings/fix`, {
-      method:"POST",
-      body: JSON.stringify({
+    let job = null;
+    try {
+      job = await runFixJob(currentRepo.id, {
         finding_id: findingIds[0],
         finding_ids: findingIds,
         apply: true,
         mode: "full_report",
         rerun_audit: false,
         report,
-      }),
-    });
-  } catch (err) {
-    llmSummary = `Fixeador no pudo recibir el reporte completo.\n${err.message}`;
+      });
+    } catch (err) {
+      llmSummary = `Fixeador no pudo recibir el reporte completo.\n${err.message}`;
+      setEditorStatus(`Fixeador · ${err.message}`, "err");
+      return;
+    }
+    const fixResult = job.result;
+
+    let auditResult = null;
+    let auditErr = null;
+    if (iaToggle.checked) {
+      llmSummary = `${fixLogText(job.log)}\nGenerando resumen narrativo (IA)...`;
+      renderFindings();
+      try {
+        auditResult = await api(`/repos/${encodeURIComponent(currentRepo.id)}/audit`,
+          { method:"POST", body: JSON.stringify({ include_llm: true }) });
+      } catch (err) {
+        auditErr = err.message;
+      }
+    }
+
+    // loadGraph() resets llmSummary, so it must run before we compute the
+    // final summary below — otherwise the summary is wiped before it's shown.
+    await loadGraph();
+    await loadFindings();
+    const afterTotal = findings.length;
+    const resolved = Math.max(0, beforeTotal - afterTotal);
+    const backendNote = fixResult?.message || fixResult?.summary || fixResult?.error || "Reporte enviado al Fixeador.";
+    const auditCounts = auditResult?.counts_by_severity || {};
+    const tail = auditErr
+      ? `Fixeador ejecutado, pero falló el resumen narrativo posterior.\n${auditErr}`
+      : [
+          `Fixeador terminado: ${resolved} resueltos, ${afterTotal} pendientes.`,
+          backendNote,
+          auditResult ? `Auditoría posterior: ${auditCounts.critical || 0} críticos · ${auditCounts.warning || 0} advertencias · ${auditCounts.info || 0} info.` : "",
+        ].filter(Boolean).join("\n");
+    llmSummary = job.log?.length ? `${fixLogText(job.log)}\n${tail}` : tail;
+    setEditorStatus(`Fixeador · ${resolved} resueltos, ${afterTotal} pendientes tras auditoría.`, afterTotal ? "err" : "ok");
+  } finally {
+    solvingAll = false;
     renderFindings();
-    setEditorStatus(`Fixeador · ${err.message}`, "err");
-    return;
   }
-
-  setEditorStatus("Fixeador · cambios recibidos. Re-ejecutando auditoría para verificar...");
-  let auditResult = null;
-  try {
-    auditResult = await api(`/repos/${encodeURIComponent(currentRepo.id)}/audit`,
-      { method:"POST", body: JSON.stringify({ include_llm: iaToggle.checked }) });
-    llmSummary = auditResult.llm_summary || null;
-  } catch (err) {
-    llmSummary = `Fixeador ejecutado, pero falló la verificación posterior.\n${err.message}`;
-    setEditorStatus(`Fixeador · falló la auditoría posterior: ${err.message}`, "err");
-  }
-
-  await loadGraph();
-  await loadFindings();
-  const afterTotal = findings.length;
-  const resolved = Math.max(0, beforeTotal - afterTotal);
-  const backendNote = fixResult?.message || fixResult?.summary || fixResult?.error || "Reporte enviado al Fixeador.";
-  const auditCounts = auditResult?.counts_by_severity || {};
-  llmSummary = [
-    `Fixeador terminado: ${resolved} resueltos, ${afterTotal} pendientes.`,
-    backendNote,
-    auditResult ? `Auditoría posterior: ${auditCounts.critical || 0} críticos · ${auditCounts.warning || 0} advertencias · ${auditCounts.info || 0} info.` : "Auditoría posterior no completada.",
-  ].join("\n");
-  renderFindings();
-  setEditorStatus(`Fixeador · ${resolved} resueltos, ${afterTotal} pendientes tras auditoría.`, afterTotal ? "err" : "ok");
 }
 
 function renderFindings(){
@@ -1405,16 +1441,17 @@ function renderFindings(){
     `<span style="color:${SEV_COLOR.critical}">${counts.critical} crít</span> · ` +
     `<span style="color:${SEV_COLOR.warning}">${counts.warning} adv</span> · ` +
     `<span style="color:${SEV_COLOR.info}">${counts.info} info</span></span>` +
-    (findings.length ? `<button class="f-fix-all" data-fix-all="1">Solucionar todos</button>` : "") +
+    (findings.length ? `<button class="f-fix-all" data-fix-all="1"${solvingAll ? " disabled" : ""}>${solvingAll ? "Solucionando…" : "Solucionar todos"}</button>` : "") +
     `</div>`;
   for (const sev of ["critical","warning","info"]) {
     for (const f of findings.filter((x) => x.severity === sev)) {
+      const busy = busyFindingIds.has(f.id) || solvingAll;
       html += `<div class="f-item" data-node="${escapeHtml(f.node_id || "")}" style="--finding-color:${SEV_COLOR[sev]}">` +
         `<div class="f-top"><span class="f-dot" style="background:${SEV_COLOR[sev]}"></span>` +
         `<span class="f-detector">${escapeHtml(f.detector)}</span><span class="f-sev">${escapeHtml(sev)}</span></div>` +
         `<span class="f-msg">${escapeHtml(f.message)}</span>` +
         `<span class="f-meta"><span class="f-tool">${escapeHtml(findingTool(f))}</span>` +
-        `<button class="f-fix" data-fix="${escapeHtml(f.id)}">Solucionar</button></span></div>`;
+        `<button class="f-fix" data-fix="${escapeHtml(f.id)}"${busy ? " disabled" : ""}>${busy ? "Solucionando…" : "Solucionar"}</button></span></div>`;
     }
   }
   findingsBox.innerHTML = html;

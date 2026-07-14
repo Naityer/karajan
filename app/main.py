@@ -6,6 +6,9 @@ import json
 import logging
 import os
 import re
+import threading
+import uuid
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,6 +80,8 @@ from app.models import (
     ExplainResult,
     FixFindingRequest,
     FixFindingResult,
+    FixJobStarted,
+    FixJobStatus,
     Finding,
     GraphSnapshot,
     ObservabilitySnapshot,
@@ -965,22 +970,30 @@ def _extract_file_blocks(output: str) -> list[tuple[str, str]]:
     return blocks
 
 
-def _fix_findings_report(repo_id: str, repo: RepoConfig, payload: FixFindingRequest) -> FixFindingResult:
+def _fix_findings_report(
+    repo_id: str,
+    repo: RepoConfig,
+    payload: FixFindingRequest,
+    progress: Callable[[str], None] = lambda _msg: None,
+) -> FixFindingResult:
     all_findings = graph_store.list_findings(repo_id)
     requested_ids = set(payload.finding_ids or [payload.finding_id])
     selected = [finding for finding in all_findings if finding.id in requested_ids] if requested_ids else all_findings
     if not selected:
         raise HTTPException(status_code=404, detail="findings not found")
+    progress(f"Hallazgos seleccionados: {len(selected)}.")
 
     resolution = _fixer_resolution(repo)
     finding_id = selected[0].id
     if resolution is None:
+        progress("No hay agente Fixeador ni proveedor de grafo disponible.")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding_id,
             error="no hay agente Fixeador ni proveedor de grafo disponible",
             attempted_count=len(selected),
         )
+    progress(f"Agente resuelto: {resolution.provider_name} · modelo {resolution.model_id}.")
 
     report = payload.report or "\n".join(
         f"- [{finding.severity}] {finding.detector}: {finding.message} ({finding.node_id})"
@@ -1002,9 +1015,11 @@ def _fix_findings_report(repo_id: str, repo: RepoConfig, payload: FixFindingRequ
         f"Ruta raíz: {repo.root_path}\n\n"
         f"{report}"
     )
+    progress("Enviando reporte completo al agente Fixeador (puede tardar varios minutos)...")
     try:
         run = resolution.provider.run(instruction, resolution.model_id, timeout_s=600)
     except Exception as exc:  # noqa: BLE001
+        progress(f"Fallo del agente Fixeador: {exc}")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding_id,
@@ -1014,6 +1029,7 @@ def _fix_findings_report(repo_id: str, repo: RepoConfig, payload: FixFindingRequ
             attempted_count=len(selected),
         )
     if run.error:
+        progress(f"El agente devolvió un error: {run.error}")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding_id,
@@ -1022,24 +1038,32 @@ def _fix_findings_report(repo_id: str, repo: RepoConfig, payload: FixFindingRequ
             error=run.error,
             attempted_count=len(selected),
         )
+    progress(f"Respuesta recibida ({len(run.output or '')} caracteres). Extrayendo parches...")
 
     applied_files: list[str] = []
     if payload.apply:
-        for rel_path, content in _extract_file_blocks(run.output or ""):
+        blocks = _extract_file_blocks(run.output or "")
+        progress(f"Bloques de fichero detectados: {len(blocks)}.")
+        for rel_path, content in blocks:
             try:
                 abs_path = safe_resolve(Path(repo.root_path), rel_path)
                 abs_path.write_text(content, encoding="utf-8")
                 applied_files.append(rel_path)
-            except (OSError, ValueError):
+                progress(f"Aplicado: {rel_path}")
+            except (OSError, ValueError) as exc:
+                progress(f"No se pudo aplicar {rel_path}: {exc}")
                 continue
 
+    progress("Re-escaneando el repositorio...")
     graph_scanner.scan_repo(repo, graph_store)
+    progress("Ejecutando auditoría de verificación...")
     result = graph_audit.run_audit(repo_id, graph_store, include_llm=False, config=active_config)
     selected_signatures = {(f.detector, f.node_id, f.message) for f in selected}
     remaining = sum(1 for f in result.findings if (f.detector, f.node_id, f.message) in selected_signatures)
     resolved = max(0, len(selected) - remaining)
     events.publish("repo_scanned", repo_id=repo_id)
     events.publish("repo_audited", repo_id=repo_id)
+    progress(f"Auditoría completada: {resolved} resueltos, {remaining} pendientes.")
     return FixFindingResult(
         repo_id=repo_id,
         finding_id=finding_id,
@@ -1057,19 +1081,16 @@ def _fix_findings_report(repo_id: str, repo: RepoConfig, payload: FixFindingRequ
     )
 
 
-@app.post("/repos/{repo_id}/findings/fix", response_model=FixFindingResult)
-def fix_finding(
-    repo_id: str, payload: FixFindingRequest, _: None = Depends(require_token)
+def _fix_single_finding(
+    repo_id: str,
+    repo: RepoConfig,
+    payload: FixFindingRequest,
+    progress: Callable[[str], None] = lambda _msg: None,
 ) -> FixFindingResult:
-    """Delegate one finding to the Fixer role and verify with scan+audit."""
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    if payload.mode == "full_report" or payload.finding_ids:
-        return _fix_findings_report(repo_id, repo, payload)
     finding = next((f for f in graph_store.list_findings(repo_id) if f.id == payload.finding_id), None)
     if finding is None:
         raise HTTPException(status_code=404, detail="finding not found")
+    progress(f"Hallazgo: {finding.detector} ({finding.severity}) · {finding.message}")
     snapshot = graph_store.get_snapshot(repo_id)
     node = next((n for n in snapshot.nodes if n.id == finding.node_id), None)
     if node is None:
@@ -1094,6 +1115,7 @@ def fix_finding(
 
     resolution = _fixer_resolution(repo)
     if resolution is None:
+        progress("No hay agente Fixeador ni proveedor de grafo disponible.")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding.id,
@@ -1102,6 +1124,7 @@ def fix_finding(
             detector=finding.detector,
             error="no hay agente Fixeador ni proveedor de grafo disponible",
         )
+    progress(f"Agente resuelto: {resolution.provider_name} · modelo {resolution.model_id}.")
 
     instruction = (
         "Eres el rol Fixeador de Karajan. Tu responsabilidad es aplicar un parche "
@@ -1117,9 +1140,11 @@ def fix_finding(
         "Fragmento afectado:\n```text\n" + snippet + "\n```\n\n"
         "Fichero completo actual:\n```file\n" + original + "\n```"
     )
+    progress(f"Enviando {rel_path} al agente Fixeador (puede tardar 1-2 minutos)...")
     try:
         run = resolution.provider.run(instruction, resolution.model_id, timeout_s=180)
     except Exception as exc:  # noqa: BLE001
+        progress(f"Fallo del agente Fixeador: {exc}")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding.id,
@@ -1131,6 +1156,7 @@ def fix_finding(
             error=f"fallo del agente Fixeador: {exc}",
         )
     if run.error or not (run.output or "").strip():
+        progress(f"El agente devolvió un error o respuesta vacía: {run.error or '(vacío)'}")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding.id,
@@ -1141,9 +1167,11 @@ def fix_finding(
             detector=finding.detector,
             error=run.error or "respuesta vacía del agente Fixeador",
         )
+    progress(f"Respuesta recibida ({len(run.output or '')} caracteres). Extrayendo parche...")
 
     new_content = _extract_file_block(run.output)
     if not new_content:
+        progress("El agente no devolvió un bloque ```file aplicable.")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding.id,
@@ -1155,6 +1183,7 @@ def fix_finding(
             error="el agente no devolvió un bloque ```file aplicable",
         )
     if not payload.apply:
+        progress("Parche generado pero no aplicado (apply=false).")
         return FixFindingResult(
             repo_id=repo_id,
             finding_id=finding.id,
@@ -1166,8 +1195,11 @@ def fix_finding(
             message="parche generado pero no aplicado",
         )
 
+    progress(f"Aplicando parche a {rel_path}...")
     abs_path.write_text(new_content, encoding="utf-8")
+    progress("Re-escaneando el repositorio...")
     graph_scanner.scan_repo(repo, graph_store)
+    progress("Ejecutando auditoría de verificación...")
     result = graph_audit.run_audit(repo_id, graph_store, include_llm=False, config=active_config)
     still_present = any(
         f.detector == finding.detector
@@ -1177,6 +1209,7 @@ def fix_finding(
     )
     events.publish("repo_scanned", repo_id=repo_id)
     events.publish("repo_audited", repo_id=repo_id)
+    progress("Verificado: el hallazgo ya no aparece." if not still_present else "Aplicado, pero el detector aún reporta el hallazgo.")
     return FixFindingResult(
         repo_id=repo_id,
         finding_id=finding.id,
@@ -1189,6 +1222,103 @@ def fix_finding(
         detector=finding.detector,
         message="parche aplicado y verificado" if not still_present else "parche aplicado, pero el detector aún reporta el hallazgo",
     )
+
+
+@app.post("/repos/{repo_id}/findings/fix", response_model=FixFindingResult)
+def fix_finding(
+    repo_id: str, payload: FixFindingRequest, _: None = Depends(require_token)
+) -> FixFindingResult:
+    """Delegate one finding to the Fixer role and verify with scan+audit."""
+    repo = graph_store.get_repo(repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="repo not found")
+    if payload.mode == "full_report" or payload.finding_ids:
+        return _fix_findings_report(repo_id, repo, payload)
+    return _fix_single_finding(repo_id, repo, payload)
+
+
+_fix_jobs: dict[str, "_FixJob"] = {}
+_fix_jobs_lock = threading.Lock()
+
+
+class _FixJob:
+    """In-memory progress log + result for one background Fixer run.
+
+    Findings fixes route through a real CLI subprocess that can take minutes;
+    this lets the frontend poll a job for incremental log lines instead of
+    blocking a single request (and getting zero feedback) for that long.
+    """
+
+    def __init__(self) -> None:
+        self.status = "running"  # running | done | error
+        self.log: list[str] = []
+        self.result: FixFindingResult | None = None
+        self.lock = threading.Lock()
+
+    def append(self, msg: str) -> None:
+        with self.lock:
+            self.log.append(msg)
+
+    def snapshot(self) -> FixJobStatus:
+        with self.lock:
+            return FixJobStatus(status=self.status, log=list(self.log), result=self.result)
+
+
+def _prune_fix_jobs() -> None:
+    with _fix_jobs_lock:
+        if len(_fix_jobs) <= 100:
+            return
+        finished = [jid for jid, job in _fix_jobs.items() if job.status != "running"]
+        for jid in finished[: len(_fix_jobs) - 100]:
+            _fix_jobs.pop(jid, None)
+
+
+def _run_fix_job(job: "_FixJob", repo_id: str, repo: RepoConfig, payload: FixFindingRequest) -> None:
+    try:
+        if payload.mode == "full_report" or payload.finding_ids:
+            result = _fix_findings_report(repo_id, repo, payload, job.append)
+        else:
+            result = _fix_single_finding(repo_id, repo, payload, job.append)
+        with job.lock:
+            job.result = result
+            job.status = "done"
+    except HTTPException as exc:
+        job.append(f"Error: {exc.detail}")
+        with job.lock:
+            job.status = "error"
+    except Exception as exc:  # noqa: BLE001 — the job must always end in a terminal state
+        job.append(f"Error inesperado: {exc}")
+        with job.lock:
+            job.status = "error"
+
+
+@app.post("/repos/{repo_id}/findings/fix/jobs", response_model=FixJobStarted)
+def start_fix_job(
+    repo_id: str, payload: FixFindingRequest, _: None = Depends(require_token)
+) -> FixJobStarted:
+    """Kick off a Fixer run in the background and return a job id to poll.
+
+    The frontend polls GET .../jobs/{job_id} for the accumulating log so the
+    Hallazgos panel can show live progress instead of blocking silently.
+    """
+    repo = graph_store.get_repo(repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="repo not found")
+    _prune_fix_jobs()
+    job = _FixJob()
+    job_id = uuid.uuid4().hex
+    with _fix_jobs_lock:
+        _fix_jobs[job_id] = job
+    threading.Thread(target=_run_fix_job, args=(job, repo_id, repo, payload), daemon=True).start()
+    return FixJobStarted(job_id=job_id)
+
+
+@app.get("/repos/{repo_id}/findings/fix/jobs/{job_id}", response_model=FixJobStatus)
+def get_fix_job(repo_id: str, job_id: str) -> FixJobStatus:
+    job = _fix_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    return job.snapshot()
 
 
 @app.post("/repos/{repo_id}/explain", response_model=ExplainResult)
