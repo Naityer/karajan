@@ -27,7 +27,7 @@ CRITICAL_INGEST = {
 
 def _api_client(tmp_path: Path, config: KarajanConfig | None = None) -> TestClient:
     main.store = TaskStore(tmp_path / "controls.db")
-    main.active_config = config or KarajanConfig(backend=Backend.SIMULATED)
+    main.active_config = config or KarajanConfig(backend=Backend.CLI)
     return TestClient(main.app)
 
 
@@ -101,7 +101,7 @@ def test_cost_cap_allows_when_under_budget() -> None:
 
 def test_daily_budget_blocks_delegation(tmp_path: Path) -> None:
     config = KarajanConfig(
-        backend=Backend.SIMULATED,
+        backend=Backend.CLI,
         orchestration=OrchestrationConfig(max_daily_cost_usd=0.00001),
     )
     client = _api_client(tmp_path, config)

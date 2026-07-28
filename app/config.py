@@ -19,7 +19,8 @@ def load_config(path: Path | str | None = None) -> KarajanConfig:
       GUI wins on startup, so operator edits survive a restart.
     - `pro`/explicit file: load YAML/JSON and override the defaults.
     - `simple` (default, no file): start from defaults and auto-detect backends.
-    - `offline`: defaults only, simulated backend.
+    - `offline`: defaults only; classification stays heuristic (no LLM call),
+      but delegation still requires a real ready provider.
     """
     if path is None:
         runtime = load_runtime_config()
@@ -33,8 +34,6 @@ def load_config(path: Path | str | None = None) -> KarajanConfig:
 
     if config.profile == Profile.SIMPLE:
         config = auto_detect(config)
-    elif config.profile == Profile.OFFLINE:
-        config.backend = Backend.SIMULATED
     return config
 
 
@@ -43,8 +42,12 @@ def auto_detect(config: KarajanConfig) -> KarajanConfig:
 
     Only providers that are *ready* (key set, or local model pulled + server up)
     are eligible — never one that would stall or trigger a multi-GB auto-pull.
-    Order: prefer free (local CLI) first when `prefer_free`, then API keys; if
-    nothing is ready, fall back to the simulated backend so the app always works.
+    Order: prefer free (local CLI) first when `prefer_free`, then API keys.
+
+    When nothing is ready the preferences are cleared and the backend is left as
+    configured. `registry.resolve` will then return `None` and delegation is
+    withheld with an explicit reason — the app reports that it cannot work
+    instead of pretending it can.
     """
     from app import catalog, credentials  # local import to avoid cycles
 
@@ -55,7 +58,7 @@ def auto_detect(config: KarajanConfig) -> KarajanConfig:
         ready.sort(key=lambda p: (not p.is_free, p.backend != Backend.CLI))
 
     if not ready:
-        config.backend = Backend.SIMULATED
+        config.provider_preferences = {}
         return config
 
     # Map each logical tier to the first ready provider that supports it.
@@ -69,7 +72,8 @@ def auto_detect(config: KarajanConfig) -> KarajanConfig:
                 break
 
     config.provider_preferences = preferences
-    config.backend = chosen_backend or Backend.SIMULATED
+    if chosen_backend is not None:
+        config.backend = chosen_backend
     return config
 
 

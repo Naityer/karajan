@@ -24,12 +24,14 @@ load_project_env()
 
 from app import (
     agent_console,
+    agent_tools,
     catalog,
     classifier,
     config as config_module,
     credentials,
     delegation,
     events,
+    handoff,
     metrics_export,
     monitoring,
     openclaw_client,
@@ -44,15 +46,13 @@ from app.logging_config import get_logger, log_event
 from app.providers.registry import resolve_by_name, resolve_entity
 from app.models import ClassificationResult
 from app.database import TaskStore
-from app.graph_store import GraphStore, safe_resolve
-from app.analysis import scanner as graph_scanner
-from app.analysis import audit as graph_audit
 from app.analytics import duckdb_ops
 from app.analytics import ml as ml_ops
 from app.analytics.duckdb_ops import AnalyticsUnavailable
 from app.tutorial import navigation_tutorial_markdown
 from app.models import (
     AgentPerformance,
+    ArtifactInfo,
     CredentialStatus,
     DecisionLogEntry,
     DefaultConfigApplyResult,
@@ -74,33 +74,25 @@ from app.models import (
     OpenClawUpdateRequest,
     PredictTaskRequest,
     PredictTaskResponse,
-    AuditRequest,
-    AuditResult,
-    ExplainRequest,
-    ExplainResult,
-    FixFindingRequest,
-    FixFindingResult,
-    FixJobStarted,
-    FixJobStatus,
-    Finding,
-    GraphSnapshot,
     ObservabilitySnapshot,
     ProviderInfo,
     ProviderRunRequest,
     ProviderRunResult,
     ProviderSetup,
-    RecommendedModel,
-    RepoConfig,
-    RepoCreateRequest,
-    RepoFileResponse,
-    RepoFileSaveRequest,
-    RepoFileSaveResponse,
-    ScanSummary,
     RoutingLayout,
+    RunEventInfo,
+    RunInfo,
     SetupStatus,
     SetupTutorial,
+    ContextPackDetail,
+    ContextPackRequest,
+    ContextPackSummary,
+    DocResultRequest,
     SkillInfo,
     SkillInstallResult,
+    ToolParamInfo,
+    ToolProfileInfo,
+    ToolSpecInfo,
     TaskRecord,
     TaskRequest,
     TaskStatus,
@@ -124,7 +116,7 @@ async def _lifespan(_: FastAPI):
 app = FastAPI(
     title="KARAJAN AI Harness Router",
     version="0.2.0",
-    description="Local harness for task classification, real/local/simulated delegation, and audit monitoring.",
+    description="Local harness for task classification, local/API delegation, and audit monitoring.",
     lifespan=_lifespan,
 )
 
@@ -138,7 +130,6 @@ app.add_middleware(
 
 logger = get_logger("api")
 store = TaskStore()
-graph_store = GraphStore()
 layout_store = routing_layout.RoutingLayoutStore()
 active_config: KarajanConfig = config_module.load_config()
 scheduler = scheduler_module.TaskScheduler(store=store)
@@ -157,7 +148,7 @@ def _static_asset_version() -> str:
     changes the moment the content does, with nothing to remember to bump.
     """
     parts = []
-    for name in ("app.js", "styles.css", "graph.html"):
+    for name in ("app.js", "styles.css"):
         path = STATIC_DIR / name
         if path.exists():
             parts.append(str(path.stat().st_mtime_ns))
@@ -182,9 +173,9 @@ def index() -> HTMLResponse:
 async def events_stream() -> StreamingResponse:
     """Server-Sent Events stream that pushes live "something changed" signals.
 
-    The dashboard (and the Grafo iframe) open one `EventSource` and refresh the
-    affected view the instant a scan/audit/task/config change is published,
-    instead of waiting for the fallback poll. A 15s heartbeat keeps the
+    The dashboard opens one `EventSource` and refreshes the affected view the
+    instant a task/config change is published, instead of waiting for the
+    fallback poll. A 15s heartbeat keeps the
     connection (and any proxy) from timing out; `EventSource` auto-reconnects.
     """
     queue = events.subscribe()
@@ -330,7 +321,8 @@ def delegate_task(request: DelegationRequest, _: None = Depends(require_token)) 
                 detail="target provider/entity is unknown to the catalog or doesn't support this task's tier",
             )
         result, decisions = delegation.delegate(
-            record.classification, active_config, layout=layout, store=store, preresolved=preresolved
+            record.classification, active_config, layout=layout, store=store, preresolved=preresolved,
+            workspace_root=request.workspace_root, agent_tools_profile=request.agent_tools,
         )
         saved = store.save_delegation(result, decisions)
         events.publish("task_changed", task_id=request.task_id)
@@ -348,7 +340,8 @@ def delegate_task(request: DelegationRequest, _: None = Depends(require_token)) 
         return store.get_task(request.task_id)
 
     result, decisions = delegation.delegate(
-        record.classification, active_config, layout=layout_store.load(), store=store
+        record.classification, active_config, layout=layout_store.load(), store=store,
+        workspace_root=request.workspace_root, agent_tools_profile=request.agent_tools,
     )
     saved = store.save_delegation(result, decisions)
     events.publish("task_changed", task_id=request.task_id)
@@ -385,6 +378,32 @@ def get_task(task_id: str) -> TaskRecord:
 @app.get("/tasks/{task_id}/decisions", response_model=list[DecisionLogEntry])
 def task_decisions(task_id: str) -> list[DecisionLogEntry]:
     return store.list_decisions(task_id)
+
+
+@app.get("/tasks/{task_id}/runs", response_model=list[RunInfo])
+def task_runs(task_id: str) -> list[RunInfo]:
+    """Per-execution ledger for one task, ordered by `run_index`.
+
+    Empty (not 404) for an unknown or undelegated task: the Tareas drill-down
+    renders this inline and an error there would blank the whole panel.
+    """
+    return [RunInfo(**row) for row in store.list_runs(task_id)]
+
+
+@app.get("/tasks/{task_id}/artifacts", response_model=list[ArtifactInfo])
+def task_artifacts(task_id: str) -> list[ArtifactInfo]:
+    """Files the agents actually touched while working on this task."""
+    return [ArtifactInfo(**row) for row in store.list_artifacts(task_id)]
+
+
+@app.get("/runs/{run_id}/events", response_model=list[RunEventInfo])
+def run_events(
+    run_id: str,
+    limit: int = Query(default=500, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+) -> list[RunEventInfo]:
+    """Chronological execution trace of one run — tool calls, results, denials."""
+    return [RunEventInfo(**row) for row in store.list_run_events(run_id, limit=limit, offset=offset)]
 
 
 @app.post("/tasks/{task_id}/approve-review", response_model=TaskRecord)
@@ -565,6 +584,127 @@ def update_routing_layout(layout: RoutingLayout, _: None = Depends(require_token
 @app.get("/catalog", response_model=list[ProviderInfo])
 def get_catalog() -> list[ProviderInfo]:
     return catalog.all_providers()
+
+
+def _pack_detail(pack, *, status: str) -> ContextPackDetail:
+    return ContextPackDetail(
+        id=pack.id,
+        task_id=pack.task_id,
+        prompt=pack.prompt,
+        created_at=pack.created_at,
+        files=len([item for item in pack.files if item.skipped_reason is None]),
+        total_chars=pack.total_chars,
+        status=status,
+        workspace_root=pack.workspace_root,
+        rationale=pack.rationale,
+        markdown=handoff.read_markdown(pack.id) or "",
+        skipped=[f"{item.path}: {item.skipped_reason}" for item in pack.files if item.skipped_reason],
+        result_markdown=handoff.read_result(pack.id),
+    )
+
+
+@app.post("/handoff/packs", response_model=ContextPackDetail)
+def create_context_pack(
+    request: ContextPackRequest, _: None = Depends(require_token)
+) -> ContextPackDetail:
+    """Package the selected files for an external chat (ChatGPT / Claude).
+
+    The selection is re-resolved through the workspace guards rather than
+    trusted: it came from a model, and the containment and secret rules must
+    hold on the way *out* too — this content is about to be pasted into a
+    third-party chat.
+    """
+    plan = agent_tools.plan(
+        active_config, requested_workspace=request.workspace_root, requested_profile="doc"
+    )
+    if plan.workspace is None:
+        raise HTTPException(status_code=422, detail=plan.reason or "sin raiz de trabajo utilizable")
+
+    pack = handoff.build_pack(
+        plan.workspace, request.task_id, request.prompt, request.paths, rationale=request.rationale
+    )
+    if not any(item.skipped_reason is None for item in pack.files):
+        raise HTTPException(
+            status_code=422,
+            detail="ninguno de los archivos seleccionados se pudo incluir: "
+            + "; ".join(f"{i.path}: {i.skipped_reason}" for i in pack.files),
+        )
+    handoff.save_pack(pack, store)
+    events.publish("task_changed", task_id=request.task_id)
+    return _pack_detail(pack, status="pending")
+
+
+@app.get("/handoff/packs", response_model=list[ContextPackSummary])
+def list_context_packs(
+    status: str | None = Query(default=None, pattern="^(pending|ready)$")
+) -> list[ContextPackSummary]:
+    """Newest-first packs. `status=ready` is what Atlas polls for documents to accept."""
+    items = handoff.list_packs()
+    if status:
+        items = [item for item in items if item["status"] == status]
+    return [ContextPackSummary(**item) for item in items]
+
+
+@app.get("/handoff/packs/{pack_id}", response_model=ContextPackDetail)
+def get_context_pack(pack_id: str) -> ContextPackDetail:
+    pack = handoff.load_pack(pack_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail="context pack not found")
+    return _pack_detail(pack, status="ready" if handoff.read_result(pack_id) else "pending")
+
+
+@app.post("/handoff/packs/{pack_id}/result", response_model=ContextPackDetail)
+def submit_doc_result(
+    pack_id: str, request: DocResultRequest, _: None = Depends(require_token)
+) -> ContextPackDetail:
+    """Ingest the answer pasted back from the web chat."""
+    pack = handoff.load_pack(pack_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail="context pack not found")
+    handoff.save_result(pack_id, pack.task_id, request.markdown, store)
+    events.publish("task_changed", task_id=pack.task_id)
+    return _pack_detail(pack, status="ready")
+
+
+@app.get("/agent-tools", response_model=list[ToolSpecInfo])
+def agent_tools_catalog() -> list[ToolSpecInfo]:
+    """The agent tool catalog, as data — the `/catalog` of tools."""
+    return [
+        ToolSpecInfo(
+            name=tool.name,
+            summary=tool.summary,
+            params=[
+                ToolParamInfo(
+                    name=param.name,
+                    type=param.type,
+                    required=param.required,
+                    default=param.default,
+                    description=param.description,
+                )
+                for param in tool.params
+            ],
+            returns=tool.returns,
+            risk=tool.risk.value,
+            terminal=tool.terminal,
+            failure_modes=list(tool.failure_modes),
+            example=tool.example,
+        )
+        for tool in agent_tools.catalog.all_tools()
+    ]
+
+
+@app.get("/agent-tools/profiles", response_model=list[ToolProfileInfo])
+def agent_tool_profiles() -> list[ToolProfileInfo]:
+    """Permission sets and the highest risk each one can reach."""
+    return [
+        ToolProfileInfo(
+            name=name,
+            tools=[tool.name for tool in agent_tools.catalog.tools_for_profile(name)],
+            max_risk=agent_tools.catalog.max_risk(name).value,
+            terminal_tools=agent_tools.catalog.terminal_tools(name),
+        )
+        for name in agent_tools.catalog.profile_names()
+    ]
 
 
 @app.get("/skills", response_model=list[SkillInfo])
@@ -753,639 +893,6 @@ def apply_queue_config(_: None = Depends(require_token)) -> DefaultConfigApplyRe
         ollama_installed=[model for model in required if model in installed],
         ollama_missing=missing_models,
         next_steps=next_steps,
-    )
-
-
-# --- Graph / multi-repo ------------------------------------------------------
-
-
-@app.get("/repos", response_model=list[RepoConfig])
-def list_repos() -> list[RepoConfig]:
-    return graph_store.list_repos()
-
-
-@app.get("/repos/{repo_id}", response_model=RepoConfig)
-def get_repo(repo_id: str) -> RepoConfig:
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    return repo
-
-
-@app.get("/system/pick-folder")
-def pick_folder(_: None = Depends(require_token)) -> dict[str, str]:
-    """Open a native folder picker on the local Karajan host."""
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except Exception as exc:  # pragma: no cover - platform dependent
-        raise HTTPException(status_code=503, detail=f"folder picker unavailable: {exc}") from exc
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    try:
-        selected = filedialog.askdirectory(title="Selecciona la carpeta del proyecto")
-    finally:
-        root.destroy()
-    return {"path": selected or ""}
-
-
-@app.post("/repos", response_model=RepoConfig)
-def create_repo(payload: RepoCreateRequest, _: None = Depends(require_token)) -> RepoConfig:
-    """Register a repository by its filesystem root.
-
-    The raw `root_path` is resolved to an absolute path and validated as an
-    existing directory; the resolved form is what gets stored so later
-    path-safety checks (Fase C/D) have a reliable anchor. Registering the same
-    resolved path twice is a 409.
-    """
-    resolved = Path(payload.root_path).resolve()
-    if not resolved.exists() or not resolved.is_dir():
-        raise HTTPException(status_code=400, detail="root_path does not exist or is not a directory")
-    root_str = str(resolved)
-    if any(existing.root_path == root_str for existing in graph_store.list_repos()):
-        raise HTTPException(status_code=409, detail="repo already registered")
-    repo = RepoConfig(
-        name=payload.name,
-        root_path=root_str,
-        language_hint=payload.language_hint,
-        provider_override=payload.provider_override,
-        exclude_globs=payload.exclude_globs,
-    )
-    return graph_store.add_repo(repo)
-
-
-@app.delete("/repos/{repo_id}")
-def delete_repo(repo_id: str, _: None = Depends(require_token)) -> dict:
-    if not graph_store.delete_repo(repo_id):
-        raise HTTPException(status_code=404, detail="repo not found")
-    return {"deleted": True}
-
-
-@app.post("/repos/{repo_id}/scan", response_model=ScanSummary)
-def scan_repo(repo_id: str, _: None = Depends(require_token)) -> ScanSummary:
-    """Run static analysis over a registered repo, returning a `ScanSummary`.
-
-    Synchronous: even the largest workspace repo (~235 files) parses in well
-    under the request budget, and a rescan skips unchanged files via the
-    mtime/size cache. Populates `graph_nodes`/`graph_edges` for the frontend.
-    """
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    summary = graph_scanner.scan_repo(repo, graph_store)
-    events.publish("repo_scanned", repo_id=repo_id)
-    return summary
-
-
-@app.get("/repos/{repo_id}/graph", response_model=GraphSnapshot)
-def get_repo_graph(repo_id: str) -> GraphSnapshot:
-    """Full node+edge snapshot for a repo (consumed by the Fase C frontend)."""
-    if graph_store.get_repo(repo_id) is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    return graph_store.get_snapshot(repo_id)
-
-
-@app.get("/repos/{repo_id}/file", response_model=RepoFileResponse)
-def get_repo_file(repo_id: str, path: str = Query(..., min_length=1)) -> RepoFileResponse:
-    """Read a repo-relative file for the embedded graph editor."""
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    try:
-        abs_path = safe_resolve(Path(repo.root_path), path)
-        if not abs_path.exists() or not abs_path.is_file():
-            raise HTTPException(status_code=404, detail="file not found")
-        content = abs_path.read_text(encoding="utf-8", errors="replace")
-        stat = abs_path.stat()
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"invalid path: {exc}")
-    except OSError as exc:
-        raise HTTPException(status_code=400, detail=f"cannot read file: {exc}")
-    return RepoFileResponse(
-        repo_id=repo_id,
-        path=path,
-        content=content,
-        size=stat.st_size,
-        modified_at=datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-    )
-
-
-@app.put("/repos/{repo_id}/file", response_model=RepoFileSaveResponse)
-def save_repo_file(
-    repo_id: str,
-    payload: RepoFileSaveRequest,
-    _: None = Depends(require_token),
-) -> RepoFileSaveResponse:
-    """Save a repo-relative file from the embedded graph editor."""
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    try:
-        abs_path = safe_resolve(Path(repo.root_path), payload.path)
-        if abs_path.exists() and not abs_path.is_file():
-            raise HTTPException(status_code=400, detail="path is not a file")
-        if not abs_path.parent.exists():
-            raise HTTPException(status_code=400, detail="parent directory does not exist")
-        abs_path.write_text(payload.content, encoding="utf-8")
-        stat = abs_path.stat()
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"invalid path: {exc}")
-    except OSError as exc:
-        raise HTTPException(status_code=400, detail=f"cannot save file: {exc}")
-    return RepoFileSaveResponse(
-        repo_id=repo_id,
-        path=payload.path,
-        size=stat.st_size,
-        modified_at=datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-    )
-
-
-@app.post("/repos/{repo_id}/audit", response_model=AuditResult)
-def audit_repo(repo_id: str, payload: AuditRequest, _: None = Depends(require_token)) -> AuditResult:
-    """Run the deterministic code audit over a repo's stored graph (Fase D).
-
-    Persists findings (replacing any prior run) and, when `include_llm=true`,
-    layers a best-effort Spanish narrative on top. The deterministic findings are
-    the guaranteed value: an LLM failure degrades to `llm_summary=null`, it never
-    500s the endpoint.
-    """
-    if graph_store.get_repo(repo_id) is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    result = graph_audit.run_audit(
-        repo_id, graph_store, include_llm=payload.include_llm, config=active_config
-    )
-    events.publish("repo_audited", repo_id=repo_id)
-    return result
-
-
-@app.get("/repos/{repo_id}/findings", response_model=list[Finding])
-def list_findings(repo_id: str) -> list[Finding]:
-    """Persisted findings for a repo (drives the frontend severity badges)."""
-    if graph_store.get_repo(repo_id) is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    return graph_store.list_findings(repo_id)
-
-
-def _fixer_resolution(repo: RepoConfig):
-    from app.providers import registry
-
-    layout = layout_store.load()
-    for entity in layout.entities:
-        tags = set(entity.role_tags or [])
-        if "fixer" not in tags:
-            continue
-        for tier in (
-            RecommendedModel.STRONG_MODEL_WITH_HUMAN_REVIEW,
-            RecommendedModel.STRONG_MODEL,
-            RecommendedModel.MEDIUM_MODEL,
-        ):
-            resolution = registry.resolve_entity(entity, tier)
-            if resolution is not None:
-                return resolution
-    return graph_audit.resolve_graph_provider(repo, active_config)
-
-
-def _extract_file_block(output: str) -> str | None:
-    match = re.search(r"```(?:file|python|py|typescript|ts|javascript|js)?\s*\n([\s\S]*?)\n```", output)
-    return match.group(1) if match else None
-
-
-def _extract_file_blocks(output: str) -> list[tuple[str, str]]:
-    blocks: list[tuple[str, str]] = []
-    pattern = re.compile(r"```file(?P<header>[^\n]*)\n(?P<body>[\s\S]*?)\n```", re.IGNORECASE)
-    for match in pattern.finditer(output):
-        header = match.group("header").strip()
-        body = match.group("body")
-        path_match = re.search(r"path=(?P<quote>[\"']?)(?P<path>[^\"'\s]+)(?P=quote)", header)
-        rel_path = path_match.group("path").strip() if path_match else header.strip()
-        if not rel_path:
-            first_line, _, rest = body.partition("\n")
-            if first_line.strip().lower().startswith("path:"):
-                rel_path = first_line.split(":", 1)[1].strip()
-                body = rest
-        if rel_path:
-            blocks.append((rel_path, body))
-    return blocks
-
-
-def _fix_findings_report(
-    repo_id: str,
-    repo: RepoConfig,
-    payload: FixFindingRequest,
-    progress: Callable[[str], None] = lambda _msg: None,
-) -> FixFindingResult:
-    all_findings = graph_store.list_findings(repo_id)
-    requested_ids = set(payload.finding_ids or [payload.finding_id])
-    selected = [finding for finding in all_findings if finding.id in requested_ids] if requested_ids else all_findings
-    if not selected:
-        raise HTTPException(status_code=404, detail="findings not found")
-    progress(f"Hallazgos seleccionados: {len(selected)}.")
-
-    resolution = _fixer_resolution(repo)
-    finding_id = selected[0].id
-    if resolution is None:
-        progress("No hay agente Fixeador ni proveedor de grafo disponible.")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding_id,
-            error="no hay agente Fixeador ni proveedor de grafo disponible",
-            attempted_count=len(selected),
-        )
-    progress(f"Agente resuelto: {resolution.provider_name} · modelo {resolution.model_id}.")
-
-    report = payload.report or "\n".join(
-        f"- [{finding.severity}] {finding.detector}: {finding.message} ({finding.node_id})"
-        for finding in selected
-    )
-    instruction = (
-        "Eres el rol Fixeador de Karajan, asignado desde Decisión para intervenir "
-        "sobre problemas detectados en el panel de Grafo.\n"
-        "Recibirás el REPORTE COMPLETO de hallazgos. Intenta corregirlos con parches "
-        "acotados y verificables. No hagas refactors amplios que no estén justificados "
-        "por los hallazgos.\n\n"
-        "Si tu CLI puede editar el workspace directamente, aplica los cambios. "
-        "Si respondes con cambios para que Karajan los aplique, usa un bloque por fichero "
-        "con este formato exacto:\n"
-        "```file path=ruta/relativa.py\n<contenido completo del fichero>\n```\n\n"
-        "No uses rutas absolutas. Tras tu intervención Karajan reescaneará el proyecto "
-        "y volverá a ejecutar la auditoría para verificar qué queda pendiente.\n\n"
-        f"Repositorio: {repo.name}\n"
-        f"Ruta raíz: {repo.root_path}\n\n"
-        f"{report}"
-    )
-    progress("Enviando reporte completo al agente Fixeador (puede tardar varios minutos)...")
-    try:
-        run = resolution.provider.run(instruction, resolution.model_id, timeout_s=600)
-    except Exception as exc:  # noqa: BLE001
-        progress(f"Fallo del agente Fixeador: {exc}")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding_id,
-            provider=resolution.provider_name,
-            model=resolution.model_id,
-            error=f"fallo del agente Fixeador: {exc}",
-            attempted_count=len(selected),
-        )
-    if run.error:
-        progress(f"El agente devolvió un error: {run.error}")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding_id,
-            provider=resolution.provider_name,
-            model=resolution.model_id,
-            error=run.error,
-            attempted_count=len(selected),
-        )
-    progress(f"Respuesta recibida ({len(run.output or '')} caracteres). Extrayendo parches...")
-
-    applied_files: list[str] = []
-    if payload.apply:
-        blocks = _extract_file_blocks(run.output or "")
-        progress(f"Bloques de fichero detectados: {len(blocks)}.")
-        for rel_path, content in blocks:
-            try:
-                abs_path = safe_resolve(Path(repo.root_path), rel_path)
-                abs_path.write_text(content, encoding="utf-8")
-                applied_files.append(rel_path)
-                progress(f"Aplicado: {rel_path}")
-            except (OSError, ValueError) as exc:
-                progress(f"No se pudo aplicar {rel_path}: {exc}")
-                continue
-
-    progress("Re-escaneando el repositorio...")
-    graph_scanner.scan_repo(repo, graph_store)
-    progress("Ejecutando auditoría de verificación...")
-    result = graph_audit.run_audit(repo_id, graph_store, include_llm=False, config=active_config)
-    selected_signatures = {(f.detector, f.node_id, f.message) for f in selected}
-    remaining = sum(1 for f in result.findings if (f.detector, f.node_id, f.message) in selected_signatures)
-    resolved = max(0, len(selected) - remaining)
-    events.publish("repo_scanned", repo_id=repo_id)
-    events.publish("repo_audited", repo_id=repo_id)
-    progress(f"Auditoría completada: {resolved} resueltos, {remaining} pendientes.")
-    return FixFindingResult(
-        repo_id=repo_id,
-        finding_id=finding_id,
-        applied=bool(applied_files) or payload.apply,
-        verified=remaining == 0,
-        provider=resolution.provider_name,
-        model=resolution.model_id,
-        message=(
-            f"reporte completo enviado al Fixeador; {resolved} resueltos, "
-            f"{remaining} pendientes tras auditoría"
-        ),
-        summary=(run.output or "")[:4000],
-        attempted_count=len(selected),
-        resolved_count=resolved,
-    )
-
-
-def _fix_single_finding(
-    repo_id: str,
-    repo: RepoConfig,
-    payload: FixFindingRequest,
-    progress: Callable[[str], None] = lambda _msg: None,
-) -> FixFindingResult:
-    finding = next((f for f in graph_store.list_findings(repo_id) if f.id == payload.finding_id), None)
-    if finding is None:
-        raise HTTPException(status_code=404, detail="finding not found")
-    progress(f"Hallazgo: {finding.detector} ({finding.severity}) · {finding.message}")
-    snapshot = graph_store.get_snapshot(repo_id)
-    node = next((n for n in snapshot.nodes if n.id == finding.node_id), None)
-    if node is None:
-        raise HTTPException(status_code=404, detail="finding node not found")
-    file_node = node
-    if node.kind != "file" and node.file_id:
-        file_node = next((n for n in snapshot.nodes if n.id == node.file_id), node)
-    rel_path = file_node.qualified_name
-    if not rel_path:
-        raise HTTPException(status_code=400, detail="finding has no source file")
-
-    try:
-        abs_path = safe_resolve(Path(repo.root_path), rel_path)
-        original = abs_path.read_text(encoding="utf-8", errors="replace")
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"cannot read source: {exc}")
-
-    lines = original.splitlines()
-    start = max(1, (node.start_line or 1) - 20)
-    end = min(len(lines), (node.end_line or node.start_line or len(lines)) + 20)
-    snippet = "\n".join(lines[start - 1 : end])
-
-    resolution = _fixer_resolution(repo)
-    if resolution is None:
-        progress("No hay agente Fixeador ni proveedor de grafo disponible.")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding.id,
-            file_path=rel_path,
-            severity=finding.severity,
-            detector=finding.detector,
-            error="no hay agente Fixeador ni proveedor de grafo disponible",
-        )
-    progress(f"Agente resuelto: {resolution.provider_name} · modelo {resolution.model_id}.")
-
-    instruction = (
-        "Eres el rol Fixeador de Karajan. Tu responsabilidad es aplicar un parche "
-        "mínimo y verificable para un hallazgo de auditoría.\n"
-        "Devuelve SOLO el fichero completo corregido dentro de un bloque ```file. "
-        "No incluyas explicación fuera del bloque.\n\n"
-        f"Ruta: {rel_path}\n"
-        f"Criticidad: {finding.severity}\n"
-        f"Detector: {finding.detector}\n"
-        f"Qué hay que solucionar: {finding.message}\n"
-        f"Nodo: {node.qualified_name or node.name}\n"
-        f"Líneas relevantes: {start}-{end}\n\n"
-        "Fragmento afectado:\n```text\n" + snippet + "\n```\n\n"
-        "Fichero completo actual:\n```file\n" + original + "\n```"
-    )
-    progress(f"Enviando {rel_path} al agente Fixeador (puede tardar 1-2 minutos)...")
-    try:
-        run = resolution.provider.run(instruction, resolution.model_id, timeout_s=180)
-    except Exception as exc:  # noqa: BLE001
-        progress(f"Fallo del agente Fixeador: {exc}")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding.id,
-            provider=resolution.provider_name,
-            model=resolution.model_id,
-            file_path=rel_path,
-            severity=finding.severity,
-            detector=finding.detector,
-            error=f"fallo del agente Fixeador: {exc}",
-        )
-    if run.error or not (run.output or "").strip():
-        progress(f"El agente devolvió un error o respuesta vacía: {run.error or '(vacío)'}")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding.id,
-            provider=resolution.provider_name,
-            model=resolution.model_id,
-            file_path=rel_path,
-            severity=finding.severity,
-            detector=finding.detector,
-            error=run.error or "respuesta vacía del agente Fixeador",
-        )
-    progress(f"Respuesta recibida ({len(run.output or '')} caracteres). Extrayendo parche...")
-
-    new_content = _extract_file_block(run.output)
-    if not new_content:
-        progress("El agente no devolvió un bloque ```file aplicable.")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding.id,
-            provider=resolution.provider_name,
-            model=resolution.model_id,
-            file_path=rel_path,
-            severity=finding.severity,
-            detector=finding.detector,
-            error="el agente no devolvió un bloque ```file aplicable",
-        )
-    if not payload.apply:
-        progress("Parche generado pero no aplicado (apply=false).")
-        return FixFindingResult(
-            repo_id=repo_id,
-            finding_id=finding.id,
-            provider=resolution.provider_name,
-            model=resolution.model_id,
-            file_path=rel_path,
-            severity=finding.severity,
-            detector=finding.detector,
-            message="parche generado pero no aplicado",
-        )
-
-    progress(f"Aplicando parche a {rel_path}...")
-    abs_path.write_text(new_content, encoding="utf-8")
-    progress("Re-escaneando el repositorio...")
-    graph_scanner.scan_repo(repo, graph_store)
-    progress("Ejecutando auditoría de verificación...")
-    result = graph_audit.run_audit(repo_id, graph_store, include_llm=False, config=active_config)
-    still_present = any(
-        f.detector == finding.detector
-        and f.node_id == finding.node_id
-        and f.message == finding.message
-        for f in result.findings
-    )
-    events.publish("repo_scanned", repo_id=repo_id)
-    events.publish("repo_audited", repo_id=repo_id)
-    progress("Verificado: el hallazgo ya no aparece." if not still_present else "Aplicado, pero el detector aún reporta el hallazgo.")
-    return FixFindingResult(
-        repo_id=repo_id,
-        finding_id=finding.id,
-        applied=True,
-        verified=not still_present,
-        provider=resolution.provider_name,
-        model=resolution.model_id,
-        file_path=rel_path,
-        severity=finding.severity,
-        detector=finding.detector,
-        message="parche aplicado y verificado" if not still_present else "parche aplicado, pero el detector aún reporta el hallazgo",
-    )
-
-
-@app.post("/repos/{repo_id}/findings/fix", response_model=FixFindingResult)
-def fix_finding(
-    repo_id: str, payload: FixFindingRequest, _: None = Depends(require_token)
-) -> FixFindingResult:
-    """Delegate one finding to the Fixer role and verify with scan+audit."""
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    if payload.mode == "full_report" or payload.finding_ids:
-        return _fix_findings_report(repo_id, repo, payload)
-    return _fix_single_finding(repo_id, repo, payload)
-
-
-_fix_jobs: dict[str, "_FixJob"] = {}
-_fix_jobs_lock = threading.Lock()
-
-
-class _FixJob:
-    """In-memory progress log + result for one background Fixer run.
-
-    Findings fixes route through a real CLI subprocess that can take minutes;
-    this lets the frontend poll a job for incremental log lines instead of
-    blocking a single request (and getting zero feedback) for that long.
-    """
-
-    def __init__(self) -> None:
-        self.status = "running"  # running | done | error
-        self.log: list[str] = []
-        self.result: FixFindingResult | None = None
-        self.lock = threading.Lock()
-
-    def append(self, msg: str) -> None:
-        with self.lock:
-            self.log.append(msg)
-
-    def snapshot(self) -> FixJobStatus:
-        with self.lock:
-            return FixJobStatus(status=self.status, log=list(self.log), result=self.result)
-
-
-def _prune_fix_jobs() -> None:
-    with _fix_jobs_lock:
-        if len(_fix_jobs) <= 100:
-            return
-        finished = [jid for jid, job in _fix_jobs.items() if job.status != "running"]
-        for jid in finished[: len(_fix_jobs) - 100]:
-            _fix_jobs.pop(jid, None)
-
-
-def _run_fix_job(job: "_FixJob", repo_id: str, repo: RepoConfig, payload: FixFindingRequest) -> None:
-    try:
-        if payload.mode == "full_report" or payload.finding_ids:
-            result = _fix_findings_report(repo_id, repo, payload, job.append)
-        else:
-            result = _fix_single_finding(repo_id, repo, payload, job.append)
-        with job.lock:
-            job.result = result
-            job.status = "done"
-    except HTTPException as exc:
-        job.append(f"Error: {exc.detail}")
-        with job.lock:
-            job.status = "error"
-    except Exception as exc:  # noqa: BLE001 — the job must always end in a terminal state
-        job.append(f"Error inesperado: {exc}")
-        with job.lock:
-            job.status = "error"
-
-
-@app.post("/repos/{repo_id}/findings/fix/jobs", response_model=FixJobStarted)
-def start_fix_job(
-    repo_id: str, payload: FixFindingRequest, _: None = Depends(require_token)
-) -> FixJobStarted:
-    """Kick off a Fixer run in the background and return a job id to poll.
-
-    The frontend polls GET .../jobs/{job_id} for the accumulating log so the
-    Hallazgos panel can show live progress instead of blocking silently.
-    """
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    _prune_fix_jobs()
-    job = _FixJob()
-    job_id = uuid.uuid4().hex
-    with _fix_jobs_lock:
-        _fix_jobs[job_id] = job
-    threading.Thread(target=_run_fix_job, args=(job, repo_id, repo, payload), daemon=True).start()
-    return FixJobStarted(job_id=job_id)
-
-
-@app.get("/repos/{repo_id}/findings/fix/jobs/{job_id}", response_model=FixJobStatus)
-def get_fix_job(repo_id: str, job_id: str) -> FixJobStatus:
-    job = _fix_jobs.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="job not found")
-    return job.snapshot()
-
-
-@app.post("/repos/{repo_id}/explain", response_model=ExplainResult)
-def explain_node(repo_id: str, payload: ExplainRequest, _: None = Depends(require_token)) -> ExplainResult:
-    """Ask the configured LLM to explain one graph node's source (Fase D).
-
-    Reads the relevant source slice via `safe_resolve` (path-traversal guarded),
-    then delegates to the resolved provider. If no provider is ready, returns a
-    clear JSON error rather than crashing.
-    """
-    repo = graph_store.get_repo(repo_id)
-    if repo is None:
-        raise HTTPException(status_code=404, detail="repo not found")
-    snapshot = graph_store.get_snapshot(repo_id)
-    node = next((n for n in snapshot.nodes if n.id == payload.node_id), None)
-    if node is None:
-        raise HTTPException(status_code=404, detail="node not found")
-
-    file_node = node
-    if node.kind != "file" and node.file_id:
-        file_node = next((n for n in snapshot.nodes if n.id == node.file_id), node)
-    rel_path = file_node.qualified_name
-    if not rel_path:
-        raise HTTPException(status_code=404, detail="node has no source file")
-
-    try:
-        abs_path = safe_resolve(Path(repo.root_path), rel_path)
-        lines = abs_path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"cannot read source: {exc}")
-
-    if node.kind == "file":
-        snippet = "\n".join(lines[:400])
-    else:
-        start = max(1, (node.start_line or 1) - 3)
-        end = min(len(lines), (node.end_line or node.start_line or 1) + 3)
-        snippet = "\n".join(lines[start - 1 : end])
-
-    resolution = graph_audit.resolve_graph_provider(repo, active_config)
-    if resolution is None:
-        return ExplainResult(
-            explanation=None,
-            error="no hay proveedor IA disponible; configura graph_agent_provider",
-        )
-
-    instruction = (
-        "Explica en español qué hace este código, cuál es su responsabilidad "
-        "principal, y posibles problemas de diseño, rendimiento o seguridad. "
-        f"Sé conciso.\n\nArchivo: {rel_path}\nSímbolo: {node.qualified_name or node.name}\n\n"
-        "```\n" + snippet + "\n```"
-    )
-    try:
-        run = resolution.provider.run(instruction, resolution.model_id, timeout_s=120)
-    except Exception as exc:  # noqa: BLE001 — never 500 on a provider failure
-        return ExplainResult(
-            explanation=None, provider=resolution.provider_name,
-            model=resolution.model_id, error=f"fallo del proveedor: {exc}",
-        )
-    if run.error or not (run.output or "").strip():
-        return ExplainResult(
-            explanation=None, provider=resolution.provider_name,
-            model=resolution.model_id, error=run.error or "respuesta vacía del proveedor",
-        )
-    return ExplainResult(
-        explanation=run.output.strip(),
-        provider=resolution.provider_name,
-        model=resolution.model_id,
     )
 
 

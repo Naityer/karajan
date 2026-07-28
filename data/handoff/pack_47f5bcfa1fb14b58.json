@@ -1,0 +1,26 @@
+{
+  "id": "pack_47f5bcfa1fb14b58",
+  "task_id": "tsk_a9d4a3a8c469",
+  "prompt": "Documenta de forma resumida la implementación end-to-end de Documentador en el repositorio Atlas.",
+  "workspace_root": "C:\\Users\\tiand\\Desktop\\Workspace\\atlas",
+  "files": [
+    {
+      "path": "apps/server/src/core/auth/auth.service.ts",
+      "truncated": false,
+      "skipped_reason": null
+    },
+    {
+      "path": "apps/server/src/core/documentator/documentator.service.ts",
+      "truncated": false,
+      "skipped_reason": null
+    },
+    {
+      "path": "apps/web/src/features/databases/components/thread-view.tsx",
+      "truncated": true,
+      "skipped_reason": null
+    }
+  ],
+  "rationale": "Selección del agente local de Karajan para Documentador.",
+  "created_at": "2026-07-27T19:54:07.818724+00:00",
+  "total_chars": 52336
+}

@@ -60,12 +60,15 @@ def _classification(task_id: str) -> ClassificationResult:
 def _delegation(task_id: str) -> DelegationResult:
     executions = [
         SubtaskExecution(
-            subtask_id="sub_1", status=TaskStatus.COMPLETED, backend=Backend.SIMULATED,
-            model_used="provider-alpha", latency_ms=100, estimated_cost_usd=0.001,
+            subtask_id="sub_1", status=TaskStatus.COMPLETED, backend=Backend.CLI,
+            # Real `model_used` shape: "<catalog provider>:<model id>", where the
+            # model id itself contains a colon.
+            model_used="ollama-qwen:qwen2.5:7b", latency_ms=100, estimated_cost_usd=0.001,
             output="ok", input_tokens=10, output_tokens=20,
         ),
         SubtaskExecution(
-            subtask_id="sub_2", status=TaskStatus.COMPLETED, backend=Backend.SIMULATED,
+            subtask_id="sub_2", status=TaskStatus.COMPLETED, backend=Backend.CLI,
+            # Not a catalog provider — attribution must stay NULL, not be guessed.
             model_used="provider-beta", latency_ms=250, estimated_cost_usd=0.002,
             output="ok", input_tokens=15, output_tokens=25,
         ),
@@ -224,10 +227,15 @@ def test_migration_parity_and_spot_check(tmp_path) -> None:
     assert [row["run_index"] for row in runs_a] == [0, 1]
     assert sum(row["latency_ms"] for row in runs_a) == delegation_a.total_latency_ms
     assert round(sum(row["estimated_cost_usd"] for row in runs_a), 5) == delegation_a.total_estimated_cost_usd
-    # Legacy fallback: provider_name = model_used (documented best-effort approximation
-    # for pre-Fase-1 rows that never persisted a real provider_name).
-    assert runs_a[0]["provider_name"] == "provider-alpha"
-    assert runs_a[1]["provider_name"] == "provider-beta"
+    # Legacy rows have no stored provider_name, so it is recovered by *splitting*
+    # `model_used` against the catalog — never by copying the whole string into
+    # `provider_name`, which is what used to make one agent appear twice in every
+    # `GROUP BY provider_name` aggregate.
+    assert runs_a[0]["provider_name"] == "ollama-qwen"
+    assert runs_a[0]["model_id"] == "qwen2.5:7b"
+    # An unrecognized prefix stays unattributed rather than being guessed at.
+    assert runs_a[1]["provider_name"] is None
+    assert runs_a[1]["model_id"] is None
 
 
 def test_record_run_and_agent_performance_round_trip(tmp_path) -> None:

@@ -36,5 +36,6 @@ def cost_for(tier: str, complexity: int, config: KarajanConfig) -> float:
 
 
 def latency_for(tier: str, run: ProviderRun, config: KarajanConfig, index: int) -> int:
-    # Real backends report measured latency; simulated returns 0 → use the config table.
+    # Every backend measures its own latency now; the config table only covers
+    # the degenerate case of a provider reporting 0 ms.
     return run.latency_ms or (config.latency_table.get(tier, 0) + index * 37)

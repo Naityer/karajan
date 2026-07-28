@@ -6,8 +6,8 @@ from app.models import Backend, KarajanConfig, OrchestrationConfig
 from app.models import RoutingEntity, RoutingLayout
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
-from app.providers.simulated import SimulatedModelProvider
 from app.router import classify_prompt
+from tests.conftest import stub_resolution
 
 PROMPT = "Corrige un bug en una API y valida con tests de integracion."
 
@@ -42,17 +42,52 @@ def _patch_resolve(monkeypatch, provider_factory) -> None:
     )
 
 
-def test_delegate_runs_every_subtask_on_simulated() -> None:
+def test_delegate_runs_every_subtask(stub_providers) -> None:
     classification = classify_prompt(PROMPT)
-    result, decisions = delegate(classification, KarajanConfig(backend=Backend.SIMULATED))
+    result, decisions = delegate(classification, KarajanConfig(backend=Backend.CLI))
 
     assert result.status.value == "completed"
     assert len(result.executions) == len(classification.subtasks)
     assert sum(decision.phase == "assign" for decision in decisions) == len(classification.subtasks)
     assert sum(decision.phase == "delegate" for decision in decisions) == len(classification.subtasks)
     assert sum(decision.phase == "validate" for decision in decisions) == len(classification.subtasks)
-    assert all(ex.backend == Backend.SIMULATED for ex in result.executions)
+    assert all(ex.backend == Backend.CLI for ex in result.executions)
     assert result.total_estimated_cost_usd > 0
+
+
+def test_delegate_is_withheld_when_no_provider_serves_a_tier(monkeypatch) -> None:
+    """The core of removing the simulated backend: nothing is invented.
+
+    With no resolvable provider the task is blocked with an explicit decision
+    and zero executions, instead of producing a fake completed run.
+    """
+    monkeypatch.setattr(delegation, "resolve", lambda tier, config: None)
+    classification = classify_prompt(PROMPT)
+
+    result, decisions = delegate(classification, KarajanConfig(backend=Backend.CLI))
+
+    assert result.executions == []
+    assert result.total_estimated_cost_usd == 0.0
+    blocked = [d for d in decisions if d.decision.startswith("provider_gate=blocked")]
+    assert len(blocked) == 1
+    assert "Ningún proveedor listo" in blocked[0].reason
+
+
+def test_run_subtask_fails_loudly_without_a_resolution(monkeypatch) -> None:
+    """Callers that bypass `delegate` (the scheduler) still never get a fake run."""
+    monkeypatch.setattr(delegation, "resolve", lambda tier, config: None)
+    classification = classify_prompt(PROMPT)
+    subtask = classification.subtasks[0]
+
+    execution, decisions = delegation.run_subtask(
+        classification, 1, subtask, KarajanConfig(backend=Backend.CLI), layout=None
+    )
+
+    assert execution.status.value == "failed"
+    assert execution.estimated_cost_usd == 0.0
+    assert execution.model_used == ""
+    assert "sin proveedor listo" in (execution.error or "")
+    assert any(d.decision.endswith("->unresolved") for d in decisions)
 
 
 def test_delegate_marks_failed_when_provider_errors(monkeypatch) -> None:
@@ -70,12 +105,12 @@ def test_delegate_marks_failed_when_provider_errors(monkeypatch) -> None:
     assert all(ex.error == "boom" for ex in result.executions)
 
 
-def test_delegate_falls_back_to_simulated_when_provider_errors(monkeypatch) -> None:
+def test_delegate_falls_back_to_a_backup_provider_when_primary_errors(monkeypatch) -> None:
     _patch_resolve(monkeypatch, _FailingProvider)
     monkeypatch.setattr(
         delegation,
         "fallback_resolutions",
-        lambda tier, config, tried, layout=None: [Resolution(SimulatedModelProvider(), Backend.SIMULATED, tier.value, "simulated")],
+        lambda tier, config, tried, layout=None: [stub_resolution(tier)],
     )
     classification = classify_prompt(PROMPT)
     config = KarajanConfig(backend=Backend.API, orchestration=OrchestrationConfig(max_retries=0))
@@ -84,16 +119,29 @@ def test_delegate_falls_back_to_simulated_when_provider_errors(monkeypatch) -> N
 
     assert result.status.value == "completed"
     assert all(ex.status.value == "completed" for ex in result.executions)
-    assert all(ex.backend == Backend.SIMULATED for ex in result.executions)
+    assert all(ex.backend == Backend.CLI for ex in result.executions)
     assert any(decision.phase == "fallback" for decision in decisions)
     assert any(decision.phase == "reassign" for decision in decisions)
 
 
-def test_delegate_parallel_executes_all_subtasks(monkeypatch) -> None:
+def test_delegate_fails_when_the_fallback_chain_is_exhausted(monkeypatch) -> None:
+    """An empty chain surfaces the real provider error, not a fake success."""
+    _patch_resolve(monkeypatch, _FailingProvider)
+    monkeypatch.setattr(delegation, "fallback_resolutions", lambda tier, config, tried, layout=None: [])
+    classification = classify_prompt(PROMPT)
+    config = KarajanConfig(backend=Backend.API, orchestration=OrchestrationConfig(max_retries=0))
+
+    result, _ = delegate(classification, config)
+
+    assert result.status.value == "failed"
+    assert all(ex.error == "boom" for ex in result.executions)
+
+
+def test_delegate_parallel_executes_all_subtasks(stub_providers) -> None:
     classification = classify_prompt(PROMPT)
     assert len(classification.subtasks) > 1  # guard: parallelism only kicks in with >1
     config = KarajanConfig(
-        backend=Backend.SIMULATED,
+        backend=Backend.CLI,
         orchestration=OrchestrationConfig(parallel=True, max_parallel=4),
     )
 
@@ -115,7 +163,7 @@ def test_delegate_retries_transient_failure(monkeypatch) -> None:
     assert all(ex.status.value == "completed" for ex in result.executions)
 
 
-def test_delegate_records_role_flow_from_layout() -> None:
+def test_delegate_records_role_flow_from_layout(stub_providers) -> None:
     classification = classify_prompt(PROMPT)
     layout = RoutingLayout(
         entities=[
@@ -145,7 +193,7 @@ def test_delegate_records_role_flow_from_layout() -> None:
         ]
     )
 
-    _, decisions = delegate(classification, KarajanConfig(backend=Backend.SIMULATED), layout=layout)
+    _, decisions = delegate(classification, KarajanConfig(backend=Backend.CLI), layout=layout)
 
     assign_decisions = [decision.decision for decision in decisions if decision.phase == "assign"]
     validate_decisions = [decision.decision for decision in decisions if decision.phase == "validate"]

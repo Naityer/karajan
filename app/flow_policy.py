@@ -24,7 +24,7 @@ class FlowAssignment:
     @property
     def backup_label(self) -> str:
         if not self.backups:
-            return "simulated"
+            return "sin backup"
         return ",".join(_entity_label(entity, "Backup") for entity in self.backups)
 
 

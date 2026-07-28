@@ -42,10 +42,10 @@ def test_put_config_persists_to_disk(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(config_module, "RUNTIME_CONFIG_PATH", path)
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
     main.store = TaskStore(tmp_path / "cfg.db")
-    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    main.active_config = KarajanConfig(backend=Backend.CLI)
     client = TestClient(main.app)
 
-    new_config = KarajanConfig(backend=Backend.SIMULATED, prefer_free=False).model_dump(mode="json")
+    new_config = KarajanConfig(backend=Backend.CLI, prefer_free=False).model_dump(mode="json")
     res = client.put("/config", json=new_config)
     assert res.status_code == 200
     assert res.json()["prefer_free"] is False

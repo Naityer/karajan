@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shlex
 import shutil
 import subprocess
@@ -7,8 +8,18 @@ import time
 import os
 from pathlib import Path
 
+# `ollama run` (and other CLIs) draw a spinner and reposition the cursor while
+# streaming, so stdout arrives peppered with escape sequences like `\x1b[7D`.
+# Left in, they end up inside the model's own answer, inside the agent trace and
+# inside anything built from it.
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|[\r\x0b\x0c]")
+
 from app.models import Backend, ProviderInfo
 from app.providers.base import ModelProvider, ProviderRun
+
+
+def _strip_ansi(text: str | None) -> str:
+    return _ANSI.sub("", text or "").strip()
 
 
 class CliModelProvider(ModelProvider):
@@ -71,8 +82,8 @@ class CliModelProvider(ModelProvider):
                 timeout=timeout_s,
                 check=False,
             )
-            output = completed.stdout.strip()
-            error = completed.stderr.strip() or None if completed.returncode != 0 else None
+            output = _strip_ansi(completed.stdout)
+            error = _strip_ansi(completed.stderr) or None if completed.returncode != 0 else None
         except subprocess.TimeoutExpired:
             output, error = "", f"timeout after {timeout_s}s"
         except OSError as exc:

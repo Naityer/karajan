@@ -183,9 +183,9 @@ const ROLE_DEFS = {
   },
   fixer: {
     label: "Fixeador",
-    summary: "Recibe desde Grafo el reporte completo de hallazgos, aplica correcciones y dispara la verificación posterior.",
-    detail: "Rol de reparación activa conectado al panel de Grafo. Cuando se pulsa Solucionar todos en Hallazgos, Karajan debe enviar al agente marcado como Fixeador el reporte completo de errores de detección de código para que aplique parches acotados. Después se vuelve a ejecutar la auditoría/test del Grafo para comprobar qué hallazgos desaparecieron. No sustituye al Validator: el Validator acepta o rechaza resultados; el Fixeador interviene sobre código con un reporte de fallos concreto.",
-    example: "Etiqueta un agente como Fixeador para que Grafo le delegue Solucionar todos con el reporte completo de hallazgos.",
+    summary: "Recibe un reporte de errores concreto y aplica correcciones activas sobre el código.",
+    detail: "Rol de reparación activa. Cuando se le delega un reporte de errores de detección de código (p. ej. de un linter, test suite o auditoría externa), el agente marcado como Fixeador aplica parches acotados para resolverlos. No sustituye al Validator: el Validator acepta o rechaza resultados; el Fixeador interviene sobre código con un reporte de fallos concreto.",
+    example: "Etiqueta un agente como Fixeador para delegarle un reporte de errores y que aplique las correcciones.",
     group: "Soporte",
     restriction: "R2",
     kind: "fixer",
@@ -239,8 +239,21 @@ const AGENT_CAPABILITY_DEFS = [
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+// Base de la API. El dashboard corre en dos sitios y el MISMO archivo debe valer:
+//   1. Suelto           → lo sirve su propio FastAPI en la raíz.
+//   2. Empaquetado como → un host (Atlas) lo sirve bajo `/…/addons/<id>/app/` y
+//      add-on de Atlas     expone su backend en `/…/addons/<id>/api`.
+// Derivarla de `location` evita mantener dos copias y atar el paquete a una ruta.
+const API_BASE = (() => {
+  const mounted = /^(.*\/addons\/[^/]+)\/app(\/|$)/.exec(window.location.pathname);
+  return mounted ? `${mounted[1]}/api` : "";
+})();
+
+/** Antepone la base a una ruta absoluta del backend (`/tasks` → `…/api/tasks`). */
+const apiUrl = (path) => `${API_BASE}${path}`;
+
 async function api(path, options = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  const res = await fetch(apiUrl(path), { headers: { "Content-Type": "application/json" }, ...options });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `HTTP ${res.status}`);
@@ -369,21 +382,21 @@ function initAutoRefresh() {
     // Decisión: refresh only the provider/readiness panel (renderModels),
     // never renderDiagram — re-rendering the editable canvas mid-interaction
     // would fight the user. This keeps "Arquitectura activa" live (which
-    // providers are ready) as models get installed/authenticated. The Grafo
-    // iframe self-refreshes on its own; the flow/config view is edit-only.
+    // providers are ready) as models get installed/authenticated. The
+    // flow/config view is edit-only.
     if (view === "decision") renderModels().catch(() => {});
   }, AUTO_REFRESH_INTERVAL_MS);
 }
 
 // ---- live push (SSE) --------------------------------------------------------
 // The 20s poll above is the resilience fallback; this makes the UI react the
-// instant the backend publishes a change (a task delegated by an agent, a scan
-// or audit finishing, config/architecture edited). One EventSource, dispatched
-// to whichever view is active. The Grafo iframe opens its own EventSource.
+// instant the backend publishes a change (a task delegated by an agent,
+// config/architecture edited). One EventSource, dispatched to whichever view
+// is active.
 function initLiveEvents() {
   let es;
   try {
-    es = new EventSource("/events");
+    es = new EventSource(apiUrl("/events"));
   } catch (_) {
     return; // no SSE support → the poll still keeps things fresh
   }
@@ -431,7 +444,6 @@ function initLiveEvents() {
         })
         .catch(() => {});
     }
-    // repo_scanned / repo_audited are consumed by the Grafo iframe directly.
   };
   // EventSource auto-reconnects on error; nothing to do here.
 }
@@ -3996,7 +4008,7 @@ function entityMemberships(entity) {
 }
 
 function providerOptions(current) {
-  return [`<option value="">(auto / simulado)</option>`]
+  return [`<option value="">(sin asignar)</option>`]
     .concat(
       state.catalog.map(
         (p) => `<option value="${p.name}" ${p.name === current ? "selected" : ""}>${escapeHtml(p.label || p.name)}</option>`
@@ -4574,7 +4586,7 @@ function modelMeta(entity) {
   const provider = state.catalog.find((p) => p.name === providerName);
   const label = providerName ? provider?.label || providerName : "sin asignar";
   const backend = provider?.backend || "provider";
-  const options = [`<button class="entity-model-option ${!providerName ? "active" : ""}" data-entity="${entity.id}" data-provider="">(auto / simulado)</button>`]
+  const options = [`<button class="entity-model-option ${!providerName ? "active" : ""}" data-entity="${entity.id}" data-provider="">(sin asignar)</button>`]
     .concat(
       state.catalog.map(
         (p) =>
@@ -5523,7 +5535,7 @@ async function renderModels({ restoreSearchFocus = false } = {}) {
 
   const groups = {};
   visibleCatalog.forEach((p) => (groups[p.backend] || (groups[p.backend] = [])).push(p));
-  const groupTitle = { cli: "Local / terminal", api: "Nube (API)", simulated: "Simulado" };
+  const groupTitle = { cli: "Local / terminal", api: "Nube (API)" };
 
   $("#providerGroups").innerHTML = `
     <div class="decision-catalog-tools">
@@ -5721,7 +5733,7 @@ function renderFlow() {
 
   const general = `<div class="fcard fcard-general"><h3>General</h3>
     ${field("Perfil", selectInput("cfg-profile", c.profile, ["simple", "pro", "offline"]))}
-    ${field("Backend", selectInput("cfg-backend", c.backend, ["simulated", "api", "cli"]))}
+    ${field("Backend", selectInput("cfg-backend", c.backend, ["cli", "api"]))}
     ${field("Preferir gratis", checkbox("cfg-prefer_free", c.prefer_free))}</div>`;
 
   const orchestration = `<div class="fcard fcard-control"><h3>Control de flujo</h3>
@@ -6417,9 +6429,8 @@ async function renderConfigAgentsPanel() {
   const groups = {
     cli: catalog.filter((p) => p.backend === "cli").sort(decisionFirst),
     api: catalog.filter((p) => p.backend === "api").sort(decisionFirst),
-    simulated: catalog.filter((p) => p.backend === "simulated").sort(decisionFirst),
   };
-  const groupLabel = { cli: "Locales / CLI", api: "Nube / API", simulated: "Simulados" };
+  const groupLabel = { cli: "Locales / CLI", api: "Nube / API" };
   target.innerHTML = `<div class="config-agent-layout">
     <section class="fcard config-agent-add">
       <h3>Agregar agente manual</h3>
@@ -6428,7 +6439,7 @@ async function renderConfigAgentsPanel() {
         <input id="manual-agent-command" type="text" spellcheck="false" placeholder='add "Nombre" backend=cli auth="comando o ENV"' />
         <button type="button" class="primary" id="runManualAgentCommand">Ejecutar</button>
       </div>
-      <p class="config-note">Sintaxis: <code>add "Nombre" backend=cli|api|simulated auth="comando o ENV"</code> · <code>remove &lt;id&gt;</code>. Quedan guardados localmente para documentar la topología.</p>
+      <p class="config-note">Sintaxis: <code>add "Nombre" backend=cli|api auth="comando o ENV"</code> · <code>remove &lt;id&gt;</code>. Quedan guardados localmente para documentar la topología.</p>
     </section>
     ${Object.entries(groups)
       .filter(([, list]) => list.length)
@@ -8953,7 +8964,7 @@ function tierLabelES(t){
 }
 function snip(s,n){s=(s||'').replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n)+'…':s;}
 function fetchTaskRecord(id){
-  return fetch('/tasks/'+encodeURIComponent(id)).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+  return fetch(apiUrl('/tasks/'+encodeURIComponent(id))).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
 }
 // Signature so we don't replay the identical state twice in a row (e.g. an
 // enterView bootstrap right after a live event for the same task).
@@ -9058,7 +9069,7 @@ function bootstrapCanvas(){
   rebuildRoster(); // refresh figures from current Decisión data on every (re)entry
   if(bootstrapped||demoRunning||realRunning)return;
   bootstrapped=true;
-  fetch('/tasks?limit=1').then(function(r){return r.ok?r.json():null;}).then(function(list){
+  fetch(apiUrl('/tasks?limit=1')).then(function(r){return r.ok?r.json():null;}).then(function(list){
     if(list&&list.length&&list[0]&&list[0].classification){playTaskRecord(list[0]);}
     else{startDemo();}
   }).catch(function(){if(!demoRunning&&!realRunning)startDemo();});
@@ -9096,7 +9107,7 @@ function showMissionInput(){
     var val=txt.value.trim();if(!val)return;ov.remove();
     DACT.userTask(val);DACT.mode('claude','thinking');
     setTimeout(function(){DACT.mode('claude','idle');},5000);
-    fetch('/classify-task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:val})}).then(function(){poll();}).catch(function(){});
+    fetch(apiUrl('/classify-task'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:val})}).then(function(){poll();}).catch(function(){});
   };
   ov.addEventListener('keydown',function(e){if(e.key==='Escape')ov.remove();});
 }
@@ -9104,8 +9115,8 @@ function showMissionInput(){
 // ── POLL ─────────────────────────────────────────────────────────────────────
 function poll(){
   Promise.all([
-    fetch('/observability').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
-    fetch('/tasks?limit=30').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
+    fetch(apiUrl('/observability')).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
+    fetch(apiUrl('/tasks?limit=30')).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
   ]).then(function(res){
     var obs=res[0];
     if(obs){

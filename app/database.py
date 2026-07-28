@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from app import catalog
 from app.logging_config import get_logger, log_event
 from app.models import (
     ClassificationResult,
@@ -27,6 +28,12 @@ logger = get_logger("database")
 # Denormalized scalar columns kept in sync on write so the dashboard KPIs can be
 # aggregated in SQL instead of re-parsing every JSON blob into Pydantic models.
 _DENORM_COLUMNS = ("level", "model", "score", "requires_review", "subtask_count", "est_cost")
+
+
+def _now_iso() -> str:
+    """UTC timestamp for the run/trace tables. Sortable as a plain string, which
+    is what `list_run_events` orders on."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _denorm_values(classification: dict, delegation: dict | None) -> tuple:
@@ -208,9 +215,9 @@ class TaskStore:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_provider ON runs(provider_name)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_task ON runs(task_id)")
-        # Schema-only groundwork for later phases (no tool-call/RAG tracing,
-        # evaluator, or artifact-writing feature exists yet) — created now so the
-        # migration/dashboard schema is stable, deliberately left unpopulated.
+        # `run_events` and `artifacts` were shipped empty as Fase-1 groundwork;
+        # the agent-tools loop is what finally populates them (one row per tool
+        # call / per file touched). `evaluations` is still unpopulated.
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS run_events (
@@ -248,6 +255,10 @@ class TaskStore:
             )
             """
         )
+        # Both traces are always read by their parent key, never scanned.
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events(run_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_task ON artifacts(task_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_artifacts_run ON artifacts(run_id)")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS comments (
@@ -429,12 +440,17 @@ class TaskStore:
             executions = delegation.get("executions") or []
             for index, execution in enumerate(executions):
                 try:
-                    # Legacy fallback: pre-Fase-1 rows never persisted a real
-                    # `provider_name` (the bug this phase fixes) — `model_used` is
-                    # the best-effort approximation, ONLY for this one-off backfill
-                    # of historical data. Every run recorded after Fase-1 ships
-                    # carries the real `resolution.provider_name` from delegation.py.
-                    legacy_provider = execution.get("model_used")
+                    # Pre-Fase-1 rows never persisted a real `provider_name`;
+                    # all they have is `model_used` (`"<provider>:<model>"`).
+                    # It is *split* rather than copied wholesale into both
+                    # columns: writing `ollama-qwen:qwen2.5:7b` into
+                    # `provider_name` is what used to make one agent show up
+                    # twice in every `GROUP BY provider_name` aggregate. When
+                    # the prefix matches no catalog provider, both stay NULL —
+                    # an unattributed run is honest, a guessed one is not.
+                    legacy_provider, legacy_model = catalog.split_model_used(
+                        execution.get("model_used")
+                    )
                     conn.execute(
                         """
                         INSERT INTO runs (
@@ -450,7 +466,7 @@ class TaskStore:
                             task_id,
                             index,
                             legacy_provider,
-                            legacy_provider,
+                            legacy_model,
                             execution.get("backend"),
                             execution.get("status"),
                             completed_at,
@@ -667,6 +683,150 @@ class TaskStore:
             try:
                 rows = conn.execute(
                     "SELECT * FROM runs WHERE task_id = ? ORDER BY run_index", (task_id,)
+                ).fetchall()
+            except sqlite3.DatabaseError:
+                rows = []
+        return [dict(row) for row in rows]
+
+    def open_run(
+        self,
+        task_id: str,
+        provider_name: str | None,
+        routing_entity_id: str | None,
+        routing_entity_name_snapshot: str | None,
+        model_id: str | None,
+        backend: str | None,
+    ) -> str:
+        """Insert a `running` run up front and return its id.
+
+        The one-shot path calls `record_run` once the execution is over, but an
+        agent session emits tool events *while* it runs — those events need a
+        `run_id` to point at before there is any result to record. This is that
+        id. Pair every `open_run` with a `close_run`; `record_run` stays the
+        single-call path so no existing caller or test changes.
+        """
+        run_id = f"run_{uuid4().hex[:16]}"
+        conn = self._connect()
+        conn.isolation_level = None  # manual transaction control for BEGIN IMMEDIATE
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT COALESCE(MAX(run_index), -1) + 1 AS next_index FROM runs WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            conn.execute(
+                """
+                INSERT INTO runs (
+                    id, task_id, run_index, provider_name, routing_entity_id,
+                    routing_entity_name_snapshot, model_id, backend, status, started_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
+                """,
+                (
+                    run_id, task_id, row["next_index"], provider_name, routing_entity_id,
+                    routing_entity_name_snapshot, model_id, backend, _now_iso(),
+                ),
+            )
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+        return run_id
+
+    def close_run(
+        self,
+        run_id: str,
+        status: str,
+        latency_ms: int | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        estimated_cost_usd: float | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Finalize a run opened with `open_run`. Never raises on an unknown id."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE runs
+                   SET status = ?, completed_at = ?, latency_ms = ?, input_tokens = ?,
+                       output_tokens = ?, estimated_cost_usd = ?, error = ?
+                 WHERE id = ?
+                """,
+                (
+                    status, _now_iso(), latency_ms, input_tokens,
+                    output_tokens, estimated_cost_usd, error, run_id,
+                ),
+            )
+
+    def record_run_event(self, run_id: str, event_type: str, payload: dict | None = None) -> str:
+        """Append one entry to a run's execution trace.
+
+        Tracing must never be able to break the run it is tracing, so an
+        unserializable payload is degraded to a note instead of raising.
+        """
+        event_id = f"rev_{uuid4().hex[:16]}"
+        try:
+            payload_json = json.dumps(payload, ensure_ascii=False) if payload is not None else None
+        except (TypeError, ValueError):
+            payload_json = json.dumps({"unserializable": repr(payload)[:500]})
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO run_events (id, run_id, event_type, ts, payload_json) VALUES (?, ?, ?, ?, ?)",
+                (event_id, run_id, event_type, _now_iso(), payload_json),
+            )
+        return event_id
+
+    def list_run_events(self, run_id: str, limit: int = 500, offset: int = 0) -> list[dict]:
+        """Chronological trace for one run, with `payload_json` already decoded."""
+        with self._connect() as conn:
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM run_events WHERE run_id = ? ORDER BY ts, rowid LIMIT ? OFFSET ?",
+                    (run_id, limit, offset),
+                ).fetchall()
+            except sqlite3.DatabaseError:
+                rows = []
+        events: list[dict] = []
+        for row in rows:
+            entry = dict(row)
+            raw = entry.pop("payload_json", None)
+            try:
+                entry["payload"] = json.loads(raw) if raw else None
+            except (TypeError, ValueError):
+                entry["payload"] = None
+            events.append(entry)
+        return events
+
+    def record_artifact(
+        self,
+        task_id: str,
+        run_id: str | None,
+        kind: str,
+        file_path: str,
+        size_bytes: int | None = None,
+        content_hash: str | None = None,
+    ) -> str:
+        """Record a file an agent touched. `file_path` must be workspace-relative."""
+        artifact_id = f"art_{uuid4().hex[:16]}"
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO artifacts (
+                    id, task_id, run_id, kind, file_path, size_bytes, content_hash, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (artifact_id, task_id, run_id, kind, file_path, size_bytes, content_hash, _now_iso()),
+            )
+        return artifact_id
+
+    def list_artifacts(self, task_id: str) -> list[dict]:
+        with self._connect() as conn:
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM artifacts WHERE task_id = ? ORDER BY created_at, rowid", (task_id,)
                 ).fetchall()
             except sqlite3.DatabaseError:
                 rows = []

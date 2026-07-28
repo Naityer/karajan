@@ -23,7 +23,6 @@ from app.database import TaskStore
 from app.models import Backend, DecisionLogEntry, KarajanConfig, OrchestrationConfig
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
-from app.providers.simulated import SimulatedModelProvider
 from app.router import classify_prompt
 
 
@@ -65,6 +64,23 @@ class FailingAuditProvider(ModelProvider):
         return ProviderRun(output="", model_used=f"audit-failing:{model_id}", latency_ms=7, error="audit injected failure")
 
 
+class StubAuditProvider(ModelProvider):
+    """Deterministic stand-in so the audit exercises routing without spending.
+
+    Lives here, in the audit harness, on purpose: KARAJAN itself ships no fake
+    provider any more, precisely so a real run can never be confused with one.
+    """
+
+    backend = Backend.API
+
+    def run(self, instruction: str, model_id: str, timeout_s: int) -> ProviderRun:
+        return ProviderRun(output=f"[audit-stub:{model_id}] ok", model_used=f"audit-stub:{model_id}", latency_ms=5)
+
+
+def _stub_resolution(tier) -> Resolution:
+    return Resolution(StubAuditProvider(), Backend.API, tier.value, "audit-stub")
+
+
 def _criteria(value: float) -> dict[str, float]:
     return {
         "ambiguity": value,
@@ -99,9 +115,11 @@ def run_isolated_routing() -> dict[str, Any]:
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         previous_store = main.store
         previous_config = main.active_config
+        previous_resolve = delegation.resolve
         try:
             main.store = TaskStore(Path(tmp) / "isolated-routing.db")
-            main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+            main.active_config = KarajanConfig(backend=Backend.API)
+            delegation.resolve = lambda tier, config: _stub_resolution(tier)  # type: ignore[assignment]
             client = TestClient(main.app)
             task = client.post(
                 "/ingest",
@@ -123,6 +141,7 @@ def run_isolated_routing() -> dict[str, Any]:
         finally:
             main.store = previous_store
             main.active_config = previous_config
+            delegation.resolve = previous_resolve  # type: ignore[assignment]
 
     classification = delegated["classification"]
     return {
@@ -155,7 +174,7 @@ def run_isolated_fallback() -> dict[str, Any]:
                 FailingAuditProvider(), Backend.API, tier.value, "audit-failing"
             )
             delegation.fallback_resolutions = lambda tier, config, tried: [  # type: ignore[assignment]
-                Resolution(SimulatedModelProvider(), Backend.SIMULATED, tier.value, "simulated")
+                _stub_resolution(tier)
             ]
             result, decisions = delegation.delegate(
                 classification,
@@ -188,9 +207,12 @@ def _free_ready_names(catalog: list[dict[str, Any]], providers: list[dict[str, A
     return {item["provider"] for item in providers if item.get("ready") and item["provider"] in free}
 
 
-def _active_config_is_free_or_simulated(config: dict[str, Any], free_ready: set[str]) -> bool:
-    if config.get("backend") == "simulated":
-        return True
+def _active_config_is_free(config: dict[str, Any], free_ready: set[str]) -> bool:
+    """True only when every tier preference points at a free, ready provider.
+
+    With no simulated backend left, "free" is the only safe-to-run condition;
+    an unconfigured harness now has no preferences and correctly returns False.
+    """
     preferences = set((config.get("provider_preferences") or {}).values())
     return bool(preferences) and preferences.issubset(free_ready)
 
@@ -206,14 +228,14 @@ def run_real_free_alternatives(api: AuditApi) -> dict[str, Any]:
     free_ready = _free_ready_names(catalog, providers)
 
     payload = _agent_payload(
-        "Prueba real segura de alternativas gratuitas: detectar proveedores, delegar solo si el backend activo es gratis o simulado.",
+        "Prueba real segura de alternativas gratuitas: detectar proveedores, delegar solo si el backend activo es gratis.",
         _criteria(1.4),
     )
     task = api.request("POST", "/ingest", payload)
     assert isinstance(task, dict)
 
     delegated: dict[str, Any] | None = None
-    if _active_config_is_free_or_simulated(config, free_ready):
+    if _active_config_is_free(config, free_ready):
         delegated = api.request("POST", "/delegate-task", {"task_id": task["task_id"]})  # type: ignore[assignment]
     else:
         api.request(
@@ -264,7 +286,7 @@ def run_real_agent_console(api: AuditApi) -> dict[str, Any]:
             "task_id": task_id,
             "phase": "fallback",
             "decision": "console_reported_fallback;from=agent-primary;to=backup-free",
-            "backend": "simulated",
+            "backend": "cli",
             "reason": "Decisión reportada desde consola externa para validar centralización.",
         },
         {

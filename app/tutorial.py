@@ -16,11 +16,6 @@ NAV_SECTIONS: tuple[tuple[str, str], ...] = (
         "y apruebas o rechazas decisiones que requieren tu confirmación.",
     ),
     (
-        "Grafo",
-        "Mapa de dependencias del propio repositorio KARAJAN (módulos de app/, tests/, tools/). "
-        "Útil para orientarte en el código, no en el comportamiento en tiempo de ejecución.",
-    ),
-    (
         "Monitor",
         "Panel de observabilidad: métricas resumidas, salud del sistema, uso de skills por "
         "agente, y el seguimiento de cada tarea delegada (coste, latencia, tokens, estado). "

@@ -14,7 +14,7 @@ from app.router import classify_prompt
 
 def _seeded_store(tmp_path: Path) -> TaskStore:
     store = TaskStore(tmp_path / "export.db")
-    config = KarajanConfig(backend=Backend.SIMULATED)
+    config = KarajanConfig(backend=Backend.CLI)
     classification = classify_prompt("Corrige un bug en una API y valida con tests.", config)
     store.save_classification(classification)
     result, decisions = delegate(classification, config)
@@ -63,7 +63,7 @@ def test_render_prometheus_marks_db_down() -> None:
 def test_prometheus_endpoint_serves_text_format(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
     main.store = _seeded_store(tmp_path)
-    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    main.active_config = KarajanConfig(backend=Backend.CLI)
     client = TestClient(main.app)
 
     res = client.get("/metrics/prometheus")

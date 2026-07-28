@@ -19,7 +19,9 @@ def test_auto_detect_skips_local_provider_that_is_not_ready(monkeypatch) -> None
 
     result = config_module.auto_detect(KarajanConfig(profile=Profile.SIMPLE))
 
-    assert result.backend == Backend.SIMULATED
+    # Nothing ready leaves the preferences empty, which is what makes
+    # `registry.resolve` return None and delegation report the real problem.
+    # There is no fake backend to fall into any more.
     assert result.provider_preferences == {}
 
 

@@ -63,7 +63,7 @@ def _populate(tmp_path):
         store.save_classification(_classification(task_id, f"prompt {task_id}", intent))
         store.record_run(
             task_id=task_id, provider_name=provider, routing_entity_id=None,
-            routing_entity_name_snapshot=None, model_id="m", backend="simulated",
+            routing_entity_name_snapshot=None, model_id="m", backend="cli",
             status=status, started_at=now, completed_at=now, latency_ms=latency,
             input_tokens=10, output_tokens=20, estimated_cost_usd=cost, error=error,
         )

@@ -21,7 +21,7 @@ PROMPTS = [
 
 
 def _seed(store: TaskStore, delegate_all: bool = True) -> None:
-    config = KarajanConfig(backend=Backend.SIMULATED)
+    config = KarajanConfig(backend=Backend.CLI)
     for prompt in PROMPTS:
         classification = classify_prompt(prompt, config)
         store.save_classification(classification)
@@ -75,7 +75,7 @@ def test_observability_snapshot_reports_nodes_and_health(tmp_path: Path) -> None
 
 def test_observability_assigns_execution_to_layout_node_by_compact_level(tmp_path: Path) -> None:
     store = TaskStore(tmp_path / "obs-layout.db")
-    config = KarajanConfig(backend=Backend.SIMULATED)
+    config = KarajanConfig(backend=Backend.CLI)
     classification = classify_prompt("Renombra una variable trivial en un script local.", config)
     store.save_classification(classification)
     result, decisions = delegate(classification, config)
@@ -98,7 +98,7 @@ def test_observability_assigns_execution_to_layout_node_by_compact_level(tmp_pat
 
 def test_observability_marks_human_review_as_policy_waiting(tmp_path: Path) -> None:
     store = TaskStore(tmp_path / "obs-policy.db")
-    config = KarajanConfig(backend=Backend.SIMULATED)
+    config = KarajanConfig(backend=Backend.CLI)
     classification = classifier.reconcile(
         {
             "original_prompt": "Audita credenciales, costes y ejecucion real antes de desplegar proveedores.",
@@ -130,7 +130,7 @@ def test_observability_marks_human_review_as_policy_waiting(tmp_path: Path) -> N
 
 def test_observability_accumulates_tokens_and_skill_usage(tmp_path: Path) -> None:
     store = TaskStore(tmp_path / "obs-tokens.db")
-    config = KarajanConfig(backend=Backend.SIMULATED)
+    config = KarajanConfig(backend=Backend.CLI)
     classification = classify_prompt(
         "Disena e implementa un router de IA con API, SQLite y panel de control.", config
     )
@@ -192,7 +192,7 @@ def test_node_token_budget_from_provider(tmp_path: Path) -> None:
 
 def test_metrics_history_records_a_point_per_delegation(tmp_path: Path) -> None:
     store = TaskStore(tmp_path / "history.db")
-    config = KarajanConfig(backend=Backend.SIMULATED)
+    config = KarajanConfig(backend=Backend.CLI)
     classification = classify_prompt("Renombra una variable trivial en un script local.", config)
     store.save_classification(classification)
     result, decisions = delegate(classification, config)

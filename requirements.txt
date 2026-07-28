@@ -9,15 +9,14 @@ rich>=13.0,<14.0
 prompt_toolkit>=3.0,<4.0
 pyfiglet>=1.0,<2.0
 
-# Optional extras — KARAJAN runs fully offline (simulated backend) without these.
-# Install only the ones for the backends/providers you actually use.
+# Optional extras — KARAJAN runs against local CLI providers (Ollama, Claude
+# Code, Codex) without any of these. Install only the ones for the API-backed
+# providers you actually use.
 # pyyaml>=6.0            # pro-mode YAML config (karajan.yaml)
 # keyring>=25.0          # OS keychain credential storage
 # anthropic>=0.40        # Anthropic (Claude) API backend
 # openai>=1.40           # OpenAI / Groq / Mistral / DeepSeek / Z.AI / Together / OpenRouter / HF API backends
 # google-genai>=0.3      # Google (Gemini) API backend
-# tree-sitter>=0.23      # TS/JS static analysis (graph scanner) — optional
-# tree-sitter-language-pack>=1.10  # prebuilt grammars for the above; graph TS/JS analysis falls back to regex if absent
 # duckdb>=1.0            # analytics layer (Fase 3) — optional, /analytics/dashboard degrades gracefully if absent
 # xgboost>=2.0            # predictive analytics (Fase 4) — optional, gated behind a 200-run minimum sample count
 # scikit-learn>=1.3       # transitive requirement of xgboost's XGBClassifier/XGBRegressor .fit() API (not used directly — anomaly detection is a dependency-light residual heuristic, not sklearn's IsolationForest)

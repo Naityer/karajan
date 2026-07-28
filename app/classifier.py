@@ -8,7 +8,6 @@ from pathlib import Path
 
 from app.logging_config import get_logger, log_event
 from app.models import (
-    Backend,
     ClassificationResult,
     CriteriaScores,
     KarajanConfig,
@@ -37,7 +36,7 @@ def classify(prompt: str, config: KarajanConfig | None = None) -> Classification
     no LLM, the call fails, or the JSON is unusable.
     """
     config = config or KarajanConfig()
-    if config.backend == Backend.SIMULATED or config.profile == Profile.OFFLINE:
+    if config.profile == Profile.OFFLINE:
         return classify_prompt(prompt, config)
 
     try:
@@ -57,7 +56,7 @@ def classify(prompt: str, config: KarajanConfig | None = None) -> Classification
 
 def _llm_classify(prompt: str, config: KarajanConfig) -> ClassificationResult:
     resolution = resolve(RecommendedModel.STRONG_MODEL, config)
-    if resolution.backend == Backend.SIMULATED:
+    if resolution is None:
         # No real parent model available; let the caller fall back.
         raise RuntimeError("no parent LLM available")
 

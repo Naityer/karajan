@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.logging_config import get_logger, log_event
+from app import agent_tools
 from app import events
 from app import execution as execution_helpers
 from app import flow_policy
@@ -47,6 +48,8 @@ def delegate(
     layout: RoutingLayout | None = None,
     store: Any | None = None,
     preresolved: Resolution | None = None,
+    workspace_root: str | None = None,
+    agent_tools_profile: str | None = None,
 ) -> tuple[DelegationResult, list[DecisionLogEntry]]:
     """Run every subtask on its resolved backend and record harness decisions.
 
@@ -75,15 +78,43 @@ def delegate(
     subtasks = classification.subtasks
     decisions: list[DecisionLogEntry] = []
 
+    # Resolved once per task, not per subtask: the workspace and profile are a
+    # property of the job, and re-validating the root N times only multiplies
+    # the ways it can disagree with itself.
+    agent_plan = agent_tools.plan(
+        config, requested_workspace=workspace_root, requested_profile=agent_tools_profile
+    )
+    # Recorded whenever the loop was *asked for*, not only when it ran: an
+    # operator who enabled it and got a one-shot run needs to see why.
+    if agent_plan.enabled or agent_tools_profile or config.agent_tools.enabled:
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="assign",
+                decision=agent_tools.describe(agent_plan),
+                reason=(
+                    f"Workspace: {agent_plan.workspace.root}"
+                    if agent_plan.enabled and agent_plan.workspace
+                    else agent_plan.reason
+                ),
+            )
+        )
+
     if config.orchestration.parallel and len(subtasks) > 1:
         with ThreadPoolExecutor(max_workers=config.orchestration.max_parallel) as pool:
             paired = list(pool.map(
-                lambda item: run_subtask(classification, item[0], item[1], config, layout, preresolved, store=store),
+                lambda item: run_subtask(
+                    classification, item[0], item[1], config, layout, preresolved,
+                    store=store, agent_plan=agent_plan,
+                ),
                 enumerate(subtasks, start=1),
             ))
     else:
         paired = [
-            run_subtask(classification, index, subtask, config, layout, preresolved, store=store)
+            run_subtask(
+                classification, index, subtask, config, layout, preresolved,
+                store=store, agent_plan=agent_plan,
+            )
             for index, subtask in enumerate(subtasks, start=1)
         ]
 
@@ -202,6 +233,50 @@ def _persist_run(
         )
 
 
+def _open_agent_run(
+    store: Any | None,
+    classification: ClassificationResult,
+    assignment: flow_policy.FlowAssignment,
+    resolution: Resolution,
+) -> str | None:
+    """Reserve the `runs` row an agent session will write its trace against.
+
+    Guarded like `_persist_run`: losing the trace must never lose the run.
+    """
+    if store is None:
+        return None
+    try:
+        return store.open_run(
+            task_id=classification.task_id,
+            provider_name=resolution.provider_name,
+            routing_entity_id=assignment.owner.id if assignment.owner else None,
+            routing_entity_name_snapshot=assignment.owner.name if assignment.owner else None,
+            model_id=resolution.model_id,
+            backend=resolution.backend.value,
+        )
+    except Exception:  # noqa: BLE001
+        log_event(logger, logging.WARNING, "open_run_failed", task_id=classification.task_id)
+        return None
+
+
+def _close_agent_run(store: Any | None, run_id: str, execution: SubtaskExecution) -> None:
+    if store is None:
+        return
+    try:
+        store.close_run(
+            run_id,
+            status=execution.status.value,
+            latency_ms=execution.latency_ms,
+            input_tokens=execution.input_tokens,
+            output_tokens=execution.output_tokens,
+            estimated_cost_usd=execution.estimated_cost_usd,
+            error=execution.error,
+        )
+        events.publish("run_completed", task_id=execution.subtask_id, run_id=run_id, status=execution.status.value)
+    except Exception:  # noqa: BLE001
+        log_event(logger, logging.WARNING, "close_run_failed", run_id=run_id)
+
+
 def run_subtask(
     classification: ClassificationResult,
     index: int,
@@ -211,6 +286,7 @@ def run_subtask(
     preresolved: Resolution | None = None,
     *,
     store: Any | None = None,
+    agent_plan: Any | None = None,
 ) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
     """Execute one subtask end-to-end: assign, run (with fallback chain), and
     optionally validate. `preresolved` lets a caller that already picked a
@@ -226,9 +302,33 @@ def run_subtask(
     started_at = datetime.now(timezone.utc).isoformat()
     assignment = flow_policy.assign_subtask(classification, subtask, layout)
     resolution = preresolved or resolve(subtask.recommended_model, config)
+    if resolution is None:
+        # `delegate()` gates on this up front, so reaching here means a caller
+        # went straight to `run_subtask` (the scheduler, or a test). Fail loudly
+        # with the real reason instead of inventing an execution.
+        return _unresolved_execution(classification, subtask, config)
     instruction = f"{classification.original_prompt}\n\nSubtarea: {subtask.name}\nValidación: {subtask.validation}"
 
-    run = execution_helpers.run_with_retries(resolution, instruction, config)
+    # The tool loop replaces exactly this one call. Whatever it returns is an
+    # ordinary `ProviderRun`, so the fallback chain, validator, cost math and
+    # persistence below are identical either way — including the degradation
+    # path, where a session error retries the *one-shot* form on another
+    # provider.
+    agent_run_id = None
+    if agent_plan is not None and agent_plan.enabled:
+        # The run row is opened *before* the session, because tool events happen
+        # during it and need a `run_id` to point at. `_persist_run` is skipped
+        # for this path and `close_run` finalizes the same row.
+        agent_run_id = _open_agent_run(store, classification, assignment, resolution)
+        outcome = agent_tools.run_agent_subtask(
+            classification, subtask, resolution, agent_plan, config.agent_tools,
+            store=store, run_id=agent_run_id,
+            max_cost_usd=config.orchestration.max_cost_per_task_usd,
+        )
+        run = outcome.as_provider_run()
+    else:
+        outcome = None
+        run = execution_helpers.run_with_retries(resolution, instruction, config)
     attempted = {resolution.provider_name}
     decisions: list[DecisionLogEntry] = [
         DecisionLogEntry(
@@ -263,6 +363,7 @@ def run_subtask(
         error=run.error,
         input_tokens=execution_helpers.estimate_tokens(instruction),
         output_tokens=execution_helpers.estimate_tokens(run.output or ""),
+        context_paths=list(outcome.context_paths) if outcome is not None else [],
     )
     decisions.append(
         DecisionLogEntry(
@@ -298,7 +399,24 @@ def run_subtask(
             )
         )
 
-    if store is not None:
+    if agent_run_id is not None:
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="delegate",
+                decision=f"{subtask.id}:{agent_tools.describe(agent_plan)}",
+                score=float(subtask.complexity),
+                backend=resolution.backend,
+                reason=(
+                    f"Sesion de agente: {outcome.status}, {outcome.turns} turno(s), "
+                    f"{outcome.tool_calls} llamada(s) a herramientas."
+                    if outcome is not None
+                    else "sesion de agente"
+                ),
+            )
+        )
+        _close_agent_run(store, agent_run_id, subtask_execution)
+    elif store is not None:
         _persist_run(
             store, classification, subtask, assignment, resolution, subtask_execution, started_at
         )
@@ -413,6 +531,57 @@ def _root_entity(layout: RoutingLayout | None):
     return next((e for e in entities if e.effective_tier() == 0), None)
 
 
+def _unresolved_execution(
+    classification: ClassificationResult,
+    subtask: Subtask,
+    config: KarajanConfig,
+) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
+    """A failed, zero-cost execution for a subtask whose tier has no provider.
+
+    `backend` records the backend that *would* have been used, which is what
+    the operator needs in order to fix it — there is no "none" backend to
+    report, because a fake backend value is exactly what this phase removes.
+    """
+    tier = subtask.recommended_model.value
+    error = f"sin proveedor listo para el tier '{tier}' en el backend '{config.backend.value}'"
+    execution = SubtaskExecution(
+        subtask_id=subtask.id,
+        status=TaskStatus.FAILED,
+        backend=config.backend,
+        model_used="",
+        latency_ms=0,
+        estimated_cost_usd=0.0,
+        output=error,
+        error=error,
+    )
+    decision = DecisionLogEntry(
+        task_id=classification.task_id,
+        phase="delegate",
+        decision=f"{subtask.id}:{tier}->unresolved",
+        score=float(subtask.complexity),
+        backend=config.backend,
+        reason=error,
+    )
+    return execution, [decision]
+
+
+def _unresolved_tiers(classification: ClassificationResult, config: KarajanConfig) -> list[str]:
+    """Distinct subtask tiers that no configured provider can serve, in order.
+
+    Checked before spending anything: with no fake backend to fall back on, a
+    tier that cannot resolve would otherwise surface as an opaque failure once
+    execution is already under way.
+    """
+    unresolved: list[str] = []
+    for subtask in classification.subtasks:
+        tier = subtask.recommended_model.value
+        if tier in unresolved:
+            continue
+        if resolve(subtask.recommended_model, config) is None:
+            unresolved.append(tier)
+    return unresolved
+
+
 def _pre_execution_gate(
     classification: ClassificationResult,
     config: KarajanConfig,
@@ -424,6 +593,28 @@ def _pre_execution_gate(
     trips, or `None` when the task is clear to run. The cost cap is a hard limit
     and applies even after human approval; the review gate is lifted by approval.
     """
+    unresolved = _unresolved_tiers(classification, config)
+    if unresolved:
+        log_event(
+            logger,
+            logging.WARNING,
+            "provider_gate_blocked",
+            task_id=classification.task_id,
+            tiers=",".join(unresolved),
+            backend=config.backend.value,
+        )
+        decision = DecisionLogEntry(
+            task_id=classification.task_id,
+            phase="delegate",
+            decision=f"provider_gate=blocked;tiers={','.join(unresolved)}",
+            reason=(
+                f"Ningún proveedor listo sirve el/los tier(s) {', '.join(unresolved)} "
+                f"en el backend '{config.backend.value}'; ejecución retenida. "
+                "Configura un proveedor en Agentes o Configuración."
+            ),
+        )
+        return _blocked(classification, [decision])
+
     estimated = estimate_task_cost(classification, config)
     cap = config.orchestration.max_cost_per_task_usd
     if cap and estimated > cap:
@@ -439,7 +630,6 @@ def _pre_execution_gate(
             task_id=classification.task_id,
             phase="validate",
             decision=f"cost_gate=blocked;estimated={estimated};cap={cap}",
-            backend=Backend.SIMULATED,
             reason=f"Estimated task cost {estimated} exceeds per-task cap {cap}; execution withheld.",
         )
         return _blocked(classification, [decision])
@@ -459,7 +649,6 @@ def _pre_execution_gate(
             task_id=classification.task_id,
             phase="validate",
             decision="human_review_gate=blocked",
-            backend=Backend.SIMULATED,
             reason="requires_human_review is set; execution withheld until human sign-off.",
         )
         return _blocked(classification, [decision])

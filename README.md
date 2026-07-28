@@ -2,7 +2,7 @@
 
 KARAJAN is a local MVP for an AI task-routing harness. It receives a free-form prompt, classifies the work, computes a configurable complexity score, recommends a model strategy, simulates or prepares delegated subtasks, stores the full audit trail in SQLite, and exposes a compact console-style GUI.
 
-The default profile is intentionally local and deterministic: it works with the simulated backend, so no external model provider, no API keys, and no network dependency are required after Python packages are installed. The app also includes provider catalog and configuration screens for later real/local model integrations.
+The default profile is local-first: it auto-detects ready providers and prefers free local CLIs (Ollama, Claude Code, Codex), so no API keys and no network dependency are required. There is deliberately **no fake backend**: when no provider is ready, delegation is withheld with an explicit reason rather than inventing an execution that never happened.
 
 ## What It Does
 
@@ -11,7 +11,7 @@ The default profile is intentionally local and deterministic: it works with the 
 - Maps complexity to levels 1-5 and recommends a model tier.
 - Generates bounded subtasks for execution.
 - Simulates model execution with deterministic latency and cost estimates.
-- Persists every task, decision, subtask, and simulated execution in SQLite.
+- Persists every task, decision, subtask and real execution in SQLite, plus the per-tool-call trace of any agent session (`run_events`, `artifacts`).
 - Shows tasks, metrics, criteria, subtasks, routing decisions, provider state, and configuration in a dense web console.
 - Lets you edit orchestration settings, criterion weights, thresholds, model tiers, cost tables, latency tables, and provider preferences from the GUI.
 
@@ -34,7 +34,8 @@ Main components:
 - `app/classifier.py`: classification heuristics, score calculation, levels, model policy, skills, and subtasks.
 - `app/delegation.py`: delegated execution flow using the active configuration.
 - `app/config.py`: default configuration loading for profiles, thresholds, orchestration, cost, and latency.
-- `app/catalog.py`: provider catalog for simulated, CLI, and API-backed models.
+- `app/catalog.py`: provider catalog for CLI and API-backed models.
+- `app/agent_tools/`: the agent tool layer (catalog, workspace confinement, budgets, loop). See `docs/agent-tools.md`.
 - `app/credentials.py`: provider readiness and setup guidance.
 - `app/monitoring.py`: decision log entries for classification and delegation.
 - `app/models.py`: Pydantic contracts for requests, classifications, delegations, records, and metrics.
@@ -137,7 +138,7 @@ Reports are written to:
 data/trial_reports/
 ```
 
-For safe local audits, set the backend to `simulated` before running trials and restore the previous config afterward.
+For safe local audits, keep `agent_tools.dry_run` on and pin the tier preferences to free local providers before running trials.
 
 ## Run The Browser GUI
 
@@ -183,7 +184,7 @@ Request:
 }
 ```
 
-Response: the task record updated with simulated subtask executions.
+Response: the task record updated with its subtask executions.
 
 ### `GET /health`
 
@@ -215,7 +216,7 @@ Returns aggregate GUI metrics:
 - tasks by recommended model
 - tasks by backend
 - human-review count
-- total simulated cost
+- total estimated cost
 - average complexity score
 
 ### `GET /metrics/prometheus`
@@ -347,7 +348,7 @@ Current coverage focuses on:
 
 ## Extending With Real Models
 
-The MVP defaults to a simulated backend so the harness can be validated without credentials or cost. Provider-related screens and endpoints are already present for later integrations.
+The harness defaults to free local CLI providers so it can be validated without credentials or cost. When nothing is ready it reports that plainly instead of producing a fabricated run.
 
 To add a real provider:
 
@@ -383,5 +384,5 @@ Good next steps after the MVP is validated:
 
 - The GUI is a functional tool surface, not a landing page.
 - The attached ZIP prototype was used as visual reference only.
-- No external LLM calls are required in the default simulated mode.
+- No paid provider is used unless you configure one; auto-detect prefers free local CLIs.
 - Human review is required for critical tasks or high operational risk.

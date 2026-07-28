@@ -77,7 +77,7 @@ def _fake_run_subtask(used: list[str]):
         execution = SubtaskExecution(
             subtask_id=subtask.id,
             status=TaskStatus.COMPLETED,
-            backend=Backend.SIMULATED,
+            backend=Backend.CLI,
             model_used="fake:model",
             latency_ms=1,
             estimated_cost_usd=0.0,

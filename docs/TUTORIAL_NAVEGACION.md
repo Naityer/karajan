@@ -6,10 +6,6 @@ Guía rápida de qué es cada pestaña de la aplicación.
 
 La vista isométrica de la ciudad de agentes. Cada torre es un agente; haz clic en una para ver su detalle. Aquí lanzas misiones nuevas, revisas el ahorro delegado a workers y apruebas o rechazas decisiones que requieren tu confirmación.
 
-## Grafo
-
-Mapa de dependencias del propio repositorio KARAJAN (módulos de app/, tests/, tools/). Útil para orientarte en el código, no en el comportamiento en tiempo de ejecución.
-
 ## Monitor
 
 Panel de observabilidad: métricas resumidas, salud del sistema, uso de skills por agente, y el seguimiento de cada tarea delegada (coste, latencia, tokens, estado). Es el sitio para auditar qué ha hecho el harness y por qué.

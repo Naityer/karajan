@@ -8453,18 +8453,6 @@ input[type="text"] {
   pointer-events: none;
   font-family: 'Cascadia Code', Consolas, monospace;
 }
-/* ── GRAPH VIEW ─────────────────────────────────────────────────────────────── */
-#view-graph {
-  padding: 0 !important;
-  overflow: hidden;
-}
-#graph-frame {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
-}
-
 /* ══════════════════════════════════════════════════════════════════════════
    MONITOR REDESIGN — System Health summary, node filter tabs, chart cards,
    inline-SVG chart primitives, skill-usage/performance panels.
@@ -10642,3 +10630,19 @@ html[data-theme="light"], html[data-theme="amber"] {
   background: var(--prio-color);
 }
 
+
+/* ── Marco del host (Atlas) ──────────────────────────────────────────────────
+   Embebido como add-on, Atlas provee TODO el marco: marca, navegación de vistas,
+   tema y las herramientas de la barra (tutorial y contadores de decisiones/agentes,
+   que publica `atlas-host.js`). Se oculta la barra completa para que no haya dos
+   navegaciones ni dos veces los mismos contadores.
+
+   La clase la pone un script en línea del <head> (ver index.html) para que la barra
+   propia no se vea ni un instante antes de desaparecer.
+
+   Ojo: `display: none` oculta pero no desactiva. `app.js` sigue actualizando los
+   contadores —de ahí puede leerlos el shim— y sigue respondiendo a `.click()`
+   sobre el botón del tutorial, cuyo modal no se ancla a la barra. */
+html.atlas-hosted .bar {
+  display: none;
+}

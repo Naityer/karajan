@@ -1,0 +1,26 @@
+{
+  "id": "pack_88561dabe648131b",
+  "task_id": "tsk_c5d46c8f47f5",
+  "prompt": "Documenta todas las skills y complementos disponibles de naityer_setup, su estado, actualización y finalidad.",
+  "workspace_root": "C:\\Users\\tiand\\Desktop\\Workspace\\naityer_setup",
+  "files": [
+    {
+      "path": "scripts/installers/complementos_ia/README.md",
+      "truncated": false,
+      "skipped_reason": null
+    },
+    {
+      "path": "scripts/report-skills.ps1",
+      "truncated": false,
+      "skipped_reason": null
+    },
+    {
+      "path": "scripts/installers/complementos_ia/scientific_agent_skills.ps1",
+      "truncated": false,
+      "skipped_reason": null
+    }
+  ],
+  "rationale": "Selección del agente local de Karajan para Documentador.",
+  "created_at": "2026-07-27T19:54:08.008275+00:00",
+  "total_chars": 12410
+}

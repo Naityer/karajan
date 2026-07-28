@@ -266,7 +266,7 @@ def _seed_nodes(layout: RoutingLayout) -> dict[str, NodeMetrics]:
             id=entity.id,
             name=entity.name or role,
             role=role,
-            active_model=entity.provider or "auto / simulado",
+            active_model=entity.provider or "sin asignar",
             provider=_provider_family(entity.provider),
             token_budget=catalog.token_budget_for(entity.provider) if entity.provider else 0,
             levels=entity.levels,
@@ -333,12 +333,10 @@ def _role_label(role: str) -> str:
 
 def _provider_family(provider: str | None) -> str:
     if not provider:
-        return "simulated"
+        return "unassigned"
     value = provider.lower()
     if any(key in value for key in ("ollama", "codex", "claude-cli")):
         return "local"
-    if "simulated" in value:
-        return "simulated"
     return "api"
 
 

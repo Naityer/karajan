@@ -6,6 +6,18 @@
     <title>KARAJAN</title>
     <link rel="icon" type="image/png" href="/static/icons/karajan_v2.png?v=ui-2" />
     <link rel="stylesheet" href="/static/styles.css?v=ui-5" />
+    <script>
+      // Marco del host (Atlas): se marca AQUÍ, antes del primer pintado, para que el
+      // CSS oculte marca, pestañas y paleta. Desde `atlas-host.js` (con `defer`)
+      // llegaría tarde y el marco propio se vería un instante. Ver atlas-host.js.
+      try {
+        if (new URLSearchParams(location.search).get("atlas_chrome") === "host") {
+          document.documentElement.classList.add("atlas-hosted");
+        }
+      } catch (e) {
+        /* URL no parseable: se queda con su marco propio, que es el modo suelto */
+      }
+    </script>
   </head>
   <body>
     <!-- Compact tool frame: brand · view switch · live status · theme — not a generic web shell -->
@@ -16,7 +28,6 @@
 
       <nav class="views" id="viewNav">
         <button class="view-tab active" data-view="human">Control humano</button>
-        <button class="view-tab" data-view="graph">Grafo</button>
         <button class="view-tab" data-view="monitor">Monitor</button>
         <button class="view-tab" data-view="decision">Decisión</button>
         <button class="view-tab" data-view="agents">Agentes</button>
@@ -215,10 +226,6 @@
         </section>
       </section>
 
-      <!-- VIEW · GRAPH -->
-      <section class="view" id="view-graph">
-        <iframe id="graph-frame" src="/static/graph.html?v=0" title="Grafo de módulos Karajan"></iframe>
-      </section>
     </main>
 
     <!-- First-run setup overlay: shown once (gated by GET /setup/status), never a
@@ -272,5 +279,8 @@
 
     <div id="toast" class="toast" hidden></div>
     <script src="/static/app.js?v=ui-5"></script>
+    <!-- Después de app.js: acciona las pestañas ya montadas cuando Atlas embebe
+         este dashboard como módulo (ver atlas-host.js). -->
+    <script src="/static/atlas-host.js?v=1"></script>
   </body>
 </html>

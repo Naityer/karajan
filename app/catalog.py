@@ -470,3 +470,26 @@ def providers_for_backend(backend: Backend) -> list[ProviderInfo]:
 
 def token_budget_for(provider_name: str) -> int:
     return TOKEN_BUDGETS.get(provider_name, 0)
+
+
+def split_model_used(model_used: str | None) -> tuple[str | None, str | None]:
+    """Split a `ProviderRun.model_used` string into `(provider_name, model_id)`.
+
+    Providers compose it as `f"{provider.name}:{model_id}"`, and model ids can
+    themselves contain colons (`ollama-qwen:qwen2.5:7b`), so the split is on the
+    *longest* catalog name that prefixes the value — not on the first colon.
+
+    Returns `(None, None)` when no catalog provider matches. That matters: the
+    pre-Fase-1 backfill used to write the whole `model_used` string into
+    `runs.provider_name`, which is what split `ollama-qwen` from
+    `ollama-qwen:qwen2.5:7b` into two "agents" in the Monitor. Guessing a
+    provider here would recreate the same class of lie, so unknown stays NULL.
+    """
+    if not model_used:
+        return None, None
+    for name in sorted(_BY_NAME, key=len, reverse=True):
+        if model_used == name:
+            return name, None
+        if model_used.startswith(f"{name}:"):
+            return name, model_used[len(name) + 1 :]
+    return None, None

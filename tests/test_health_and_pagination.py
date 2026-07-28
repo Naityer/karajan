@@ -11,7 +11,7 @@ from app.models import Backend, KarajanConfig
 
 def _client(tmp_path: Path) -> TestClient:
     main.store = TaskStore(tmp_path / "health.db")
-    main.active_config = KarajanConfig(backend=Backend.SIMULATED)
+    main.active_config = KarajanConfig(backend=Backend.CLI)
     return TestClient(main.app)
 
 
@@ -21,7 +21,7 @@ def test_health_reports_ok_and_profile(tmp_path: Path, monkeypatch) -> None:
     body = client.get("/health").json()
     assert body["status"] == "ok"
     assert body["db_ok"] is True
-    assert body["backend"] == "simulated"
+    assert body["backend"] == "cli"
     assert body["auth_enabled"] is False
     assert body["total_tasks"] == 0
 

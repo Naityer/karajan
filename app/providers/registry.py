@@ -7,7 +7,6 @@ from app.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel, R
 from app.providers.api import ApiModelProvider
 from app.providers.base import ModelProvider
 from app.providers.cli import CliModelProvider
-from app.providers.simulated import SimulatedModelProvider
 
 
 @dataclass
@@ -18,25 +17,25 @@ class Resolution:
     provider_name: str
 
 
-def resolve(tier: RecommendedModel, config: KarajanConfig) -> Resolution:
+def resolve(tier: RecommendedModel, config: KarajanConfig) -> Resolution | None:
     """Pick the concrete provider + model id for a logical tier under `config`.
 
-    Falls back to the simulated backend whenever no real provider is configured,
-    so the harness always produces a result.
+    Returns `None` when no configured provider serves `tier`. There is
+    deliberately no fake fallback: a harness that invents an execution when
+    nothing is available produces an audit trail that lies, which is worse than
+    producing none. Callers withhold execution instead (see
+    `delegation._pre_execution_gate`).
     """
-    if config.backend == Backend.SIMULATED:
-        return _simulated(tier)
-
     info = _provider_for_tier(tier, config)
     if info is None:
-        return _simulated(tier)
+        return None
 
     model_id = info.tiers.get(tier) or next(iter(info.tiers.values()), tier.value)
     if info.backend == Backend.API:
         return Resolution(ApiModelProvider(info), Backend.API, model_id, info.name)
     if info.backend == Backend.CLI:
         return Resolution(CliModelProvider(info), Backend.CLI, model_id, info.name)
-    return _simulated(tier)
+    return None
 
 
 def fallback_resolutions(
@@ -50,9 +49,9 @@ def fallback_resolutions(
     Providers explicitly marked `role="backup"` in the routing layout (e.g. an
     OpenAI node backing up the Claude parent) are tried first, paid or not —
     that's an explicit operator decision, not an automatic one. After that,
-    only free catalog providers are attempted automatically. The deterministic
-    simulated provider is always last so delegation can still finish and record
-    the fallback chain without spending money or requiring credentials.
+    only free catalog providers are attempted automatically. When the chain is
+    exhausted it returns empty: the subtask fails with the real provider error
+    rather than being papered over by a fake success.
     """
     tried = set(tried_provider_names or set())
     candidates: list[Resolution] = []
@@ -89,8 +88,6 @@ def fallback_resolutions(
         elif info.backend == Backend.CLI:
             candidates.append(Resolution(CliModelProvider(info), Backend.CLI, model_id, info.name))
 
-    if "simulated" not in tried:
-        candidates.append(_simulated(tier))
     return candidates
 
 
@@ -125,9 +122,7 @@ def resolve_entity(entity: RoutingEntity, tier: RecommendedModel) -> Resolution 
     """Build a concrete `Resolution` for one specific layout entity.
 
     Returns `None` when the entity's provider is unknown to the catalog or
-    doesn't support `tier` — callers should skip such entities rather than
-    falling back to the simulated backend (that fallback is `resolve()`'s job
-    for the static/tier-pinned path, not this per-entity lookup).
+    doesn't support `tier` — callers should skip such entities.
     """
     if not entity.provider:
         return None
@@ -148,9 +143,8 @@ def resolve_by_name(provider_name: str, tier: RecommendedModel) -> Resolution | 
     Picks the provider's model for `tier`, or its first available tier if that
     exact tier is unmapped. Returns None when the provider is unknown or exposes
     no runnable tier. Thin wrapper over the same API/CLI machinery as
-    `resolve_entity` — the Grafo explain/audit path resolves the workspace's
-    `graph_agent_provider` (or a repo override) through here rather than the
-    tier-pinned classification path.
+    `resolve_entity`, for callers that need to resolve a provider by name
+    rather than through the tier-pinned classification path.
     """
     info = catalog.get_provider(provider_name)
     if info is None:
@@ -177,7 +171,3 @@ def _provider_for_tier(tier: RecommendedModel, config: KarajanConfig) -> Provide
         if tier in info.tiers:
             return info
     return None
-
-
-def _simulated(tier: RecommendedModel) -> Resolution:
-    return Resolution(SimulatedModelProvider(), Backend.SIMULATED, tier.value, "simulated")
