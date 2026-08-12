@@ -9,6 +9,8 @@ __pycache__/
 # SQLite WAL sidecar files (transient; the .db itself is intentionally tracked)
 *.db-wal
 *.db-shm
+# Per-operator Biblioteca inventory; schema and seeds live in source code.
+data/resources.db
 
 # Runtime config override written by PUT /config
 data/active_config.json

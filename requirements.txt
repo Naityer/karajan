@@ -8,6 +8,9 @@ typer>=0.12,<1.0
 rich>=13.0,<14.0
 prompt_toolkit>=3.0,<4.0
 pyfiglet>=1.0,<2.0
+# Verifica el token de capacidad RS256 que manda Atlas (app/atlas_auth.py).
+# `[crypto]` trae `cryptography`, necesario para RS256.
+PyJWT[crypto]>=2.9,<3.0
 
 # Optional extras — KARAJAN runs against local CLI providers (Ollama, Claude
 # Code, Codex) without any of these. Install only the ones for the API-backed

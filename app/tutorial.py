@@ -16,7 +16,7 @@ NAV_SECTIONS: tuple[tuple[str, str], ...] = (
         "y apruebas o rechazas decisiones que requieren tu confirmación.",
     ),
     (
-        "Monitor",
+        "Estadísticas",
         "Panel de observabilidad: métricas resumidas, salud del sistema, uso de skills por "
         "agente, y el seguimiento de cada tarea delegada (coste, latencia, tokens, estado). "
         "Es el sitio para auditar qué ha hecho el harness y por qué.",

@@ -44,6 +44,11 @@
     if (embedded) window.parent.postMessage(message, '*');
   }
 
+  // El relay de `fetch`/`EventSource`/`localStorage` vive en `atlas-relay.js`,
+  // cargado ANTES que `app.js` (ver `index.html`) — tiene que estar instalado
+  // antes de que `app.js` ejecute su primera línea, y este archivo se carga
+  // DESPUÉS de `app.js` a propósito (necesita el DOM que `app.js` puebla).
+
   // ── Navegación ─────────────────────────────────────────────────────────────
   function applyView(view, attempt) {
     if (typeof view !== 'string' || !view) return;

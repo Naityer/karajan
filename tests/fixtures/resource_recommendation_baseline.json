@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "recorded_at": "2026-08-10",
+  "corpus": "resource_retrieval_cases.json",
+  "relevance": {
+    "critical_hit_at_1": 1.0,
+    "hit_at_3": 1.0,
+    "mrr": 1.0,
+    "ndcg_at_5": 1.0,
+    "nested_recall_at_3": 1.0,
+    "critical_abstention_precision": 1.0,
+    "false_primary_rate": 0.0,
+    "deterministic_runs": 3
+  },
+  "latency_ms": {
+    "catalog_size": 10000,
+    "warmups": 20,
+    "measured_queries": 200,
+    "cold": 26.293,
+    "p50": 38.365,
+    "p95": 40.901,
+    "p99": 46.471
+  },
+  "fixed_regressions": [
+    "generic-web-reference-outranked-anatomy",
+    "repository-audit-failed-to-select-repo-analyzer",
+    "finance-gap-returned-arbitrary-primary",
+    "spanish-acciones-polysemy-triggered-security-review",
+    "full-catalog-scan-p95-exceeded-budget"
+  ]
+}

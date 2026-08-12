@@ -113,6 +113,18 @@ class Subtask(BaseModel):
     validation: str
 
 
+class ResourceRecommendationContext(BaseModel):
+    resource_id: str
+    slug: str
+    name: str
+    kind: Literal["skill", "capability", "reference"]
+    summary: str = ""
+    source_url: str | None = None
+    parent_resource_id: str | None = None
+    role: Literal["primary", "complementary"]
+    score: float
+
+
 class ClassificationResult(BaseModel):
     task_id: str = Field(default_factory=lambda: f"tsk_{uuid4().hex[:12]}")
     original_prompt: str
@@ -124,6 +136,7 @@ class ClassificationResult(BaseModel):
     recommended_strategy: str
     recommended_model: RecommendedModel
     recommended_skills: list[str] = Field(default_factory=list)
+    recommended_resources: list[ResourceRecommendationContext] = Field(default_factory=list)
     subtasks: list[Subtask]
     requires_human_review: bool
     reason: str
@@ -146,6 +159,7 @@ class IngestRequest(BaseModel):
     subtasks: list[Subtask] = Field(default_factory=list)
     recommended_strategy: str | None = None
     recommended_skills: list[str] = Field(default_factory=list)
+    recommended_resources: list[ResourceRecommendationContext] = Field(default_factory=list)
     reason: str | None = None
     requires_human_review: bool | None = None
     validation_plan: str | None = None
@@ -709,6 +723,10 @@ class RoutingEntity(BaseModel):
     levels: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
+    # Stable Biblioteca references. ``skills``/``capabilities`` remain the
+    # routing projection used by older clients; this list is the canonical
+    # link back to catalog records.
+    resource_ids: list[str] = Field(default_factory=list)
     # Hierarchy-group memberships. When non-empty, they drive dispatch order via
     # `effective_tier()` and override the raw `tier` fallback below.
     memberships: list[GroupMembership] = Field(default_factory=list)
@@ -882,6 +900,276 @@ class DecisionLogEntry(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     context: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Resource library -------------------------------------------------------
+
+
+class ResourceKind(str, Enum):
+    SKILL = "skill"
+    CAPABILITY = "capability"
+    REFERENCE = "reference"
+
+
+class ResourceInstallation(BaseModel):
+    target: Literal["claude", "codex"]
+    path: str
+    digest: str
+    verified: bool = True
+    installed_at: datetime = Field(default_factory=_utcnow)
+
+
+class ResourceItem(BaseModel):
+    """Persisted resource exposed by the Biblioteca API.
+
+    The fields are intentionally data-oriented: callers can render and filter
+    the catalog without importing installer implementations.
+    """
+
+    id: str = Field(default_factory=lambda: f"res_{uuid4().hex[:12]}")
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,119}$")
+    name: str = Field(min_length=1, max_length=160)
+    kind: ResourceKind
+    source: str = Field(min_length=1, max_length=80)
+    repo_url: str | None = None
+    # Nested directories are modelled as ordinary resources linked to their
+    # catalog parent.  ``source_url`` is the canonical page inspected for this
+    # concrete entry (which may differ from a GitHub ``repo_url``).
+    parent_resource_id: str | None = None
+    source_url: str | None = None
+    indexed_at: datetime | None = None
+    index_status: Literal["active", "inactive", "error"] = "active"
+    summary: str = Field(default="", max_length=4000)
+    tags: list[str] = Field(default_factory=list)
+    requirements: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    compatible_runtimes: list[str] = Field(default_factory=list)
+    install_strategy: str = "none"
+    status: Literal["available", "installed", "partial", "error"] = "available"
+    installations: list[ResourceInstallation] = Field(default_factory=list)
+    visible_agent_ids: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("tags", "requirements", "capabilities", "compatible_runtimes", "visible_agent_ids")
+    @classmethod
+    def _clean_resource_lists(cls, values: list[str]) -> list[str]:
+        return sorted({value.strip() for value in values if value and value.strip()}, key=str.casefold)
+
+
+class ResourceCreateRequest(BaseModel):
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,119}$")
+    name: str = Field(min_length=1, max_length=160)
+    kind: ResourceKind
+    source: str = Field(default="manual", min_length=1, max_length=80)
+    repo_url: str | None = None
+    parent_resource_id: str | None = None
+    source_url: str | None = None
+    indexed_at: datetime | None = None
+    index_status: Literal["active", "inactive", "error"] = "active"
+    summary: str = Field(default="", max_length=4000)
+    tags: list[str] = Field(default_factory=list)
+    requirements: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    compatible_runtimes: list[str] = Field(default_factory=list)
+    install_strategy: str = "none"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # Single-use server ticket proving that a GitHub URL was inspected before
+    # it can become installable. It is transport metadata, not persisted.
+    analysis_token: str | None = None
+
+
+class ResourceUpdateRequest(BaseModel):
+    """Editorial fields that can be corrected after a safe scan."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    summary: str | None = Field(default=None, max_length=4000)
+    tags: list[str] | None = None
+
+
+class AnalyzeRequest(BaseModel):
+    repo_url: str = Field(min_length=1, max_length=500)
+
+
+class AnalyzeResult(BaseModel):
+    valid: bool
+    repo_url: str
+    owner: str | None = None
+    repository: str | None = None
+    default_branch: str | None = None
+    summary: str = ""
+    skill_paths: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    preview: ResourceCreateRequest | None = None
+    warnings: list[str] = Field(default_factory=list)
+    analysis_token: str | None = None
+
+
+class ResourceOperationRequest(BaseModel):
+    action: Literal["install", "update", "verify", "uninstall"]
+    targets: list[Literal["claude", "codex"]] = Field(default_factory=list)
+    confirmed: bool = False
+
+
+class ResourceVisibilityRequest(BaseModel):
+    agent_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("agent_ids")
+    @classmethod
+    def _clean_agent_ids(cls, values: list[str]) -> list[str]:
+        return sorted({value.strip() for value in values if value and value.strip()}, key=str.casefold)
+
+
+class ResourceRecommendationRequest(BaseModel):
+    """Prompt-to-resource decision request used by agents and the dashboard."""
+
+    prompt: str = Field(min_length=3, max_length=20_000)
+    runtime: str | None = Field(default=None, max_length=80)
+    agent_id: str | None = Field(default=None, max_length=160)
+    limit: int = Field(default=12, ge=1, le=50)
+    include_complementary: bool = True
+
+
+class ResourceIndexRequest(BaseModel):
+    """Explicit confirmation for bounded, pre-query child indexing."""
+
+    confirmed: bool = False
+
+
+class ResourceRefreshSettingsUpdate(BaseModel):
+    """Cadence for repository reanalysis and the Inspiration radar."""
+
+    repository_enabled: bool = True
+    repository_interval_days: int = Field(default=7, ge=1, le=90)
+    radar_interval_minutes: int = Field(default=60, ge=15, le=1440)
+
+
+class ResourceGroup(BaseModel):
+    """Operator-owned classification node for the Inspiration catalog."""
+
+    id: str = Field(default_factory=lambda: f"rgrp_{uuid4().hex[:12]}")
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=1000)
+    parent_id: str | None = None
+    sort_order: int = Field(default=0, ge=0, le=1_000_000)
+    resource_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def _clean_group_text(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("parent_id", mode="before")
+    @classmethod
+    def _clean_group_parent(cls, value: str | None) -> str | None:
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    @field_validator("resource_ids")
+    @classmethod
+    def _clean_group_resources(cls, values: list[str]) -> list[str]:
+        return sorted({value.strip() for value in values if value and value.strip()})
+
+    @model_validator(mode="after")
+    def _reject_self_parent(self) -> "ResourceGroup":
+        if self.parent_id == self.id:
+            raise ValueError("a resource group cannot be its own parent")
+        return self
+
+
+class ResourceGroupCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=1000)
+    parent_id: str | None = None
+    sort_order: int = Field(default=0, ge=0, le=1_000_000)
+
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def _clean_group_create_text(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("parent_id", mode="before")
+    @classmethod
+    def _clean_group_create_parent(cls, value: str | None) -> str | None:
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+class ResourceGroupUpdateRequest(ResourceGroupCreateRequest):
+    pass
+
+
+class ResourceGroupAssignmentsRequest(BaseModel):
+    """Atomic resource-to-group changes; null removes the classification."""
+
+    assignments: dict[str, str | None] = Field(default_factory=dict, max_length=500)
+
+    @field_validator("assignments")
+    @classmethod
+    def _clean_group_assignments(cls, values: dict[str, str | None]) -> dict[str, str | None]:
+        cleaned: dict[str, str | None] = {}
+        for resource_id, group_id in values.items():
+            resource_id = resource_id.strip()
+            if not resource_id:
+                raise ValueError("resource ids cannot be blank")
+            cleaned[resource_id] = group_id.strip() if group_id and group_id.strip() else None
+        return cleaned
+
+
+class InspirationSourcePreference(BaseModel):
+    """Operator choice for the allowlisted sources shown in Inspiration Radar."""
+
+    source_ids: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("source_ids")
+    @classmethod
+    def _clean_source_ids(cls, values: list[str]) -> list[str]:
+        return sorted({value.strip() for value in values if value and value.strip()}, key=str.casefold)
+
+
+class DiscoverySourceCreateRequest(BaseModel):
+    """A followed account/publication/feed; never a library artifact."""
+
+    url: str = Field(min_length=3, max_length=500)
+    name: str | None = Field(default=None, max_length=160)
+    enabled: bool = True
+
+
+class DiscoverySource(BaseModel):
+    id: str
+    name: str
+    url: str
+    provider: str
+    source_type: Literal["account", "publication", "feed", "community"] = "account"
+    description: str = ""
+    enabled: bool = True
+    available: bool = False
+    requires_credentials: bool = False
+    setup_hint: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
+class ResourceOperationResult(BaseModel):
+    operation_id: str
+    resource_id: str | None = None
+    action: str
+    status: Literal["planned", "succeeded", "failed", "denied"]
+    detail: str = ""
+    targets: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class NaityerPreflight(BaseModel):
+    component: str
+    allowed: bool
+    ready: bool
+    launcher_path: str | None = None
+    script_path: str | None = None
+    powershell_path: str | None = None
+    checks: dict[str, bool] = Field(default_factory=dict)
+    detail: str = ""
 
 
 # --- Predictive analytics (Fase 4) -------------------------------------------

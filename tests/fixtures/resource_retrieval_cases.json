@@ -1,0 +1,67 @@
+[
+  {
+    "id": "anatomy-es",
+    "prompt": "Construccion de una web de anatomia para estudiar los distintos organos del cuerpo",
+    "expected_primary": "anatomy-atelier",
+    "forbidden_top3": ["gradientsaas-blogspot-com", "www-threads-com-midu-dev"]
+  },
+  {
+    "id": "anatomy-en",
+    "prompt": "Build an interactive human anatomy website to learn the organs in 3D",
+    "expected_primary": "anatomy-atelier"
+  },
+  {
+    "id": "anatomy-typo",
+    "prompt": "Necesito una esperiencia 3d de anatomia y organos para estudiar",
+    "expected_primary": "anatomy-atelier"
+  },
+  {
+    "id": "shops-map-es",
+    "prompt": "Genera un mapa interactivo para la gestion de comercios de la zona",
+    "expected_primary": "mapcn"
+  },
+  {
+    "id": "shops-map-en",
+    "prompt": "Create an interactive local business map with markers and routes",
+    "expected_primary": "mapcn"
+  },
+  {
+    "id": "shops-map-long",
+    "prompt": "Quiero construir una aplicacion para administrar comercios locales, verlos sobre un mapa, colocar marcadores y mostrar rutas",
+    "expected_primary": "mapcn"
+  },
+  {
+    "id": "finance-gap-es",
+    "prompt": "Quiero un programa de analisis financiero para estudiar los comportamientos de la bolsa",
+    "expected_decision": "no_match",
+    "expected_missing": ["financial-analysis"]
+  },
+  {
+    "id": "finance-gap-en",
+    "prompt": "Analyze stock market behavior and portfolio risk with financial market data",
+    "expected_decision": "no_match",
+    "expected_missing": ["financial-analysis"]
+  },
+  {
+    "id": "finance-gap-negative",
+    "prompt": "Necesito predecir cotizaciones bursatiles y estudiar acciones",
+    "expected_decision": "no_match",
+    "expected_missing": ["financial-analysis"]
+  },
+  {
+    "id": "repo-audit-es",
+    "prompt": "Comprueba la auditoria de un repositorio de codigo",
+    "expected_primary": "repo-analyzer"
+  },
+  {
+    "id": "repo-audit-en",
+    "prompt": "Audit this source code repository and inspect its dependencies",
+    "expected_primary": "repo-analyzer"
+  },
+  {
+    "id": "repo-audit-security",
+    "prompt": "Revisa el repositorio, sus dependencias y posibles problemas de seguridad",
+    "expected_primary": "repo-analyzer",
+    "expected_complementary": ["security-review"]
+  }
+]

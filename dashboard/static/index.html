@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KARAJAN</title>
     <link rel="icon" type="image/png" href="/static/icons/karajan_v2.png?v=ui-2" />
-    <link rel="stylesheet" href="/static/styles.css?v=ui-5" />
+    <link rel="stylesheet" href="/static/styles.css?v=ui-15" />
     <script>
       // Marco del host (Atlas): se marca AQUÍ, antes del primer pintado, para que el
       // CSS oculte marca, pestañas y paleta. Desde `atlas-host.js` (con `defer`)
@@ -18,6 +18,9 @@
         /* URL no parseable: se queda con su marco propio, que es el modo suelto */
       }
     </script>
+    <!-- Antes que app.js a propósito: parchea fetch/EventSource/localStorage
+         antes de que su arranque síncrono los use. Ver atlas-relay.js. -->
+    <script src="/static/atlas-relay.js?v=1"></script>
   </head>
   <body>
     <!-- Compact tool frame: brand · view switch · live status · theme — not a generic web shell -->
@@ -28,9 +31,10 @@
 
       <nav class="views" id="viewNav">
         <button class="view-tab active" data-view="human">Control humano</button>
-        <button class="view-tab" data-view="monitor">Monitor</button>
+        <button class="view-tab" data-view="monitor">Estadísticas</button>
         <button class="view-tab" data-view="decision">Decisión</button>
         <button class="view-tab" data-view="agents">Agentes</button>
+        <button class="view-tab" data-view="resources">Inspiration</button>
         <button class="view-tab" data-view="flow">Configuración</button>
       </nav>
 
@@ -90,7 +94,7 @@
       <!-- VIEW 2 · MONITOR (full-width, sub-navigated redesign — Phase A) -->
       <section class="view" id="view-monitor">
         <div class="monitor-shell" id="monitorShell">
-          <nav class="monitor-subnav" id="monitorSubnav" role="tablist" aria-label="Sub-vistas del monitor">
+          <nav class="monitor-subnav" id="monitorSubnav" role="tablist" aria-label="Sub-vistas de estadísticas">
             <button type="button" class="monitor-subtab active" data-subview="resumen" role="tab" aria-selected="true">
               <span class="monitor-subtab-name">Resumen</span>
               <span class="monitor-subtab-desc">KPIs y relación tareas ↔ agentes</span>
@@ -102,6 +106,10 @@
             <button type="button" class="monitor-subtab" data-subview="tareas" role="tab" aria-selected="false">
               <span class="monitor-subtab-name">Tareas</span>
               <span class="monitor-subtab-desc">Traza y auditoría de ejecución</span>
+            </button>
+            <button type="button" class="monitor-subtab" data-subview="skills" role="tab" aria-selected="false">
+              <span class="monitor-subtab-name">Skills</span>
+              <span class="monitor-subtab-desc">Uso, agentes y tasa de acierto</span>
             </button>
           </nav>
 
@@ -121,6 +129,10 @@
             <!-- Kept (empty, hidden) so refreshMonitor()'s `#monitorMainContent` mount-guard
                  stays truthy while Monitor is active regardless of the visible sub-view. -->
             <section id="monitorMainContent" hidden aria-hidden="true"></section>
+          </section>
+
+          <section class="monitor-subview" id="subview-skills" role="tabpanel" aria-label="Skills" hidden>
+            <div id="skillsView" class="skills-view"><div class="chart-empty">Cargando métricas de skills…</div></div>
           </section>
         </div>
       </section>
@@ -186,7 +198,94 @@
         </div>
       </section>
 
-      <!-- VIEW 5 · CONFIGURATION / PARAMETERS -->
+      <!-- VIEW 5 · INSPIRATION — catálogo de recursos + radar de señales.
+           Sin panel contenedor: el contenido fluye directamente sobre el fondo
+           de la vista, igual que Monitor (.monitor-shell). El Radar es una
+           sub-vista propia en lugar de un rail estrecho, y el detalle vive en
+           un drawer superpuesto para que abrirlo no recoloque el catálogo. -->
+      <section class="view" id="view-resources">
+        <div class="insp-shell">
+          <div class="insp-workspace" id="resourceWorkbench">
+            <aside class="insp-sidebar" aria-label="Explorar recursos">
+              <div class="insp-sidebar-title"><div><h2>Explorar</h2><span id="resourceResultCount">0 recursos</span></div><button type="button" id="hideInspirationSidebar" aria-label="Ocultar barra Explorar">Ocultar</button></div>
+              <div class="insp-sidebar-search">
+                <label class="insp-search"><span class="insp-search-ico" aria-hidden="true">⌕</span><input id="resourceSearch" type="search" placeholder="Buscar…" autocomplete="off" aria-label="Buscar recursos" /><kbd>/</kbd></label>
+                <button type="button" class="icon-btn" id="toggleResourceFilters" aria-label="Mostrar filtros" aria-expanded="false" aria-controls="resourceFiltersPanel">≡</button>
+              </div>
+              <section class="insp-filter-panel" id="resourceFiltersPanel" aria-label="Filtros del catálogo" hidden>
+                <label><span>Tipo</span><select id="resourceKindFilter"><option value="">Todos</option></select></label>
+                <label><span>Estado</span><select id="resourceStatusFilter"><option value="">Todos</option></select></label>
+                <label><span>Runtime</span><select id="resourceRuntimeFilter"><option value="">Todos</option></select></label>
+                <label><span>Agente</span><select id="resourceAgentFilter"><option value="">Todos</option></select></label>
+                <label><span>Origen</span><select id="resourceSourceFilter"><option value="">Todos</option></select></label>
+                <label><span>Contenido</span><select id="resourceStructureFilter"><option value="">Todos</option></select></label>
+                <button type="button" class="ghost-btn" id="clearResourceFilters">Limpiar filtros</button>
+              </section>
+              <div class="insp-kpis" id="resourceKpis" aria-live="polite"></div>
+              <button type="button" class="primary insp-new-reference" id="addResourceBtn">Nueva referencia</button>
+              <nav class="insp-view-switch" id="inspirationSubnav" role="tablist" aria-label="Vista de Inspiration">
+                <button type="button" class="insp-subtab active" data-insp-subview="catalogo" role="tab" aria-selected="true" aria-controls="subview-catalogo">Catálogo</button>
+                <button type="button" class="insp-subtab" data-insp-subview="radar" role="tab" aria-selected="false" aria-controls="subview-radar">Radar</button>
+              </nav>
+              <section class="insp-sidebar-section" id="resourceGroupSection">
+                <header><b>Grupos</b><button type="button" id="openResourceGroupManager">Gestionar grupos</button></header>
+                <div id="resourceGroupTree" class="resource-group-tree" aria-live="polite"></div>
+              </section>
+              <section class="insp-sidebar-section insp-radar-access" id="resourceRadarSection" hidden>
+                <header><b>Radar</b><span id="resourceDiscoveryState">Sin conectar</span></header>
+                <label><span>Fuente</span><select id="resourceDiscoverySourceSelect" aria-label="Filtrar Radar por fuente"><option value="">Todas las fuentes</option></select></label>
+                <button type="button" id="toggleResourceSources" aria-expanded="false" aria-controls="resourceSourcesPanel">Gestionar fuentes</button>
+              </section>
+            </aside>
+            <div class="insp-sidebar-splitter" id="inspirationSidebarSplitter" role="separator" aria-orientation="vertical" aria-label="Redimensionar barra Explorar" aria-valuemin="220" aria-valuemax="360" aria-valuenow="270" tabindex="0"></div>
+            <button type="button" class="insp-sidebar-scrim" id="inspirationSidebarScrim" aria-label="Cerrar barra Explorar" hidden></button>
+            <main class="insp-main">
+              <button type="button" class="insp-sidebar-restore" id="showInspirationSidebar" aria-controls="resourceWorkbench" hidden>Mostrar Explorar</button>
+              <section class="insp-subview active" id="subview-catalogo" role="tabpanel" aria-label="Catálogo">
+                <div class="insp-result-meta">
+                  <div class="insp-result-copy"><b>Biblioteca</b><span id="resourceFilterState"></span></div>
+                  <div class="insp-display-actions">
+                    <div class="insp-display-switch" id="resourceDisplaySwitch" role="group" aria-label="Presentación del catálogo">
+                      <button type="button" data-resource-display="gallery" aria-pressed="true">Galería</button>
+                      <button type="button" data-resource-display="list" aria-pressed="false">Lista</button>
+                      <button type="button" data-resource-display="tree" aria-pressed="false">Árbol</button>
+                    </div>
+                    <div class="insp-tree-nav" id="resourceTreeNav" role="group" aria-label="Enfocar familia del árbol" hidden></div>
+                  </div>
+                </div>
+                <div id="resourceList" class="insp-groups" aria-live="polite"></div>
+              </section>
+              <section class="insp-subview" id="subview-radar" role="tabpanel" aria-label="Radar" hidden>
+                <div class="insp-result-meta"><b>Últimas señales</b><span>Fuentes activas por fecha</span></div>
+                <section class="insp-sources" id="resourceSourcesPanel" aria-label="Fuentes del Radar" hidden><div id="resourceDiscoverySources" class="insp-source-grid"></div><div class="insp-sources-actions"><button type="button" class="primary" id="saveResourceDiscoverySources">Guardar fuentes</button></div></section>
+                <div id="resourceDiscoveryFeed" class="insp-signal-grid" aria-live="polite"><div class="insp-empty"><b>Radar pendiente</b><span>Conecta una fuente para recibir posibles recursos.</span></div></div>
+              </section>
+            </main>
+          </div>
+        </div>
+
+        <!-- Detalle del recurso: drawer superpuesto, no una columna del grid.
+             Vive dentro de #view-resources para que la delegación de eventos
+             de la vista siga cubriendo sus botones de operación. -->
+        <div class="insp-drawer-scrim" id="resourceInspectorScrim" hidden></div>
+        <aside class="insp-drawer" id="resourceInspector" aria-label="Inspector de recurso" aria-hidden="true" inert>
+          <div class="insp-inspector-splitter" id="resourceInspectorSplitter" role="separator" aria-orientation="vertical" aria-label="Redimensionar inspector" aria-valuemin="360" aria-valuemax="760" aria-valuenow="520" tabindex="0"></div>
+          <header class="insp-drawer-bar">
+            <div><span>Detalle del recurso</span><small>Funciones, agentes e instalacion</small></div>
+            <button type="button" class="icon-btn" id="closeResourceInspector" aria-label="Cerrar inspector">✕</button>
+          </header>
+          <div class="resource-detail-pane" id="resourceDetail" tabindex="-1">
+            <div class="resource-detail-empty"><b>Sin recurso seleccionado</b></div>
+          </div>
+        </aside>
+        <div class="insp-drawer-scrim" id="resourceGroupManagerScrim" hidden></div>
+        <aside class="insp-drawer resource-group-manager" id="resourceGroupManager" aria-label="Gestionar grupos" aria-hidden="true" inert>
+          <header class="insp-drawer-bar"><div><span>Gestionar grupos</span><small>Crear, ordenar y asignar recursos</small></div><button type="button" class="icon-btn" id="closeResourceGroupManager" aria-label="Cerrar gestor de grupos">✕</button></header>
+          <div class="resource-group-manager-body" id="resourceGroupManagerBody"></div>
+        </aside>
+      </section>
+
+      <!-- VIEW 6 · CONFIGURATION / PARAMETERS -->
       <section class="view" id="view-flow">
         <div class="flow-head">
           <p>Configuración del harness: parámetros tradicionales o plantillas guiadas para autoconfigurar la skill mediante prompting.</p>
@@ -202,6 +301,19 @@
             <button class="active" type="button" data-config-mode="prompting">Prompting configuration</button>
           </div>
         </div>
+        <section class="config-refresh-settings" id="resourceRefreshSection" aria-labelledby="resourceRefreshHeading">
+          <header class="config-refresh-header"><div><span class="eyebrow">Inspiration</span><h3 id="resourceRefreshHeading">Frecuencias de actualizaci&oacute;n</h3><p>Define cu&aacute;ndo se reanalizan los repositorios y cu&aacute;ndo rota el contenido del Radar.</p></div><span class="config-refresh-summary" id="resourceRefreshState">Repositorios: 7 d&iacute;as &middot; Radar: 1 hora</span></header>
+          <div class="config-refresh-fields">
+            <div class="config-refresh-field"><div class="config-refresh-field-copy"><b>Cat&aacute;logo de repositorios</b><span>Actualiza metadatos, componentes anidados y revisi&oacute;n de origen.</span></div><label class="config-refresh-enabled"><input type="checkbox" id="resourceRefreshEnabled" checked /><span>Rean&aacute;lisis autom&aacute;tico</span></label><label><span>Frecuencia</span><select id="resourceRefreshDays"><option value="1">Cada d&iacute;a</option><option value="3">Cada 3 d&iacute;as</option><option value="7">Cada 7 d&iacute;as</option><option value="14">Cada 14 d&iacute;as</option><option value="30">Cada 30 d&iacute;as</option></select></label></div>
+            <div class="config-refresh-field"><div class="config-refresh-field-copy"><b>Radar de fuentes</b><span>Renueva las se&ntilde;ales disponibles sin modificar el cat&aacute;logo.</span></div><label><span>Frecuencia</span><select id="radarRefreshMinutes"><option value="30">Cada 30 min</option><option value="60">Cada hora</option><option value="180">Cada 3 horas</option><option value="360">Cada 6 horas</option><option value="1440">Cada d&iacute;a</option></select></label></div>
+          </div>
+          <div class="config-refresh-progress" id="resourceRefreshProgress" hidden aria-live="polite">
+            <div class="config-refresh-progress-head"><b id="resourceRefreshProgressTitle">Preparando rean&aacute;lisis</b><span id="resourceRefreshProgressCount">0 / 0</span></div>
+            <progress id="resourceRefreshProgressBar" max="100" value="0">0%</progress>
+            <p id="resourceRefreshProgressMeta">El cat&aacute;logo se procesa en segundo plano.</p>
+          </div>
+          <footer class="config-refresh-actions"><button type="button" id="runResourceRefresh">Reanalizar cat&aacute;logo completo</button><button type="button" class="primary" id="saveResourceRefreshSettings">Guardar frecuencias</button></footer>
+        </section>
         <section class="config-mode-panel" id="config-mode-traditional">
           <div class="traditional-config-shell">
             <aside class="traditional-rail">
@@ -213,6 +325,7 @@
                   <button type="button" class="config-tab" data-config-tab="weights">Pesos de criterios</button>
                   <button type="button" class="config-tab" data-config-tab="rules">Umbrales y reglas</button>
                   <button type="button" class="config-tab" data-config-tab="cost">Coste y latencia</button>
+                  <button type="button" class="config-tab" data-config-tab="inspiration">Inspiration</button>
                 </div>
               </nav>
             </aside>
@@ -277,8 +390,31 @@
       </div>
     </div>
 
+    <div id="resourceModal" class="app-modal resource-modal" hidden role="dialog" aria-modal="true" aria-labelledby="resourceModalTitle">
+      <div class="app-modal-box resource-modal-box">
+        <header>
+          <div><b id="resourceModalTitle">Añadir nueva referencia</b><span id="resourceModalStep">Paso 1 de 3</span></div>
+          <button id="resourceModalClose" class="icon-btn" type="button" aria-label="Cerrar">✕</button>
+        </header>
+        <div class="app-modal-body" id="resourceModalBody"></div>
+      </div>
+    </div>
+
+    <div id="resourceConfirmModal" class="app-modal resource-confirm-modal" hidden role="alertdialog" aria-modal="true" aria-labelledby="resourceConfirmTitle">
+      <div class="app-modal-box resource-confirm-box">
+        <header><b id="resourceConfirmTitle">Confirmar operación</b></header>
+        <div class="app-modal-body">
+          <p id="resourceConfirmCopy"></p>
+          <div class="resource-confirm-actions">
+            <button type="button" id="resourceConfirmCancel">Cancelar</button>
+            <button type="button" class="primary" id="resourceConfirmAccept">Confirmar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast" hidden></div>
-    <script src="/static/app.js?v=ui-5"></script>
+    <script src="/static/app.js?v=ui-15"></script>
     <!-- Después de app.js: acciona las pestañas ya montadas cuando Atlas embebe
          este dashboard como módulo (ver atlas-host.js). -->
     <script src="/static/atlas-host.js?v=1"></script>

@@ -59,6 +59,17 @@ def stub_resolution(tier: RecommendedModel) -> Resolution:
 
 
 @pytest.fixture(autouse=True)
+def isolate_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep dotenv production security from breaking zero-auth legacy TestClient tests.
+
+    Individual auth tests can override this in their own body because test
+    monkeypatch calls occur after autouse fixture setup.
+    """
+    monkeypatch.setenv("KARAJAN_REQUIRE_ATLAS_TOKEN", "0")
+    monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def no_real_providers(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     """Hard stop: no test may shell out to, or call, a real backend."""
     if request.node.get_closest_marker("real_provider_methods"):

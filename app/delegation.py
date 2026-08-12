@@ -24,6 +24,7 @@ from app.models import (
 )
 from app.providers import resolve
 from app.providers.registry import Resolution, fallback_resolutions, resolve_entity
+from app.resource_activation import build_resource_context
 
 logger = get_logger("delegation")
 
@@ -307,7 +308,13 @@ def run_subtask(
         # went straight to `run_subtask` (the scheduler, or a test). Fail loudly
         # with the real reason instead of inventing an execution.
         return _unresolved_execution(classification, subtask, config)
-    instruction = f"{classification.original_prompt}\n\nSubtarea: {subtask.name}\nValidación: {subtask.validation}"
+    resource_context = build_resource_context(classification)
+    prompt_for_execution = (
+        f"{classification.original_prompt}\n\n{resource_context}"
+        if resource_context
+        else classification.original_prompt
+    )
+    instruction = f"{prompt_for_execution}\n\nSubtarea: {subtask.name}\nValidación: {subtask.validation}"
 
     # The tool loop replaces exactly this one call. Whatever it returns is an
     # ordinary `ProviderRun`, so the fallback chain, validator, cost math and
@@ -320,8 +327,13 @@ def run_subtask(
         # during it and need a `run_id` to point at. `_persist_run` is skipped
         # for this path and `close_run` finalizes the same row.
         agent_run_id = _open_agent_run(store, classification, assignment, resolution)
+        agent_classification = (
+            classification.model_copy(update={"original_prompt": prompt_for_execution})
+            if resource_context
+            else classification
+        )
         outcome = agent_tools.run_agent_subtask(
-            classification, subtask, resolution, agent_plan, config.agent_tools,
+            agent_classification, subtask, resolution, agent_plan, config.agent_tools,
             store=store, run_id=agent_run_id,
             max_cost_usd=config.orchestration.max_cost_per_task_usd,
         )
