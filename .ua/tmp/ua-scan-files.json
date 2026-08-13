@@ -1,0 +1,1477 @@
+{
+  "scriptCompleted": true,
+  "contentDigest": "91e5c8a9af495c9a3a73dc688fe4906662582003f8ad47436866b4f366ac725a",
+  "files": [
+    {
+      "path": ".claude/evals/resource-recommendation.md",
+      "language": "markdown",
+      "sizeLines": 30,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".claude/launch.json",
+      "language": "json",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".env.example",
+      "language": "config",
+      "sizeLines": 29,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_api_classify_delegate_lis0/api.db",
+      "language": "db",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_approve_human_review0/api.db",
+      "language": "db",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_empty_store_metrics_are_z0/empty.db",
+      "language": "db",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_metrics_counts_and_costs0/metrics2.db",
+      "language": "db",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_observability_assigns_exe0/obs-layout.db",
+      "language": "db",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_observability_marks_human0/obs-policy.db",
+      "language": "db",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_observability_snapshot_re0/obs.db",
+      "language": "db",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_routing_layout_atomic_sav0/routing_layout.json",
+      "language": "json",
+      "sizeLines": 18,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_routing_layout_atomic_sav0/routing_layout.json.bak",
+      "language": "bak",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_routing_layout_recovers_f0/routing_layout.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_routing_layout_recovers_f0/routing_layout.json.bak",
+      "language": "bak",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_routing_layout_roundtrip0/routing_layout.json",
+      "language": "json",
+      "sizeLines": 22,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-0/test_sql_metrics_match_referen0/metrics.db",
+      "language": "db",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_api_classify_delegate_lis0/api.db",
+      "language": "db",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_approve_human_review0/api.db",
+      "language": "db",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_empty_store_metrics_are_z0/empty.db",
+      "language": "db",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_metrics_counts_and_costs0/metrics2.db",
+      "language": "db",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_observability_assigns_exe0/obs-layout.db",
+      "language": "db",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_observability_marks_human0/obs-policy.db",
+      "language": "db",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_observability_snapshot_re0/obs.db",
+      "language": "db",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_routing_layout_atomic_sav0/routing_layout.json",
+      "language": "json",
+      "sizeLines": 18,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_routing_layout_atomic_sav0/routing_layout.json.bak",
+      "language": "bak",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_routing_layout_recovers_f0/routing_layout.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_routing_layout_recovers_f0/routing_layout.json.bak",
+      "language": "bak",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_routing_layout_roundtrip0/routing_layout.json",
+      "language": "json",
+      "sizeLines": 22,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".tmp/pytest-of-tiand/pytest-1/test_sql_metrics_match_referen0/metrics.db",
+      "language": "db",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp_activation_smoke/resources.db",
+      "language": "db",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".tmp_activation_smoke/tasks.db",
+      "language": "db",
+      "sizeLines": 216,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".ua/.understandignore",
+      "language": "unknown",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "KARAJAN Desktop.bat",
+      "language": "batch",
+      "sizeLines": 140,
+      "fileCategory": "script"
+    },
+    {
+      "path": "PRODUCT.md",
+      "language": "markdown",
+      "sizeLines": 33,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 388,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "app/__init__.py",
+      "language": "python",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_console.py",
+      "language": "python",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/__init__.py",
+      "language": "python",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/budget.py",
+      "language": "python",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/catalog.py",
+      "language": "python",
+      "sizeLines": 233,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/executors/__init__.py",
+      "language": "python",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/executors/control.py",
+      "language": "python",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/executors/fs.py",
+      "language": "python",
+      "sizeLines": 234,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/executors/search.py",
+      "language": "python",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/executors/shell.py",
+      "language": "python",
+      "sizeLines": 181,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/policy.py",
+      "language": "python",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/prompt.py",
+      "language": "python",
+      "sizeLines": 121,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/protocol.py",
+      "language": "python",
+      "sizeLines": 228,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/runner.py",
+      "language": "python",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/session.py",
+      "language": "python",
+      "sizeLines": 273,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/spec.py",
+      "language": "python",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/trace.py",
+      "language": "python",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/transport.py",
+      "language": "python",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/agent_tools/workspace.py",
+      "language": "python",
+      "sizeLines": 212,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/analytics/__init__.py",
+      "language": "python",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/analytics/duckdb_ops.py",
+      "language": "python",
+      "sizeLines": 345,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/analytics/ml.py",
+      "language": "python",
+      "sizeLines": 644,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/atlas_auth.py",
+      "language": "python",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/auth.py",
+      "language": "python",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/catalog.py",
+      "language": "python",
+      "sizeLines": 495,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/classifier.py",
+      "language": "python",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/config.py",
+      "language": "python",
+      "sizeLines": 127,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/credentials.py",
+      "language": "python",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/curated_resources.py",
+      "language": "python",
+      "sizeLines": 228,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/database.py",
+      "language": "python",
+      "sizeLines": 1246,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/delegation.py",
+      "language": "python",
+      "sizeLines": 688,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/env.py",
+      "language": "python",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/events.py",
+      "language": "python",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/execution.py",
+      "language": "python",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/flow_policy.py",
+      "language": "python",
+      "sizeLines": 187,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/github_resources.py",
+      "language": "python",
+      "sizeLines": 322,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/handoff/__init__.py",
+      "language": "python",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/handoff/pack.py",
+      "language": "python",
+      "sizeLines": 175,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/handoff/store.py",
+      "language": "python",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/inspiration_feed.py",
+      "language": "python",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/local_resources.py",
+      "language": "python",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/logging_config.py",
+      "language": "python",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/main.py",
+      "language": "python",
+      "sizeLines": 1737,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/metrics_export.py",
+      "language": "python",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/models.py",
+      "language": "python",
+      "sizeLines": 1205,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/monitoring.py",
+      "language": "python",
+      "sizeLines": 408,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/naityer_resources.py",
+      "language": "python",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/nested_resources.py",
+      "language": "python",
+      "sizeLines": 442,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/openclaw_client.py",
+      "language": "python",
+      "sizeLines": 342,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/production_setup.py",
+      "language": "python",
+      "sizeLines": 108,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/providers/__init__.py",
+      "language": "python",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/providers/api.py",
+      "language": "python",
+      "sizeLines": 108,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/providers/base.py",
+      "language": "python",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/providers/cli.py",
+      "language": "python",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/providers/registry.py",
+      "language": "python",
+      "sizeLines": 173,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/resource_activation.py",
+      "language": "python",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/resource_installer.py",
+      "language": "python",
+      "sizeLines": 357,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/resource_intelligence.py",
+      "language": "python",
+      "sizeLines": 631,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/resource_library.py",
+      "language": "python",
+      "sizeLines": 1269,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/resource_refresh.py",
+      "language": "python",
+      "sizeLines": 369,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/resource_sources.py",
+      "language": "python",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/resource_taxonomy.py",
+      "language": "python",
+      "sizeLines": 82,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/router.py",
+      "language": "python",
+      "sizeLines": 296,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/routing_layout.py",
+      "language": "python",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/scheduler.py",
+      "language": "python",
+      "sizeLines": 291,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/setup_status.py",
+      "language": "python",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/skill_analytics.py",
+      "language": "python",
+      "sizeLines": 171,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/skills_catalog.py",
+      "language": "python",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/tutorial.py",
+      "language": "python",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/validation.py",
+      "language": "python",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "app/web_references.py",
+      "language": "python",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "commands/karajan.md",
+      "language": "markdown",
+      "sizeLines": 16,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard/static/app.js",
+      "language": "javascript",
+      "sizeLines": 11765,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard/static/atlas-host.js",
+      "language": "javascript",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard/static/atlas-relay.js",
+      "language": "javascript",
+      "sizeLines": 190,
+      "fileCategory": "code"
+    },
+    {
+      "path": "dashboard/static/index.html",
+      "language": "html",
+      "sizeLines": 422,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "dashboard/static/resource-library.md",
+      "language": "markdown",
+      "sizeLines": 122,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "dashboard/static/styles.css",
+      "language": "css",
+      "sizeLines": 12563,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "data/.setup_complete",
+      "language": "unknown",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/active_config.json.pre-production-setup.bak",
+      "language": "bak",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/handoff/pack_47f5bcfa1fb14b58.json",
+      "language": "json",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/handoff/pack_47f5bcfa1fb14b58.md",
+      "language": "markdown",
+      "sizeLines": 1356,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "data/handoff/pack_47f5bcfa1fb14b58.result.json",
+      "language": "json",
+      "sizeLines": 4,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/handoff/pack_47f5bcfa1fb14b58.result.md",
+      "language": "markdown",
+      "sizeLines": 27,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "data/handoff/pack_88561dabe648131b.json",
+      "language": "json",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/handoff/pack_88561dabe648131b.md",
+      "language": "markdown",
+      "sizeLines": 219,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "data/handoff/pack_88561dabe648131b.result.json",
+      "language": "json",
+      "sizeLines": 4,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/handoff/pack_88561dabe648131b.result.md",
+      "language": "markdown",
+      "sizeLines": 462,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "data/handoff/pack_8a9ea9d464367f68.json",
+      "language": "json",
+      "sizeLines": 30,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/handoff/pack_8a9ea9d464367f68.md",
+      "language": "markdown",
+      "sizeLines": 1946,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "data/handoff/pack_8a9ea9d464367f68.result.json",
+      "language": "json",
+      "sizeLines": 4,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/handoff/pack_8a9ea9d464367f68.result.md",
+      "language": "markdown",
+      "sizeLines": 53,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "data/handoff/resources-pre-full-refresh-20260811-143052.db",
+      "language": "db",
+      "sizeLines": 1789,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/production_baseline/active_config.json",
+      "language": "json",
+      "sizeLines": 75,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/production_baseline/routing_layout.json",
+      "language": "json",
+      "sizeLines": 272,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/routing_layout.json",
+      "language": "json",
+      "sizeLines": 202,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/routing_layout.json.bak",
+      "language": "bak",
+      "sizeLines": 202,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/routing_layout.json.pre-production-setup.bak",
+      "language": "bak",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/task_logs.db",
+      "language": "db",
+      "sizeLines": 1806,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/task_logs.db.corrupted",
+      "language": "corrupted",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/task_logs.db.corrupted_20260630_015604.bak",
+      "language": "bak",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/task_logs.db.corrupted_20260630_015642.bak",
+      "language": "bak",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/task_logs_recovered.db",
+      "language": "db",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "desktop_app.py",
+      "language": "python",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/CLI.md",
+      "language": "markdown",
+      "sizeLines": 240,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/KARAJAN_TEST_REPORT_2026-06-25.md",
+      "language": "markdown",
+      "sizeLines": 188,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ROLES.md",
+      "language": "markdown",
+      "sizeLines": 241,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/TUTORIAL_NAVEGACION.md",
+      "language": "markdown",
+      "sizeLines": 23,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/agent-tools.md",
+      "language": "markdown",
+      "sizeLines": 242,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/funcionamiento-completo.md",
+      "language": "markdown",
+      "sizeLines": 53,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/model-setups.md",
+      "language": "markdown",
+      "sizeLines": 77,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/provider-operational-audit.md",
+      "language": "markdown",
+      "sizeLines": 63,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/reports/artifact-production-readiness-2026-08-12.md",
+      "language": "markdown",
+      "sizeLines": 69,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "icon/preset_oscuro.avif",
+      "language": "avif",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "icon/preset_predeterminado.avif",
+      "language": "avif",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/banner.py",
+      "language": "python",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/client.py",
+      "language": "python",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/activate.py",
+      "language": "python",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/agents.py",
+      "language": "python",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/assign.py",
+      "language": "python",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/config.py",
+      "language": "python",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/layout.py",
+      "language": "python",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/stats.py",
+      "language": "python",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/commands/tasks.py",
+      "language": "python",
+      "sizeLines": 117,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/main.py",
+      "language": "python",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/output.py",
+      "language": "python",
+      "sizeLines": 65,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/repl.py",
+      "language": "python",
+      "sizeLines": 394,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/serverctl.py",
+      "language": "python",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_cli/userconfig.py",
+      "language": "python",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "karajan_mcp.py",
+      "language": "python",
+      "sizeLines": 408,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pyproject.toml",
+      "language": "toml",
+      "sizeLines": 21,
+      "fileCategory": "config"
+    },
+    {
+      "path": "requirements.txt",
+      "language": "txt",
+      "sizeLines": 25,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/clean_icon.py",
+      "language": "python",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/install_on_new_machine.ps1",
+      "language": "powershell",
+      "sizeLines": 124,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/migrate_run_attribution.py",
+      "language": "python",
+      "sizeLines": 237,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/reanalyze_resources.py",
+      "language": "python",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/setup_production.py",
+      "language": "python",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "skills/karajan/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 106,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "skills/task-router/SKILL.md",
+      "language": "markdown",
+      "sizeLines": 108,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "tests/conftest.py",
+      "language": "python",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/fixtures/itsfree_directory.html",
+      "language": "html",
+      "sizeLines": 5,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "tests/fixtures/itsfree_open_meteo.html",
+      "language": "html",
+      "sizeLines": 3,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "tests/fixtures/itsfree_supabase.html",
+      "language": "html",
+      "sizeLines": 3,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "tests/fixtures/resource_recommendation_baseline.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "tests/fixtures/resource_retrieval_cases.json",
+      "language": "json",
+      "sizeLines": 67,
+      "fileCategory": "config"
+    },
+    {
+      "path": "tests/rate_limiter_demo/rate_limiter.py",
+      "language": "python",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/rate_limiter_demo/test_rate_limiter.py",
+      "language": "python",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_console.py",
+      "language": "python",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_protocol.py",
+      "language": "python",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_session.py",
+      "language": "python",
+      "sizeLines": 230,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_tools_api.py",
+      "language": "python",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_tools_budget.py",
+      "language": "python",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_tools_catalog.py",
+      "language": "python",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_tools_executors.py",
+      "language": "python",
+      "sizeLines": 376,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_agent_tools_workspace.py",
+      "language": "python",
+      "sizeLines": 197,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_analytics_duckdb.py",
+      "language": "python",
+      "sizeLines": 170,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_api.py",
+      "language": "python",
+      "sizeLines": 351,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_artifact_activation_e2e.py",
+      "language": "python",
+      "sizeLines": 158,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_catalog_architecture.py",
+      "language": "python",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_config.py",
+      "language": "python",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_config_persistence.py",
+      "language": "python",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_controls.py",
+      "language": "python",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_database.py",
+      "language": "python",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_decision_drawer_ui.py",
+      "language": "python",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_delegation.py",
+      "language": "python",
+      "sizeLines": 203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_delegation_agent_tools.py",
+      "language": "python",
+      "sizeLines": 238,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_flow_policy.py",
+      "language": "python",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_handoff.py",
+      "language": "python",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_health_and_pagination.py",
+      "language": "python",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_hierarchy_groups.py",
+      "language": "python",
+      "sizeLines": 241,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_ingest.py",
+      "language": "python",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_inspiration_feed.py",
+      "language": "python",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_inspiration_source_roles.py",
+      "language": "python",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_metrics_export.py",
+      "language": "python",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_ml.py",
+      "language": "python",
+      "sizeLines": 232,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_observability.py",
+      "language": "python",
+      "sizeLines": 203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_openclaw_api.py",
+      "language": "python",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_openclaw_client.py",
+      "language": "python",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_production_setup.py",
+      "language": "python",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_providers.py",
+      "language": "python",
+      "sizeLines": 130,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_api.py",
+      "language": "python",
+      "sizeLines": 298,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_groups.py",
+      "language": "python",
+      "sizeLines": 146,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_intelligence.py",
+      "language": "python",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_library_ui.py",
+      "language": "python",
+      "sizeLines": 528,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_recommendation_benchmark.py",
+      "language": "python",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_recommendation_eval.py",
+      "language": "python",
+      "sizeLines": 189,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_refresh.py",
+      "language": "python",
+      "sizeLines": 270,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resource_taxonomy.py",
+      "language": "python",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_resources.py",
+      "language": "python",
+      "sizeLines": 482,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_router.py",
+      "language": "python",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_run_attribution_migration.py",
+      "language": "python",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_run_events_store.py",
+      "language": "python",
+      "sizeLines": 114,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_runs_endpoint.py",
+      "language": "python",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_scheduler.py",
+      "language": "python",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_search.py",
+      "language": "python",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_setup_production.py",
+      "language": "python",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_skill_analytics.py",
+      "language": "python",
+      "sizeLines": 186,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_skills.py",
+      "language": "python",
+      "sizeLines": 65,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_task_store_v2.py",
+      "language": "python",
+      "sizeLines": 320,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_tutorial.py",
+      "language": "python",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tests/test_validation_loop.py",
+      "language": "python",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tools/run_karajan_audit.py",
+      "language": "python",
+      "sizeLines": 421,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tools/run_karajan_trials.py",
+      "language": "python",
+      "sizeLines": 195,
+      "fileCategory": "code"
+    }
+  ],
+  "totalFiles": 240,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "large",
+  "stats": {
+    "filesScanned": 240,
+    "byCategory": {
+      "docs": 23,
+      "config": 20,
+      "code": 190,
+      "script": 2,
+      "markup": 5
+    },
+    "byLanguage": {
+      "markdown": 22,
+      "json": 18,
+      "config": 1,
+      "db": 21,
+      "bak": 9,
+      "unknown": 2,
+      "batch": 1,
+      "python": 152,
+      "javascript": 3,
+      "html": 4,
+      "css": 1,
+      "corrupted": 1,
+      "avif": 2,
+      "toml": 1,
+      "txt": 1,
+      "powershell": 1
+    }
+  }
+}
