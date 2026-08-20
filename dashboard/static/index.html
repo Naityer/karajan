@@ -10,9 +10,17 @@
       // Marco del host (Atlas): se marca AQUÍ, antes del primer pintado, para que el
       // CSS oculte marca, pestañas y paleta. Desde `atlas-host.js` (con `defer`)
       // llegaría tarde y el marco propio se vería un instante. Ver atlas-host.js.
+      //
+      // `atlas_object` (nota "Plan de mejora", §7/§12, F7) es más agresivo:
+      // oculta TODO el dashboard, no solo su marca — este documento aloja un
+      // único objeto de grano fino, no la aplicación completa.
       try {
-        if (new URLSearchParams(location.search).get("atlas_chrome") === "host") {
+        var params = new URLSearchParams(location.search);
+        if (params.get("atlas_chrome") === "host") {
           document.documentElement.classList.add("atlas-hosted");
+        }
+        if (params.get("atlas_object")) {
+          document.documentElement.classList.add("atlas-object-only");
         }
       } catch (e) {
         /* URL no parseable: se queda con su marco propio, que es el modo suelto */
@@ -23,6 +31,10 @@
     <script src="/static/atlas-relay.js?v=1"></script>
   </head>
   <body>
+    <!-- Modo `?atlas_object=<id>` (F7): único contenedor visible, el resto del
+         shell se oculta por CSS (`.atlas-object-only`, ver styles.css). Vive
+         fuera del `<header>`/`<main>` legacy para no heredar su layout. -->
+    <div id="atlasObjectMount" class="atlas-object-mount"></div>
     <!-- Compact tool frame: brand · view switch · live status · theme — not a generic web shell -->
     <header class="bar">
       <div class="brand"><img src="/static/icons/karajan_v2.png?v=ui-2" alt="" class="brand-icon" /><span>KARAJAN</span></div>
@@ -414,9 +426,14 @@
     </div>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/static/app.js?v=ui-15"></script>
+    <!-- `type="module"` (nota "Plan de mejora", §3): permite a app.js importar
+         de `src/core/` — un módulo se difiere igual que `defer`, así que el
+         orden relativo con atlas-host.js (también módulo, justo debajo) se
+         conserva sin tocar nada más. atlas-relay.js sigue siendo un script
+         clásico a propósito: tiene que ejecutar antes de que se difiera nada. -->
+    <script type="module" src="/static/app.js?v=ui-15"></script>
     <!-- Después de app.js: acciona las pestañas ya montadas cuando Atlas embebe
          este dashboard como módulo (ver atlas-host.js). -->
-    <script src="/static/atlas-host.js?v=1"></script>
+    <script type="module" src="/static/atlas-host.js?v=1"></script>
   </body>
 </html>

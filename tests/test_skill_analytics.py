@@ -22,6 +22,18 @@ from app.skill_analytics import build_skill_analytics
 
 NOW = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
 
+# `app.js` (nota "Plan de mejora", §18) se partió en
+# `dashboard/static/src/modules/*.js`; estos tests comprueban comportamiento
+# del dashboard, no la ubicación de un fichero concreto, así que leen el
+# conjunto de módulos concatenado como si fuera el `app.js` monolítico de antes.
+_STATIC_DIR = Path(__file__).parents[1] / "dashboard" / "static"
+
+
+def _frontend_js() -> str:
+    return "\n\n".join(
+        p.read_text(encoding="utf-8") for p in sorted((_STATIC_DIR / "src" / "modules").glob("*.js"))
+    )
+
 
 def _record(*, delegated: bool = True, status: TaskStatus = TaskStatus.COMPLETED) -> TaskRecord:
     subtask = Subtask(
@@ -147,7 +159,7 @@ def test_period_uses_execution_date_even_for_an_old_task() -> None:
 
 def test_monitor_ui_exposes_statistics_and_skills_tab() -> None:
     html = (Path(__file__).parents[1] / "dashboard" / "static" / "index.html").read_text(encoding="utf-8")
-    js = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
+    js = _frontend_js()
     assert 'data-view="monitor">Estadísticas<' in html
     assert 'data-subview="skills"' in html
     assert 'id="subview-skills"' in html
@@ -155,7 +167,7 @@ def test_monitor_ui_exposes_statistics_and_skills_tab() -> None:
 
 
 def test_skills_tab_falls_back_when_running_backend_predates_endpoint() -> None:
-    js = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
+    js = _frontend_js()
     assert "function buildSkillsAnalyticsFallback(records, catalogSkills, days)" in js
     assert "async function loadSkillsAnalyticsReport()" in js
     assert "if (error.status !== 404) throw error;" in js
@@ -163,11 +175,17 @@ def test_skills_tab_falls_back_when_running_backend_predates_endpoint() -> None:
     assert 'api("/skills")' in js
     assert "compatibility_mode: true" in js
     assert "const report = await loadSkillsAnalyticsReport();" in js
-    assert "error.status = res.status" in js
+    # `error.status` lo pone `ApiClient.request` (src/core/api-client.js), del
+    # que `api()` es un wrapper desde la extracción a módulos del frontend
+    # (nota "Plan de mejora", §3/§19) — antes vivía inline en app.js.
+    api_client_js = (Path(__file__).parents[1] / "dashboard" / "static" / "src" / "core" / "api-client.js").read_text(
+        encoding="utf-8"
+    )
+    assert "error.status = res.status" in api_client_js
 
 
 def test_skill_inventory_can_switch_to_per_skill_timeline() -> None:
-    js = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
+    js = _frontend_js()
     assert 'data-skills-inventory-view="table"' in js
     assert 'data-skills-inventory-view="timeline"' in js
     assert 'localStorage.setItem("karajan-skill-inventory-view"' in js
@@ -176,9 +194,8 @@ def test_skill_inventory_can_switch_to_per_skill_timeline() -> None:
     assert "legendAlways: true" in js
 
 
-def test_skill_analytics_endpoint_is_readable_without_mutating_state(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(main, "store", TaskStore(tmp_path / "skills-api.db"))
-    response = TestClient(main.app).get("/analytics/skills?days=30")
+def test_skill_analytics_endpoint_is_readable_without_mutating_state(karajan_install) -> None:
+    response = karajan_install.client.get("/analytics/skills?days=30")
     assert response.status_code == 200
     payload = response.json()
     assert payload["period_days"] == 30

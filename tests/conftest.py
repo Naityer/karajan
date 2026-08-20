@@ -96,3 +96,91 @@ def stub_providers(monkeypatch: pytest.MonkeyPatch) -> type[StubProvider]:
     monkeypatch.setattr(delegation, "resolve", lambda tier, config: stub_resolution(tier))
     monkeypatch.setattr(classifier, "resolve", lambda tier, config: None)
     return StubProvider
+
+
+# --- instalación aislada por test -------------------------------------------
+# Hasta ahora cada test se fabricaba su aislamiento a mano reasignando globales
+# de `app.main` (`main.store = TaskStore(tmp_path / "api.db")`), sin restaurarlas
+# nunca: el aislamiento dependía del orden de ejecución y la instalación real
+# del operador (`data/`) quedaba a un descuido de distancia.
+#
+# `karajan_install` construye una instalación entera y desechable —el
+# `KarajanRuntime` de `app/runtime.py`— y la activa mientras dura el test. Los
+# módulos ya extraídos de `main.py` la ven a través de `runtime.current()`; los
+# endpoints que todavía viven en `main.py` la ven a través de las vistas de
+# módulo, que la fixture rebindea y restaura.
+
+
+class KarajanInstall:
+    """Una instalación de Karajan de usar y tirar, con su cliente HTTP."""
+
+    def __init__(self, runtime, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.runtime = runtime
+        self._monkeypatch = monkeypatch
+
+    @property
+    def tasks(self):
+        return self.runtime.tasks
+
+    @property
+    def routing(self):
+        return self.runtime.routing
+
+    @property
+    def resources(self):
+        return self.runtime.resources
+
+    def set_config(self, config):
+        """Fija la configuración activa de esta instalación.
+
+        Toca también la vista `main.active_config` porque parte de los endpoints
+        sigue leyéndola desde ahí mientras dura la migración a routers.
+        """
+        from app import main
+
+        self.runtime.set_config(config)
+        self._monkeypatch.setattr(main, "active_config", config)
+        return config
+
+    @property
+    def client(self):
+        from fastapi.testclient import TestClient
+        from app import main
+
+        return TestClient(main.app)
+
+
+@pytest.fixture
+def karajan_install(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    from app import main
+    from app.runtime import build_standalone_runtime, set_current
+
+    runtime = build_standalone_runtime(tmp_path / "data")
+    previous = set_current(runtime)
+    monkeypatch.setattr(main, "runtime", runtime)
+    # Todas las vistas de `main`, no solo los almacenes: el instalador, el
+    # adaptador de Naityer, el indexador anidado y el coordinador de reanálisis
+    # llevan dentro una referencia al almacén con el que se construyeron. Dejar
+    # cualquiera de ellos sin sustituir es dejar una vía por la que un test
+    # escribe en la biblioteca real del operador.
+    for attribute, value in {
+        "store": runtime.tasks,
+        "layout_store": runtime.routing,
+        "resource_store": runtime.resources,
+        "active_config": runtime.config,
+        "scheduler": runtime.scheduler,
+        "resource_analyzer": runtime.resource_analyzer,
+        "web_reference_analyzer": runtime.web_reference_analyzer,
+        "resource_installer": runtime.resource_installer,
+        "naityer_adapter": runtime.naityer_adapter,
+        "nested_resource_indexer": runtime.nested_resource_indexer,
+        "local_resource_analyzer": runtime.local_resource_analyzer,
+        "resource_ranking_engine": runtime.resource_ranking_engine,
+        "inspiration_feed": runtime.inspiration_feed,
+        "resource_refresh": runtime.resource_refresh,
+    }.items():
+        monkeypatch.setattr(main, attribute, value)
+    try:
+        yield KarajanInstall(runtime, monkeypatch)
+    finally:
+        set_current(previous)

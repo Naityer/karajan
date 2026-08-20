@@ -1,0 +1,707 @@
+[
+  {
+    "kind": "route",
+    "path": "/",
+    "methods": [
+      "GET"
+    ],
+    "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/agent-tools",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ToolSpecInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/agent-tools/profiles",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ToolProfileInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/agents/performance",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[AgentPerformance]"
+  },
+  {
+    "kind": "route",
+    "path": "/analytics/dashboard",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/analytics/predictions/status",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/analytics/skills",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/atlas-addon.json",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/catalog",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ProviderInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/classify-task",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "TaskRecord"
+  },
+  {
+    "kind": "route",
+    "path": "/config",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "KarajanConfig"
+  },
+  {
+    "kind": "route",
+    "path": "/config",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "KarajanConfig"
+  },
+  {
+    "kind": "route",
+    "path": "/delegate-task",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "TaskRecord"
+  },
+  {
+    "kind": "starlette",
+    "path": "/docs",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "kind": "starlette",
+    "path": "/docs/oauth2-redirect",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "kind": "route",
+    "path": "/events",
+    "methods": [
+      "GET"
+    ],
+    "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/handoff/packs",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ContextPackSummary]"
+  },
+  {
+    "kind": "route",
+    "path": "/handoff/packs",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ContextPackDetail"
+  },
+  {
+    "kind": "route",
+    "path": "/handoff/packs/{pack_id}",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "ContextPackDetail"
+  },
+  {
+    "kind": "route",
+    "path": "/handoff/packs/{pack_id}/result",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ContextPackDetail"
+  },
+  {
+    "kind": "route",
+    "path": "/health",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "HealthStatus"
+  },
+  {
+    "kind": "route",
+    "path": "/ingest",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "TaskRecord"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/channels",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[OpenClawChannelInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/channels/catalog",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[OpenClawChannelInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/daemon-status",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "OpenClawDaemonStatus"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/plugins",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[OpenClawPluginInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/plugins/install",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "OpenClawOperationResult"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/setup-commands",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[OpenClawSetupCommand]"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/skills",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[OpenClawSkillInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/skills/install",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "OpenClawOperationResult"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/skills/update",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "OpenClawOperationResult"
+  },
+  {
+    "kind": "route",
+    "path": "/integrations/openclaw/status",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "OpenClawStatus"
+  },
+  {
+    "kind": "route",
+    "path": "/manifest",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/metrics",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "Metrics"
+  },
+  {
+    "kind": "route",
+    "path": "/metrics/prometheus",
+    "methods": [
+      "GET"
+    ],
+    "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/observability",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "ObservabilitySnapshot"
+  },
+  {
+    "kind": "route",
+    "path": "/observability/history",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "MetricsHistory"
+  },
+  {
+    "kind": "starlette",
+    "path": "/openapi.json",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "kind": "route",
+    "path": "/predict/task",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "PredictTaskResponse"
+  },
+  {
+    "kind": "route",
+    "path": "/providers",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[CredentialStatus]"
+  },
+  {
+    "kind": "route",
+    "path": "/providers/{name}/run",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ProviderRunResult"
+  },
+  {
+    "kind": "route",
+    "path": "/providers/{name}/setup",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "ProviderSetup"
+  },
+  {
+    "kind": "route",
+    "path": "/queue/status",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "starlette",
+    "path": "/redoc",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "kind": "route",
+    "path": "/resource-groups",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ResourceGroup]"
+  },
+  {
+    "kind": "route",
+    "path": "/resource-groups",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ResourceGroup"
+  },
+  {
+    "kind": "route",
+    "path": "/resource-groups/assignments",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "list[ResourceGroup]"
+  },
+  {
+    "kind": "route",
+    "path": "/resource-groups/{group_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resource-groups/{group_id}",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "ResourceGroup"
+  },
+  {
+    "kind": "route",
+    "path": "/resources",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ResourceItem]"
+  },
+  {
+    "kind": "route",
+    "path": "/resources",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ResourceItem"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/analyze",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "AnalyzeResult"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/discovery/feed",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/discovery/sources",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/discovery/sources",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "DiscoverySource"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/discovery/sources",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/index",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/recommend",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/refresh/run",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/refresh/runs/{run_id}",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/refresh/settings",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/refresh/settings",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/{resource_id}",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/{resource_id}",
+    "methods": [
+      "PATCH"
+    ],
+    "response_model": "ResourceItem"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/{resource_id}/operations",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ResourceOperationResult"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/{resource_id}/reanalyze",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ResourceItem"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/{resource_id}/reindex",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/{resource_id}/visibility",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "ResourceItem"
+  },
+  {
+    "kind": "route",
+    "path": "/routing-layout",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "RoutingLayout"
+  },
+  {
+    "kind": "route",
+    "path": "/routing-layout",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "RoutingLayout"
+  },
+  {
+    "kind": "route",
+    "path": "/routing-layout/catalog/{provider_name}",
+    "methods": [
+      "DELETE"
+    ],
+    "response_model": "RoutingLayout"
+  },
+  {
+    "kind": "route",
+    "path": "/routing-layout/catalog/{provider_name}",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "RoutingLayout"
+  },
+  {
+    "kind": "route",
+    "path": "/runs/{run_id}/events",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[RunEventInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/search/tasks",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/setup/apply-default",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "DefaultConfigApplyResult"
+  },
+  {
+    "kind": "route",
+    "path": "/setup/apply-queue-config",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "DefaultConfigApplyResult"
+  },
+  {
+    "kind": "route",
+    "path": "/setup/complete",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "SetupStatus"
+  },
+  {
+    "kind": "route",
+    "path": "/setup/status",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "SetupStatus"
+  },
+  {
+    "kind": "route",
+    "path": "/setup/tutorial",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "SetupTutorial"
+  },
+  {
+    "kind": "route",
+    "path": "/skills",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[SkillInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/skills/{name}/install",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "SkillInstallResult"
+  },
+  {
+    "kind": "mount",
+    "path": "/static",
+    "name": "static"
+  },
+  {
+    "kind": "route",
+    "path": "/tasks",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[TaskRecord]"
+  },
+  {
+    "kind": "route",
+    "path": "/tasks/{task_id}",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "TaskRecord"
+  },
+  {
+    "kind": "route",
+    "path": "/tasks/{task_id}/approve-review",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "TaskRecord"
+  },
+  {
+    "kind": "route",
+    "path": "/tasks/{task_id}/artifacts",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ArtifactInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/tasks/{task_id}/decisions",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[DecisionLogEntry]"
+  },
+  {
+    "kind": "route",
+    "path": "/tasks/{task_id}/decisions",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "DecisionLogEntry"
+  },
+  {
+    "kind": "route",
+    "path": "/tasks/{task_id}/runs",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[RunInfo]"
+  }
+]

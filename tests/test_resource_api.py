@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app import main
+from app.modules.inspiration import api as inspiration_api
 from app.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
 from app.resource_library import ResourceStore
 from app.routing_layout import RoutingLayoutStore
@@ -27,14 +28,24 @@ class _Analyzer:
         )
 
 
-def _client(monkeypatch, tmp_path) -> TestClient:
+def _client(karajan_install, monkeypatch, tmp_path) -> TestClient:
+    """Cliente sobre una instalación aislada, con la biblioteca vacía.
+
+    `karajan_install` monta una instalación completa —la que ven tanto los
+    endpoints que siguen en `main.py` como los routers ya extraídos—, pero su
+    catálogo viene sembrado con los recursos curados, igual que en producción.
+    Estos tests comprueban la API sobre un catálogo conocido, así que sustituyen
+    el almacén por uno vacío; el sembrado se prueba en `test_resource_library`.
+    """
     monkeypatch.setenv("KARAJAN_REQUIRE_ATLAS_TOKEN", "0")
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    monkeypatch.setattr(main, "resource_store", ResourceStore(tmp_path / "resources.db"))
-    monkeypatch.setattr(main, "layout_store", RoutingLayoutStore(tmp_path / "routing.json"))
-    monkeypatch.setattr(main, "resource_analyzer", _Analyzer())
-    main._resource_analysis_tickets.clear()
-    return TestClient(main.app)
+    resources = ResourceStore(tmp_path / "resources.db")
+    karajan_install.runtime.resources = resources
+    monkeypatch.setattr(main, "resource_store", resources)
+    karajan_install.runtime.resource_analyzer = _Analyzer()
+    monkeypatch.setattr(main, "resource_analyzer", karajan_install.runtime.resource_analyzer)
+    inspiration_api._resource_analysis_tickets.clear()
+    return karajan_install.client
 
 
 class _Feed:
@@ -66,8 +77,8 @@ class _NestedIndexer:
         return self.Result()
 
 
-def test_resource_crud_search_index_and_analysis(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_resource_crud_search_index_and_analysis(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     analyzed = client.post("/resources/analyze", json={"repo_url": "https://github.com/acme/demo"})
     assert analyzed.status_code == 200
     assert analyzed.json()["preview"]["kind"] == "skill"
@@ -84,8 +95,8 @@ def test_resource_crud_search_index_and_analysis(monkeypatch, tmp_path) -> None:
     assert detail["operations"] == []
 
 
-def test_github_resource_requires_matching_analysis_ticket(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_github_resource_requires_matching_analysis_ticket(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     response = client.post("/resources", json={
         "slug": "unsafe",
         "name": "Unsafe",
@@ -97,8 +108,8 @@ def test_github_resource_requires_matching_analysis_ticket(monkeypatch, tmp_path
     assert response.status_code == 409
 
 
-def test_recommend_resources_returns_explainable_primary_and_complementary(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_recommend_resources_returns_explainable_primary_and_complementary(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     client.post("/resources", json={
         "slug": "pdf-parser", "name": "PDF Parser", "kind": "capability", "source": "manual",
         "summary": "Convierte documentos PDF a Markdown", "tags": ["pdf", "markdown"],
@@ -128,9 +139,9 @@ def test_recommend_resources_returns_explainable_primary_and_complementary(monke
     assert result[0]["coverage"] > 0
 
 
-def test_nested_reindex_requires_confirmation_and_is_explicit(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
-    monkeypatch.setattr(main, "nested_resource_indexer", _NestedIndexer())
+def test_nested_reindex_requires_confirmation_and_is_explicit(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
+    karajan_install.runtime.nested_resource_indexer = _NestedIndexer()
     created = client.post("/resources", json={
         "slug": "itsfree", "name": "it's free*", "kind": "reference", "source": "manual",
         "source_url": "https://itsfree.dev/es/", "summary": "Directorio de recursos",
@@ -145,9 +156,9 @@ def test_nested_reindex_requires_confirmation_and_is_explicit(monkeypatch, tmp_p
     assert indexed.json()["operation_id"].startswith("rop_")
 
 
-def test_discovery_sources_are_persisted_and_feed_uses_selection(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
-    monkeypatch.setattr(main, "inspiration_feed", _Feed())
+def test_discovery_sources_are_persisted_and_feed_uses_selection(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
+    karajan_install.runtime.inspiration_feed = _Feed()
 
     catalog = client.get("/resources/discovery/sources")
     assert catalog.status_code == 200
@@ -168,8 +179,8 @@ def test_discovery_sources_are_persisted_and_feed_uses_selection(monkeypatch, tm
     assert feed.json()["items"][0]["title"] == "Demo agent toolkit"
 
 
-def test_discovery_rejects_unknown_or_unconfigured_sources(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_discovery_rejects_unknown_or_unconfigured_sources(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     assert client.put(
         "/resources/discovery/sources", json={"source_ids": ["invented"]}
     ).status_code == 422
@@ -180,8 +191,8 @@ def test_discovery_rejects_unknown_or_unconfigured_sources(monkeypatch, tmp_path
     assert "require configuration" in response.json()["detail"]
 
 
-def test_visibility_updates_catalog_and_routing_projection(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_visibility_updates_catalog_and_routing_projection(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     assert client.put(
         "/routing-layout",
         json={"entities": [{"id": "worker-1", "name": "Worker", "role": "child"}]},
@@ -205,8 +216,8 @@ def test_visibility_updates_catalog_and_routing_projection(monkeypatch, tmp_path
     assert entity["skills"] == ["demo"]
 
 
-def test_catalog_only_operation_is_denied_and_audited(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_catalog_only_operation_is_denied_and_audited(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     created = client.post("/resources", json={
         "slug": "inspiration",
         "name": "Inspiration",
@@ -224,8 +235,8 @@ def test_catalog_only_operation_is_denied_and_audited(monkeypatch, tmp_path) -> 
     assert detail["operations"][0]["action"] == "install"
 
 
-def test_manual_resource_cannot_claim_naityer_installer(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_manual_resource_cannot_claim_naityer_installer(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     created = client.post("/resources", json={
         "slug": "fake-installer",
         "name": "Fake installer",
@@ -240,8 +251,8 @@ def test_manual_resource_cannot_claim_naityer_installer(monkeypatch, tmp_path) -
     assert created.json()["metadata"]["note"] == "editorial"
 
 
-def test_visibility_rejects_unknown_agent(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_visibility_rejects_unknown_agent(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     created = client.post("/resources", json={
         "slug": "demo",
         "name": "Demo",
@@ -255,8 +266,8 @@ def test_visibility_rejects_unknown_agent(monkeypatch, tmp_path) -> None:
     assert response.status_code == 422
 
 
-def test_full_refresh_api_returns_run_id_and_exposes_progress(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_full_refresh_api_returns_run_id_and_exposes_progress(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
 
     class RefreshStub:
         run = {
@@ -282,7 +293,7 @@ def test_full_refresh_api_returns_run_id_and_exposes_progress(monkeypatch, tmp_p
                 raise KeyError(run_id)
             return dict(self.run)
 
-    monkeypatch.setattr(main, "resource_refresh", RefreshStub())
+    karajan_install.runtime.resource_refresh = RefreshStub()
 
     denied = client.post("/resources/refresh/run", json={"confirmed": False})
     started = client.post("/resources/refresh/run", json={"confirmed": True})

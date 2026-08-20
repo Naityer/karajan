@@ -8,6 +8,7 @@ from app import config as config_module
 from app import main
 from app.database import TaskStore
 from app.models import Backend, KarajanConfig, Profile
+from app.runtime import build_standalone_runtime
 
 
 def test_save_and_load_runtime_config_roundtrip(tmp_path: Path) -> None:
@@ -37,13 +38,14 @@ def test_load_config_prefers_runtime_override(tmp_path: Path, monkeypatch) -> No
     assert resolved.profile == Profile.PRO
 
 
-def test_put_config_persists_to_disk(tmp_path: Path, monkeypatch) -> None:
-    path = tmp_path / "active_config.json"
-    monkeypatch.setattr(config_module, "RUNTIME_CONFIG_PATH", path)
+def test_put_config_persists_to_disk(karajan_install, monkeypatch) -> None:
+    # `PUT /config` vive ahora en `app/modules/configuration/api.py` y resuelve
+    # el runtime activo con `runtime.current()` (el runtime de proceso que
+    # `karajan_install` activa), no con el global `main.runtime` de antes — de
+    # ahí que la instalación aislada tenga que venir de la fixture.
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    main.store = TaskStore(tmp_path / "cfg.db")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
 
     new_config = KarajanConfig(backend=Backend.CLI, prefer_free=False).model_dump(mode="json")
     res = client.put("/config", json=new_config)
@@ -51,5 +53,6 @@ def test_put_config_persists_to_disk(tmp_path: Path, monkeypatch) -> None:
     assert res.json()["prefer_free"] is False
 
     # Persisted and reloadable for the next process start.
+    path = karajan_install.runtime.data_dir / "active_config.json"
     assert path.exists()
     assert config_module.load_runtime_config(path).prefer_free is False

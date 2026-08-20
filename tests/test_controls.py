@@ -25,17 +25,16 @@ CRITICAL_INGEST = {
 }
 
 
-def _api_client(tmp_path: Path, config: KarajanConfig | None = None) -> TestClient:
-    main.store = TaskStore(tmp_path / "controls.db")
-    main.active_config = config or KarajanConfig(backend=Backend.CLI)
-    return TestClient(main.app)
+def _api_client(karajan_install, config: KarajanConfig | None = None) -> TestClient:
+    karajan_install.set_config(config or KarajanConfig(backend=Backend.CLI))
+    return karajan_install.client
 
 
 # --- P0.1: human review gate is now PRE-execution -----------------------------
 
 
-def test_human_review_gate_withholds_execution_until_approved(tmp_path: Path) -> None:
-    client = _api_client(tmp_path)
+def test_human_review_gate_withholds_execution_until_approved(karajan_install, tmp_path: Path) -> None:
+    client = _api_client(karajan_install)
     task = client.post("/ingest", json=CRITICAL_INGEST).json()
 
     delegated = client.post("/delegate-task", json={"task_id": task["task_id"]}).json()
@@ -54,8 +53,8 @@ def test_human_review_gate_withholds_execution_until_approved(tmp_path: Path) ->
     assert any(d["decision"] == "human_review_gate=approved" for d in decisions)
 
 
-def test_approve_review_rejects_non_critical_task(tmp_path: Path) -> None:
-    client = _api_client(tmp_path)
+def test_approve_review_rejects_non_critical_task(karajan_install, tmp_path: Path) -> None:
+    client = _api_client(karajan_install)
     task = client.post("/classify-task", json={"prompt": "Renombra una variable trivial."}).json()
     assert task["classification"]["requires_human_review"] is False
     res = client.post(f"/tasks/{task['task_id']}/approve-review")
@@ -99,12 +98,12 @@ def test_cost_cap_allows_when_under_budget() -> None:
 # --- P0.3: daily budget cap (API layer with shared state) ---------------------
 
 
-def test_daily_budget_blocks_delegation(tmp_path: Path) -> None:
+def test_daily_budget_blocks_delegation(karajan_install, tmp_path: Path) -> None:
     config = KarajanConfig(
         backend=Backend.CLI,
         orchestration=OrchestrationConfig(max_daily_cost_usd=0.00001),
     )
-    client = _api_client(tmp_path, config)
+    client = _api_client(karajan_install, config)
     task = client.post("/classify-task", json={"prompt": "Implementa un endpoint y valida."}).json()
 
     res = client.post("/delegate-task", json={"task_id": task["task_id"]})
@@ -116,9 +115,9 @@ def test_daily_budget_blocks_delegation(tmp_path: Path) -> None:
 # --- P0.2: token auth on mutations --------------------------------------------
 
 
-def test_mutations_require_token_when_configured(tmp_path: Path, monkeypatch) -> None:
+def test_mutations_require_token_when_configured(karajan_install, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("KARAJAN_TOKEN", "s3cret")
-    client = _api_client(tmp_path)
+    client = _api_client(karajan_install)
 
     unauth = client.post("/classify-task", json={"prompt": "hola"})
     assert unauth.status_code == 401
@@ -131,8 +130,8 @@ def test_mutations_require_token_when_configured(tmp_path: Path, monkeypatch) ->
     assert auth.status_code == 200
 
 
-def test_reads_stay_open_with_token_set(tmp_path: Path, monkeypatch) -> None:
+def test_reads_stay_open_with_token_set(karajan_install, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("KARAJAN_TOKEN", "s3cret")
-    client = _api_client(tmp_path)
+    client = _api_client(karajan_install)
     assert client.get("/metrics").status_code == 200
     assert client.get("/tasks").status_code == 200

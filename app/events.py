@@ -30,6 +30,16 @@ def set_loop(loop: asyncio.AbstractEventLoop) -> None:
     _loop = loop
 
 
+def get_loop() -> asyncio.AbstractEventLoop | None:
+    """The loop recorded by `set_loop`, or `None` before the app has started.
+
+    Used by `queue` dispatch (`app/modules/tasks/api.py`) to hand a coroutine
+    from a sync request handler to the loop the scheduler actually runs on —
+    the same loop `set_loop` captured, so there is only one place that tracks it.
+    """
+    return _loop
+
+
 def subscribe() -> asyncio.Queue[dict[str, Any]]:
     q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
     _subscribers.add(q)

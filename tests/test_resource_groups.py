@@ -6,11 +6,20 @@ from app import main
 from app.resource_library import ResourceStore
 
 
-def _client(monkeypatch, tmp_path) -> TestClient:
+def _client(karajan_install, monkeypatch, tmp_path) -> TestClient:
+    """Cliente sobre una instalación aislada, con la biblioteca vacía.
+
+    Sustituir solo `main.resource_store` no bastaba: el instalador y el
+    coordinador de reanálisis siguen apuntando al almacén con el que se
+    construyeron, así que parte de los endpoints escribía en la biblioteca real.
+    `karajan_install` sustituye la instalación entera.
+    """
     monkeypatch.setenv("KARAJAN_REQUIRE_ATLAS_TOKEN", "0")
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    monkeypatch.setattr(main, "resource_store", ResourceStore(tmp_path / "resources.db"))
-    return TestClient(main.app)
+    resources = ResourceStore(tmp_path / "resources.db")
+    karajan_install.runtime.resources = resources
+    monkeypatch.setattr(main, "resource_store", resources)
+    return karajan_install.client
 
 
 def _create_resource(client: TestClient, slug: str, kind: str = "skill") -> dict:
@@ -37,8 +46,8 @@ def _create_group(
     return response.json()
 
 
-def test_defaults_seed_once_and_classify_existing_resources(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_defaults_seed_once_and_classify_existing_resources(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     skill = _create_resource(client, "demo-skill", "skill")
     capability = _create_resource(client, "demo-capability", "capability")
     reference = _create_resource(client, "demo-reference", "reference")
@@ -65,8 +74,8 @@ def test_defaults_seed_once_and_classify_existing_resources(monkeypatch, tmp_pat
     assert skill["id"] not in latest[extensions["id"]]["resource_ids"]
 
 
-def test_group_hierarchy_rejects_cycles_and_more_than_four_levels(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_group_hierarchy_rejects_cycles_and_more_than_four_levels(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     roots = {group["name"]: group for group in client.get("/resource-groups").json()}
     level_2 = _create_group(client, "Nivel 2", roots["Desarrollo de software"]["id"])
     level_3 = _create_group(client, "Nivel 3", level_2["id"])
@@ -89,8 +98,8 @@ def test_group_hierarchy_rejects_cycles_and_more_than_four_levels(monkeypatch, t
     assert "4 levels" in too_deep.json()["detail"]
 
 
-def test_bulk_assignment_is_atomic_and_validates_ids(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_bulk_assignment_is_atomic_and_validates_ids(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     resource = _create_resource(client, "assign-me")
     roots = {group["name"]: group for group in client.get("/resource-groups").json()}
     target = _create_group(client, "Target", roots["Desarrollo de software"]["id"])
@@ -110,8 +119,8 @@ def test_bulk_assignment_is_atomic_and_validates_ids(monkeypatch, tmp_path) -> N
     assert all(resource["id"] not in group["resource_ids"] for group in unassigned.json())
 
 
-def test_delete_requires_confirmation_moves_resources_and_reparents_children(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_delete_requires_confirmation_moves_resources_and_reparents_children(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     resource = _create_resource(client, "movable")
     roots = {group["name"]: group for group in client.get("/resource-groups").json()}
     parent = _create_group(client, "Temporal", roots["Desarrollo de software"]["id"])
@@ -132,8 +141,8 @@ def test_delete_requires_confirmation_moves_resources_and_reparents_children(mon
     assert latest[roots["Implementación"]["id"]]["resource_ids"] == [resource["id"]]
 
 
-def test_group_mutations_require_shared_token(monkeypatch, tmp_path) -> None:
-    client = _client(monkeypatch, tmp_path)
+def test_group_mutations_require_shared_token(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
     monkeypatch.setenv("KARAJAN_TOKEN", "secret")
     assert client.get("/resource-groups").status_code == 200
     denied = client.post("/resource-groups", json={"name": "Private"})

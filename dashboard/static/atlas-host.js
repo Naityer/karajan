@@ -17,6 +17,22 @@
 // Todo lo hace este archivo leyendo y accionando el DOM que ya existe: `app.js` no
 // se toca (más allá de la base de API, que sí necesita saber dónde está montado).
 // Conmutar = accionar el control real, no duplicar su lógica.
+//
+// La navegación (`applyView`) pasa por `objectForDataView` — el registry de
+// `src/registry-bootstrap.js` (nota "Plan de mejora", §6-§11) — en vez de
+// buscar la pestaña a mano: el `data-view` que manda Atlas sigue siendo el
+// mismo vocabulario de siempre, pero ahora se resuelve contra el catálogo de
+// objetos UI en vez del DOM directamente. `type="module"` (como `app.js`,
+// cargado antes en el documento) es lo que hace seguro este `import`: los
+// módulos se difieren igual que `defer` y se evalúan en orden de documento,
+// así que el registry ya existe cuando este script arranca.
+//
+// `?atlas_object=<id>` (nota §7/§12, F7) es un segundo modo de hospedaje,
+// distinto de `?atlas_view=`: en vez de la pestaña completa, monta UN objeto
+// de grano fino del catálogo (`mountObjectById`) — pensado para vivir en su
+// propio iframe sandbox, más pequeño que el documento del dashboard, que es
+// lo que `addon-object-host.tsx` de Atlas abre por objeto.
+import { objectForDataView, mountObjectById } from './src/registry-bootstrap.js';
 
 (function () {
   'use strict';
@@ -52,10 +68,21 @@
   // ── Navegación ─────────────────────────────────────────────────────────────
   function applyView(view, attempt) {
     if (typeof view !== 'string' || !view) return;
-    var tab = document.querySelector('.view-tab[data-view="' + view + '"]');
-    if (tab) {
-      tab.click();
+    var object = objectForDataView(view);
+    // `app.js` puede enganchar el nav algo después de que este script arranque
+    // (los módulos se difieren, pero su propio `init()` async todavía tiene
+    // trabajo que hacer) — igual que el `applyView` original, reintenta en vez
+    // de perder la navegación si la pestaña/objeto aún no está listo.
+    if (object && object.canMount()) {
+      object.mount();
       return;
+    }
+    if (!object) {
+      var tab = document.querySelector('.view-tab[data-view="' + view + '"]');
+      if (tab) {
+        tab.click();
+        return;
+      }
     }
     if ((attempt || 0) < MAX_ATTEMPTS) {
       setTimeout(function () {
@@ -158,7 +185,41 @@
   // en línea del <head>: este archivo va con `defer` y llegaría tarde, tras haberse
   // visto un instante el marco propio.
 
+  // ── Modo objeto suelto ─────────────────────────────────────────────────────
+  // `document.documentElement.classList` ya trae `atlas-object-only` puesto por
+  // el script en línea del <head> (antes del primer pintado, igual que
+  // `atlas-hosted` — ver index.html) si `atlas_object` está presente: aquí solo
+  // queda montar. Reintenta como `applyView`: el registry puede no tener el
+  // objeto listo si `app.js` todavía está terminando su `init()`.
+  function mountAtlasObject(id, attempt) {
+    var container = document.getElementById('atlasObjectMount');
+    if (!container) return;
+    var mounted = mountObjectById(id, container);
+    if (mounted) {
+      postToHost({ source: ATLAS_ADDON_SOURCE, type: 'atlas:ready' });
+      return;
+    }
+    if ((attempt || 0) < MAX_ATTEMPTS) {
+      setTimeout(function () {
+        mountAtlasObject(id, (attempt || 0) + 1);
+      }, RETRY_MS);
+      return;
+    }
+    container.textContent = 'objeto desconocido: "' + id + '"';
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    var objectId = param('atlas_object');
+    if (objectId) {
+      // Modo objeto: sin barra de pestañas, sin toolbar, sin `atlas_view` — es
+      // un widget suelto, no el dashboard completo. El acuse `atlas:ready` lo
+      // manda `mountAtlasObject` una vez el objeto está montado de verdad, no
+      // antes (a diferencia del modo dashboard, donde "listo" es "el DOM
+      // existe" y el objeto en sí puede tardar un `fetch` más).
+      mountAtlasObject(objectId, 0);
+      return;
+    }
+
     var view = param('atlas_view');
     if (view) applyView(view, 0);
 

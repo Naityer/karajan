@@ -6,13 +6,12 @@ from app import main
 from app.database import TaskStore
 
 
-def _client(tmp_path: Path) -> TestClient:
-    main.store = TaskStore(tmp_path / "ingest.db")
-    return TestClient(main.app)
+def _client(karajan_install) -> TestClient:
+    return karajan_install.client
 
 
-def test_ingest_reconciles_and_persists(tmp_path: Path) -> None:
-    client = _client(tmp_path)
+def test_ingest_reconciles_and_persists(karajan_install, tmp_path: Path) -> None:
+    client = _client(karajan_install)
     body = {
         "original_prompt": "Revisa el pipeline y corrige el report",
         "domain": ["devops", "programming"],
@@ -39,8 +38,8 @@ def test_ingest_reconciles_and_persists(tmp_path: Path) -> None:
     assert any(d["phase"] == "classify" for d in decisions)
 
 
-def test_append_decision(tmp_path: Path) -> None:
-    client = _client(tmp_path)
+def test_append_decision(karajan_install, tmp_path: Path) -> None:
+    client = _client(karajan_install)
     body = {
         "original_prompt": "tarea",
         "criteria": {k: 1 for k in [
@@ -58,7 +57,7 @@ def test_append_decision(tmp_path: Path) -> None:
     assert any(d["decision"] == "sub_001->claude" for d in decisions)
 
 
-def test_append_decision_unknown_task(tmp_path: Path) -> None:
-    client = _client(tmp_path)
+def test_append_decision_unknown_task(karajan_install, tmp_path: Path) -> None:
+    client = _client(karajan_install)
     res = client.post("/tasks/nope/decisions", json={"task_id": "nope", "phase": "x", "decision": "y"})
     assert res.status_code == 404

@@ -1,7 +1,22 @@
 from pathlib import Path
 
 
-APP_JS = Path("dashboard/static/app.js")
+class _ConcatenatedSource:
+    """Como un `Path`, pero concatena varios (ver test_resource_library_ui.py).
+
+    `app.js` (nota "Plan de mejora", §18) se partió en
+    `dashboard/static/src/modules/*.js`; estos tests comprueban comportamiento
+    del dashboard, no la ubicación de un fichero concreto.
+    """
+
+    def __init__(self, *paths: Path) -> None:
+        self._paths = paths
+
+    def read_text(self, encoding: str = "utf-8") -> str:
+        return "\n\n".join(p.read_text(encoding=encoding) for p in self._paths)
+
+
+APP_JS = _ConcatenatedSource(*sorted(Path("dashboard/static/src/modules").glob("*.js")))
 STYLES_CSS = Path("dashboard/static/styles.css")
 
 

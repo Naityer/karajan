@@ -12561,3 +12561,26 @@ body.resource-group-manager-open #resourceGroupManagerScrim { opacity: 1; pointe
   .skills-view > .dv-stat-row { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   #skillsView .dv-frame:last-of-type .card-h { align-items: flex-start; flex-direction: column; }
 }
+
+/* ---- Modo objeto suelto (`?atlas_object=`, nota "Plan de mejora" F7) ------
+   Capa final a propósito: no reordena el cascade de capas de parches de
+   arriba, solo decide qué raíz del documento se ve cuando este documento
+   aloja UN objeto en vez del dashboard completo (ver atlas-host.js). */
+.atlas-object-mount { display: none; }
+html.atlas-object-only body > header.bar,
+html.atlas-object-only body > main.stage {
+  display: none !important;
+}
+html.atlas-object-only .atlas-object-mount {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100vh;
+  padding: 12px;
+  background: var(--bg);
+}
+html.atlas-object-only .karajan-object-task-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}

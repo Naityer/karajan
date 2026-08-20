@@ -60,11 +60,11 @@ def test_render_prometheus_marks_db_down() -> None:
     assert "# TYPE karajan_tasks_by_skill gauge" in text
 
 
-def test_prometheus_endpoint_serves_text_format(tmp_path: Path, monkeypatch) -> None:
+def test_prometheus_endpoint_serves_text_format(karajan_install, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    main.store = _seeded_store(tmp_path)
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+    karajan_install.runtime.tasks = _seeded_store(tmp_path)
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
 
     res = client.get("/metrics/prometheus")
     assert res.status_code == 200

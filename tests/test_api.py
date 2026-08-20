@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app import config as config_module
 from app import main
+from app.modules.tasks import api as tasks_api
 from app.database import TaskStore
 from app.models import Backend, KarajanConfig
 from app.providers.base import ModelProvider, ProviderRun
@@ -27,11 +28,9 @@ class _FakeFixerProvider(ModelProvider):
         )
 
 
-def test_api_classify_delegate_list_and_metrics(tmp_path: Path) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_api_classify_delegate_list_and_metrics(karajan_install, tmp_path: Path) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
 
     response = client.post("/classify-task", json={"prompt": "Desarrolla un router de IA con API, SQLite y panel."})
     assert response.status_code == 200
@@ -56,9 +55,8 @@ def test_api_classify_delegate_list_and_metrics(tmp_path: Path) -> None:
     assert response.json()["total_tasks"] == 1
 
 
-def test_routing_layout_roundtrip(tmp_path: Path) -> None:
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    client = TestClient(main.app)
+def test_routing_layout_roundtrip(karajan_install, tmp_path: Path) -> None:
+    client = karajan_install.client
     payload = {
         "entities": [
             {
@@ -100,7 +98,7 @@ def test_routing_layout_recovers_from_corrupt_primary(tmp_path: Path) -> None:
     assert layout.entities[0].name == "Backup Agent"
 
 
-def test_routing_layout_atomic_save_keeps_backup(tmp_path: Path) -> None:
+def test_routing_layout_atomic_save_keeps_backup(karajan_install, tmp_path: Path) -> None:
     path = tmp_path / "routing_layout.json"
     store = RoutingLayoutStore(path)
     first = {
@@ -114,8 +112,8 @@ def test_routing_layout_atomic_save_keeps_backup(tmp_path: Path) -> None:
         "drawer_width": 360,
     }
 
-    main.layout_store = store
-    client = TestClient(main.app)
+    karajan_install.runtime.routing = store
+    client = karajan_install.client
     assert client.put("/routing-layout", json=first).status_code == 200
     assert client.put("/routing-layout", json=second).status_code == 200
 
@@ -123,9 +121,8 @@ def test_routing_layout_atomic_save_keeps_backup(tmp_path: Path) -> None:
     assert store.backup_path.exists()
 
 
-def test_routing_layout_can_add_catalog_provider_to_decision_map(tmp_path: Path) -> None:
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    client = TestClient(main.app)
+def test_routing_layout_can_add_catalog_provider_to_decision_map(karajan_install, tmp_path: Path) -> None:
+    client = karajan_install.client
 
     response = client.post("/routing-layout/catalog/ollama-ornith")
 
@@ -139,9 +136,8 @@ def test_routing_layout_can_add_catalog_provider_to_decision_map(tmp_path: Path)
     assert ornith["levels"] == ["level_3_intermediate", "level_4_complex", "level_5_critical"]
 
 
-def test_routing_layout_catalog_add_is_idempotent(tmp_path: Path) -> None:
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    client = TestClient(main.app)
+def test_routing_layout_catalog_add_is_idempotent(karajan_install, tmp_path: Path) -> None:
+    client = karajan_install.client
 
     assert client.post("/routing-layout/catalog/ollama-ornith").status_code == 200
     response = client.post("/routing-layout/catalog/ollama-ornith")
@@ -151,9 +147,8 @@ def test_routing_layout_catalog_add_is_idempotent(tmp_path: Path) -> None:
     assert len(entities) == 1
 
 
-def test_routing_layout_can_remove_catalog_provider_from_decision_map(tmp_path: Path) -> None:
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    client = TestClient(main.app)
+def test_routing_layout_can_remove_catalog_provider_from_decision_map(karajan_install, tmp_path: Path) -> None:
+    client = karajan_install.client
     client.put(
         "/routing-layout",
         json={
@@ -172,10 +167,9 @@ def test_routing_layout_can_remove_catalog_provider_from_decision_map(tmp_path: 
     assert "claude-cli" in providers
 
 
-def test_approve_human_review(tmp_path: Path) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_approve_human_review(karajan_install, tmp_path: Path) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
     payload = {
         "original_prompt": "Audita seguridad antes de ejecutar proveedores reales.",
         "domain": ["security"],
@@ -200,14 +194,13 @@ def test_approve_human_review(tmp_path: Path) -> None:
     assert response.json()["status"] == "completed"
 
 
-def test_apply_queue_config_enables_queue_dispatch_and_fills_hierarchy(tmp_path: Path, monkeypatch) -> None:
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
+def test_apply_queue_config_enables_queue_dispatch_and_fills_hierarchy(karajan_install, tmp_path: Path, monkeypatch) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
     # apply_queue_config() calls config_module.save_runtime_config(), which
     # defaults to the real data/active_config.json — redirect it so the test
     # never writes to the operator's actual runtime config.
     monkeypatch.setattr(config_module, "RUNTIME_CONFIG_PATH", tmp_path / "active_config.json")
-    client = TestClient(main.app)
+    client = karajan_install.client
 
     # Starting layout only has the two root entities — everything else is "missing".
     client.put(
@@ -247,16 +240,14 @@ def _classify(client: TestClient) -> str:
     return response.json()["task_id"]
 
 
-def test_delegate_task_force_provider_bypasses_routing(tmp_path: Path, monkeypatch) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_delegate_task_force_provider_bypasses_routing(karajan_install, tmp_path: Path, monkeypatch) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
     task_id = _classify(client)
 
     fake = _FakeFixerProvider("output forzado")
     monkeypatch.setattr(
-        main, "resolve_by_name", lambda name, tier: Resolution(fake, Backend.CLI, "fake-model", name)
+        tasks_api, "resolve_by_name", lambda name, tier: Resolution(fake, Backend.CLI, "fake-model", name)
     )
 
     response = client.post("/delegate-task", json={"task_id": task_id, "force_provider": "claude-cli"})
@@ -266,11 +257,9 @@ def test_delegate_task_force_provider_bypasses_routing(tmp_path: Path, monkeypat
     assert all(execution["model_used"] == "fake-model" for execution in executions)
 
 
-def test_delegate_task_force_entity_id_bypasses_routing(tmp_path: Path, monkeypatch) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_delegate_task_force_entity_id_bypasses_routing(karajan_install, tmp_path: Path, monkeypatch) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
     task_id = _classify(client)
 
     client.put(
@@ -280,7 +269,7 @@ def test_delegate_task_force_entity_id_bypasses_routing(tmp_path: Path, monkeypa
 
     fake = _FakeFixerProvider("output forzado por entidad")
     monkeypatch.setattr(
-        main, "resolve_entity", lambda entity, tier: Resolution(fake, Backend.CLI, "fake-model-entity", entity.id)
+        tasks_api, "resolve_entity", lambda entity, tier: Resolution(fake, Backend.CLI, "fake-model-entity", entity.id)
     )
 
     response = client.post("/delegate-task", json={"task_id": task_id, "force_entity_id": "entity-forced"})
@@ -290,33 +279,27 @@ def test_delegate_task_force_entity_id_bypasses_routing(tmp_path: Path, monkeypa
     assert all(execution["model_used"] == "fake-model-entity" for execution in executions)
 
 
-def test_delegate_task_force_unknown_entity_returns_404(tmp_path: Path) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_delegate_task_force_unknown_entity_returns_404(karajan_install, tmp_path: Path) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
     task_id = _classify(client)
 
     response = client.post("/delegate-task", json={"task_id": task_id, "force_entity_id": "does-not-exist"})
     assert response.status_code == 404
 
 
-def test_delegate_task_force_unknown_provider_returns_422(tmp_path: Path) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_delegate_task_force_unknown_provider_returns_422(karajan_install, tmp_path: Path) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
     task_id = _classify(client)
 
     response = client.post("/delegate-task", json={"task_id": task_id, "force_provider": "no-such-provider"})
     assert response.status_code == 422
 
 
-def test_delegate_task_force_both_fields_returns_400(tmp_path: Path) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_delegate_task_force_both_fields_returns_400(karajan_install, tmp_path: Path) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
     task_id = _classify(client)
 
     response = client.post(
@@ -326,24 +309,20 @@ def test_delegate_task_force_both_fields_returns_400(tmp_path: Path) -> None:
     assert response.status_code == 400
 
 
-def test_delegate_task_force_with_queue_dispatch_returns_400(tmp_path: Path) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
+def test_delegate_task_force_with_queue_dispatch_returns_400(karajan_install, tmp_path: Path) -> None:
     config = KarajanConfig(backend=Backend.CLI)
     config.orchestration.dispatch_mode = "queue"
-    main.active_config = config
-    client = TestClient(main.app)
+    karajan_install.set_config(config)
+    client = karajan_install.client
     task_id = _classify(client)
 
     response = client.post("/delegate-task", json={"task_id": task_id, "force_provider": "claude-cli"})
     assert response.status_code == 400
 
 
-def test_delegate_task_without_force_fields_is_unchanged(tmp_path: Path) -> None:
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+def test_delegate_task_without_force_fields_is_unchanged(karajan_install, tmp_path: Path) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
     task_id = _classify(client)
 
     response = client.post("/delegate-task", json={"task_id": task_id})

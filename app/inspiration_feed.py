@@ -10,6 +10,8 @@ from xml.etree import ElementTree
 
 import httpx
 
+from app.platform import http
+
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _MAX_RESPONSE_BYTES = 1_000_000
@@ -71,7 +73,7 @@ class InspirationFeed:
     """Fetch a small feed from fixed public endpoints; repository content is never executed."""
 
     def __init__(self, client: httpx.Client | None = None, timeout_s: float = 5.0) -> None:
-        self._client = client or httpx.Client(
+        self._client = client or http.build_client(
             timeout=timeout_s,
             follow_redirects=False,
             headers={"User-Agent": "Karajan-Inspiration/1.0", "Accept": "application/json, application/xml, text/xml"},

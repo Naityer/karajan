@@ -40,16 +40,16 @@ def _repo_analyzer() -> ResourceItem:
     )
 
 
-def _client(monkeypatch, tmp_path: Path, resource_store: ResourceStore) -> TestClient:
+def _client(karajan_install, monkeypatch, resource_store: ResourceStore) -> TestClient:
     monkeypatch.setenv("KARAJAN_REQUIRE_ATLAS_TOKEN", "0")
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    monkeypatch.setattr(main, "store", TaskStore(tmp_path / "tasks.db"))
-    monkeypatch.setattr(main, "layout_store", RoutingLayoutStore(tmp_path / "routing.json"))
+    karajan_install.runtime.resources = resource_store
     monkeypatch.setattr(main, "resource_store", resource_store)
-    monkeypatch.setattr(main, "resource_ranking_engine", ResourceRankingEngine())
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    main.active_config.orchestration.require_human_review_gate = False
-    return TestClient(main.app)
+    karajan_install.runtime.resource_ranking_engine = ResourceRankingEngine()
+    config = KarajanConfig(backend=Backend.CLI)
+    config.orchestration.require_human_review_gate = False
+    karajan_install.set_config(config)
+    return karajan_install.client
 
 
 def test_exact_parent_name_remains_recommended_alongside_indexed_children(tmp_path: Path) -> None:
@@ -84,10 +84,10 @@ def test_exact_parent_name_remains_recommended_alongside_indexed_children(tmp_pa
     assert child.slug in slugs
 
 
-def test_classify_delegate_resource_activation_and_skill_analytics(monkeypatch, tmp_path: Path) -> None:
+def test_classify_delegate_resource_activation_and_skill_analytics(karajan_install, monkeypatch, tmp_path: Path) -> None:
     resource_store = ResourceStore(tmp_path / "resources.db")
     resource_store.upsert(_repo_analyzer())
-    client = _client(monkeypatch, tmp_path, resource_store)
+    client = _client(karajan_install, monkeypatch, resource_store)
     provider = _CapturingProvider()
     monkeypatch.setattr(
         delegation,
@@ -122,13 +122,13 @@ def test_classify_delegate_resource_activation_and_skill_analytics(monkeypatch, 
     assert repo_after["agents"] == {"verified-agent": 1}
 
 
-def test_agent_tools_path_receives_resource_context_without_persisting_prompt(monkeypatch, tmp_path: Path) -> None:
+def test_agent_tools_path_receives_resource_context_without_persisting_prompt(karajan_install, monkeypatch, tmp_path: Path) -> None:
     resource_store = ResourceStore(tmp_path / "resources.db")
     resource_store.upsert(_repo_analyzer())
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     provider = _CapturingProvider()
-    client = _client(monkeypatch, tmp_path, resource_store)
+    client = _client(karajan_install, monkeypatch, resource_store)
     monkeypatch.setattr(
         delegation,
         "resolve",
@@ -147,10 +147,10 @@ def test_agent_tools_path_receives_resource_context_without_persisting_prompt(mo
     assert main.store.get_task(task["task_id"]).prompt == prompt
 
 
-def test_no_match_prompt_attaches_no_misleading_resources(monkeypatch, tmp_path: Path) -> None:
+def test_no_match_prompt_attaches_no_misleading_resources(karajan_install, monkeypatch, tmp_path: Path) -> None:
     resource_store = ResourceStore(tmp_path / "resources.db")
     resource_store.upsert(_repo_analyzer())
-    client = _client(monkeypatch, tmp_path, resource_store)
+    client = _client(karajan_install, monkeypatch, resource_store)
 
     response = client.post("/classify-task", json={"prompt": "Organiza mi lista de compra semanal."})
 

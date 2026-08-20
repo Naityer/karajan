@@ -9,6 +9,8 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
+from app.platform import http
+
 from app.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
 from app.resource_intelligence import extract_resource_signals
 from app.resource_library import ResourceStore, deterministic_summary
@@ -69,7 +71,7 @@ class GitHubResourceAnalyzer:
         }
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        self._client = client or httpx.Client(headers=headers, timeout=timeout_s, follow_redirects=False)
+        self._client = client or http.build_client(headers=headers, timeout=timeout_s, follow_redirects=False)
         self._owns_client = client is None
         self._headers = headers
         self._summarizer = summarizer

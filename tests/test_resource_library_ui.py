@@ -1,8 +1,27 @@
 from pathlib import Path
 
 
+class _ConcatenatedSource:
+    """Se comporta como un `Path` de solo lectura, pero concatena varios.
+
+    La modularización del frontend (nota "Plan de mejora", §18) repartió
+    `dashboard/static/app.js` (antes ~11.700 líneas) en
+    `dashboard/static/src/modules/*.js`; `app.js` ahora es solo un `import`
+    de una línea. Estos tests comprueban comportamiento del dashboard —qué
+    endpoints llama, qué texto/estructura expone—, no la ubicación de un
+    fichero concreto, así que leen el conjunto de módulos como si fuera el
+    `app.js` monolítico de antes.
+    """
+
+    def __init__(self, *paths: Path) -> None:
+        self._paths = paths
+
+    def read_text(self, encoding: str = "utf-8") -> str:
+        return "\n\n".join(p.read_text(encoding=encoding) for p in self._paths)
+
+
 INDEX_HTML = Path("dashboard/static/index.html")
-APP_JS = Path("dashboard/static/app.js")
+APP_JS = _ConcatenatedSource(*sorted(Path("dashboard/static/src/modules").glob("*.js")))
 STYLES_CSS = Path("dashboard/static/styles.css")
 
 # The Inspiration styles live in a single trailing layer. Earlier revisions kept

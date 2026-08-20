@@ -99,7 +99,7 @@ def test_pack_round_trips_through_the_store(repo: Path, tmp_path: Path) -> None:
     assert handoff.list_packs(base=base)[0]["status"] == "ready"
 
 
-def test_pack_and_result_are_registered_as_artifacts(repo: Path, tmp_path: Path) -> None:
+def test_pack_and_result_are_registered_as_artifacts(karajan_install, repo: Path, tmp_path: Path) -> None:
     store = TaskStore(tmp_path / "runs.db")
     ws = Workspace.open(repo)
     pack = pack_module.build(ws, "tsk_1", "documenta", ["README.md"])
@@ -112,19 +112,19 @@ def test_pack_and_result_are_registered_as_artifacts(repo: Path, tmp_path: Path)
 
 
 # ── HTTP surface ────────────────────────────────────────────────────────────
-def _client(repo: Path, tmp_path: Path, monkeypatch) -> TestClient:
+def _client(karajan_install, repo: Path, tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setattr(handoff.store, "HANDOFF_DIR", tmp_path / "handoff")
-    main.store = TaskStore(tmp_path / "api.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "layout.json")
-    main.active_config = KarajanConfig(
-        backend=Backend.CLI,
-        agent_tools=AgentToolsConfig(default_workspace_root=str(repo)),
+    karajan_install.set_config(
+        KarajanConfig(
+            backend=Backend.CLI,
+            agent_tools=AgentToolsConfig(default_workspace_root=str(repo)),
+        )
     )
-    return TestClient(main.app)
+    return karajan_install.client
 
 
-def test_full_handoff_cycle_over_http(repo: Path, tmp_path: Path, monkeypatch) -> None:
-    client = _client(repo, tmp_path, monkeypatch)
+def test_full_handoff_cycle_over_http(karajan_install, repo: Path, tmp_path: Path, monkeypatch) -> None:
+    client = _client(karajan_install, repo, tmp_path, monkeypatch)
 
     created = client.post(
         "/handoff/packs",
@@ -158,8 +158,8 @@ def test_full_handoff_cycle_over_http(repo: Path, tmp_path: Path, monkeypatch) -
     assert client.get("/handoff/packs?status=pending").json() == []
 
 
-def test_pack_creation_fails_when_nothing_could_be_included(repo: Path, tmp_path: Path, monkeypatch) -> None:
-    client = _client(repo, tmp_path, monkeypatch)
+def test_pack_creation_fails_when_nothing_could_be_included(karajan_install, repo: Path, tmp_path: Path, monkeypatch) -> None:
+    client = _client(karajan_install, repo, tmp_path, monkeypatch)
     response = client.post(
         "/handoff/packs", json={"task_id": "t", "prompt": "p", "paths": [".env", "no-existe.py"]}
     )
@@ -167,9 +167,9 @@ def test_pack_creation_fails_when_nothing_could_be_included(repo: Path, tmp_path
     assert ".env" in response.json()["detail"]
 
 
-def test_pack_creation_needs_a_workspace(repo: Path, tmp_path: Path, monkeypatch) -> None:
-    client = _client(repo, tmp_path, monkeypatch)
-    main.active_config = KarajanConfig(backend=Backend.CLI, agent_tools=AgentToolsConfig())
+def test_pack_creation_needs_a_workspace(karajan_install, repo: Path, tmp_path: Path, monkeypatch) -> None:
+    client = _client(karajan_install, repo, tmp_path, monkeypatch)
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI, agent_tools=AgentToolsConfig()))
     monkeypatch.setattr("app.agent_tools.policy.resolve_workspace_root", lambda settings, requested=None: None)
 
     response = client.post("/handoff/packs", json={"task_id": "t", "prompt": "p", "paths": ["a.py"]})
@@ -177,7 +177,7 @@ def test_pack_creation_needs_a_workspace(repo: Path, tmp_path: Path, monkeypatch
     assert "raiz de trabajo" in response.json()["detail"]
 
 
-def test_unknown_pack_is_404(repo: Path, tmp_path: Path, monkeypatch) -> None:
-    client = _client(repo, tmp_path, monkeypatch)
+def test_unknown_pack_is_404(karajan_install, repo: Path, tmp_path: Path, monkeypatch) -> None:
+    client = _client(karajan_install, repo, tmp_path, monkeypatch)
     assert client.get("/handoff/packs/pack_nope").status_code == 404
     assert client.post("/handoff/packs/pack_nope/result", json={"markdown": "x"}).status_code == 404

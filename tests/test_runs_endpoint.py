@@ -8,12 +8,10 @@ from app.models import Backend, KarajanConfig
 from app.routing_layout import RoutingLayoutStore
 
 
-def test_task_runs_endpoint_returns_recorded_runs(tmp_path: Path) -> None:
+def test_task_runs_endpoint_returns_recorded_runs(karajan_install, tmp_path: Path) -> None:
     """A delegated task exposes its stable Fase-1 `runs` rows via GET /tasks/{id}/runs."""
-    main.store = TaskStore(tmp_path / "runs.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
 
     task = client.post(
         "/classify-task",
@@ -38,12 +36,10 @@ def test_task_runs_endpoint_returns_recorded_runs(tmp_path: Path) -> None:
     assert [r["run_index"] for r in runs] == sorted(r["run_index"] for r in runs)
 
 
-def test_task_runs_endpoint_empty_for_unknown_task(tmp_path: Path) -> None:
+def test_task_runs_endpoint_empty_for_unknown_task(karajan_install, tmp_path: Path) -> None:
     """An unknown / undelegated task returns an empty list, not an error."""
-    main.store = TaskStore(tmp_path / "runs_empty.db")
-    main.layout_store = RoutingLayoutStore(tmp_path / "routing_layout.json")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    client = TestClient(main.app)
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
 
     response = client.get("/tasks/tsk_does_not_exist/runs")
     assert response.status_code == 200

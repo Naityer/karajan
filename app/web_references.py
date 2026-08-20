@@ -9,6 +9,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from app.platform import http
+
 from app.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
 from app.resource_intelligence import extract_resource_signals
 
@@ -55,7 +57,7 @@ class WebReferenceAnalyzer:
     def analyze(self, url: str) -> AnalyzeResult:
         try:
             canonical = validate_reference_url(url)
-            with httpx.Client(follow_redirects=True, max_redirects=2, timeout=8.0, headers={"User-Agent": "Karajan-Inspiration/1.0"}) as client:
+            with http.build_client(follow_redirects=True, max_redirects=2, timeout=8.0, headers={"User-Agent": "Karajan-Inspiration/1.0"}) as client:
                 with client.stream("GET", canonical) as response:
                     canonical = validate_reference_url(str(response.url))
                     access_limited = response.status_code in {401, 403, 429}

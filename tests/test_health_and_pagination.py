@@ -9,15 +9,14 @@ from app.database import TaskStore
 from app.models import Backend, KarajanConfig
 
 
-def _client(tmp_path: Path) -> TestClient:
-    main.store = TaskStore(tmp_path / "health.db")
-    main.active_config = KarajanConfig(backend=Backend.CLI)
-    return TestClient(main.app)
+def _client(karajan_install) -> TestClient:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    return karajan_install.client
 
 
-def test_health_reports_ok_and_profile(tmp_path: Path, monkeypatch) -> None:
+def test_health_reports_ok_and_profile(karajan_install, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    client = _client(tmp_path)
+    client = _client(karajan_install)
     body = client.get("/health").json()
     assert body["status"] == "ok"
     assert body["db_ok"] is True
@@ -26,15 +25,15 @@ def test_health_reports_ok_and_profile(tmp_path: Path, monkeypatch) -> None:
     assert body["total_tasks"] == 0
 
 
-def test_health_reflects_auth_enabled(tmp_path: Path, monkeypatch) -> None:
+def test_health_reflects_auth_enabled(karajan_install, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("KARAJAN_TOKEN", "s3cret")
-    client = _client(tmp_path)
+    client = _client(karajan_install)
     assert client.get("/health").json()["auth_enabled"] is True
 
 
-def test_tasks_pagination(tmp_path: Path, monkeypatch) -> None:
+def test_tasks_pagination(karajan_install, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    client = _client(tmp_path)
+    client = _client(karajan_install)
     for i in range(5):
         client.post("/classify-task", json={"prompt": f"Tarea numero {i} de prueba."})
 
@@ -48,8 +47,8 @@ def test_tasks_pagination(tmp_path: Path, monkeypatch) -> None:
     assert client.get("/tasks", params={"limit": 0}).status_code == 422  # below ge=1
 
 
-def test_health_total_tasks_tracks_inserts(tmp_path: Path, monkeypatch) -> None:
+def test_health_total_tasks_tracks_inserts(karajan_install, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("KARAJAN_TOKEN", raising=False)
-    client = _client(tmp_path)
+    client = _client(karajan_install)
     client.post("/classify-task", json={"prompt": "Una tarea cualquiera."})
     assert client.get("/health").json()["total_tasks"] == 1

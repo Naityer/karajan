@@ -5,9 +5,9 @@ from app import main
 from app.models import KarajanConfig
 
 
-def test_provider_run_executes_catalog_probe_command() -> None:
-    main.active_config = KarajanConfig()
-    client = TestClient(main.app)
+def test_provider_run_executes_catalog_probe_command(karajan_install) -> None:
+    karajan_install.set_config(KarajanConfig())
+    client = karajan_install.client
 
     response = client.post("/providers/ollama/run", json={"slot": "probe_command"})
 
@@ -19,18 +19,18 @@ def test_provider_run_executes_catalog_probe_command() -> None:
     assert isinstance(body["ok"], bool)
 
 
-def test_provider_run_rejects_unknown_provider() -> None:
-    main.active_config = KarajanConfig()
-    client = TestClient(main.app)
+def test_provider_run_rejects_unknown_provider(karajan_install) -> None:
+    karajan_install.set_config(KarajanConfig())
+    client = karajan_install.client
 
     response = client.post("/providers/not-a-real-provider/run", json={"slot": "login_command"})
 
     assert response.status_code == 404
 
 
-def test_provider_run_reports_missing_command_slot() -> None:
-    main.active_config = KarajanConfig()
-    client = TestClient(main.app)
+def test_provider_run_reports_missing_command_slot(karajan_install) -> None:
+    karajan_install.set_config(KarajanConfig())
+    client = karajan_install.client
 
     response = client.post("/providers/openai/run", json={"slot": "probe_command"})
 
@@ -40,9 +40,9 @@ def test_provider_run_reports_missing_command_slot() -> None:
     assert "no probe_command" in body["detail"]
 
 
-def test_provider_run_rejects_invalid_slot() -> None:
-    main.active_config = KarajanConfig()
-    client = TestClient(main.app)
+def test_provider_run_rejects_invalid_slot(karajan_install) -> None:
+    karajan_install.set_config(KarajanConfig())
+    client = karajan_install.client
 
     response = client.post("/providers/ollama/run", json={"slot": "cli_command"})
 

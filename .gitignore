@@ -21,3 +21,6 @@ data/.setup_complete
 # Trial reports
 data/trial_reports/
 data/audit_reports/
+
+# Capturas de referencia del smoke del dashboard (se regeneran al ejecutarlo)
+tests/artifacts/

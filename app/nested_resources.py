@@ -17,6 +17,8 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
+from app.platform import http
+
 from app.models import ResourceItem, ResourceKind
 from app.resource_intelligence import extract_resource_signals
 from app.resource_library import ResourceStore, deterministic_summary
@@ -139,7 +141,7 @@ class ItsFreeAdapter:
     hosts = {"itsfree.dev", "www.itsfree.dev"}
 
     def __init__(self, client: httpx.Client | None = None) -> None:
-        self.client = client or httpx.Client(timeout=8.0, follow_redirects=False)
+        self.client = client or http.build_client(timeout=8.0, follow_redirects=False)
 
     def supports(self, resource: ResourceItem) -> bool:
         candidate = resource.source_url or resource.repo_url or ""
@@ -258,7 +260,7 @@ class GenericHtmlDirectoryAdapter:
     def __init__(self, allowed_hosts: Iterable[str], link_pattern: str, client: httpx.Client | None = None) -> None:
         self.allowed_hosts = {host.casefold() for host in allowed_hosts}
         self.link_pattern = re.compile(link_pattern)
-        self.client = client or httpx.Client(timeout=8.0, follow_redirects=False)
+        self.client = client or http.build_client(timeout=8.0, follow_redirects=False)
 
     def supports(self, resource: ResourceItem) -> bool:
         url = resource.source_url or resource.repo_url or ""
@@ -360,7 +362,7 @@ class TooolsDesignAdapter:
     hosts = {"toools.design", "www.toools.design"}
 
     def __init__(self, client: httpx.Client | None = None) -> None:
-        self.client = client or httpx.Client(timeout=8.0, follow_redirects=False)
+        self.client = client or http.build_client(timeout=8.0, follow_redirects=False)
 
     def supports(self, resource: ResourceItem) -> bool:
         candidate = resource.source_url or resource.repo_url or ""

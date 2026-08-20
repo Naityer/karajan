@@ -1,0 +1,30 @@
+from app.core.module import ModuleManifest
+
+MANIFEST = ModuleManifest(
+    id="karajan.agents",
+    title="Agentes",
+    icon="Bot",
+    capabilities=("agents.read", "agents.write", "skills.read", "skills.write"),
+    publishes=("resource_changed", "provider_changed"),
+    consumes=(),
+    routes=(
+        "/catalog",
+        "/agent-tools",
+        "/agent-tools/profiles",
+        "/skills",
+        "/skills/{name}/install",
+        "/providers",
+        "/providers/{name}/setup",
+        "/providers/{name}/run",
+        "/integrations/openclaw/status",
+        "/integrations/openclaw/skills",
+        "/integrations/openclaw/skills/install",
+        "/integrations/openclaw/skills/update",
+        "/integrations/openclaw/channels",
+        "/integrations/openclaw/channels/catalog",
+        "/integrations/openclaw/setup-commands",
+        "/integrations/openclaw/daemon-status",
+        "/integrations/openclaw/plugins",
+        "/integrations/openclaw/plugins/install",
+    ),
+)

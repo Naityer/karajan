@@ -113,8 +113,16 @@ def eligible_entities(level: str, layout: RoutingLayout | None) -> list[RoutingE
 def candidate_tiers(entities: list[RoutingEntity]) -> list[int]:
     """Distinct hierarchy tiers among `entities`, ascending, with tier 0 (root)
     moved to the end — root is the last-resort escalation target, not the
-    first pick, mirroring the existing `fallback_resolutions` ordering."""
-    tiers = sorted({entity.tier for entity in entities})
+    first pick, mirroring the existing `fallback_resolutions` ordering.
+
+    Buckets by `effective_tier()`, not the raw `tier` field: `_dispatch` below
+    filters candidates the same way, and two entities can share a raw `tier`
+    while belonging to different Prio groups (`memberships`) that should
+    dispatch in a different order. Bucketing by the raw field would merge them
+    into one tier and let whichever came first in `entities` shadow the other,
+    regardless of Prio.
+    """
+    tiers = sorted({entity.effective_tier() for entity in entities})
     return sorted(tiers, key=lambda tier: (tier == 0, tier))
 
 
