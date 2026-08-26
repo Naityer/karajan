@@ -7,6 +7,7 @@ from app.providers import registry
 from app.models import AuthMethod, Backend, KarajanConfig, ProviderInfo, RecommendedModel
 from app.providers.api import ApiModelProvider
 from app.providers.cli import CliModelProvider
+from app.catalog import get_provider
 
 
 def _provider(name: str, backend: Backend, **kwargs) -> ProviderInfo:
@@ -128,3 +129,11 @@ def test_cli_provider_strips_terminal_control_sequences(monkeypatch) -> None:
 
     assert run.error is None
     assert run.output == "Hola mundo"
+
+
+def test_codex_cli_uses_model_flag_and_reads_instruction_from_stdin() -> None:
+    provider = get_provider("codex")
+
+    assert provider is not None
+    assert provider.cli_command == "codex exec --ephemeral --color never -"
+    assert set(provider.tiers.values()) == {"default"}

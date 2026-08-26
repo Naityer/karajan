@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-DEFAULT_URL = "http://127.0.0.1:8000"
+DEFAULT_URL = "http://127.0.0.1:8001"
 URL_ENV_VAR = "KARAJAN_URL"
 TOKEN_ENV_VAR = "KARAJAN_TOKEN"
 
@@ -23,7 +23,7 @@ class KarajanApiError(Exception):
         super().__init__(f"HTTP {status_code}: {detail}")
 
 
-class KarajanClient:
+class HttpKarajanClient:
     def __init__(self, base_url: str | None = None, token: str | None = None, timeout: float = 30.0) -> None:
         self.base_url = (base_url or os.environ.get(URL_ENV_VAR, DEFAULT_URL)).rstrip("/")
         self.token = token or os.environ.get(TOKEN_ENV_VAR)
@@ -146,3 +146,158 @@ class KarajanClient:
 
     def observability_history(self, limit: int = 200) -> dict:
         return self._request("GET", "/observability/history", params={"limit": limit})
+
+
+KarajanClient = HttpKarajanClient
+
+
+class EmbeddedKarajanClient:
+    """Caller-facing SDK backed by the in-process application protocol."""
+
+    base_url = "embedded://karajan"
+
+    def __init__(self, container, *, token: str | None = None) -> None:
+        from app.application_dto import ResolvedIdentity
+
+        self.container = container
+        self.application = container.application
+        self.management = self.application.management
+        context = container.runtime.identity.authenticate(karajan_token=token)
+        self.identity = ResolvedIdentity(context.actor, context.permissions)
+
+    @staticmethod
+    def _dump(value):
+        if hasattr(value, "model_dump"):
+            return value.model_dump(mode="json")
+        if hasattr(value, "legacy_payload"):
+            return value.legacy_payload()
+        if isinstance(value, list):
+            return [EmbeddedKarajanClient._dump(item) for item in value]
+        return value
+
+    def close(self) -> None:
+        self.container.close()
+
+    def is_running(self) -> bool:
+        return True
+
+    def health(self) -> dict:
+        return self.management.health()
+
+    def classify(self, prompt: str) -> dict:
+        from app.application_dto import ClassifyCommand
+
+        return self.application.classify(ClassifyCommand(prompt=prompt)).legacy_payload()
+
+    def delegate(
+        self, task_id: str, *, force_provider: str | None = None, force_entity_id: str | None = None
+    ) -> dict:
+        from app.application_dto import AdministrativeOverrideCommand, ExecuteCommand
+
+        if force_provider or force_entity_id:
+            result = self.application.override_route(
+                AdministrativeOverrideCommand(
+                    task_id=task_id,
+                    reason="authenticated embedded operator override",
+                    force_provider=force_provider or "",
+                    force_entity_id=force_entity_id or "",
+                ),
+                self.identity,
+            )
+            return result.task.legacy_payload()
+        return self.application.execute(ExecuteCommand(task_id=task_id)).task.legacy_payload()
+
+    def list_tasks(self, limit: int | None = None, offset: int = 0) -> list[dict]:
+        return [item.legacy_payload() for item in self.application.list_tasks(limit, offset)]
+
+    def get_task(self, task_id: str) -> dict:
+        return self.application.get_task(task_id).legacy_payload()
+
+    def get_decisions(self, task_id: str) -> list[dict]:
+        return self._dump(self.management.get_decisions(task_id))
+
+    def search_tasks(self, query: str, limit: int = 20) -> dict:
+        return self.management.search_tasks(query, limit)
+
+    def get_config(self) -> dict:
+        return self._dump(self.management.get_config())
+
+    def put_config(self, config: dict) -> dict:
+        from app.models import KarajanConfig
+
+        return self._dump(self.management.put_config(KarajanConfig.model_validate(config)))
+
+    def get_routing_layout(self) -> dict:
+        return self._dump(self.management.get_routing_layout())
+
+    def put_routing_layout(self, layout: dict) -> dict:
+        from app.models import RoutingLayout
+
+        return self._dump(self.management.put_routing_layout(RoutingLayout.model_validate(layout)))
+
+    def list_catalog(self) -> list[dict]:
+        return self._dump(self.management.list_catalog())
+
+    def list_providers(self) -> list[dict]:
+        return self._dump(self.management.list_providers())
+
+    def provider_setup(self, name: str) -> dict:
+        value = self.management.provider_setup(name)
+        if value is None:
+            raise KarajanApiError(404, "provider not found")
+        return self._dump(value)
+
+    def provider_run(self, name: str, slot: str) -> dict:
+        try:
+            return self._dump(self.management.provider_run(name, slot))
+        except KeyError as exc:
+            raise KarajanApiError(404, "provider not found") from exc
+
+    def metrics(self) -> dict:
+        return self._dump(self.management.metrics())
+
+    def agents_performance(self) -> list[dict]:
+        return self._dump(self.management.agents_performance())
+
+    def queue_status(self) -> dict:
+        return self.management.queue_status()
+
+    def dashboard(self, days: int = 30) -> dict:
+        return {"available": False, "reason": "analytics adapter is not enabled in embedded mode"}
+
+    def observability(self) -> dict:
+        return {"health": self.health(), "transport": "embedded"}
+
+    def observability_history(self, limit: int = 200) -> dict:
+        return self._dump(self.container.runtime.tasks.metrics_history(limit=limit))
+
+    def ingest(self, payload: dict) -> dict:
+        from uuid import uuid4
+
+        return self._dump(
+            self.management.ingest(payload, correlation_id=f"cor_{uuid4().hex}")
+        )
+
+    def append_decision(self, task_id: str, entry: dict) -> dict:
+        from app.models import DecisionLogEntry
+
+        value = DecisionLogEntry.model_validate({**entry, "task_id": task_id})
+        return self._dump(self.management.append_decision(task_id, value))
+
+    def approve_review(self, task_id: str) -> dict:
+        return self.application.approve_review(task_id, self.identity).legacy_payload()
+
+
+def build_client(
+    *, transport: str, url: str | None = None, token: str | None = None,
+    timeout: float = 30.0, data_dir: str = "data",
+):
+    if transport == "http":
+        return HttpKarajanClient(base_url=url, token=token, timeout=timeout)
+    if transport != "embedded":
+        raise ValueError(f"unsupported Karajan transport: {transport}")
+    from app.container import KarajanContainer
+
+    return EmbeddedKarajanClient(
+        KarajanContainer.build(data_dir=data_dir), token=token
+    )

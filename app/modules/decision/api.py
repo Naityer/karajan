@@ -76,8 +76,8 @@ def add_catalog_provider_to_routing_layout(
         provider=provider_name,
         levels=[_TIER_TO_LEVEL[tier].value for tier in provider.tiers],
     )
-    merged = RoutingLayout(entities=[*layout.entities, entity], zoom=layout.zoom, drawer_width=layout.drawer_width)
-    saved = runtime_module.current().routing.save(merged)
+    layout.entities.append(entity)
+    saved = runtime_module.current().routing.save(layout)
     events.publish("layout_changed")
     return saved
 
@@ -92,7 +92,7 @@ def remove_catalog_provider_from_routing_layout(
     remaining = [entity for entity in layout.entities if entity.provider != provider_name]
     if len(remaining) == len(layout.entities):
         return layout  # no había ninguna — idempotente
-    merged = RoutingLayout(entities=remaining, zoom=layout.zoom, drawer_width=layout.drawer_width)
-    saved = runtime_module.current().routing.save(merged)
+    layout.entities = remaining
+    saved = runtime_module.current().routing.save(layout)
     events.publish("layout_changed")
     return saved

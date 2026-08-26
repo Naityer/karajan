@@ -79,7 +79,16 @@ class LocalIdentityProvider:
         authorization: str | None = None,
     ) -> RequestContext:
         auth.require_token(karajan_token)
-        return RequestContext(actor="local")
+        return RequestContext(
+            actor="local",
+            permissions=frozenset(
+                {
+                    "karajan:routing:override",
+                    "karajan:review:approve",
+                    "karajan:config:write",
+                }
+            ),
+        )
 
 
 class AtlasCapabilityIdentityProvider:
@@ -98,7 +107,7 @@ class AtlasCapabilityIdentityProvider:
         auth.require_token(karajan_token)
         claims = atlas_auth.require_atlas_token(authorization)
         if claims is None:  # verificación desactivada → se comporta como local
-            return RequestContext(actor="local")
+            return LocalIdentityProvider().authenticate(karajan_token=karajan_token)
         scopes = claims.get("scopes") or claims.get("scope") or []
         if isinstance(scopes, str):
             scopes = scopes.split()

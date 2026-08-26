@@ -17,7 +17,7 @@ def activate(
         False, "--start/--no-start", help="Arranca el servidor si no está activo (por defecto, solo reporta su estado)."
     ),
     wait: float = typer.Option(10.0, "--wait", help="Segundos a esperar a que /health responda tras arrancar."),
-    port: int = typer.Option(8000, "--port", help="Puerto para el servidor arrancado con --start."),
+    port: int = typer.Option(8001, "--port", help="Puerto para el servidor arrancado con --start."),
     repo: str = typer.Option(
         None, "--repo", help="Raíz del repo Karajan (si no se detecta automáticamente ni hay una recordada)."
     ),

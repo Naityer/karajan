@@ -11,6 +11,8 @@ let routingSaveTimer = null;
 
 let layoutSaveTimer = null;
 
+let canvasProfileDeleteConfirmTimer = null;
+
 let activeModelDrag = null;
 
 let activeEntityMove = null;
@@ -20,6 +22,219 @@ let activeGroupMove = null;
 let activeDiagramPan = null;
 
 let wiresFrame = null;
+
+const CURRENT_CANVAS_PROFILE_NAME = "Esquema actual";
+const SIMPLE_CANVAS_PRESET_NAME = "Qwen · Claude + ChatGPT";
+
+function cloneLayoutValue(value) {
+  return JSON.parse(JSON.stringify(value ?? null));
+}
+
+function uniqueCanvasProfileId(prefix = "profile") {
+  const used = new Set((state.canvasProfiles || []).map((profile) => profile.id));
+  let id;
+  do {
+    id = `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  } while (used.has(id));
+  return id;
+}
+
+function canvasProfileSnapshot(id, name) {
+  return {
+    id,
+    name,
+    entities: cloneLayoutValue(state.entities) || [],
+    groups: cloneLayoutValue(state.groups) || [],
+    zoom: state.diagramZoom,
+    drawer_width: state.drawerWidth,
+    openclaw_pos: cloneLayoutValue(state.openclawPos) || { x: 1040, y: 42 },
+  };
+}
+
+function normalizeCanvasProfile(profile, index) {
+  return {
+    id: typeof profile?.id === "string" && profile.id ? profile.id : `profile_${index + 1}`,
+    name: typeof profile?.name === "string" && profile.name.trim() ? profile.name.trim() : `Perfil ${index + 1}`,
+    entities: cloneLayoutValue(Array.isArray(profile?.entities) ? profile.entities : []),
+    groups: cloneLayoutValue(Array.isArray(profile?.groups) ? profile.groups : []),
+    zoom: Number.isFinite(Number(profile?.zoom)) ? Number(profile.zoom) : 1,
+    drawer_width: Number.isFinite(Number(profile?.drawer_width)) ? Number(profile.drawer_width) : 320,
+    openclaw_pos: cloneLayoutValue(profile?.openclaw_pos) || { x: 1040, y: 42 },
+  };
+}
+
+function simpleCanvasPreset() {
+  const parentId = "preset-qwen-router";
+  return {
+    id: uniqueCanvasProfileId("qwen-claude-chatgpt"),
+    name: SIMPLE_CANVAS_PRESET_NAME,
+    entities: [
+      {
+        id: parentId, name: "Qwen Router (local)", role: "parent", role_tags: ["parent"],
+        provider: "ollama-qwen", capabilities: ["Planner", "Router"], capabilities_touched: true,
+        tier: 0, levels: [], parentId: "", memberships: [], skills: [], x: 500, y: 110,
+      },
+      {
+        id: "preset-codex-worker", name: "ChatGPT / Codex", role: "child", role_tags: ["child"],
+        provider: "codex", tier: 1,
+        levels: ["level_1_simple", "level_2_moderate", "level_3_intermediate"],
+        parentId, memberships: [], skills: [], x: 120, y: 430,
+      },
+      {
+        id: "preset-claude-worker", name: "Claude Code CLI", role: "child", role_tags: ["child"],
+        provider: "claude-cli", tier: 1,
+        levels: ["level_4_complex", "level_5_critical"],
+        parentId, memberships: [], skills: [], x: 820, y: 430,
+      },
+    ],
+    groups: [], zoom: 1, drawer_width: 320, openclaw_pos: { x: 1110, y: 80 },
+  };
+}
+
+function activeCanvasProfile() {
+  return (state.canvasProfiles || []).find((profile) => profile.id === state.activeCanvasProfileId);
+}
+
+function isSimpleCanvasPreset(profile) {
+  return profile?.name === SIMPLE_CANVAS_PRESET_NAME || String(profile?.id || "").startsWith("qwen-claude-chatgpt_");
+}
+
+function snapshotActiveCanvasProfile() {
+  const index = (state.canvasProfiles || []).findIndex((profile) => profile.id === state.activeCanvasProfileId);
+  if (index < 0) return;
+  const profile = state.canvasProfiles[index];
+  state.canvasProfiles[index] = canvasProfileSnapshot(profile.id, profile.name);
+}
+
+function applyCanvasProfile(profile) {
+  if (!profile) return;
+  state.activeCanvasProfileId = profile.id;
+  state.entities = cloneLayoutValue(profile.entities) || [];
+  state.groups = cloneLayoutValue(profile.groups) || [];
+  state.diagramZoom = Number.isFinite(Number(profile.zoom)) ? Number(profile.zoom) : 1;
+  state.drawerWidth = Number.isFinite(Number(profile.drawer_width)) ? Number(profile.drawer_width) : 320;
+  state.openclawPos = cloneLayoutValue(profile.openclaw_pos) || { x: 1040, y: 42 };
+  normalizeGroups();
+  normalizeEntityPositions();
+  localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
+  localStorage.setItem("karajan-decision-groups", JSON.stringify(state.groups));
+  localStorage.setItem("karajan-diagram-zoom", String(state.diagramZoom));
+  localStorage.setItem("karajan-model-drawer-width", String(state.drawerWidth));
+  persistOpenClawPos();
+  applyDrawerState();
+  applyDiagramZoom();
+}
+
+function scheduleDiagramCenter() {
+  requestAnimationFrame(() => centerDiagramOnContent());
+}
+
+export function renderCanvasProfileControls() {
+  const select = $("#canvasProfileSelect");
+  const name = $("#canvasProfileName");
+  const remove = $("#deleteCanvasProfile");
+  const defaultButton = $("#setDefaultCanvasProfile");
+  if (!select || !name || !remove || !defaultButton) return;
+  select.innerHTML = (state.canvasProfiles || [])
+    .map((profile) => `<option value="${escapeHtml(profile.id)}" ${profile.id === state.activeCanvasProfileId ? "selected" : ""}>${escapeHtml(profile.name)}${profile.id === state.defaultCanvasProfileId ? " · predeterminado" : ""}</option>`)
+    .join("");
+  name.value = activeCanvasProfile()?.name || "";
+  const isDefault = state.activeCanvasProfileId === state.defaultCanvasProfileId;
+  defaultButton.setAttribute("aria-pressed", String(isDefault));
+  defaultButton.setAttribute("aria-label", isDefault ? "Perfil predeterminado" : "Usar este perfil por defecto");
+  defaultButton.title = isDefault ? "Perfil predeterminado" : "Usar este perfil por defecto";
+  defaultButton.querySelector("span").textContent = isDefault ? "★" : "☆";
+  remove.disabled = (state.canvasProfiles || []).length <= 1;
+  remove.dataset.confirmDelete = "";
+  remove.textContent = "Eliminar";
+}
+
+export function activateCanvasProfile(profileId) {
+  if (!profileId || profileId === state.activeCanvasProfileId) return;
+  snapshotActiveCanvasProfile();
+  const profile = state.canvasProfiles.find((item) => item.id === profileId);
+  if (!profile) return;
+  applyCanvasProfile(profile);
+  renderCanvasProfileControls();
+  renderDiagram();
+  renderModels();
+  scheduleDiagramCenter();
+  scheduleRoutingSave(`Perfil activo: ${profile.name}. Guardando enrutado…`);
+}
+
+export function setActiveCanvasProfileAsDefault() {
+  const profile = activeCanvasProfile();
+  if (!profile || profile.id === state.defaultCanvasProfileId) return;
+  state.defaultCanvasProfileId = profile.id;
+  renderCanvasProfileControls();
+  persistEntityState();
+  toast(`${profile.name} es ahora el perfil predeterminado.`);
+}
+
+export function renameActiveCanvasProfile(value) {
+  const profile = activeCanvasProfile();
+  if (!profile) return;
+  profile.name = String(value || "").trim() || "Perfil sin nombre";
+  renderCanvasProfileControls();
+  persistEntityState();
+}
+
+export function duplicateActiveCanvasProfile() {
+  snapshotActiveCanvasProfile();
+  const source = activeCanvasProfile();
+  if (!source) return;
+  const copy = normalizeCanvasProfile(cloneLayoutValue(source), state.canvasProfiles.length);
+  copy.id = uniqueCanvasProfileId("profile");
+  copy.name = `${source.name} copia`;
+  state.canvasProfiles.push(copy);
+  applyCanvasProfile(copy);
+  renderCanvasProfileControls();
+  renderDiagram();
+  renderModels();
+  scheduleDiagramCenter();
+  scheduleRoutingSave("Perfil duplicado. Guardando enrutado…");
+  $("#canvasProfileName")?.select();
+}
+
+export function deleteActiveCanvasProfile() {
+  if ((state.canvasProfiles || []).length <= 1) return;
+  const button = $("#deleteCanvasProfile");
+  if (button?.dataset.confirmDelete !== state.activeCanvasProfileId) {
+    clearTimeout(canvasProfileDeleteConfirmTimer);
+    button.dataset.confirmDelete = state.activeCanvasProfileId;
+    button.textContent = "Confirmar";
+    toast("Pulsa Confirmar para eliminar este perfil.");
+    canvasProfileDeleteConfirmTimer = setTimeout(renderCanvasProfileControls, 4000);
+    return;
+  }
+  clearTimeout(canvasProfileDeleteConfirmTimer);
+  const index = state.canvasProfiles.findIndex((profile) => profile.id === state.activeCanvasProfileId);
+  if (index < 0) return;
+  const [removed] = state.canvasProfiles.splice(index, 1);
+  const next = state.canvasProfiles[Math.min(index, state.canvasProfiles.length - 1)];
+  if (removed.id === state.defaultCanvasProfileId) state.defaultCanvasProfileId = next.id;
+  applyCanvasProfile(next);
+  renderCanvasProfileControls();
+  renderDiagram();
+  renderModels();
+  scheduleDiagramCenter();
+  scheduleRoutingSave(`Perfil eliminado: ${removed.name}. Guardando enrutado…`);
+}
+
+export function activateSimpleCanvasPreset() {
+  snapshotActiveCanvasProfile();
+  let preset = state.canvasProfiles.find(isSimpleCanvasPreset);
+  if (!preset) {
+    preset = simpleCanvasPreset();
+    state.canvasProfiles.push(preset);
+  }
+  if (preset.id !== state.activeCanvasProfileId) applyCanvasProfile(preset);
+  renderCanvasProfileControls();
+  renderDiagram();
+  renderModels();
+  scheduleDiagramCenter();
+  scheduleRoutingSave("Preset Qwen · Claude + ChatGPT activo. Guardando enrutado…");
+}
 
 export function scheduleRoutingSave(message = "Cambio detectado. Guardando enrutado…") {
   persistEntityState();
@@ -89,38 +304,29 @@ function persistOpenClawPos() {
 export async function loadRoutingLayout() {
   try {
     const layout = await api("/routing-layout");
-    if (Array.isArray(layout.groups)) {
-      state.groups = layout.groups;
-      localStorage.setItem("karajan-decision-groups", JSON.stringify(state.groups));
-      normalizeGroups();
+    const hasProfiles = Array.isArray(layout.profiles) && layout.profiles.length > 0;
+    state.canvasProfiles = hasProfiles
+      ? layout.profiles.map(normalizeCanvasProfile)
+      : [normalizeCanvasProfile({
+          id: "current",
+          name: CURRENT_CANVAS_PROFILE_NAME,
+          entities: Array.isArray(layout.entities) ? layout.entities : state.entities,
+          groups: Array.isArray(layout.groups) ? layout.groups : state.groups,
+          zoom: layout.zoom || state.diagramZoom,
+          drawer_width: layout.drawer_width || state.drawerWidth,
+          openclaw_pos: layout.openclaw_pos || readStoredOpenClawPos() || state.openclawPos,
+        }, 0)];
+    let defaultId = hasProfiles ? layout.default_profile_id : state.canvasProfiles[0].id;
+    if (!state.canvasProfiles.some((profile) => profile.id === defaultId)) defaultId = state.canvasProfiles[0].id;
+    state.defaultCanvasProfileId = defaultId;
+    let selectedId = state.activeCanvasProfileId ? layout.active_profile_id : defaultId;
+    if (!state.canvasProfiles.some((profile) => profile.id === selectedId)) selectedId = defaultId;
+    if (!state.canvasProfiles.some(isSimpleCanvasPreset)) {
+      state.canvasProfiles.push(simpleCanvasPreset());
+      setTimeout(() => saveRoutingLayout(), 0);
     }
-    if (layout.entities?.length) {
-      state.entities = layout.entities;
-      state.diagramZoom = layout.zoom || state.diagramZoom;
-      state.drawerWidth = layout.drawer_width || state.drawerWidth;
-      const localOpenClawPos = readStoredOpenClawPos();
-      if (
-        localOpenClawPos &&
-        Number.isFinite(Number(localOpenClawPos.x)) &&
-        Number.isFinite(Number(localOpenClawPos.y))
-      ) {
-        state.openclawPos = localOpenClawPos;
-      } else if (
-        layout.openclaw_pos &&
-        Number.isFinite(Number(layout.openclaw_pos.x)) &&
-        Number.isFinite(Number(layout.openclaw_pos.y))
-      ) {
-        state.openclawPos = {
-          x: Number(layout.openclaw_pos.x),
-          y: Number(layout.openclaw_pos.y),
-        };
-        persistOpenClawPos();
-      }
-      localStorage.setItem("karajan-decision-entities", JSON.stringify(state.entities));
-      localStorage.setItem("karajan-diagram-zoom", String(state.diagramZoom));
-      localStorage.setItem("karajan-model-drawer-width", String(state.drawerWidth));
-      normalizeEntityPositions();
-    }
+    applyCanvasProfile(state.canvasProfiles.find((profile) => profile.id === selectedId));
+    renderCanvasProfileControls();
   } catch {
     // LocalStorage remains the offline fallback for the diagram.
   }
@@ -128,6 +334,7 @@ export async function loadRoutingLayout() {
 
 async function saveRoutingLayout() {
   try {
+    snapshotActiveCanvasProfile();
     await api("/routing-layout", {
       method: "PUT",
       body: JSON.stringify({
@@ -136,6 +343,9 @@ async function saveRoutingLayout() {
         zoom: state.diagramZoom,
         drawer_width: state.drawerWidth,
         openclaw_pos: state.openclawPos,
+        active_profile_id: state.activeCanvasProfileId,
+        default_profile_id: state.defaultCanvasProfileId,
+        profiles: state.canvasProfiles,
       }),
     });
   } catch {
@@ -945,11 +1155,27 @@ export function applyDiagramZoom() {
     node.style.left = `${screenX(group.x)}px`;
     node.style.top = `${screenY(group.y)}px`;
   });
-  if (!state.diagramCentered && $("#view-decision").classList.contains("active")) {
-    diagram.scrollLeft = Math.max(0, screenX(0) - Math.round(diagram.clientWidth * 0.18));
-    diagram.scrollTop = Math.max(0, screenY(0) - Math.round(diagram.clientHeight * 0.18));
-    state.diagramCentered = true;
-  }
+  scheduleDrawWires();
+}
+
+export function centerDiagramOnContent() {
+  const diagram = $("#diagram");
+  if (!diagram || !$("#view-decision")?.classList.contains("active")) return;
+  const diagramRect = diagram.getBoundingClientRect();
+  const nodes = $$("#diagramLayer .node").filter((node) => node.getClientRects().length > 0);
+  if (!nodes.length) return;
+  const bounds = nodes.reduce((result, node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      left: Math.min(result.left, rect.left - diagramRect.left + diagram.scrollLeft),
+      top: Math.min(result.top, rect.top - diagramRect.top + diagram.scrollTop),
+      right: Math.max(result.right, rect.right - diagramRect.left + diagram.scrollLeft),
+      bottom: Math.max(result.bottom, rect.bottom - diagramRect.top + diagram.scrollTop),
+    };
+  }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+  diagram.scrollLeft = Math.max(0, (bounds.left + bounds.right - diagram.clientWidth) / 2);
+  diagram.scrollTop = Math.max(0, (bounds.top + bounds.bottom - diagram.clientHeight) / 2);
+  state.diagramCentered = true;
   scheduleDrawWires();
 }
 
@@ -1638,12 +1864,28 @@ export function applyDrawerState() {
   scheduleDrawWires();
 }
 
+export function setModelDrawerOpen(open) {
+  state.modelDrawerOpen = open;
+  localStorage.setItem("karajan-model-drawer-open", open ? "1" : "0");
+  $(".decision-workbench")?.classList.toggle("drawer-collapsed", !open);
+  $("#modelDrawer")?.classList.toggle("collapsed", !open);
+  const button = $("#toggleModelDrawer");
+  if (button) {
+    button.textContent = open ? "◧" : "◨";
+    button.setAttribute("aria-pressed", String(!open));
+    button.setAttribute("title", open ? "Compactar panel" : "Expandir panel");
+    button.setAttribute("aria-label", open ? "Compactar panel" : "Expandir panel");
+  }
+  scheduleDrawWires();
+}
+
 export function initDrawerControls() {
   const storedWidth = Number(localStorage.getItem("karajan-model-drawer-width"));
   if (Number.isFinite(storedWidth) && storedWidth >= 240) {
     state.drawerWidth = Math.min(520, Math.max(240, storedWidth));
   }
   applyDrawerState();
+  setModelDrawerOpen(localStorage.getItem("karajan-model-drawer-open") !== "0");
 
   const splitter = $("#drawerSplitter");
   if (!splitter) return;

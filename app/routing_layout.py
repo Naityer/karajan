@@ -20,7 +20,11 @@ class RoutingLayoutStore:
         self.backup_path = self.path.with_suffix(f"{self.path.suffix}.bak")
 
     def load(self) -> RoutingLayout:
-        return self._load_path(self.path) or self._load_path(self.backup_path) or RoutingLayout()
+        return (
+            self._load_path(self.path)
+            or self._load_path(self.backup_path)
+            or RoutingLayout().project_active_profile()
+        )
 
     def _load_path(self, path: Path) -> RoutingLayout | None:
         """Read one layout file defensively.
@@ -37,13 +41,20 @@ class RoutingLayoutStore:
             if not raw.strip() or "\x00" in raw:
                 return None
             payload = json.loads(raw)
-            return RoutingLayout.model_validate(payload)
+            return RoutingLayout.model_validate(payload).project_active_profile()
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError):
             return None
 
     def save(self, layout: RoutingLayout) -> RoutingLayout:
         """Persist the diagram atomically and keep the previous file as backup."""
         saved = layout.model_copy(deep=True)
+        # Loaded layouts have their active projection marked as explicitly set,
+        # so in-place mutations remain authoritative. A profiles-only API
+        # payload has no such fields and must instead project its active profile.
+        changed_canvas_fields = set(saved.model_fields_set).intersection(
+            {"entities", "groups", "zoom", "drawer_width", "openclaw_pos"}
+        )
+        saved.reconcile_active_profile(changed_canvas_fields)
         saved.updated_at = datetime.now(timezone.utc)
         payload = saved.model_dump_json(indent=2)
         # Validate the exact bytes that will be written before touching disk.

@@ -21,11 +21,17 @@ class PostgresRoutingRepository:
                 (self._workspace.tenant_id, self._workspace.workspace_id, self._workspace.project_id),
             ).fetchone()
         if row is None:
-            return RoutingLayout()  # workspace nuevo: layout vacío, igual que RoutingLayoutStore sin fichero
-        return RoutingLayout.model_validate(row[0])
+            # Workspace nuevo: layout vacío, igual que RoutingLayoutStore sin fichero.
+            return RoutingLayout().project_active_profile()
+        return RoutingLayout.model_validate(row[0]).project_active_profile()
 
     def save(self, layout: RoutingLayout) -> RoutingLayout:
-        payload = layout.model_dump(mode="json")
+        saved = layout.model_copy(deep=True)
+        changed_canvas_fields = set(saved.model_fields_set).intersection(
+            {"entities", "groups", "zoom", "drawer_width", "openclaw_pos"}
+        )
+        saved.reconcile_active_profile(changed_canvas_fields)
+        payload = saved.model_dump(mode="json")
         with self._pool.connection() as conn:
             conn.execute(
                 """
@@ -37,4 +43,4 @@ class PostgresRoutingRepository:
                 (self._workspace.tenant_id, self._workspace.workspace_id, self._workspace.project_id, Json(payload)),
             )
             conn.commit()
-        return layout
+        return saved

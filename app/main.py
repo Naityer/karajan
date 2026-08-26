@@ -39,6 +39,7 @@ from app.modules.inspiration import api as inspiration_api
 from app.modules.monitoring import api as monitoring_api
 from app.modules.shared import api as shared_api
 from app.modules.tasks import api as tasks_api
+from app.modules.v1 import api as v1_api
 from app.logging_config import get_logger
 from app.models import KarajanConfig
 
@@ -133,8 +134,29 @@ app.include_router(agents_api.router)
 app.include_router(inspiration_api.router)
 app.include_router(configuration_api.router)
 app.include_router(shared_api.router)
+app.include_router(v1_api.router)
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+class _NoCacheStaticFiles(StaticFiles):
+    """`StaticFiles` that always revalidates instead of trusting browser heuristics.
+
+    `_static_asset_version()` below only busts the cache for `app.js`/`styles.css`
+    referenced directly from `index.html`. Everything they import — `src/main.js`
+    and every `src/modules/*.js` — is requested by its bare URL with no `?v=`,
+    so a browser (or the pywebview/WebView2 control the desktop launcher uses)
+    can go on serving a long-cached copy of an edited module for the lifetime
+    of that browser profile, even after a plain reload. `Cache-Control: no-cache`
+    forces a conditional GET on every request instead, so edits under `src/`
+    take effect on the next reload without needing a full app restart. This
+    still allows cheap 304s via the ETag/Last-Modified Starlette already sets.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", _NoCacheStaticFiles(directory=STATIC_DIR), name="static")
 
 
 def _static_asset_version() -> str:

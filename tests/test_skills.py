@@ -21,7 +21,8 @@ def test_codex_in_catalog() -> None:
     assert "codex" in cli
     assert "aider" not in cli
     codex = catalog.get_provider("codex")
-    assert codex.cli_command == "codex exec {model}"
+    assert codex.cli_command == "codex exec --ephemeral --color never -"
+    assert set(codex.tiers.values()) == {"default"}
 
 
 def test_install_skill_already_installed(monkeypatch, tmp_path) -> None:

@@ -353,7 +353,11 @@ def run_subtask(
         )
     ]
 
-    if run.error and config.orchestration.enable_runtime_fallback:
+    # An explicit provider/entity selection is a hard routing decision. Falling
+    # back silently would violate sender routing and make the audit trail claim
+    # that another agent performed the requested work. Automatic routing may
+    # still use its configured fallback chain.
+    if run.error and config.orchestration.enable_runtime_fallback and preresolved is None:
         resolution, run, fallback_decisions = _run_fallback_chain(
             classification, subtask, assignment, resolution, instruction, run, attempted, config, layout
         )

@@ -124,6 +124,27 @@ def test_delegate_falls_back_to_a_backup_provider_when_primary_errors(monkeypatc
     assert any(decision.phase == "reassign" for decision in decisions)
 
 
+def test_forced_provider_surfaces_error_without_silent_fallback(monkeypatch) -> None:
+    classification = classify_prompt(PROMPT)
+    config = KarajanConfig(
+        backend=Backend.API,
+        orchestration=OrchestrationConfig(max_retries=0, enable_runtime_fallback=True),
+    )
+    forced = Resolution(_FailingProvider(), Backend.API, "forced-model", "forced")
+    monkeypatch.setattr(
+        delegation,
+        "fallback_resolutions",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("fallback must not run")),
+    )
+
+    result, decisions = delegate(classification, config, preresolved=forced)
+
+    assert result.status.value == "failed"
+    assert all(ex.model_used.startswith("fake:") for ex in result.executions)
+    assert all(ex.error == "boom" for ex in result.executions)
+    assert not any(decision.phase == "fallback" for decision in decisions)
+
+
 def test_delegate_fails_when_the_fallback_chain_is_exhausted(monkeypatch) -> None:
     """An empty chain surfaces the real provider error, not a fake success."""
     _patch_resolve(monkeypatch, _FailingProvider)

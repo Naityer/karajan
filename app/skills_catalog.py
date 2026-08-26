@@ -58,9 +58,19 @@ _LOCAL_SKILLS: tuple[dict, ...] = (
     },
 )
 
-SKILLS_DIR = Path.home() / ".claude" / "skills"
+_DEFAULT_SKILLS_DIR = Path.home() / ".claude" / "skills"
+SKILLS_DIR = _DEFAULT_SKILLS_DIR
+AGENTS_SKILLS_DIR = Path.home() / ".agents" / "skills"
+CODEX_SKILLS_DIR = Path.home() / ".codex" / "skills"
 COMMANDS_DIR = Path.home() / ".claude" / "commands"
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _skill_dirs() -> tuple[Path, ...]:
+    """Destinos compatibles; el override de tests conserva aislamiento."""
+    if SKILLS_DIR != _DEFAULT_SKILLS_DIR:
+        return (SKILLS_DIR,)
+    return tuple(dict.fromkeys((SKILLS_DIR, AGENTS_SKILLS_DIR, CODEX_SKILLS_DIR)))
 
 
 def list_skills() -> list[SkillInfo]:
@@ -72,7 +82,7 @@ def list_skills() -> list[SkillInfo]:
         SkillInfo(
             name=skill["name"],
             description=skill["description"],
-            installed=(installed := (SKILLS_DIR / skill["name"]).is_dir()),
+            installed=(installed := any((root / skill["name"]).is_dir() for root in _skill_dirs())),
             recommended=installed,
             applies_to=skill["applies_to"],
             install_command=None if installed else f"claude skill install {skill['name']}",
@@ -83,29 +93,22 @@ def list_skills() -> list[SkillInfo]:
 
 
 def install_skill(name: str) -> SkillInstallResult:
-    """Install a catalog-listed skill into ~/.claude/skills.
-
-    Restricted to names present in the static catalog (never arbitrary specs).
-    Three sources: `_SKILLS` are already bundled with the agent (nothing to
-    do), `_GITHUB_SKILLS` are cloned from `repo_url`, `_LOCAL_SKILLS` are
-    copied straight from this repo's own `skills/<name>/` (plus its matching
-    `commands/<name>.md`, if any) — no network needed.
-    """
+    """Instala una skill del catálogo en los directorios de agentes compatibles."""
     entry = next((s for s in (*_SKILLS, *_GITHUB_SKILLS, *_LOCAL_SKILLS) if s["name"] == name), None)
     if entry is None:
         return SkillInstallResult(ok=False, detail=f"Skill desconocida en el catálogo: {name}")
-
-    target = SKILLS_DIR / name
-    if target.is_dir():
-        return SkillInstallResult(ok=True, detail=f"'{name}' ya está instalada.")
 
     source_dir = entry.get("source_dir")
     if source_dir:
         source = _REPO_ROOT / source_dir
         if not source.is_dir():
             return SkillInstallResult(ok=False, detail=f"No se encontró '{source_dir}' en el repo.")
-        SKILLS_DIR.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(source, target)
+        installed_paths: list[str] = []
+        for skills_root in _skill_dirs():
+            target = skills_root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source, target, dirs_exist_ok=True)
+            installed_paths.append(str(target))
         command_file = entry.get("command_file")
         if command_file:
             command_source = _REPO_ROOT / command_file
@@ -113,8 +116,13 @@ def install_skill(name: str) -> SkillInstallResult:
                 COMMANDS_DIR.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(command_source, COMMANDS_DIR / command_source.name)
         return SkillInstallResult(
-            ok=True, detail=f"'{name}' instalada en {target}. Reinicia Claude Code para que aparezca."
+            ok=True,
+            detail=f"'{name}' sincronizada en: {', '.join(installed_paths)}. Reinicia la sesión del agente.",
         )
+
+    target = SKILLS_DIR / name
+    if target.is_dir():
+        return SkillInstallResult(ok=True, detail=f"'{name}' ya está instalada.")
 
     repo_url = entry.get("repo_url")
     if not repo_url:
@@ -123,7 +131,7 @@ def install_skill(name: str) -> SkillInstallResult:
     if not shutil.which("git"):
         return SkillInstallResult(ok=False, detail="git no está disponible para clonar la skill.")
 
-    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         clone = subprocess.run(
             ["git", "clone", "--depth", "1", "--filter=blob:none", "--sparse", repo_url, tmp],

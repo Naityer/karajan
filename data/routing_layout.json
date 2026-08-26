@@ -1,13 +1,13 @@
 {
   "entities": [
     {
-      "id": "entity-parent",
-      "name": "Qwen Coder (local)",
+      "id": "preset-qwen-router",
+      "name": "Qwen Router (local)",
       "role": "parent",
       "role_tags": [
         "parent"
       ],
-      "provider": "ollama-qwen-coder",
+      "provider": "ollama-qwen",
       "parentId": "",
       "target_ids": [],
       "levels": [],
@@ -16,188 +16,364 @@
         "Planner",
         "Router"
       ],
-      "memberships": [
-        {
-          "group_id": "grp_mrcp9isp",
-          "prio": 2
-        }
-      ],
-      "tier": 2,
+      "resource_ids": [],
+      "memberships": [],
+      "tier": 0,
       "max_concurrent": 1,
-      "x": 732.2410747040254,
-      "y": 189.11366279804537
+      "x": 500.0,
+      "y": 110.0
     },
     {
-      "id": "entity-provider-ollama-ornith",
-      "name": "Ornith (local)",
+      "id": "preset-codex-worker",
+      "name": "ChatGPT / Codex",
       "role": "child",
       "role_tags": [
         "child"
       ],
-      "provider": "ollama-ornith",
-      "parentId": "entity-parent",
+      "provider": "codex",
+      "parentId": "preset-qwen-router",
       "target_ids": [],
       "levels": [
-        "level_5_critical"
-      ],
-      "skills": [],
-      "capabilities": [],
-      "memberships": [
-        {
-          "group_id": "grp_mrchp9cn",
-          "prio": 3
-        },
-        {
-          "group_id": "grp_mrcp9isp",
-          "prio": 1
-        }
-      ],
-      "tier": 2,
-      "max_concurrent": 1,
-      "x": 723.1837970317847,
-      "y": 958.4978816834226
-    },
-    {
-      "id": "entity-provider-ollama-glm",
-      "name": "GLM-5.2 (Ollama cloud)",
-      "role": "child",
-      "role_tags": [
-        "child"
-      ],
-      "provider": "ollama-glm",
-      "parentId": "entity-parent",
-      "target_ids": [],
-      "levels": [
-        "level_4_complex"
-      ],
-      "skills": [],
-      "capabilities": [],
-      "memberships": [
-        {
-          "group_id": "grp_mrchp9cn",
-          "prio": 1
-        }
-      ],
-      "tier": 2,
-      "max_concurrent": 1,
-      "x": 1591.9833799397682,
-      "y": 799.3714604503605
-    },
-    {
-      "id": "entity-provider-ollama-kimi",
-      "name": "Kimi K2.7 Code (Ollama cloud)",
-      "role": "child",
-      "role_tags": [
-        "child"
-      ],
-      "provider": "ollama-kimi",
-      "parentId": "entity-parent",
-      "target_ids": [],
-      "levels": [
+        "level_1_simple",
+        "level_2_moderate",
         "level_3_intermediate"
       ],
       "skills": [],
       "capabilities": [],
-      "memberships": [
-        {
-          "group_id": "grp_mrchp9cn",
-          "prio": 2
-        }
-      ],
-      "tier": 2,
-      "max_concurrent": 1,
-      "x": 1244.1986910975986,
-      "y": 141.28732098876907
-    },
-    {
-      "id": "entity-provider-claude-cli",
-      "name": "Claude Code CLI (local)",
-      "role": "child",
-      "role_tags": [
-        "child",
-        "fixer"
-      ],
-      "provider": "claude-cli",
-      "parentId": "entity-parent",
-      "target_ids": [],
-      "levels": [
-        "level_1_simple",
-        "level_2_moderate"
-      ],
-      "skills": [],
-      "capabilities": [],
-      "memberships": [
-        {
-          "group_id": "grp_mrcctgy7",
-          "prio": 2
-        }
-      ],
-      "tier": 2,
-      "max_concurrent": 1,
-      "x": 81.01260274134259,
-      "y": -21.841196777905623
-    },
-    {
-      "id": "entity-provider-codex",
-      "name": "OpenAI Codex CLI (local)",
-      "role": "child",
-      "role_tags": [
-        "child",
-        "validator"
-      ],
-      "provider": "codex",
-      "parentId": "entity-parent",
-      "target_ids": [
-        "entity-provider-ollama-glm",
-        "entity-provider-ollama-ornith",
-        "entity-provider-ollama-kimi"
-      ],
-      "levels": [
-        "level_1_simple",
-        "level_2_moderate"
-      ],
-      "skills": [],
-      "capabilities": [],
-      "memberships": [
-        {
-          "group_id": "grp_mrcctgy7",
-          "prio": 1
-        }
-      ],
+      "resource_ids": [],
+      "memberships": [],
       "tier": 1,
       "max_concurrent": 1,
-      "x": 77.3348727912158,
-      "y": 573.5512249313371
-    }
-  ],
-  "groups": [
-    {
-      "id": "grp_mrcctgy7",
-      "name": "Nivel Superior",
-      "color": "#3484c5",
-      "x": -351.16579088017215,
-      "y": 456.2100251957395
+      "x": -3.1578826904296804,
+      "y": 394.2105504086143
     },
     {
-      "id": "grp_mrchp9cn",
-      "name": "Nivel Medio",
-      "color": "#ffb25f",
-      "x": 1155.7597791079331,
-      "y": 724.954535122292
-    },
-    {
-      "id": "grp_mrcp9isp",
-      "name": "Delegador / Tareas basicas",
-      "color": "#b9a7ff",
-      "x": 736.9858709161929,
-      "y": 695.6564608487216
+      "id": "preset-claude-worker",
+      "name": "Claude Code CLI",
+      "role": "child",
+      "role_tags": [
+        "child"
+      ],
+      "provider": "claude-cli",
+      "parentId": "preset-qwen-router",
+      "target_ids": [],
+      "levels": [
+        "level_4_complex",
+        "level_5_critical"
+      ],
+      "skills": [],
+      "capabilities": [],
+      "resource_ids": [],
+      "memberships": [],
+      "tier": 1,
+      "max_concurrent": 1,
+      "x": 971.2000122070312,
+      "y": 427.6000061035156
     }
   ],
-  "zoom": 0.44000000000000006,
-  "drawer_width": 402,
+  "groups": [],
+  "zoom": 0.7600000000000001,
+  "drawer_width": 367,
   "openclaw_pos": {
-    "x": 731.1111450195311,
-    "y": -48.88885498046874
+    "x": 499.2306988055892,
+    "y": -50.76921609731815
   },
-  "updated_at": "2026-07-09T16:07:11.760880Z"
+  "active_profile_id": "qwen-claude-chatgpt_mt7ci6il_an68t",
+  "default_profile_id": "qwen-claude-chatgpt_mt7ci6il_an68t",
+  "profiles": [
+    {
+      "id": "current",
+      "name": "Esquema actual",
+      "entities": [
+        {
+          "id": "entity-parent",
+          "name": "Qwen Coder (local)",
+          "role": "parent",
+          "role_tags": [
+            "parent"
+          ],
+          "provider": "ollama-qwen-coder",
+          "parentId": "",
+          "target_ids": [],
+          "levels": [],
+          "skills": [],
+          "capabilities": [
+            "Planner",
+            "Router"
+          ],
+          "resource_ids": [],
+          "memberships": [
+            {
+              "group_id": "grp_mrcp9isp",
+              "prio": 2
+            }
+          ],
+          "tier": 2,
+          "max_concurrent": 1,
+          "x": 732.2410747040254,
+          "y": 189.11366279804537
+        },
+        {
+          "id": "entity-provider-ollama-ornith",
+          "name": "Ornith (local)",
+          "role": "child",
+          "role_tags": [
+            "child"
+          ],
+          "provider": "ollama-ornith",
+          "parentId": "entity-parent",
+          "target_ids": [],
+          "levels": [
+            "level_5_critical"
+          ],
+          "skills": [],
+          "capabilities": [],
+          "resource_ids": [],
+          "memberships": [
+            {
+              "group_id": "grp_mrchp9cn",
+              "prio": 3
+            },
+            {
+              "group_id": "grp_mrcp9isp",
+              "prio": 1
+            }
+          ],
+          "tier": 2,
+          "max_concurrent": 1,
+          "x": 723.1837970317847,
+          "y": 958.4978816834226
+        },
+        {
+          "id": "entity-provider-ollama-glm",
+          "name": "GLM-5.2 (Ollama cloud)",
+          "role": "child",
+          "role_tags": [
+            "child"
+          ],
+          "provider": "ollama-glm",
+          "parentId": "entity-parent",
+          "target_ids": [],
+          "levels": [
+            "level_4_complex"
+          ],
+          "skills": [],
+          "capabilities": [],
+          "resource_ids": [],
+          "memberships": [
+            {
+              "group_id": "grp_mrchp9cn",
+              "prio": 1
+            }
+          ],
+          "tier": 2,
+          "max_concurrent": 1,
+          "x": 1591.9833799397682,
+          "y": 799.3714604503605
+        },
+        {
+          "id": "entity-provider-ollama-kimi",
+          "name": "Kimi K2.7 Code (Ollama cloud)",
+          "role": "child",
+          "role_tags": [
+            "child"
+          ],
+          "provider": "ollama-kimi",
+          "parentId": "entity-parent",
+          "target_ids": [],
+          "levels": [
+            "level_3_intermediate"
+          ],
+          "skills": [],
+          "capabilities": [],
+          "resource_ids": [],
+          "memberships": [
+            {
+              "group_id": "grp_mrchp9cn",
+              "prio": 2
+            }
+          ],
+          "tier": 2,
+          "max_concurrent": 1,
+          "x": 1244.1986910975986,
+          "y": 141.28732098876907
+        },
+        {
+          "id": "entity-provider-claude-cli",
+          "name": "Claude Code CLI (local)",
+          "role": "child",
+          "role_tags": [
+            "child",
+            "fixer"
+          ],
+          "provider": "claude-cli",
+          "parentId": "entity-parent",
+          "target_ids": [],
+          "levels": [
+            "level_1_simple",
+            "level_2_moderate"
+          ],
+          "skills": [],
+          "capabilities": [],
+          "resource_ids": [],
+          "memberships": [
+            {
+              "group_id": "grp_mrcctgy7",
+              "prio": 2
+            }
+          ],
+          "tier": 2,
+          "max_concurrent": 1,
+          "x": 81.01260274134259,
+          "y": -21.841196777905623
+        },
+        {
+          "id": "entity-provider-codex",
+          "name": "OpenAI Codex CLI (local)",
+          "role": "child",
+          "role_tags": [
+            "child",
+            "validator"
+          ],
+          "provider": "codex",
+          "parentId": "entity-parent",
+          "target_ids": [
+            "entity-provider-ollama-glm",
+            "entity-provider-ollama-ornith",
+            "entity-provider-ollama-kimi"
+          ],
+          "levels": [
+            "level_1_simple",
+            "level_2_moderate"
+          ],
+          "skills": [],
+          "capabilities": [],
+          "resource_ids": [],
+          "memberships": [
+            {
+              "group_id": "grp_mrcctgy7",
+              "prio": 1
+            }
+          ],
+          "tier": 1,
+          "max_concurrent": 1,
+          "x": 77.3348727912158,
+          "y": 573.5512249313371
+        }
+      ],
+      "groups": [
+        {
+          "id": "grp_mrcctgy7",
+          "name": "Nivel Superior",
+          "color": "#3484c5",
+          "x": -351.16579088017215,
+          "y": 456.2100251957395
+        },
+        {
+          "id": "grp_mrchp9cn",
+          "name": "Nivel Medio",
+          "color": "#ffb25f",
+          "x": 1155.7597791079331,
+          "y": 724.954535122292
+        },
+        {
+          "id": "grp_mrcp9isp",
+          "name": "Delegador / Tareas basicas",
+          "color": "#b9a7ff",
+          "x": 736.9858709161929,
+          "y": 695.6564608487216
+        }
+      ],
+      "zoom": 0.44000000000000006,
+      "drawer_width": 402,
+      "openclaw_pos": {
+        "x": 731.1111450195311,
+        "y": -48.88885498046874
+      }
+    },
+    {
+      "id": "qwen-claude-chatgpt_mt7ci6il_an68t",
+      "name": "Qwen · Claude + ChatGPT",
+      "entities": [
+        {
+          "id": "preset-qwen-router",
+          "name": "Qwen Router (local)",
+          "role": "parent",
+          "role_tags": [
+            "parent"
+          ],
+          "provider": "ollama-qwen",
+          "parentId": "",
+          "target_ids": [],
+          "levels": [],
+          "skills": [],
+          "capabilities": [
+            "Planner",
+            "Router"
+          ],
+          "resource_ids": [],
+          "memberships": [],
+          "tier": 0,
+          "max_concurrent": 1,
+          "x": 500.0,
+          "y": 110.0
+        },
+        {
+          "id": "preset-codex-worker",
+          "name": "ChatGPT / Codex",
+          "role": "child",
+          "role_tags": [
+            "child"
+          ],
+          "provider": "codex",
+          "parentId": "preset-qwen-router",
+          "target_ids": [],
+          "levels": [
+            "level_1_simple",
+            "level_2_moderate",
+            "level_3_intermediate"
+          ],
+          "skills": [],
+          "capabilities": [],
+          "resource_ids": [],
+          "memberships": [],
+          "tier": 1,
+          "max_concurrent": 1,
+          "x": -3.1578826904296804,
+          "y": 394.2105504086143
+        },
+        {
+          "id": "preset-claude-worker",
+          "name": "Claude Code CLI",
+          "role": "child",
+          "role_tags": [
+            "child"
+          ],
+          "provider": "claude-cli",
+          "parentId": "preset-qwen-router",
+          "target_ids": [],
+          "levels": [
+            "level_4_complex",
+            "level_5_critical"
+          ],
+          "skills": [],
+          "capabilities": [],
+          "resource_ids": [],
+          "memberships": [],
+          "tier": 1,
+          "max_concurrent": 1,
+          "x": 971.2000122070312,
+          "y": 427.6000061035156
+        }
+      ],
+      "groups": [],
+      "zoom": 0.7600000000000001,
+      "drawer_width": 367,
+      "openclaw_pos": {
+        "x": 499.2306988055892,
+        "y": -50.76921609731815
+      }
+    }
+  ],
+  "updated_at": "2026-08-25T11:50:06.350079Z"
 }

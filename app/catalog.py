@@ -194,12 +194,20 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         auth_method=AuthMethod.CLI_LOGIN,
         backend=Backend.CLI,
         tiers={
-            RM.MEDIUM_MODEL: "gpt-5-codex",
-            RM.STRONG_MODEL: "gpt-5-codex",
-            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "gpt-5-codex",
+            # The authenticated Codex CLI selects an account-compatible model.
+            # Hard-coding `gpt-5-codex` broke ChatGPT-account executions when
+            # that legacy id stopped being supported.
+            RM.CHEAP_MODEL: "default",
+            RM.CHEAP_OR_MEDIUM_MODEL: "default",
+            RM.MEDIUM_MODEL: "default",
+            RM.STRONG_MODEL: "default",
+            RM.STRONG_MODEL_WITH_HUMAN_REVIEW: "default",
         },
         signup_url="https://developers.openai.com/codex/cli",
-        cli_command="codex exec {model}",
+        # The trailing `-` tells Codex to read the real instruction from stdin.
+        # Model selection stays in the user's Codex profile so the skill works
+        # across ChatGPT accounts without pinning an obsolete model id.
+        cli_command="codex exec --ephemeral --color never -",
         login_command="codex login",
     ),
     ProviderInfo(

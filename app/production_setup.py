@@ -71,16 +71,15 @@ def ensure_queue_hierarchy_entities(layout: RoutingLayout) -> tuple[RoutingLayou
     baseline_path = BASELINE_DIR / "routing_layout.json"
     if not baseline_path.exists():
         return layout, []
-    baseline = RoutingLayout.model_validate_json(baseline_path.read_text(encoding="utf-8"))
+    baseline = RoutingLayout.model_validate_json(
+        baseline_path.read_text(encoding="utf-8")
+    ).project_active_profile()
     existing_ids = {entity.id for entity in layout.entities}
     added = [entity for entity in baseline.entities if entity.id not in existing_ids]
     if not added:
         return layout, []
-    merged = RoutingLayout(
-        entities=[*layout.entities, *added],
-        zoom=layout.zoom,
-        drawer_width=layout.drawer_width,
-    )
+    merged = layout.model_copy(deep=True)
+    merged.entities.extend(added)
     return merged, [entity.id for entity in added]
 
 

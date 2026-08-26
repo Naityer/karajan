@@ -44,3 +44,20 @@ def test_policy_sensitive_domain_requires_human_review() -> None:
 
     assert "product" in result.domain
     assert result.requires_human_review is True
+
+
+def test_domain_keywords_do_not_match_inside_unrelated_words() -> None:
+    result = classify_prompt(
+        "Responde exactamente KARAJAN_CODEX_OK y no realices ninguna acción.",
+        KarajanConfig(),
+    )
+
+    assert result.domain == ["general"]
+    assert result.requires_human_review is False
+
+
+def test_real_ci_cd_pipeline_remains_a_sensitive_devops_task() -> None:
+    result = classify_prompt("Revisa el pipeline CI/CD del repositorio.", KarajanConfig())
+
+    assert "devops" in result.domain
+    assert result.requires_human_review is True

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
@@ -36,6 +37,8 @@ class TaskStatus(str, Enum):
     QUEUED = "queued"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCEL_REQUESTED = "cancel_requested"
+    OUTCOME_UNKNOWN = "outcome_unknown"
 
 
 class TaskV2Status(str, Enum):
@@ -93,6 +96,7 @@ class CriteriaScores(BaseModel):
 
 class TaskRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=20000)
+    effort_level: ComplexityLevel | None = None
 
     @field_validator("prompt")
     @classmethod
@@ -172,6 +176,9 @@ class DelegationRequest(BaseModel):
     # whole task (every subtask), not per-subtask. Pass at most one of the two.
     force_provider: str | None = None
     force_entity_id: str | None = None
+    # Context supplied after classification. It reaches providers during execution
+    # but cannot inflate the task score or trigger gates by merely containing keywords.
+    execution_context: str | None = Field(default=None, max_length=100_000)
     # Per-task workspace root for the agent tool loop. Without one the tools stay
     # disabled for this task — never a fallback to the server's cwd.
     workspace_root: str | None = None
@@ -770,29 +777,121 @@ class RoutingEntity(BaseModel):
         return self
 
 
+_CANVAS_FIELD_NAMES = ("entities", "groups", "zoom", "drawer_width", "openclaw_pos")
+
+
+def _reject_duplicate_group_prio(entities: list[RoutingEntity]) -> None:
+    seen: dict[tuple[str, int], str] = {}
+    for entity in entities:
+        for membership in entity.memberships:
+            key = (membership.group_id, membership.prio)
+            if key in seen:
+                raise ValueError(
+                    f"Duplicate Prio {membership.prio} in group '{membership.group_id}': "
+                    f"claimed by both entity '{seen[key]}' and entity '{entity.id}'"
+                )
+            seen[key] = entity.id
+
+
+class RoutingProfile(BaseModel):
+    """One named, independently editable canvas inside the decision view."""
+
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    name: str = Field(min_length=1, max_length=100)
+    entities: list[RoutingEntity] = Field(default_factory=list)
+    groups: list[HierarchyGroup] = Field(default_factory=list)
+    zoom: float = Field(default=1.0, ge=0.15, le=2.0)
+    drawer_width: int = Field(default=320, ge=220, le=680)
+    openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
+
+    @field_validator("id", "name")
+    @classmethod
+    def _strip_identity(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("profile id and name cannot be blank")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_group_priorities(self) -> "RoutingProfile":
+        _reject_duplicate_group_prio(self.entities)
+        return self
+
+
 class RoutingLayout(BaseModel):
     entities: list[RoutingEntity] = Field(default_factory=list)
     groups: list[HierarchyGroup] = Field(default_factory=list)
     zoom: float = Field(default=1.0, ge=0.15, le=2.0)
     drawer_width: int = Field(default=320, ge=220, le=680)
     openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
+    active_profile_id: str = "current"
+    default_profile_id: str = "current"
+    profiles: list[RoutingProfile] = Field(min_length=1)
     updated_at: datetime = Field(default_factory=_utcnow)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_canvas(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        migrated = dict(data)
+        if "profiles" not in migrated:
+            profile = {
+                "id": "current",
+                "name": "Esquema actual",
+                **{name: migrated.get(name) for name in _CANVAS_FIELD_NAMES if name in migrated},
+            }
+            migrated["profiles"] = [profile]
+        if not migrated.get("default_profile_id"):
+            profiles = migrated.get("profiles") or []
+            first_profile_id = profiles[0].get("id") if profiles and isinstance(profiles[0], dict) else "current"
+            migrated["default_profile_id"] = migrated.get("active_profile_id") or first_profile_id
+        return migrated
 
     @model_validator(mode="after")
     def _reject_duplicate_group_prio(self) -> "RoutingLayout":
         # Defense in depth: within one group, no two members may claim the same
         # Prio. Checked across ALL entities' memberships combined so an invalid
         # state can never be silently persisted (the frontend also prevents it).
-        seen: dict[tuple[str, int], str] = {}
-        for entity in self.entities:
-            for membership in entity.memberships:
-                key = (membership.group_id, membership.prio)
-                if key in seen:
-                    raise ValueError(
-                        f"Duplicate Prio {membership.prio} in group '{membership.group_id}': "
-                        f"claimed by both entity '{seen[key]}' and entity '{entity.id}'"
-                    )
-                seen[key] = entity.id
+        _reject_duplicate_group_prio(self.entities)
+        profile_ids = [profile.id for profile in self.profiles]
+        if len(profile_ids) != len(set(profile_ids)):
+            raise ValueError("routing profile ids must be unique")
+        if self.active_profile_id not in profile_ids:
+            raise ValueError(f"active routing profile '{self.active_profile_id}' does not exist")
+        if self.default_profile_id not in profile_ids:
+            raise ValueError(f"default routing profile '{self.default_profile_id}' does not exist")
+        return self
+
+    def active_profile(self) -> RoutingProfile:
+        return next(profile for profile in self.profiles if profile.id == self.active_profile_id)
+
+    def default_profile(self) -> RoutingProfile:
+        return next(profile for profile in self.profiles if profile.id == self.default_profile_id)
+
+    def project_active_profile(self) -> "RoutingLayout":
+        active = self.active_profile()
+        for name in _CANVAS_FIELD_NAMES:
+            setattr(self, name, deepcopy(getattr(active, name)))
+        return self
+
+    def project_default_profile(self) -> "RoutingLayout":
+        default = self.default_profile()
+        for name in _CANVAS_FIELD_NAMES:
+            setattr(self, name, deepcopy(getattr(default, name)))
+        return self
+
+    def reconcile_active_profile(self, changed_fields: set[str] | None = None) -> "RoutingLayout":
+        changed = set(_CANVAS_FIELD_NAMES) if changed_fields is None else changed_fields
+        active = self.active_profile()
+        updates: dict[str, object] = {}
+        for name in _CANVAS_FIELD_NAMES:
+            if name in changed:
+                updates[name] = getattr(self, name)
+            else:
+                setattr(self, name, deepcopy(getattr(active, name)))
+        replacement = active.model_copy(update=updates, deep=True)
+        self.profiles = [replacement if profile.id == active.id else profile for profile in self.profiles]
         return self
 
 

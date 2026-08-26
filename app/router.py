@@ -147,8 +147,16 @@ def _requires_human_review(
 
 
 def _detect_domains(text: str) -> list[str]:
-    domains = [domain for domain, words in DOMAIN_KEYWORDS.items() if any(word in text for word in words)]
+    domains = [
+        domain for domain, words in DOMAIN_KEYWORDS.items()
+        if any(_contains_term(text, word) for word in words)
+    ]
     return domains or ["general"]
+
+
+def _contains_term(text: str, term: str) -> bool:
+    """Match classifier keywords as terms, never arbitrary substrings."""
+    return re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, flags=re.UNICODE) is not None
 
 
 def _detect_intent(text: str) -> str:

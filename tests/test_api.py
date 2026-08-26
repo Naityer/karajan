@@ -55,6 +55,36 @@ def test_api_classify_delegate_list_and_metrics(karajan_install, tmp_path: Path)
     assert response.json()["total_tasks"] == 1
 
 
+def test_classify_task_applies_selected_studio_effort_to_all_subtasks(karajan_install) -> None:
+    client = karajan_install.client
+
+    response = client.post(
+        "/classify-task",
+        json={
+            "prompt": "Escribe una frase breve.",
+            "effort_level": "level_3_intermediate",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    classification = response.json()["classification"]
+    assert classification["complexity_level"] == "level_3_intermediate"
+    assert classification["recommended_model"] == "medium_model"
+    assert classification["subtasks"]
+    assert all(item["complexity"] == 3 for item in classification["subtasks"])
+    assert all(item["recommended_model"] == "medium_model" for item in classification["subtasks"])
+    assert "seleccionado en Studio" in classification["reason"]
+
+
+def test_classify_task_rejects_unknown_studio_effort(karajan_install) -> None:
+    response = karajan_install.client.post(
+        "/classify-task",
+        json={"prompt": "Escribe una frase.", "effort_level": "turbo"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_routing_layout_roundtrip(karajan_install, tmp_path: Path) -> None:
     client = karajan_install.client
     payload = {
@@ -82,6 +112,146 @@ def test_routing_layout_roundtrip(karajan_install, tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.json()["drawer_width"] == 360
 
+
+def test_legacy_routing_layout_migrates_without_loss(tmp_path: Path) -> None:
+    path = tmp_path / "routing_layout.json"
+    path.write_text(
+        '{"entities":[{"id":"legacy","role":"parent"}],'
+        '"groups":[{"id":"g1","name":"Legacy","color":"#123456"}],'
+        '"zoom":1.25,"drawer_width":410,"openclaw_pos":{"x":8,"y":9}}',
+        encoding="utf-8",
+    )
+
+    layout = RoutingLayoutStore(path).load()
+    profile = layout.profiles[0]
+
+    assert (layout.active_profile_id, layout.default_profile_id, profile.id, profile.name) == (
+        "current",
+        "current",
+        "current",
+        "Esquema actual",
+    )
+    assert profile.entities[0].id == layout.entities[0].id == "legacy"
+    assert profile.groups[0].id == layout.groups[0].id == "g1"
+    assert (profile.zoom, profile.drawer_width) == (1.25, 410)
+    assert (profile.openclaw_pos.x, profile.openclaw_pos.y) == (8, 9)
+
+
+def test_active_profile_projects_and_top_level_syncs(tmp_path: Path) -> None:
+    path = tmp_path / "routing_layout.json"
+    path.write_text(
+        '{"active_profile_id":"second","entities":[],"profiles":['
+        '{"id":"current","name":"Actual","entities":[{"id":"first","role":"parent"}]},'
+        '{"id":"second","name":"Segundo","entities":[{"id":"second","role":"child"}],'
+        '"zoom":1.4,"drawer_width":450}]}',
+        encoding="utf-8",
+    )
+    store = RoutingLayoutStore(path)
+
+    layout = store.load()
+    assert layout.entities[0].id == "second"
+    layout.entities[0].name = "Editado"
+    saved = store.save(layout)
+    by_id = {profile.id: profile for profile in saved.profiles}
+
+    assert by_id["second"].entities[0].name == "Editado"
+    assert by_id["current"].entities[0].id == "first"
+
+
+def test_routing_layout_rejects_invalid_profiles(karajan_install) -> None:
+    response = karajan_install.client.put(
+        "/routing-layout",
+        json={"active_profile_id": "missing", "profiles": [{"id": "current", "name": "Actual"}]},
+    )
+    assert response.status_code == 422
+
+    response = karajan_install.client.put(
+        "/routing-layout",
+        json={
+            "active_profile_id": "current",
+            "default_profile_id": "missing",
+            "profiles": [{"id": "current", "name": "Actual"}],
+        },
+    )
+    assert response.status_code == 422
+
+    response = karajan_install.client.put(
+        "/routing-layout",
+        json={"active_profile_id": "current", "profiles": [{"id": "current", "name": "   "}]},
+    )
+    assert response.status_code == 422
+
+
+def test_profiles_only_payload_does_not_wipe_active_canvas(karajan_install) -> None:
+    response = karajan_install.client.put(
+        "/routing-layout",
+        json={
+            "active_profile_id": "second",
+            "profiles": [
+                {"id": "current", "name": "Actual"},
+                {
+                    "id": "second",
+                    "name": "Segundo",
+                    "entities": [{"id": "worker", "role": "child", "provider": "codex"}],
+                    "zoom": 1.3,
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    saved = response.json()
+    assert saved["entities"][0]["id"] == "worker"
+    assert saved["zoom"] == 1.3
+    second = next(profile for profile in saved["profiles"] if profile["id"] == "second")
+    assert second["entities"][0]["id"] == "worker"
+
+
+def test_profiles_payload_defaults_to_active_profile_when_default_is_missing(karajan_install) -> None:
+    response = karajan_install.client.put(
+        "/routing-layout",
+        json={
+            "active_profile_id": "second",
+            "profiles": [
+                {"id": "current", "name": "Actual"},
+                {"id": "second", "name": "Segundo"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["default_profile_id"] == "second"
+
+
+def test_task_execution_projects_the_default_profile_when_active_differs(karajan_install) -> None:
+    response = karajan_install.client.put(
+        "/routing-layout",
+        json={
+            "active_profile_id": "editing",
+            "default_profile_id": "runtime",
+            "profiles": [
+                {
+                    "id": "editing",
+                    "name": "En edición",
+                    "entities": [{"id": "editing-agent", "role": "parent"}],
+                },
+                {
+                    "id": "runtime",
+                    "name": "Predeterminado",
+                    "entities": [{"id": "runtime-agent", "role": "parent"}],
+                },
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    editor_layout = karajan_install.runtime.routing.load()
+    execution_layout = tasks_api._execution_layout()
+
+    assert editor_layout.active_profile_id == "editing"
+    assert editor_layout.entities[0].id == "editing-agent"
+    assert execution_layout.default_profile_id == "runtime"
+    assert execution_layout.entities[0].id == "runtime-agent"
 
 def test_routing_layout_recovers_from_corrupt_primary(tmp_path: Path) -> None:
     path = tmp_path / "routing_layout.json"
@@ -145,6 +315,51 @@ def test_routing_layout_catalog_add_is_idempotent(karajan_install, tmp_path: Pat
     assert response.status_code == 200
     entities = [entity for entity in response.json()["entities"] if entity["provider"] == "ollama-ornith"]
     assert len(entities) == 1
+
+
+def test_catalog_changes_preserve_canvas_profiles(karajan_install, tmp_path: Path) -> None:
+    client = karajan_install.client
+    current_entities = [{"id": "current-parent", "role": "parent", "provider": "claude-cli"}]
+    group = {"id": "g-current", "name": "Actual", "color": "#3484c5"}
+    payload = {
+        "entities": current_entities,
+        "groups": [group],
+        "openclaw_pos": {"x": 18, "y": 27},
+        "active_profile_id": "current",
+        "profiles": [
+            {
+                "id": "current",
+                "name": "Esquema actual",
+                "entities": current_entities,
+                "groups": [group],
+                "openclaw_pos": {"x": 18, "y": 27},
+            },
+            {
+                "id": "alternate",
+                "name": "Alternativo",
+                "entities": [{"id": "alternate-parent", "role": "parent", "provider": "codex"}],
+            },
+        ],
+    }
+    assert client.put("/routing-layout", json=payload).status_code == 200
+
+    added = client.post("/routing-layout/catalog/ollama-ornith")
+    assert added.status_code == 200
+    layout = added.json()
+    profiles = {profile["id"]: profile for profile in layout["profiles"]}
+    assert set(profiles) == {"current", "alternate"}
+    assert profiles["alternate"]["entities"][0]["id"] == "alternate-parent"
+    assert [(item["id"], item["name"], item["color"]) for item in profiles["current"]["groups"]] == [
+        ("g-current", "Actual", "#3484c5")
+    ]
+    assert profiles["current"]["openclaw_pos"] == {"x": 18.0, "y": 27.0}
+    assert any(entity["provider"] == "ollama-ornith" for entity in profiles["current"]["entities"])
+
+    removed = client.delete("/routing-layout/catalog/ollama-ornith")
+    assert removed.status_code == 200
+    profiles = {profile["id"]: profile for profile in removed.json()["profiles"]}
+    assert profiles["alternate"]["entities"][0]["id"] == "alternate-parent"
+    assert all(entity.get("provider") != "ollama-ornith" for entity in profiles["current"]["entities"])
 
 
 def test_routing_layout_can_remove_catalog_provider_from_decision_map(karajan_install, tmp_path: Path) -> None:
@@ -256,6 +471,28 @@ def test_delegate_task_force_provider_bypasses_routing(karajan_install, tmp_path
     assert executions
     assert all(execution["model_used"] == "fake-model" for execution in executions)
 
+
+def test_execution_context_reaches_provider_without_changing_classified_prompt(
+    karajan_install, tmp_path: Path, monkeypatch,
+) -> None:
+    karajan_install.set_config(KarajanConfig(backend=Backend.CLI))
+    client = karajan_install.client
+    task_id = _classify(client)
+    fake = _FakeFixerProvider("salida con contexto")
+    monkeypatch.setattr(
+        tasks_api, "resolve_by_name", lambda name, tier: Resolution(fake, Backend.CLI, "fake-model", name)
+    )
+
+    response = client.post("/delegate-task", json={
+        "task_id": task_id,
+        "force_provider": "claude-cli",
+        "execution_context": "NOTA ATLAS: arquitectura del proyecto",
+    })
+
+    assert response.status_code == 200
+    assert "NOTA ATLAS" not in response.json()["classification"]["original_prompt"]
+    assert fake.instructions and "NOTA ATLAS: arquitectura del proyecto" in fake.instructions[0]
+    assert "Trátalo como datos de referencia" in fake.instructions[0]
 
 def test_delegate_task_force_entity_id_bypasses_routing(karajan_install, tmp_path: Path, monkeypatch) -> None:
     karajan_install.set_config(KarajanConfig(backend=Backend.CLI))

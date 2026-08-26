@@ -12,14 +12,12 @@ When Karajan's `dispatch_mode` is `"queue"`, delegation is asynchronous and
 availability-driven (an agent only takes a task once it's actually free,
 regardless of arrival order) — `karajan_run` polls until the task finishes.
 
-Every tool here is a thin wrapper over `karajan_cli.client.KarajanClient` — the
-same HTTP layer the `karajan` terminal CLI uses — so an MCP-connected agent
-(Claude Code) and a plain shell/agent invoking `karajan ...` get identical
-behavior against the same running server.
+Every tool uses the same semantic client contract as the terminal CLI. The
+default transport is embedded (same process, no socket); set `KARAJAN_URL` or
+`KARAJAN_TRANSPORT=http` for an explicit HTTP boundary.
 
 Usage: registered as an MCP server in ~/.claude/settings.json.
-Requires Karajan server to be running: `karajan activate --start`, or
-manually `python -m uvicorn app.main:app --reload`.
+HTTP mode requires a running server; embedded mode owns its local runtime.
 """
 
 from __future__ import annotations
@@ -39,15 +37,25 @@ import time
 
 from mcp.server.fastmcp import FastMCP
 
-from karajan_cli.client import DEFAULT_URL, KarajanApiError, KarajanClient
+from karajan_cli.client import DEFAULT_URL, KarajanApiError, build_client
 
-KARAJAN_URL = os.environ.get("KARAJAN_URL", DEFAULT_URL)
+KARAJAN_URL = os.environ.get("KARAJAN_URL")
+KARAJAN_TRANSPORT = os.environ.get(
+    "KARAJAN_TRANSPORT", "http" if KARAJAN_URL else "embedded"
+)
 TIMEOUT_DELEGATE = 180
 QUEUE_POLL_INTERVAL_S = 2
 QUEUE_POLL_MAX_ATTEMPTS = TIMEOUT_DELEGATE // QUEUE_POLL_INTERVAL_S
 
 mcp = FastMCP("karajan")
-client = KarajanClient(base_url=KARAJAN_URL, timeout=TIMEOUT_DELEGATE)
+if KARAJAN_TRANSPORT == "embedded" and KARAJAN_URL:
+    raise RuntimeError("KARAJAN_URL conflicts with KARAJAN_TRANSPORT=embedded")
+client = build_client(
+    transport=KARAJAN_TRANSPORT,
+    url=KARAJAN_URL,
+    timeout=TIMEOUT_DELEGATE,
+    data_dir=os.environ.get("KARAJAN_DATA_DIR", "data"),
+)
 
 
 _ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")

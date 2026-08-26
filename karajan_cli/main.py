@@ -11,7 +11,7 @@ import sys
 import typer
 
 from karajan_cli import repl as repl_module
-from karajan_cli.client import DEFAULT_URL, KarajanApiError, KarajanClient
+from karajan_cli.client import DEFAULT_URL, KarajanApiError, build_client
 from karajan_cli.commands import activate as activate_cmd
 from karajan_cli.commands import agents as agents_cmd
 from karajan_cli.commands import assign as assign_cmd
@@ -35,10 +35,21 @@ app = typer.Typer(
 def main(
     ctx: typer.Context,
     url: str = typer.Option(None, "--url", envvar="KARAJAN_URL", help=f"URL del servidor Karajan (default {DEFAULT_URL})."),
+    transport: str = typer.Option(None, "--transport", envvar="KARAJAN_TRANSPORT", help="embedded (default) o http."),
+    data_dir: str = typer.Option("data", "--data-dir", envvar="KARAJAN_DATA_DIR", help="Almacenamiento local para embedded."),
     token: str = typer.Option(None, "--token", envvar="KARAJAN_TOKEN", help="Token de mutación (X-Karajan-Token)."),
     json_output: bool = typer.Option(False, "--json", help="Salida en JSON crudo en vez de tablas."),
 ) -> None:
-    ctx.obj = {"client": KarajanClient(base_url=url, token=token), "json": json_output}
+    selected = transport or ("http" if url else "embedded")
+    if selected == "embedded" and url:
+        raise typer.BadParameter("--url/KARAJAN_URL conflicts with --transport embedded")
+    ctx.obj = {
+        "client": build_client(
+            transport=selected, url=url, token=token, data_dir=data_dir
+        ),
+        "json": json_output,
+        "transport": selected,
+    }
     if ctx.invoked_subcommand is None:
         repl_module.run(ctx.obj["client"], ctx.obj["json"])
         raise typer.Exit()

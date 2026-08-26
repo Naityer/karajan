@@ -90,6 +90,7 @@ class KarajanRuntime:
     local_resource_analyzer: LocalResourceAnalyzer
     resource_ranking_engine: ResourceRankingEngine
     inspiration_feed: InspirationFeed
+    application: Any | None = None
 
     @property
     def config(self) -> KarajanConfig:
@@ -150,13 +151,14 @@ def build_runtime(
     mode: Mode = "standalone",
     data_dir: Path | str = DEFAULT_DATA_DIR,
     identity: IdentityProvider | None = None,
+    in_memory: bool = False,
 ) -> KarajanRuntime:
     """Construye una instalación completa sobre un directorio de datos."""
     data_path = Path(data_dir)
     data_path.mkdir(parents=True, exist_ok=True)
 
     holder: dict[str, Any] = {}
-    tasks = build_task_repository(data_path)
+    tasks = TaskStore(":memory:") if in_memory else build_task_repository(data_path)
     resources = build_resource_repository(data_path)
     resource_analyzer = GitHubResourceAnalyzer(
         token=os.environ.get("GITHUB_TOKEN"),
@@ -194,6 +196,9 @@ def build_runtime(
         inspiration_feed=InspirationFeed(),
     )
     holder["runtime"] = runtime
+    from app.application import KarajanApplication
+
+    runtime.application = KarajanApplication(runtime)
     return runtime
 
 

@@ -1,106 +1,32 @@
 ---
 name: karajan
-description: Router/orquestador de tareas de KARAJAN. Para cualquier tarea de desarrollo no trivial (bugs, features, refactors, análisis, decisiones de arquitectura), actúa como el LLM padre en vez de resolverla directamente — clasifica por ámbito/complejidad/riesgo, registra la decisión en el harness local KARAJAN y delega según la estrategia y el modelo recomendados. Aplica tanto si el usuario invoca /karajan explícitamente como si plantea la tarea directamente, sin comando.
+description: Clasifica y registra tareas de desarrollo en el router local KARAJAN; delega a otro agente solo cuando el usuario pide ejecución real. Úsala para routing, selección de agente, trazabilidad o coordinación local.
 ---
 
-# KARAJAN — Router de tareas (harness)
+# KARAJAN — router local de tareas
 
-Se activa tanto con el comando `/karajan` como automáticamente cuando el
-usuario plantea una tarea de desarrollo no trivial directamente, sin comando
-explícito. Cuando se activa, **no resuelvas la tarea directamente**: actúas
-como el **LLM padre / router**. Clasificas, ponderas, registras la decisión
-en el harness y delegas. El harness KARAJAN guarda cada decisión para
-monitoreo y auditoría; tú eres quien recibe el prompt y decide.
+Usa KARAJAN como una skill local y portable. La clasificación, la decisión y el historial permanecen en el harness local.
+No reproduzcas manualmente su clasificador ni construyas payloads `/ingest` salvo que el usuario aporte una clasificación ya hecha.
 
-No hace falta estar dentro del repo de KARAJAN para usar esta skill: todo el
-registro se hace por HTTP (`karajan` CLI o `curl` contra `KARAJAN_API`), así
-que funciona desde cualquier proyecto una vez que el harness está activo
-(`karajan activate --start` una vez recuerda dónde está el repo para
-próximas veces).
+## Flujo normal
 
-## Flujo
+1. Comprueba el servicio con `karajan activate`. Si no responde, ejecuta una sola vez `karajan activate --start`.
+2. Para clasificar y registrar una tarea sin ejecutarla externamente: `karajan --json classify "<tarea>"`.
+3. Lee el nivel, estrategia, skills y agente recomendados y continúa localmente cuando el entorno actual sea el ejecutor adecuado.
 
-1. **Clasifica** el prompt del usuario. Puntúa de 0 a 5 cada criterio:
-   `ambiguity`, `context_required`, `reasoning_depth`, `autonomy_required`,
-   `operational_risk`, `validation_difficulty`.
-2. **Detecta** `domain` (p.ej. security, devops, programming, data, documents,
-   product) e `intent`, y divide en `subtasks` acotadas.
-3. **Recomienda skills/estrategias** del agente (`recommended_skills`): p.ej.
-   `repo-analyzer`, `security-review`, `backend-builder`, `frontend-builder`,
-   `cti-analyst`, `promptfoo`, y siempre `ponytail` (mínimo código seguro).
-4. **Registra la decisión** en el harness con un POST a `/ingest`. Guarda el
-   `task_id` devuelto. El harness **recalcula** `complexity_score`,
-   `complexity_level` y `recommended_model` de forma determinista — no los fijes tú.
-5. **Ejecuta/delega** según `recommended_strategy` y el modelo recomendado,
-   apoyándote en las skills sugeridas. Si `requires_human_review` es `true`,
-   pide confirmación humana antes de acciones irreversibles.
-6. **(Opcional) Reporta** cada decisión real de ejecución con un POST a
-   `/tasks/{task_id}/decisions` para enriquecer la auditoría en vivo.
+No llames por separado a `/health`, `/ingest`, `/tasks` y `/decisions` para una operación que ya cubre el CLI.
 
-Si el CLI `karajan` está instalado (`pip install -e .` en la raíz del repo),
-prefiérelo sobre el `curl` crudo de los pasos 4 y 6: `karajan ingest --file
-payload.json` / `karajan tasks decisions <task_id>` manejan servidor caído,
-reintentos y formato de salida. El `curl` de abajo queda como fallback si el
-CLI no está disponible en el entorno del agente.
+## Delegación opcional
 
-## Roles del diagrama
+Solo cuando el usuario pida ejecutar mediante otro agente o proveedor, usa una invocación única:
+`karajan --json assign --prompt "<tarea>" --to <proveedor>`
 
-El padre del harness se modela como `Agent`. `Agent` ya incluye clasificación,
-planificación, routing, agregación ligera y recuperación básica. No crees
-`Classifier`, `Planner` o `Router` como nodos separados salvo que haya alta
-complejidad, mucha carga, varias rutas o necesidad fuerte de trazabilidad.
+La delegación puede enviar el prompt y el contexto suministrado al proveedor elegido. Solicita autorización inmediatamente antes si implica datos locales, un proveedor externo, coste, escritura o una acción irreversible. Una clasificación local y de solo lectura no necesita esa autorización.
 
-Roles visibles:
+Si Karajan devuelve `requires_human_review`, pide revisión únicamente antes de la ejecución que produzca efectos; no repitas la clasificación ni pierdas el contexto al aprobar.
 
-- `Agent`: autoridad estructural; clasifica, decide, enruta y delega.
-- `Worker`: ejecuta tareas concretas asignadas por el `Agent`.
-- `Backup`: reserva en standby; solo asume autoridad si se promueve a `Agent`.
-- `Guardian`: apoya o revisa un `Worker` concreto.
-- `Validator`: valida salidas de otros nodos.
-- `Memory`: conserva estado, checkpoints y contexto.
-- `Monitor`: detecta salud, timeouts, errores y saturación.
+## Puertos y disponibilidad
 
-Capacidad especial:
+El servidor local usa `http://127.0.0.1:8001` por defecto. `KARAJAN_URL` permite cambiarlo. El CLI recuerda la raíz del repositorio tras el primer `activate --start`, por lo que después funciona desde cualquier carpeta.
 
-- `Reallocator` solo puede existir dentro de un `Agent`. Permite reasignar
-  roles, tareas, prioridades y relaciones cuando la jerarquía se rompe o se
-  vuelve ineficiente. `Worker`, `Guardian`, `Validator`, `Memory` y `Monitor`
-  pueden informar problemas, pero no pueden reasignar roles globales.
-
-## Registro en el harness
-
-`KARAJAN_API` por defecto es `http://127.0.0.1:8000` (si sirves la app en otro
-puerto, exporta `KARAJAN_API`, p.ej. `http://127.0.0.1:8001`). Antes de
-registrar nada, `karajan activate` (o `karajan activate --start`) confirma que
-el harness está arriba — evita fallos de conexión a mitad del flujo.
-
-```bash
-curl -s "${KARAJAN_API:-http://127.0.0.1:8000}/ingest" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "original_prompt": "<prompt del usuario>",
-    "domain": ["devops","programming"],
-    "intent": "diagnose_and_fix",
-    "criteria": {"ambiguity":1.5,"context_required":2,"reasoning_depth":2,
-                 "autonomy_required":1.5,"operational_risk":1,"validation_difficulty":1.5},
-    "recommended_strategy": "divide_and_delegate",
-    "recommended_skills": ["repo-analyzer","ponytail"],
-    "subtasks": [
-      {"id":"sub_001","name":"Analizar causa","complexity":3,
-       "recommended_model":"medium_model","recommended_skill":"repo-analyzer",
-       "validation":"Reproducir el fallo"}
-    ],
-    "reason": "Afecta a CI/CD; requiere validar en pipeline."
-  }'
-```
-
-Reportar una decisión de ejecución (opcional):
-
-```bash
-curl -s "${KARAJAN_API:-http://127.0.0.1:8000}/tasks/<task_id>/decisions" \
-  -H 'Content-Type: application/json' \
-  -d '{"task_id":"<task_id>","phase":"delegate","decision":"sub_001->claude-sonnet","reason":"ejecutado"}'
-```
-
-La regla de oro: el padre clasifica, pondera y coordina; los submodelos ejecutan
-subtareas delimitadas; el padre valida la coherencia final.
+Si el CLI no está en `PATH`, usa el ejecutable del entorno virtual de Karajan o instala el paquete localmente con `pip install -e <ruta-del-repo-karajan>`. No recurras a `curl` salvo diagnóstico del propio CLI.

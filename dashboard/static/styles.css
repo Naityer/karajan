@@ -1021,21 +1021,178 @@ body.resizing-monitor {
 }
 
 /* ---- Decision diagram ----------------------------------------------- */
-.diagram-head, .models-head, .flow-head {
+.models-head, .flow-head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;
   flex-wrap: wrap;
 }
-.diagram-head p, .models-head p, .flow-head p { margin: 0; color: var(--muted); max-width: 70ch; }
+.models-head p, .flow-head p { margin: 0; color: var(--muted); max-width: 70ch; }
+.drawer-section-label {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+/* Profile switcher: one always-visible select is the whole primary action;
+   rename/duplicate/delete/preset are secondary and tucked behind the "⋮"
+   menu so the default view stays down to a single control. */
+.profile-switcher {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.profile-switcher-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.profile-switcher-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r) - 2px);
+  background: var(--panel-2);
+  color: var(--text);
+  font: 600 13px/1.2 var(--sans);
+  padding: 5px 8px;
+}
+.profile-switcher-row select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.profile-default-toggle {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.profile-default-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+  color: var(--accent);
+}
+.profile-default-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.profile-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+.profile-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  display: none;
+  width: 196px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r) - 2px);
+  background: var(--panel);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, .28);
+}
+.profile-menu.open .profile-menu-toggle {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.profile-menu.open .profile-menu-panel { display: block; }
+.profile-menu-actions {
+  display: flex;
+  flex-direction: column;
+}
+.profile-menu-actions[hidden],
+.profile-rename-editor[hidden] { display: none; }
+.profile-menu-panel label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.profile-menu-panel input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r) - 2px);
+  background: var(--panel-2);
+  color: var(--text);
+  font: 600 12px/1.2 var(--sans);
+  padding: 5px 8px;
+}
+.profile-menu-actions > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: calc(var(--r) - 3px);
+  background: transparent;
+  color: var(--text);
+  font: 500 12px/1.2 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+.profile-menu-actions > button > span[aria-hidden] {
+  width: 14px;
+  color: var(--muted);
+  font: 14px/1 var(--mono);
+  text-align: center;
+}
+.profile-menu-actions > button:hover { background: var(--panel-2); }
+.profile-menu-panel button.danger:not(:disabled) { color: var(--bad); }
+.profile-menu-panel button:disabled { cursor: not-allowed; opacity: .45; }
+.profile-menu-panel hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 4px;
+}
+.profile-rename-editor { padding: 4px; }
+.profile-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 6px;
+}
+.profile-rename-actions button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r) - 3px);
+  background: transparent;
+  color: var(--text);
+  font: 600 11px/1.2 var(--sans);
+  cursor: pointer;
+}
+.profile-rename-actions button:hover { background: var(--panel-2); }
+.profile-rename-actions button.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.profile-menu-panel :is(input, button):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.drawer-add-hierarchy { width: 100%; margin-bottom: 10px; }
 #view-flow .flow-head {
   max-width: 920px;
   margin-inline: auto;
 }
 .decision-workbench {
-  height: calc(100% - 58px);
+  height: 100%;
   min-height: 420px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 10px var(--drawer-width);
   gap: 0;
+}
+.decision-workbench.drawer-collapsed {
+  grid-template-columns: minmax(0, 1fr) 10px 48px;
 }
 .diagram {
   position: relative;
@@ -1722,13 +1879,15 @@ body.resizing-monitor {
 }
 .drawer-head {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 10px;
-  align-items: start;
-  margin-bottom: 10px;
+  align-items: flex-start;
+  margin-bottom: 12px;
 }
-.drawer-head h3 { margin: 0; font-size: 13px; }
-.drawer-head p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+.drawer-head-title { min-width: 0; }
+.drawer-head h3 { margin: 0; font-size: clamp(18px, 2vw, 22px); font-weight: 800; letter-spacing: -.01em; }
+.drawer-head p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.drawer-head .icon-btn { flex: 0 0 auto; }
 .drawer-tools {
   display: flex;
   align-items: center;
@@ -1740,6 +1899,21 @@ body.resizing-monitor {
   width: 14px;
   height: 14px;
   accent-color: var(--accent);
+}
+
+/* ---- Compacted model drawer ------------------------------------------ */
+.model-drawer.collapsed {
+  padding: 12px 8px;
+  overflow: hidden;
+}
+.model-drawer.collapsed .drawer-head { justify-content: center; }
+.model-drawer.collapsed .drawer-head-title,
+.model-drawer.collapsed .profile-switcher,
+.model-drawer.collapsed .drawer-add-hierarchy,
+.model-drawer.collapsed .drawer-tools,
+.model-drawer.collapsed #openclawDrawerCard,
+.model-drawer.collapsed .provider-groups {
+  display: none;
 }
 
 /* ---- Skills section -------------------------------------------------- */
@@ -3219,6 +3393,7 @@ body.resizing-monitor {
   .monitor-grid { grid-template-columns: 1fr; }
   .diagram-layer { min-width: 0; }
   .decision-workbench { height: auto; grid-template-columns: 1fr; gap: 10px; }
+  .decision-workbench.drawer-collapsed { grid-template-columns: 1fr; }
   .splitter { display: none; }
   .wires { display: none; }
   .flow-grid { max-width: none; }
@@ -10440,7 +10615,6 @@ html[data-theme="light"], html[data-theme="amber"] {
 }
 
 /* ---- Decisión: hierarchy (Prio) group cards ----------------------------- */
-.diagram-head-actions { display: flex; align-items: center; gap: 8px; }
 .ghost-btn {
   min-height: 32px;
   padding: 6px 14px;

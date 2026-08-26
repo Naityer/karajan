@@ -5,7 +5,7 @@
 // compartidos (antes globals de un único archivo, ahora imports explícitos).
 
 import { addPolicyChip, addPolicyChipValue, configAgentCard, createPromptTemplateFromForm, deletePromptTemplate, ensureEntityForProvider, filterConfigFields, insertPromptResource, removeManualAgent, removePolicyChip, renderAgentsSidePanel, renderAgentsView, renderConfigAgentsPanel, renderFlow, renderPromptConfiguration, renderPromptResourceGrid, runManualAgentCommand, saveCurrentPromptTemplate, setCatalogProviderInDecision, setConfigMode, setConfigTab } from "./flow.js";
-import { applyDiagramZoom, applyDrawerState, createGroup, initDiagramViewport, initDrawerControls, loadRoutingLayout, renderDiagram, renderModels, scheduleDrawWires, scheduleRoutingSave } from "./decision.js";
+import { activateCanvasProfile, activateSimpleCanvasPreset, applyDiagramZoom, applyDrawerState, centerDiagramOnContent, createGroup, deleteActiveCanvasProfile, duplicateActiveCanvasProfile, initDiagramViewport, initDrawerControls, loadRoutingLayout, renameActiveCanvasProfile, renderCanvasProfileControls, renderDiagram, renderModels, scheduleDrawWires, scheduleRoutingSave, setActiveCanvasProfileAsDefault, setModelDrawerOpen } from "./decision.js";
 import { applyInspirationSidebarState, initResourceLibraryControls, refreshResourceDiscovery, refreshResourceRefreshSettings, refreshResources, renderResourceDiscoveryUnavailable, renderResourceError, renderResourceRefreshSettings, setInspirationSubview, setResourceGroupManager, setResourceInspector } from "./inspiration.js";
 import { initAgentsSplitter, initDataviz, initHumanSplitter, initMonitorBlocks, initMonitorSplitter, initMonitorSubnav, initTaskSearch, refreshMonitor, renderAnalyticsSection, renderPredictionsPanel, renderSkillsAnalytics, restoreMonitorSubview, setAgentsSide, setHumanSide, setMonitorSide, showProviderSetup, syncHumanSideHeight, syncHumanSideOffset } from "./monitor.js";
 import { $, $$, api, apiUrl, escapeHtml, state, toast } from "./shared.js";
@@ -31,12 +31,34 @@ function initViews() {
   $("#viewNav").addEventListener("click", (event) => {
     const tab = event.target.closest(".view-tab");
     if (!tab) return;
-    const view = tab.dataset.view;
-    $$(".view-tab").forEach((t) => t.classList.toggle("active", t === tab));
-    $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
-    state.activeView = view;
-    enterView(view);
+    activateView(tab.dataset.view);
   });
+  // Enlace directo a una vista: `?view=human` abre el Control humano sin pasar
+  // por la pestaña por defecto. Lo usa audit_code para abrirlo en su propia
+  // ventana (ver su componente "Karajan"), y sirve para cualquier marcador.
+  //
+  // Se dispara un click en vez de llamar a `activateView` aquí mismo: `initViews`
+  // corre al principio de `init()`, y `enterView` renderiza vistas que dependen
+  // de lo que init cablea después. Diferirlo un tick lo deja en el mismo camino
+  // que un click real -- que es como el resto del dashboard cambia de vista.
+  const requested = new URLSearchParams(location.search).get("view");
+  if (requested) {
+    setTimeout(() => $(`.view-tab[data-view="${requested}"]`)?.click(), 0);
+  }
+}
+
+function activateView(view) {
+  const tab = $(`.view-tab[data-view="${view}"]`);
+  if (!tab) return;
+  $$(".view-tab").forEach((t) => t.classList.toggle("active", t === tab));
+  $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
+  state.activeView = view;
+  // La URL refleja la vista activa, así que recargar o compartir el enlace
+  // devuelve a donde estabas.
+  const url = new URL(location.href);
+  url.searchParams.set("view", view);
+  history.replaceState(null, "", url);
+  enterView(view);
 }
 
 // ---- automatic data refresh -------------------------------------------------
@@ -50,6 +72,7 @@ function enterView(view) {
   if (view === "decision") {
     renderDiagram();
     renderModels();
+    requestAnimationFrame(() => centerDiagramOnContent());
   }
   if (view === "flow") {
     loadConfig().then(renderFlow).catch((error) => toast(error.message));
@@ -370,6 +393,71 @@ function init() {
   initTaskSearch();
   $("#modelsAdvanced").addEventListener("change", renderModels);
   $("#addHierarchyGroup")?.addEventListener("click", () => createGroup());
+  $("#canvasProfileSelect")?.addEventListener("change", (event) => activateCanvasProfile(event.target.value));
+  $("#setDefaultCanvasProfile")?.addEventListener("click", setActiveCanvasProfileAsDefault);
+  const profileMenu = $("#profileMenu");
+  const profileMenuToggle = $("#profileMenuToggle");
+  const profileMenuActions = $("#profileMenuActions");
+  const profileRenameEditor = $("#profileRenameEditor");
+  const profileNameInput = $("#canvasProfileName");
+  const setProfileRenameMode = (editing) => {
+    profileMenuActions.hidden = editing;
+    profileRenameEditor.hidden = !editing;
+    if (editing) {
+      profileNameInput.focus();
+      profileNameInput.select();
+    }
+  };
+  const setProfileMenuOpen = (open, { restoreFocus = false } = {}) => {
+    profileMenu.classList.toggle("open", open);
+    profileMenuToggle.setAttribute("aria-expanded", String(open));
+    if (!open) {
+      setProfileRenameMode(false);
+      if (restoreFocus) profileMenuToggle.focus();
+    }
+  };
+  const saveProfileName = () => {
+    renameActiveCanvasProfile(profileNameInput.value);
+    setProfileMenuOpen(false, { restoreFocus: true });
+  };
+  $("#renameCanvasProfile")?.addEventListener("click", () => setProfileRenameMode(true));
+  $("#saveCanvasProfileName")?.addEventListener("click", saveProfileName);
+  $("#cancelCanvasProfileName")?.addEventListener("click", () => {
+    renderCanvasProfileControls();
+    setProfileRenameMode(false);
+    $("#renameCanvasProfile")?.focus();
+  });
+  profileNameInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveProfileName();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      renderCanvasProfileControls();
+      setProfileRenameMode(false);
+      $("#renameCanvasProfile")?.focus();
+    }
+  });
+  $("#duplicateCanvasProfile")?.addEventListener("click", () => {
+    duplicateActiveCanvasProfile();
+    setProfileMenuOpen(false, { restoreFocus: true });
+  });
+  $("#deleteCanvasProfile")?.addEventListener("click", (event) => {
+    const wasConfirmed = event.currentTarget.dataset.confirmDelete === state.activeCanvasProfileId;
+    deleteActiveCanvasProfile();
+    if (wasConfirmed) setProfileMenuOpen(false, { restoreFocus: true });
+  });
+  $("#activateSimpleCanvasPreset")?.addEventListener("click", () => {
+    activateSimpleCanvasPreset();
+    setProfileMenuOpen(false, { restoreFocus: true });
+  });
+  $("#toggleModelDrawer")?.addEventListener("click", () => setModelDrawerOpen(!state.modelDrawerOpen));
+  profileMenuToggle?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = profileMenu.classList.contains("open");
+    setProfileMenuOpen(!isOpen);
+    if (!isOpen) $("#renameCanvasProfile")?.focus();
+  });
   initAutoRefresh();
   initLiveEvents();
   initResourceLibraryControls();
@@ -594,6 +682,9 @@ function init() {
     if (!event.target.closest(".role-tag-picker")) {
       $$(".role-tag-picker.open").forEach((item) => item.classList.remove("open"));
     }
+    if (!event.target.closest(".profile-menu")) {
+      setProfileMenuOpen(false);
+    }
   });
   document.addEventListener("input", (event) => {
     if (event.target?.id === "promptResourceSearch") {
@@ -644,6 +735,7 @@ function init() {
       refreshMonitor(),
     ]))
     .then(() => {
+      renderCanvasProfileControls();
       applyDrawerState();
       applyDiagramZoom();
       // Control Humano roster is derived from state.entities/state.groups; rebuild

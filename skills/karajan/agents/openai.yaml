@@ -1,0 +1,6 @@
+interface:
+  display_name: "Karajan"
+  short_description: "Routing local y delegación trazable de tareas"
+  default_prompt: "Usa $karajan para clasificar y registrar esta tarea localmente."
+policy:
+  allow_implicit_invocation: true

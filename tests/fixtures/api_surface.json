@@ -703,5 +703,47 @@
       "GET"
     ],
     "response_model": "list[RunInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/v1/executions",
+    "methods": ["POST"],
+    "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/v1/executions/{execution_id}/cancel",
+    "methods": ["POST"],
+    "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/v1/health/live",
+    "methods": ["GET"],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/v1/health/ready",
+    "methods": ["GET"],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/v1/tasks",
+    "methods": ["GET"],
+    "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/v1/tasks/classify",
+    "methods": ["POST"],
+    "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/v1/tasks/{task_id}",
+    "methods": ["GET"],
+    "response_model": null
   }
 ]

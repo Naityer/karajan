@@ -151,12 +151,6 @@
 
       <!-- VIEW 3 · DECISION DIAGRAM (parent + submodels) -->
       <section class="view" id="view-decision">
-        <div class="diagram-head">
-          <p>Define el <b>padre de decisiones</b> (router que clasifica y pondera) y los <b>submodelos</b>. Asigna a cada hijo los niveles de complejidad de los que se responsabiliza.</p>
-          <div class="diagram-head-actions">
-            <button type="button" class="ghost-btn" id="addHierarchyGroup">+ Nueva jerarquía</button>
-          </div>
-        </div>
         <div class="decision-workbench">
           <div class="diagram" id="diagram">
             <div class="diagram-layer" id="diagramLayer">
@@ -168,11 +162,40 @@
           <div class="splitter" id="drawerSplitter" role="separator" aria-orientation="vertical" title="Ajustar panel de modelos"></div>
           <aside class="model-drawer" id="modelDrawer">
             <div class="drawer-head">
-              <div>
+              <div class="drawer-head-title">
                 <h3>Arquitectura activa</h3>
                 <p>Solo agentes incluidos en la jerarquia actual.</p>
               </div>
+              <button type="button" class="icon-btn" id="toggleModelDrawer" aria-label="Compactar panel" title="Compactar panel">◧</button>
             </div>
+            <div class="profile-switcher">
+              <label class="drawer-section-label" for="canvasProfileSelect">Perfil de lienzo</label>
+              <div class="profile-switcher-row">
+                <select id="canvasProfileSelect" aria-label="Perfil de lienzo activo"></select>
+                <button type="button" class="icon-btn profile-default-toggle" id="setDefaultCanvasProfile" aria-pressed="false" title="Usar este perfil por defecto" aria-label="Usar este perfil por defecto"><span aria-hidden="true">☆</span></button>
+                <div class="profile-menu" id="profileMenu">
+                  <button type="button" class="icon-btn profile-menu-toggle" id="profileMenuToggle" aria-haspopup="dialog" aria-controls="profileMenuPanel" aria-expanded="false" title="Más opciones de perfil" aria-label="Más opciones de perfil">⋮</button>
+                  <div class="profile-menu-panel" id="profileMenuPanel" role="dialog" aria-label="Opciones del perfil">
+                    <div class="profile-menu-actions" id="profileMenuActions" role="menu">
+                      <button type="button" id="renameCanvasProfile" role="menuitem"><span aria-hidden="true">✎</span>Renombrar</button>
+                      <button type="button" id="duplicateCanvasProfile" role="menuitem"><span aria-hidden="true">⧉</span>Duplicar</button>
+                      <button type="button" class="danger" id="deleteCanvasProfile" role="menuitem" aria-label="Eliminar perfil de lienzo"><span aria-hidden="true">×</span><span class="profile-menu-action-label">Eliminar</span></button>
+                      <hr role="separator" />
+                      <button type="button" id="activateSimpleCanvasPreset" role="menuitem"><span aria-hidden="true">＋</span>Crear perfil simple</button>
+                    </div>
+                    <div class="profile-rename-editor" id="profileRenameEditor" hidden>
+                      <label for="canvasProfileName">Nuevo nombre</label>
+                      <input id="canvasProfileName" type="text" maxlength="80" aria-label="Nombre del perfil de lienzo" autocomplete="off" />
+                      <div class="profile-rename-actions">
+                        <button type="button" id="cancelCanvasProfileName">Cancelar</button>
+                        <button type="button" class="primary" id="saveCanvasProfileName">Guardar</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="ghost-btn drawer-add-hierarchy" id="addHierarchyGroup">+ Nueva jerarquía</button>
             <div class="drawer-tools">
               <label class="adv-toggle"><input type="checkbox" id="modelsAdvanced" /> Vista avanzada</label>
             </div>

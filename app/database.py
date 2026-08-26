@@ -62,14 +62,24 @@ def _group(conn: sqlite3.Connection, column: str) -> dict[str, int]:
 class TaskStore:
     def __init__(self, db_path: Path | str = DEFAULT_DB_PATH) -> None:
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._memory_uri: str | None = None
+        self._memory_anchor: sqlite3.Connection | None = None
+        if str(db_path) == ":memory:":
+            self._memory_uri = f"file:karajan-{uuid4().hex}?mode=memory&cache=shared"
+            self._memory_anchor = sqlite3.connect(self._memory_uri, uri=True)
+        else:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # Flipped to False by `_init_fts` if this machine's sqlite3 lacks FTS5;
         # `search_tasks` reads it to decide FTS-MATCH vs. LIKE-scan fallback.
         self._fts_available = True
         self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(
+            self._memory_uri or self.db_path,
+            uri=self._memory_uri is not None,
+            check_same_thread=False,
+        )
         conn.row_factory = sqlite3.Row
         # WAL lets the dashboard read while a delegation writes, instead of
         # serializing behind a single lock; NORMAL keeps that safe and fast.
@@ -78,6 +88,11 @@ class TaskStore:
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
+
+    def close(self) -> None:
+        if self._memory_anchor is not None:
+            self._memory_anchor.close()
+            self._memory_anchor = None
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
@@ -96,7 +111,8 @@ class TaskStore:
                     score REAL,
                     requires_review INTEGER,
                     subtask_count INTEGER,
-                    est_cost REAL
+                    est_cost REAL,
+                    schema_version INTEGER NOT NULL DEFAULT 1
                 )
                 """
             )
@@ -133,6 +149,39 @@ class TaskStore:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_history_ts ON metrics_history(timestamp)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS idempotency_keys (
+                    workspace_id TEXT NOT NULL,
+                    operation_name TEXT NOT NULL,
+                    idempotency_key TEXT NOT NULL,
+                    payload_hash TEXT NOT NULL,
+                    task_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY (workspace_id, operation_name, idempotency_key)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS domain_outbox (
+                    event_id TEXT PRIMARY KEY,
+                    event_type TEXT NOT NULL,
+                    aggregate_id TEXT NOT NULL,
+                    correlation_id TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    delivered_at TEXT,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    schema_version INTEGER NOT NULL DEFAULT 1
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_outbox_pending "
+                "ON domain_outbox(delivered_at, occurred_at)"
+            )
             self._migrate(conn)
             self._init_schema_v2(conn)
             self._seed_project(conn)
@@ -170,10 +219,16 @@ class TaskStore:
                 created_at TEXT NOT NULL,
                 completed_at TEXT,
                 updated_at TEXT NOT NULL
+                ,schema_version INTEGER NOT NULL DEFAULT 1
             )
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_v2_legacy ON tasks_v2(legacy_task_id)")
+        v2_columns = {row["name"] for row in conn.execute("PRAGMA table_info(tasks_v2)")}
+        if "schema_version" not in v2_columns:
+            conn.execute(
+                "ALTER TABLE tasks_v2 ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1"
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS task_history (
@@ -868,6 +923,11 @@ class TaskStore:
     def _migrate(self, conn: sqlite3.Connection) -> None:
         """Add denormalized columns to a pre-existing DB and backfill them once."""
         existing = {row["name"] for row in conn.execute("PRAGMA table_info(tasks)")}
+        if "schema_version" not in existing:
+            conn.execute(
+                "ALTER TABLE tasks ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1"
+            )
+            existing.add("schema_version")
         added = False
         for column in _DENORM_COLUMNS:
             if column not in existing:
@@ -897,6 +957,12 @@ class TaskStore:
         self,
         classification: ClassificationResult,
         decision: DecisionLogEntry | None = None,
+        *,
+        workspace_id: str = "default",
+        operation_name: str = "classify",
+        idempotency_key: str = "",
+        payload_hash: str = "",
+        outbox_events: list[dict] | None = None,
     ) -> TaskRecord:
         now = datetime.now(timezone.utc)
         payload = classification.model_dump_json()
@@ -904,6 +970,23 @@ class TaskStore:
             classification.model_dump(mode="json"), None
         )
         with self._connect() as conn:
+            if idempotency_key:
+                conn.execute(
+                    """
+                    INSERT INTO idempotency_keys (
+                        workspace_id, operation_name, idempotency_key,
+                        payload_hash, task_id, created_at, schema_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, 1)
+                    """,
+                    (
+                        workspace_id,
+                        operation_name,
+                        idempotency_key,
+                        payload_hash,
+                        classification.task_id,
+                        now.isoformat(),
+                    ),
+                )
             conn.execute(
                 """
                 INSERT INTO tasks (
@@ -930,6 +1013,7 @@ class TaskStore:
             )
             if decision is not None:
                 self._insert_decisions(conn, [decision])
+            self._insert_outbox(conn, outbox_events or [])
             self._upsert_task_v2(
                 conn,
                 task_id=classification.task_id,
@@ -942,7 +1026,13 @@ class TaskStore:
             )
         return self.get_task(classification.task_id)
 
-    def mark_status(self, task_id: str, status: TaskStatus) -> TaskRecord:
+    def mark_status(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        *,
+        outbox_events: list[dict] | None = None,
+    ) -> TaskRecord:
         """Flip a task's status without requiring a full `DelegationResult`.
 
         Used by the async queue dispatcher to record `queued` the instant a
@@ -972,12 +1062,19 @@ class TaskStore:
                 updated_at=now.isoformat(),
                 completed_at=None,
             )
+            self._insert_outbox(conn, outbox_events or [])
         return self.get_task(task_id)
 
     def save_delegation(
         self,
         delegation: DelegationResult,
         decisions: list[DecisionLogEntry] | None = None,
+        *,
+        outbox_events: list[dict] | None = None,
+        workspace_id: str = "default",
+        operation_name: str = "execute",
+        idempotency_key: str = "",
+        payload_hash: str = "",
     ) -> TaskRecord:
         now = datetime.now(timezone.utc)
         with self._connect() as conn:
@@ -988,6 +1085,23 @@ class TaskStore:
             row = cursor.fetchone()
             if row is None:
                 raise KeyError(delegation.task_id)
+            if idempotency_key:
+                conn.execute(
+                    """
+                    INSERT INTO idempotency_keys (
+                        workspace_id, operation_name, idempotency_key,
+                        payload_hash, task_id, created_at, schema_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, 1)
+                    """,
+                    (
+                        workspace_id,
+                        operation_name,
+                        idempotency_key,
+                        payload_hash,
+                        delegation.task_id,
+                        now.isoformat(),
+                    ),
+                )
             conn.execute(
                 """
                 UPDATE tasks
@@ -1004,6 +1118,7 @@ class TaskStore:
             )
             if decisions:
                 self._insert_decisions(conn, decisions)
+            self._insert_outbox(conn, outbox_events or [])
             self._record_metrics_snapshot(conn, now)
             classification = json.loads(row["classification_json"]) if row["classification_json"] else {}
             completed_at = (
@@ -1022,6 +1137,81 @@ class TaskStore:
                 completed_at=completed_at,
             )
         return self.get_task(delegation.task_id)
+
+    def get_idempotency(
+        self, workspace_id: str, operation_name: str, idempotency_key: str
+    ) -> dict | None:
+        if not idempotency_key:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload_hash, task_id, created_at, schema_version
+                FROM idempotency_keys
+                WHERE workspace_id = ? AND operation_name = ? AND idempotency_key = ?
+                """,
+                (workspace_id, operation_name, idempotency_key),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    @staticmethod
+    def _insert_outbox(conn: sqlite3.Connection, events: list[dict]) -> None:
+        for event in events:
+            conn.execute(
+                """
+                INSERT INTO domain_outbox (
+                    event_id, event_type, aggregate_id, correlation_id,
+                    payload_json, occurred_at, schema_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event["event_id"],
+                    event["event_type"],
+                    event["aggregate_id"],
+                    event["correlation_id"],
+                    json.dumps(event.get("payload", {}), sort_keys=True),
+                    event["occurred_at"],
+                    int(event.get("schema_version", 1)),
+                ),
+            )
+    def list_pending_outbox(self, limit: int = 100) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT event_id, event_type, aggregate_id, correlation_id,
+                       payload_json, occurred_at, attempts, schema_version
+                FROM domain_outbox
+                WHERE delivered_at IS NULL
+                ORDER BY occurred_at ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                **dict(row),
+                "payload": json.loads(row["payload_json"]),
+            }
+            for row in rows
+        ]
+
+    def mark_outbox_delivered(self, event_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE domain_outbox
+                SET delivered_at = ?, attempts = attempts + 1
+                WHERE event_id = ? AND delivered_at IS NULL
+                """,
+                (_now_iso(), event_id),
+            )
+
+    def record_outbox_attempt(self, event_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE domain_outbox SET attempts = attempts + 1 WHERE event_id = ?",
+                (event_id,),
+            )
 
     def _record_metrics_snapshot(self, conn: sqlite3.Connection, when: datetime) -> None:
         """Append a metrics-history row reflecting current aggregate totals.
