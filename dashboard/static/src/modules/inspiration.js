@@ -4,7 +4,7 @@
 // código, mismo comportamiento — solo cambia de dónde vienen sus nombres
 // compartidos (antes globals de un único archivo, ahora imports explícitos).
 
-import { $, $$, api, entityLabel, escapeHtml, state, toast } from "./shared.js";
+import { $, $$, api, apiUrl, entityLabel, escapeHtml, state, toast } from "./shared.js";
 
 // ---- resource library -----------------------------------------------------
 // The resource API is intentionally treated as a loose contract: early server
@@ -53,17 +53,36 @@ function resourceSummary(item) {
   return item?.summary || item?.description || "";
 }
 
+function rebuildResourceIndex() {
+  const byId = new Map();
+  const childrenByParent = new Map();
+  const searchTextById = new Map();
+  (state.resources || []).forEach((item) => {
+    const id = resourceId(item);
+    byId.set(id, item);
+    const parentId = String(item?.parent_resource_id || item?.parent_id || "");
+    if (parentId) {
+      if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+      childrenByParent.get(parentId).push(item);
+    }
+    searchTextById.set(id, [resourceLabel(item), resourceSummary(item), item.repo_url, item.source_url, item.source,
+      ...resourceRuntime(item), ...resourceAgents(item), ...resourceValues(item.tags), ...resourceValues(item.capabilities)]
+      .join(" ").toLocaleLowerCase("es"));
+  });
+  state.resourceIndex = { byId, childrenByParent, searchTextById, groupArtifacts: new Map() };
+}
+
 function resourceParent(item) {
   const parentId = String(item?.parent_resource_id || item?.parent_id || "");
   if (!parentId) return null;
-  return (state.resources || []).find((candidate) => resourceId(candidate) === parentId)
+  return state.resourceIndex?.byId?.get(parentId)
     || { id: parentId, name: item?.metadata?.parent_name || "Referencia padre" };
 }
 
 function resourceChildren(item) {
   if (Array.isArray(item?.children)) return item.children;
   const id = resourceId(item);
-  return (state.resources || []).filter((candidate) => String(candidate?.parent_resource_id || candidate?.parent_id || "") === id);
+  return state.resourceIndex?.childrenByParent?.get(id) || [];
 }
 
 // Composite de la biblioteca: las colecciones de la API son planas, pero la
@@ -73,13 +92,13 @@ function resourceArtifact(item) {
   if (!item) return null;
   const parentId = String(item?.parent_resource_id || item?.parent_id || "");
   if (!parentId) return item;
-  return (state.resources || []).find((candidate) => resourceId(candidate) === parentId) || null;
+  return state.resourceIndex?.byId?.get(parentId) || null;
 }
 
 function resourceArtifactId(itemOrId) {
   const item = typeof itemOrId === "object"
     ? itemOrId
-    : (state.resources || []).find((candidate) => resourceId(candidate) === String(itemOrId || ""));
+    : state.resourceIndex?.byId?.get(String(itemOrId || ""));
   return resourceId(resourceArtifact(item)) || resourceId(item) || String(itemOrId || "");
 }
 
@@ -157,10 +176,10 @@ function filteredResources(options = {}) {
  const f = state.resourceFilters;
   const query = options.ignoreQuery ? "" : f.query.trim().toLowerCase();
   return (state.resources || []).filter((item) => {
-    const haystack = [resourceLabel(item), resourceSummary(item), item.repo_url, item.source, ...resourceRuntime(item), ...resourceAgents(item), ...resourceValues(item.tags), ...resourceValues(item.capabilities)].join(" ").toLowerCase();
+    const haystack = state.resourceIndex?.searchTextById?.get(resourceId(item)) || "";
     if (query && !haystack.includes(query)) return false;
     if (state.resourceGroupFilter) {
-      if (!resourceArtifactIdsForGroup(state.resourceGroupFilter).includes(resourceArtifactId(item))) return false;
+      if (!resourceArtifactIdsForGroup(state.resourceGroupFilter).has(resourceArtifactId(item))) return false;
     }
     return ["kind", "status", "runtime", "agent", "source", "structure"].every((key) => !f[key] || resourceFacet(item, key).map((v) => v.toLowerCase()).includes(f[key].toLowerCase()));
   });
@@ -462,7 +481,7 @@ function focusResourceSearchTarget() {
 
 function resourceArtifactFamily(item) {
   const id = resourceId(item);
-  return groupDescendants("").find((group) => resourceArtifactIdsForGroup(group.id).includes(id)) || null;
+  return groupDescendants("").find((group) => resourceArtifactIdsForGroup(group.id).has(id)) || null;
 }
 
 function resourceArtifactGroup(item, family = resourceArtifactFamily(item)) {
@@ -756,16 +775,16 @@ function isResourceGroupDescendant(groupId, parentId) {
 }
 
 function resourceGroupBranch(group, depth = 0) {
-  const children = groupDescendants(group.id).filter((child) => resourceArtifactIdsForGroup(child.id).length);
+  const children = groupDescendants(group.id).filter((child) => resourceArtifactIdsForGroup(child.id).size);
   const active = state.resourceGroupFilter === String(group.id);
-  const artifactCount = resourceArtifactIdsForGroup(group.id).length;
+  const artifactCount = resourceArtifactIdsForGroup(group.id).size;
   return `<div class="resource-group-branch"><button type="button" class="resource-group-node ${active ? "active" : ""}" data-resource-group-filter="${escapeHtml(group.id)}" style="--group-depth:${depth}"><span>${escapeHtml(group.name)}</span><small>${artifactCount}</small></button>${children.map((child) => resourceGroupBranch(child, depth + 1)).join("")}</div>`;
 }
 
 function renderResourceGroupTree() {
   const target = $("#resourceGroupTree");
   if (!target) return;
-  const roots = groupDescendants("").filter((group) => resourceArtifactIdsForGroup(group.id).length);
+  const roots = groupDescendants("").filter((group) => resourceArtifactIdsForGroup(group.id).size);
   target.innerHTML = `<button type="button" class="resource-group-node ${state.resourceGroupFilter ? "" : "active"}" data-resource-group-filter=""><span>Todos</span><small>${resourceArtifacts().length}</small></button>${roots.map((group) => resourceGroupBranch(group)).join("") || `<p>Sin grupos configurados.</p>`}`;
 }
 
@@ -779,6 +798,7 @@ async function refreshResourceGroups() {
     state.resourceGroupPersistenceAvailable = false;
   }
   state.resourceGroupView = buildResourceGroupView(state.resourceGroups);
+  state.resourceIndex.groupArtifacts = new Map();
   if (state.resourceGroupFilter && !catalogResourceGroups().some((group) => String(group.id) === state.resourceGroupFilter)) state.resourceGroupFilter = "";
   renderResourceGroupTree();
 }
@@ -905,8 +925,13 @@ function renderResourceDiscoverySources() {
 }
 
 function resourceArtifactIdsForGroup(groupId) {
+  const cache = state.resourceIndex?.groupArtifacts || new Map();
+  const key = String(groupId || "");
+  if (cache.has(key)) return cache.get(key);
   const known = new Set(resourceArtifacts().map(resourceId));
-  return [...new Set(resourceIdsForGroup(groupId).map(resourceArtifactId).filter((id) => known.has(id)))];
+  const result = new Set(resourceIdsForGroup(groupId).map(resourceArtifactId).filter((id) => known.has(id)));
+  cache.set(key, result);
+  return result;
 }
 
 function radarSignalIsCatalogued(item) {
@@ -1318,7 +1343,22 @@ function renderResourceDetail(item = state.resourceDetail) {
   }
   const id = resourceId(item);
   const status = resourceStatus(item);
-  const repo = safeExternalUrl(item.repo_url || item.repository_url || item.url || item.metadata?.homepage_url || item.external_url);
+  const repo = safeExternalUrl(item.repo_url || item.source_url || item.repository_url || item.url || item.metadata?.homepage_url || item.external_url || item.metadata?.validity?.source_url);
+  const validity = item?.metadata?.validity || {};
+  const githubRepository = validity.github_repository ?? (() => {
+    if (!repo) return false;
+    try {
+      const parsed = new URL(repo);
+      return parsed.hostname.toLowerCase() === "github.com" && parsed.pathname.split("/").filter(Boolean).length >= 2;
+    } catch (_) { return false; }
+  })();
+  const rawStars = validity.github_stars ?? item?.metadata?.github_stars;
+  const githubStars = rawStars !== null && rawStars !== undefined && Number.isFinite(Number(rawStars)) ? Number(rawStars) : null;
+  const starFact = githubRepository
+    ? githubStars === null
+      ? `<span class="resource-repository-fact pending" title="Ejecuta Revalidar ahora para consultar GitHub">Estrellas pendientes de verificar</span>`
+      : `<span class="resource-repository-fact verified" title="Contador obtenido de GitHub">&#9733; ${githubStars.toLocaleString("es-ES")} estrellas en GitHub</span>`
+    : `<span class="resource-repository-fact neutral">Estrellas: no aplica · referencia web</span>`;
   const agents = resourceAgents(item);
   const knownAgents = knownResourceAgents(item);
   const logs = resourceLogEntries(item);
@@ -1354,6 +1394,7 @@ function renderResourceDetail(item = state.resourceDetail) {
       <div class="resource-detail-title-row"><span class="resource-kind-mark">${escapeHtml((resourceFacet(item, "kind")[0] || "resource").slice(0, 2).toUpperCase())}</span><div>${resourceStatusPill(status)}<h2>${escapeHtml(resourceLabel(item))}</h2></div></div>
       <div class="resource-summary-row"><p>${escapeHtml(resourceSummary(item) || "Sin descripci\u00f3n disponible.")}</p><button type="button" class="resource-edit-description" data-resource-edit-description aria-label="Editar descripciÃ³n" title="Editar descripciÃ³n">&#9998;</button></div>
       <div class="resource-description-editor" data-resource-description-editor hidden><textarea data-resource-description-input rows="4" maxlength="4000">${escapeHtml(resourceSummary(item))}</textarea><div><button type="button" data-resource-description-cancel>Cancelar</button><button type="button" class="primary" data-resource-description-save="${escapeHtml(id)}">Guardar descripciÃ³n</button></div></div>
+      <div class="resource-detail-facts">${starFact}</div>
       <div class="resource-detail-links">${repo ? `<a href="${escapeHtml(repo)}" target="_blank" rel="noreferrer">Abrir fuente <span aria-hidden="true">&#8599;</span></a>` : ""}<code>${escapeHtml(id)}</code></div>
     </header>
 
@@ -1483,19 +1524,21 @@ export async function refreshResources(options = {}) {
   // behind hundreds of indexed children.
   for (const kind of ["skill", "capability", "reference"]) {
     for (let offset = 0; ; offset += 500) {
-      const payload = await api(`/resources?kind=${kind}&limit=500&offset=${offset}`);
+      const payload = await api(`/resources?kind=${kind}&accepted_only=true&limit=500&offset=${offset}`);
       const page = resourceItems(payload);
       resources.push(...page);
       if (page.length < 500) break;
     }
   }
   state.resources = [...new Map(resources.map((item) => [resourceId(item), item])).values()];
+  rebuildResourceIndex();
   const selectionExists = state.resources.some((item) => resourceId(item) === state.selectedResourceId);
   if (!selectionExists && state.resourceInspectorOpen) setResourceInspector(false, { restoreFocus: false });
   renderResourceFilters();
   await refreshResourceGroups();
   renderResourceList();
   renderResourceKpis();
+  await loadValidityUi();
   if ($("#resourceSyncState")) $("#resourceSyncState").textContent = `Actualizado ${new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`;
   if (state.resourceInspectorOpen && selectionExists) await selectResource(state.selectedResourceId, { keepList: true, openInspector: false, keepFocus: true });
 }
@@ -1910,11 +1953,325 @@ function initInspirationEdgeAutoscroll() {
   });
 }
 
+function validityPolicyDraft(form = $("#resourceCriteriaForm")) {
+  if (!form) return null;
+  const data = new FormData(form);
+  return {
+    stars_enabled: data.has("stars_enabled"),
+    min_github_stars: Math.max(0, Math.min(100000000, Number(data.get("min_github_stars") || 0))),
+    require_source_url: data.has("require_source_url"),
+    require_detection_success: data.has("require_detection_success"),
+    required_runtimes: data.getAll("required_runtimes").map(String),
+    require_web_reference: data.has("require_web_reference"),
+  };
+}
+
+function validityCountsMarkup(impact) {
+  const states = impact?.states || {};
+  return `<span><b>${Number(states.accepted || 0) + Number(states.accepted_override || 0)}</b> aceptados</span><span><b>${Number(states.pending_review || 0)}</b> pendientes</span><span><b>${Number(states.discarded || 0)}</b> descartados</span><span><b>${Number(impact?.manual_decisions_to_reset || 0)}</b> decisiones se reiniciarán</span>`;
+}
+
+function renderValidityPolicy() {
+  const panel = $("#resourceCriteriaPanel");
+  const policy = state.resourceValidityPolicy;
+  if (!panel || !policy) return;
+  const runtimeCount = resourceValues(policy.required_runtimes).length;
+  const refreshRun = state.resourceRefreshRun;
+  const refreshActive = ["queued", "running"].includes(refreshRun?.status);
+  const refreshTotal = Number(refreshRun?.total || 0);
+  const refreshProcessed = Number(refreshRun?.processed || 0);
+  const refreshPercent = refreshActive && refreshTotal ? Math.min(100, Math.round((refreshProcessed / refreshTotal) * 100)) : 0;
+  $("#resourceCriteriaSummary").innerHTML = `${policy.stars_enabled ? `>${Number(policy.min_github_stars).toLocaleString("es-ES")}` : "sin estrellas"} · ${runtimeCount} runtimes${refreshActive ? ` <i class="resource-refresh-loader" aria-hidden="true"></i><span class="resource-refresh-percent" aria-label="${refreshPercent}% del análisis completado">${refreshPercent}%</span>` : ""}`;
+  panel.innerHTML = `<form id="resourceCriteriaForm" class="resource-criteria-form">
+    <header><div><b>Artefactos válidos</b><small>Política global · versión ${Number(policy.version)}</small></div><button type="button" class="icon-btn" data-resource-criteria-close aria-label="Cerrar criterios">✕</button></header>
+    <label class="criteria-row"><span><b>Estrellas de GitHub</b><small>Solo repositorios GitHub. Las referencias web están exentas.</small></span><input type="checkbox" name="stars_enabled" ${policy.stars_enabled ? "checked" : ""}></label>
+    <label class="criteria-number"><span>Umbral mínimo</span><input type="number" name="min_github_stars" min="0" max="100000000" step="1000" value="${Number(policy.min_github_stars)}" ${policy.stars_enabled ? "" : "disabled"}></label>
+    <label class="criteria-row"><span><b>Fuente HTTPS accesible</b><small>Debe existir y responder durante el análisis.</small></span><input type="checkbox" name="require_source_url" ${policy.require_source_url ? "checked" : ""}></label>
+    <label class="criteria-row"><span><b>Detección satisfactoria</b><small>Las skills deben contener un SKILL.md.</small></span><input type="checkbox" name="require_detection_success" ${policy.require_detection_success ? "checked" : ""}></label>
+    <fieldset><legend>Runtimes obligatorios · deben cumplirse todos</legend><label><input type="checkbox" name="required_runtimes" value="claude" ${policy.required_runtimes.includes("claude") ? "checked" : ""}> Claude</label><label><input type="checkbox" name="required_runtimes" value="codex" ${policy.required_runtimes.includes("codex") ? "checked" : ""}> ChatGPT / Codex</label></fieldset>
+    <label class="criteria-row"><span><b>Referencia web</b><small>Exige una URL pública asociada al recurso.</small></span><input type="checkbox" name="require_web_reference" ${policy.require_web_reference ? "checked" : ""}></label>
+    <div class="resource-criteria-impact" id="resourceCriteriaImpact" aria-live="polite">${validityCountsMarkup(state.resourceValidityImpact)}</div>
+    <footer><button type="button" data-resource-criteria-defaults>Restaurar</button><button type="button" data-resource-criteria-revalidate>Revalidar ahora</button><button type="submit" class="primary">Guardar</button></footer>
+  </form>`;
+}
+
+async function previewValidityPolicy() {
+  const draft = validityPolicyDraft();
+  if (!draft) return;
+  state.resourceValidityImpact = await api("/resources/validity-policy/impact", { method: "POST", body: JSON.stringify(draft) });
+  const target = $("#resourceCriteriaImpact");
+  if (target) target.innerHTML = validityCountsMarkup(state.resourceValidityImpact);
+}
+
+async function loadValidityUi() {
+  const policy = await api("/resources/validity-policy");
+  state.resourceValidityPolicy = policy;
+  state.resourceValidityImpact = await api("/resources/validity-policy/impact", {
+    method: "POST",
+    body: JSON.stringify({
+      stars_enabled: policy.stars_enabled, min_github_stars: policy.min_github_stars,
+      require_source_url: policy.require_source_url, require_detection_success: policy.require_detection_success,
+      required_runtimes: policy.required_runtimes, require_web_reference: policy.require_web_reference,
+    }),
+  });
+  $("#resourceReviewCount").textContent = String(state.resourceValidityImpact?.states?.pending_review || 0);
+  renderValidityPolicy();
+}
+
+async function saveValidityPolicy(form) {
+  const draft = validityPolicyDraft(form);
+  const reset = Number(state.resourceValidityImpact?.manual_decisions_to_reset || 0);
+  const acceptedOverrides = Number(state.resourceValidityImpact?.states?.accepted_override || 0);
+  const discarded = Number(state.resourceValidityImpact?.states?.discarded || 0);
+  const confirmReset = reset > 0
+    ? window.confirm(`Cambiar la política reiniciará ${reset} decisiones humanas (${acceptedOverrides} aceptadas manualmente y ${discarded} descartadas). El historial se conservará. ¿Continuar?`)
+    : true;
+  if (!confirmReset) return;
+  const result = await api("/resources/validity-policy", {
+    method: "PUT",
+    body: JSON.stringify({ ...draft, expected_version: state.resourceValidityPolicy.version, confirm_reset: reset > 0 }),
+  });
+  state.resourceValidityPolicy = result.policy;
+  state.resourceValidityImpact = result.impact;
+  toast("Política guardada y catálogo recalculado.");
+  await refreshResources();
+  await loadValidityUi();
+}
+
+function setAuxModal(id, open) {
+  const modal = $(id);
+  if (!modal) return;
+  modal.hidden = !open;
+  document.body.classList.toggle("modal-open", open || !$("#resourceReviewModal")?.hidden || !$("#resourceInventoryModal")?.hidden);
+}
+
+function renderReviewQueue() {
+  const target = $("#resourceReviewBody");
+  if (!target) return;
+  const allItems = state.resourceReviewItems || [];
+  const filter = state.resourceReviewFilter || "repositories";
+  const items = allItems.filter((item) => {
+    const validity = item?.metadata?.validity || {};
+    if (validity.github_repository === true) return filter === "repositories";
+    if (validity.github_repository === false) return filter === "web";
+    const source = safeExternalUrl(validity.source_url || item.repo_url || item.source_url);
+    return filter === (source && /(^|\\.)github\\.com$/i.test(new URL(source).hostname) ? "repositories" : "web");
+  });
+  const columnFilters = state.resourceReviewColumnFilters || (state.resourceReviewColumnFilters = { starsSort: "none", starsApprox: "", related: "all" });
+  const relatedValue = (item) => { const taxonomy = item.metadata?.decision_taxonomy || {}; return [item.category, item.group, taxonomy.family, taxonomy.group, item.source, ...(item.tags || []), ...(item.capabilities || [])].filter(Boolean).join(" · ") || "Sin clasificar"; };
+  const displayItems = items.filter((item) => {
+    const validity = item?.metadata?.validity || {};
+    const stars = Number.isFinite(Number(validity.github_stars)) ? Number(validity.github_stars) : null;
+    const approximate = Number(columnFilters.starsApprox);
+    const starsMatch = !Number.isFinite(approximate) || (stars !== null && Math.abs(stars - approximate) <= Math.max(10, approximate * 0.1));
+    const relatedMatch = !columnFilters.related || columnFilters.related === "all" || relatedValue(item) === columnFilters.related;
+    return starsMatch && relatedMatch;
+  });
+  const total = Number(state.resourceValidityImpact?.states?.pending_review || allItems.length);
+  const selected = state.resourceReviewSelection || new Set();
+  const ids = displayItems.map(resourceId);
+  const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+  const sort = columnFilters.starsSort;
+  if (sort === "asc" || sort === "desc") displayItems.sort((a, b) => { const av = Number(a?.metadata?.validity?.github_stars); const bv = Number(b?.metadata?.validity?.github_stars); const diff = (Number.isFinite(av) ? av : -1) - (Number.isFinite(bv) ? bv : -1); return sort === "asc" ? diff : -diff; });
+  const rows = displayItems.map((item) => {
+    const validity = item?.metadata?.validity || {};
+    const source = safeExternalUrl(validity.source_url || item.repo_url || item.source_url);
+    const rawStars = validity.github_stars;
+    const stars = rawStars !== null && rawStars !== undefined && Number.isFinite(Number(rawStars)) ? Number(rawStars) : null;
+    const starLabel = validity.github_repository === false ? "No aplica" : stars === null ? "No verificadas" : stars.toLocaleString("es-ES");
+    const reason = (validity.reasons || []).join(" ") || "Requiere una decisión editorial.";
+    const verificationError = item?.metadata?.source_verification_state === "rate_limited" || String(item?.metadata?.source_analysis_error || "").toLowerCase().includes("rate limit") ? " Verificación limitada temporalmente." : "";
+    const id = resourceId(item);
+    const related = relatedValue(item);
+    let title = resourceLabel(item);
+    try { const parts = source ? new URL(source).pathname.split("/").filter(Boolean) : []; if (parts.length >= 2 && new URL(source).hostname.toLowerCase() === "github.com") title = parts[0] + " / " + title; } catch (_) { /* source already sanitized */ }
+    const titleCell = source ? "<a href=\"" + escapeHtml(source) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + escapeHtml(title) + "</a>" : "<span>" + escapeHtml(title) + "</span>";
+    return "<tr data-review-resource=\"" + escapeHtml(id) + "\"><td class=\"review-select-col\"><input type=\"checkbox\" data-review-select=\"" + escapeHtml(id) + "\"" + (selected.has(id) ? " checked" : "") + " aria-label=\"Seleccionar " + escapeHtml(title) + "\"></td><td class=\"review-title\">" + titleCell + "<small>" + escapeHtml(source || "Referencia interna de Karajan") + "</small></td><td><strong class=\"resource-review-stars" + (stars === null ? " pending" : "") + " title=\"" + escapeHtml(stars === null && validity.github_repository !== false ? "Las estrellas aún no han podido verificarse" : "") + "\">" + escapeHtml(starLabel) + "</strong></td><td class=\"review-reason\">" + escapeHtml(reason + verificationError) + "</td><td class=\"review-related\" title=\"" + escapeHtml(related) + "\">" + escapeHtml(related) + "</td><td><button type=\"button\" class=\"primary\" data-resource-review-decision=\"accept\">Aceptar</button></td><td><button type=\"button\" data-resource-review-decision=\"discard\">Desechar</button></td></tr>";
+  }).join("");
+  const selectedCount = ids.filter((id) => selected.has(id)).length;
+  $("#resourceReviewModal")?.querySelectorAll("[data-resource-review-bulk]").forEach((button) => {
+    button.hidden = selectedCount === 0;
+    button.disabled = selectedCount === 0;
+  });
+  const limit = total > allItems.length ? "<p class=\"resource-review-limit\">Mostrando " + allItems.length + " de " + total + " pendientes. Usa Revalidar para actualizar la cola completa.</p>" : "";
+  const empty = "<div class=\"insp-empty\"><b>Cola al día</b><span>No hay artefactos pendientes en esta vista.</span></div>";
+  const relatedOptions = [...new Set(items.map(relatedValue))].sort((a, b) => a.localeCompare(b, "es"));
+  const starSelect = "<select data-review-column-filter=\"starsSort\" aria-label=\"Ordenar estrellas\"><option value=\"none\"" + (columnFilters.starsSort === "none" ? " selected" : "") + ">Orden</option><option value=\"desc\"" + (columnFilters.starsSort === "desc" ? " selected" : "") + ">Más</option><option value=\"asc\"" + (columnFilters.starsSort === "asc" ? " selected" : "") + ">Menos</option></select><input class=\"review-stars-approx\" type=\"number\" min=\"0\" step=\"1\" data-review-column-filter=\"starsApprox\" aria-label=\"Buscar estrellas aproximadas\" placeholder=\"≈ cantidad\" value=\"" + escapeHtml(columnFilters.starsApprox || "") + "\">";
+  const relatedSelect = "<select data-review-column-filter=\"related\" aria-label=\"Filtrar por relación\"><option value=\"all\">Todos</option>" + relatedOptions.map((value) => "<option value=\"" + escapeHtml(value) + "\"" + (columnFilters.related === value ? " selected" : "") + ">" + escapeHtml(value.slice(0, 34)) + "</option>").join("") + "</select>";
+  const table = "<div class=\"resource-review-table-wrap\"><table class=\"resource-review-table\"><thead><tr><th class=\"review-select-col\"><input type=\"checkbox\" data-review-select-all" + (allSelected ? " checked" : "") + " aria-label=\"Seleccionar todas las filas visibles\"></th><th>Título</th><th>Estrellas</th><th>Motivo</th><th>Relacionado con</th><th>Aceptar</th><th>Desechar</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+  const toolbar = "<div class=\"resource-review-toolbar\"><span class=\"resource-review-selection-count\">" + selectedCount + " seleccionados · " + items.length + " para revisar</span><label class=\"resource-review-column-filter\"><span>Estrellas</span>" + starSelect + "</label><label class=\"resource-review-column-filter\"><span>Relacionado con</span>" + relatedSelect + "</label></div>";
+  target.innerHTML = toolbar + limit + (displayItems.length ? table : empty);
+}
+
+async function openReviewQueue() {
+  state.resourceReviewFilter = state.resourceReviewFilter || "repositories";
+  state.resourceReviewSelection = new Set();
+  $("#resourceReviewModal")?.querySelectorAll("[data-review-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.reviewFilter === state.resourceReviewFilter)));
+  const payload = await api("/resources/review?state=pending_review&limit=1000");
+  state.resourceReviewItems = resourceItems(payload);
+  renderReviewQueue();
+  setAuxModal("#resourceReviewModal", true);
+}
+
+async function decideReviewResource(article, decision, button) {
+  const id = article?.dataset.reviewResource;
+  if (!id) return;
+  const scrollTop = $("#resourceReviewBody .resource-review-table-wrap")?.scrollTop || 0;
+  button.disabled = true;
+  await api(`/resources/${encodeURIComponent(id)}/review`, { method: "POST", body: JSON.stringify({ decision }) });
+  state.resourceReviewItems = state.resourceReviewItems.filter((item) => resourceId(item) !== id);
+  state.resourceReviewSelection?.delete(id);
+  renderReviewQueue();
+  requestAnimationFrame(() => { const table = $("#resourceReviewBody .resource-review-table-wrap"); if (table) table.scrollTop = scrollTop; });
+  const remaining = Math.max(0, Number(state.resourceValidityImpact?.states?.pending_review || 1) - 1);
+  if (state.resourceValidityImpact?.states) state.resourceValidityImpact.states.pending_review = remaining;
+  $("#resourceReviewCount").textContent = String(remaining);
+  toast(decision === "accept" ? "Recurso aceptado manualmente." : "Recurso descartado.");
+  await refreshResources();
+}
+
+async function decideSelectedReviewResources(decision) {
+  const ids = [...(state.resourceReviewSelection || new Set())];
+  if (!ids.length) return;
+  const scrollTop = $("#resourceReviewBody .resource-review-table-wrap")?.scrollTop || 0;
+  const results = await Promise.allSettled(ids.map((id) => api(`/resources/${encodeURIComponent(id)}/review`, { method: "POST", body: JSON.stringify({ decision }) })));
+  const succeeded = ids.filter((_, index) => results[index].status === "fulfilled");
+  if (!succeeded.length) throw new Error("No se pudo aplicar ninguna decisión.");
+  const done = new Set(succeeded);
+  state.resourceReviewItems = (state.resourceReviewItems || []).filter((item) => !done.has(resourceId(item)));
+  state.resourceReviewSelection = new Set();
+  renderReviewQueue();
+  requestAnimationFrame(() => { const table = $("#resourceReviewBody .resource-review-table-wrap"); if (table) table.scrollTop = scrollTop; });
+  if (state.resourceValidityImpact?.states) state.resourceValidityImpact.states.pending_review = Math.max(0, Number(state.resourceValidityImpact.states.pending_review || 0) - succeeded.length);
+  $("#resourceReviewCount").textContent = String(state.resourceValidityImpact?.states?.pending_review || 0);
+  toast(`${succeeded.length} recurso${succeeded.length === 1 ? "" : "s"} actualizado${succeeded.length === 1 ? "" : "s"}.`);
+  await refreshResources();
+  if (results.some((result) => result.status === "rejected")) toast("Algunas decisiones no pudieron aplicarse.");
+}
+
+function renderInventoryPreview(snapshot) {
+  const target = $("#resourceInventoryBody");
+  $("#resourceInventoryMeta").textContent = `${snapshot.total} filas · previsualización de ${snapshot.rows.length}`;
+  const columns = ["name", "kind", "source", "stars", "category", "runtimes", "validity"];
+  const labels = { name: "Nombre", kind: "Tipo", source: "Fuente", stars: "Estrellas", category: "Categoría", runtimes: "Compatibilidad", validity: "Estado" };
+  target.innerHTML = `<div class="resource-inventory-table-wrap"><table><thead><tr>${columns.map((key) => `<th>${labels[key]}</th>`).join("")}</tr></thead><tbody>${snapshot.rows.map((row) => `<tr>${columns.map((key) => `<td>${escapeHtml(row[key] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div><footer><span>El archivo incluye las hojas Inventario y Política, también con pendientes y descartados.</span><a class="primary" href="${escapeHtml(apiUrl(snapshot.download_url))}" download="${escapeHtml(snapshot.filename)}">Descargar .xlsx</a></footer>`;
+}
+
+async function openInventoryPreview() {
+  setAuxModal("#resourceInventoryModal", true);
+  $("#resourceInventoryBody").innerHTML = `<div class="insp-empty"><b>Preparando inventario…</b><span>Se está congelando el snapshot para que vista previa y descarga coincidan.</span></div>`;
+  const snapshot = await api("/resources/inventory", { method: "POST" });
+  state.resourceInventorySnapshot = snapshot;
+  renderInventoryPreview(snapshot);
+}
+
 export function initResourceLibraryControls() {
   initInspirationSidebar();
   initResourceInspectorResize();
   initInspirationEdgeAutoscroll();
   $("#addResourceBtn")?.addEventListener("click", openResourceWizard);
+  $("#resourceCriteriaToggle")?.addEventListener("click", () => {
+    const panel = $("#resourceCriteriaPanel");
+    panel.hidden = !panel.hidden;
+    $("#resourceCriteriaToggle").setAttribute("aria-expanded", String(!panel.hidden));
+    if (!panel.hidden) requestAnimationFrame(() => panel.querySelector("input")?.focus());
+  });
+  $("#resourceCriteriaPanel")?.addEventListener("input", (event) => {
+    if (event.target.name === "stars_enabled") {
+      const threshold = $('#resourceCriteriaForm input[name="min_github_stars"]');
+      if (threshold) threshold.disabled = !event.target.checked;
+    }
+    window.clearTimeout(state.resourceValidityPreviewTimer);
+    state.resourceValidityPreviewTimer = window.setTimeout(() => previewValidityPolicy().catch((error) => toast(error.message)), 150);
+  });
+  $("#resourceCriteriaPanel")?.addEventListener("submit", (event) => {
+    if (event.target.id !== "resourceCriteriaForm") return;
+    event.preventDefault();
+    saveValidityPolicy(event.target).catch((error) => toast(error.message));
+  });
+  $("#resourceCriteriaPanel")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-resource-criteria-close]")) {
+      $("#resourceCriteriaPanel").hidden = true;
+      $("#resourceCriteriaToggle").setAttribute("aria-expanded", "false");
+    }
+    if (event.target.closest("[data-resource-criteria-defaults]")) {
+      state.resourceValidityPolicy = { ...state.resourceValidityPolicy, stars_enabled: true, min_github_stars: 10000, require_source_url: true, require_detection_success: true, required_runtimes: ["claude", "codex"], require_web_reference: true };
+      renderValidityPolicy();
+      previewValidityPolicy().catch((error) => toast(error.message));
+    }
+    const revalidate = event.target.closest("[data-resource-criteria-revalidate]");
+    if (revalidate) {
+      revalidate.disabled = true;
+      api("/resources/validity-policy/revalidate", { method: "POST" })
+        .then((run) => { state.resourceRefreshRun = run; renderValidityPolicy(); toast("Revalidación iniciada en segundo plano."); return pollResourceRefreshRun(run.run_id); })
+        .catch((error) => { revalidate.disabled = false; toast(error.message); });
+    }
+  });
+  $("#resourceReviewOpen")?.addEventListener("click", () => openReviewQueue().catch((error) => toast(error.message)));
+  $("#resourceReviewModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "resourceReviewModal" || event.target.closest("[data-resource-review-close]")) return setAuxModal("#resourceReviewModal", false);
+    const filter = event.target.closest("[data-review-filter]");
+    if (filter) {
+      state.resourceReviewFilter = filter.dataset.reviewFilter;
+      $("#resourceReviewModal").querySelectorAll("[data-review-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button === filter)));
+      renderReviewQueue();
+      return;
+    }
+    const bulk = event.target.closest("[data-resource-review-bulk]");
+    if (bulk && !bulk.disabled) {
+      bulk.disabled = true;
+      decideSelectedReviewResources(bulk.dataset.resourceReviewBulk).catch((error) => { bulk.disabled = false; toast(error.message); });
+      return;
+    }
+    const decision = event.target.closest("[data-resource-review-decision]");
+    if (decision) decideReviewResource(decision.closest("[data-review-resource]"), decision.dataset.resourceReviewDecision, decision).catch((error) => { decision.disabled = false; toast(error.message); });
+  });
+  $("#resourceReviewModal")?.addEventListener("change", (event) => {
+    const selection = state.resourceReviewSelection || (state.resourceReviewSelection = new Set());
+    const columnFilter = event.target.closest("[data-review-column-filter]");
+    if (columnFilter) {
+      state.resourceReviewColumnFilters = state.resourceReviewColumnFilters || { stars: "all", related: "all" };
+      state.resourceReviewColumnFilters[columnFilter.dataset.reviewColumnFilter] = columnFilter.value;
+      renderReviewQueue();
+      return;
+    }
+    const fieldFilter = event.target.closest("[data-review-field-filter]");
+    if (fieldFilter) {
+      state.resourceReviewFieldQuery = fieldFilter.value;
+      renderReviewQueue();
+      requestAnimationFrame(() => { const input = $("#resourceReviewBody")?.querySelector("[data-review-field-filter]"); if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); } });
+      return;
+    }
+    const selectAll = event.target.closest("[data-review-select-all]");
+    if (selectAll) {
+      $("#resourceReviewBody")?.querySelectorAll("[data-review-select]").forEach((checkbox) => selectAll.checked ? selection.add(checkbox.dataset.reviewSelect) : selection.delete(checkbox.dataset.reviewSelect));
+      renderReviewQueue();
+      return;
+    }
+    const checkbox = event.target.closest("[data-review-select]");
+    if (!checkbox) return;
+    if (checkbox.checked) selection.add(checkbox.dataset.reviewSelect); else selection.delete(checkbox.dataset.reviewSelect);
+    renderReviewQueue();
+  });
+  $("#resourceReviewModal")?.addEventListener("input", (event) => {
+    const columnFilter = event.target.closest("[data-review-column-filter]");
+    if (columnFilter) {
+      state.resourceReviewColumnFilters = state.resourceReviewColumnFilters || { starsSort: "none", starsApprox: "", related: "all" };
+      state.resourceReviewColumnFilters[columnFilter.dataset.reviewColumnFilter] = columnFilter.value;
+      renderReviewQueue();
+      requestAnimationFrame(() => { const input = $("#resourceReviewBody")?.querySelector("[data-review-column-filter=\"starsApprox\"]"); if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); } });
+      return;
+    }
+    const fieldFilter = event.target.closest("[data-review-field-filter]");
+    if (!fieldFilter) return;
+    state.resourceReviewFieldQuery = fieldFilter.value;
+    renderReviewQueue();
+    requestAnimationFrame(() => { const input = $("#resourceReviewBody")?.querySelector("[data-review-field-filter]"); if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); } });
+  });
+  $("#resourceInventoryOpen")?.addEventListener("click", () => openInventoryPreview().catch((error) => toast(error.message)));
+  $("#resourceInventoryModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "resourceInventoryModal" || event.target.closest("[data-resource-inventory-close]")) setAuxModal("#resourceInventoryModal", false);
+  });
   $("#closeResourceInspector")?.addEventListener("click", () => setResourceInspector(false));
   $("#resourceInspectorScrim")?.addEventListener("click", () => setResourceInspector(false));
   $("#inspirationSubnav")?.addEventListener("click", (event) => {
@@ -1992,11 +2349,7 @@ export function initResourceLibraryControls() {
     if (event.target.id === "resourceSearch") {
       state.resourceFilters.query = event.target.value;
       window.clearTimeout(state.resourceSearchTimer);
-      if (state.resourceDisplayMode === "tree") {
-        state.resourceSearchTimer = window.setTimeout(() => renderResourceList(), 280);
-      } else {
-        renderResourceList();
-      }
+      state.resourceSearchTimer = window.setTimeout(() => renderResourceList(), 150);
     }
   });
   $("#view-resources")?.addEventListener("keydown", (event) => {
@@ -2099,7 +2452,10 @@ export function initResourceLibraryControls() {
       $("#resourceSearch")?.focus();
     }
     if (event.key === "Escape") {
-      if (!$("#resourceConfirmModal")?.hidden) closeResourceConfirm();
+      if (!$("#resourceReviewModal")?.hidden) setAuxModal("#resourceReviewModal", false);
+      else if (!$("#resourceInventoryModal")?.hidden) setAuxModal("#resourceInventoryModal", false);
+      else if (!$("#resourceCriteriaPanel")?.hidden) { $("#resourceCriteriaPanel").hidden = true; $("#resourceCriteriaToggle").setAttribute("aria-expanded", "false"); }
+      else if (!$("#resourceConfirmModal")?.hidden) closeResourceConfirm();
       else if (!$("#resourceModal")?.hidden) setResourceModal(false);
       else if (state.resourceGroupManagerOpen) setResourceGroupManager(false);
       else if (state.resourceInspectorOpen) setResourceInspector(false);

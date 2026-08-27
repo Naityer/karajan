@@ -110,6 +110,36 @@ def test_refresh_cadence_is_persistent_and_configurable(tmp_path: Path):
     assert coordinator.run_due()["disabled"] is True
 
 
+def test_rate_limit_preserves_verified_facts_and_is_retried(tmp_path: Path):
+    class RateLimitedAnalyzer:
+        def analyze(self, repo_url: str) -> AnalyzeResult:
+            raise RuntimeError("GitHub API rate limit exceeded")
+
+    store = ResourceStore(tmp_path / "resources.db")
+    item = _legacy_resource(store)
+    store.upsert(item.model_copy(update={"metadata": {
+        "github_stars": 12_345,
+        "source_accessible": True,
+        "detection_succeeded": True,
+        "source_analyzed_at": "2099-01-01T00:00:00+00:00",
+    }}))
+
+    failed = ResourceRefreshCoordinator(store, RateLimitedAnalyzer()).run_due(force=True)
+    pending = store.get(item.id)
+    assert failed["failed"] == 1
+    assert pending.metadata["github_stars"] == 12_345
+    assert pending.metadata["source_accessible"] is True
+    assert pending.metadata["detection_succeeded"] is True
+    assert pending.metadata["source_verification_state"] == "rate_limited"
+
+    retried = ResourceRefreshCoordinator(store, FakeAnalyzer()).run_due()
+    refreshed = store.get(item.id)
+    assert retried["analyzed"] == 1
+    assert retried["failed"] == 0
+    assert "source_analysis_error" not in refreshed.metadata
+    assert "source_verification_state" not in refreshed.metadata
+
+
 class CatalogAnalyzer:
     def __init__(self, *, fail_on: str = "", paths: list[str] | None = None) -> None:
         self.calls: list[str] = []
@@ -237,6 +267,8 @@ def test_github_children_are_idempotent_and_missing_children_become_inactive(tmp
 
     assert first_count == second_count == 2
     assert {child.id for child in first_children} == {child.id for child in second_children}
+    assert all(child.metadata["skill_paths"] == [child.metadata["skill_path"]] for child in second_children)
+    assert all(child.metadata["detection_succeeded"] is True for child in second_children)
 
     analyzer.paths = ["skills/a/SKILL.md"]
     coordinator.refresh_catalog_item(store.get(parent.id), trigger="manual")

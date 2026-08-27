@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 
 from app.github_resources import GitHubResourceAnalyzer, validate_github_repository_url
+from app.modules.inspiration.api import _github_resource_parts
 from app.models import ResourceCreateRequest, ResourceItem, ResourceKind, ResourceOperationRequest, SkillInfo
 from app.naityer_resources import NaityerAdapter
 from app.nested_resources import ItsFreeAdapter, TooolsDesignAdapter
@@ -103,7 +104,7 @@ def test_seed_is_idempotent_and_includes_all_resource_kinds(monkeypatch, tmp_pat
     seed_resource_library(store, installers)
 
     resources = store.list_resources(limit=50)
-    assert len(resources) == 17
+    assert len(resources) == 27
     assert {item.kind for item in resources} == {
         ResourceKind.SKILL, ResourceKind.CAPABILITY, ResourceKind.REFERENCE,
     }
@@ -155,6 +156,16 @@ def test_github_url_validation_rejects_unsafe_or_non_root_urls() -> None:
             raise AssertionError(f"unsafe URL accepted: {value}")
 
 
+def test_github_internal_component_resolves_to_repository_root() -> None:
+    assert _github_resource_parts(
+        "https://github.com/affaan-m/ECC/blob/main/docs/ja-JP/skills/agent-introspection-debugging/SKILL.md"
+    ) == (
+        "https://github.com/affaan-m/ECC",
+        "https://github.com/affaan-m/ECC/blob/main/docs/ja-JP/skills/agent-introspection-debugging/SKILL.md",
+        True,
+    )
+
+
 def test_github_analysis_reads_metadata_without_repository_execution(tmp_path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "raw.githubusercontent.com":
@@ -163,7 +174,7 @@ def test_github_analysis_reads_metadata_without_repository_execution(tmp_path) -
             return httpx.Response(200, json={"tree": [{"path": "skills/demo/SKILL.md", "type": "blob"}]})
         return httpx.Response(200, json={
             "name": "demo", "description": "A demo skill", "default_branch": "main",
-            "topics": ["agents"], "license": {"spdx_id": "MIT"},
+            "topics": ["agents"], "license": {"spdx_id": "MIT"}, "stargazers_count": 12_345,
         })
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
@@ -173,9 +184,23 @@ def test_github_analysis_reads_metadata_without_repository_execution(tmp_path) -
     assert result.valid
     assert result.skill_paths == ["skills/demo/SKILL.md"]
     assert result.preview and result.preview.install_strategy == "github_skill"
+    assert result.preview.metadata["github_stars"] == 12_345
     store = ResourceStore(tmp_path / "resources.db")
     persisted = analyzer.persist_preview(store, result)
     assert persisted.repo_url == "https://github.com/acme/demo"
+
+
+def test_github_analysis_never_turns_missing_stars_into_zero() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/git/trees/" in request.url.path:
+            return httpx.Response(200, json={"tree": []})
+        return httpx.Response(200, json={"name": "demo", "default_branch": "main"})
+
+    analyzer = GitHubResourceAnalyzer(httpx.Client(transport=httpx.MockTransport(handler)))
+    result = analyzer.analyze("https://github.com/acme/demo")
+
+    assert result.valid and result.preview
+    assert result.preview.metadata["github_stars"] is None
 
 
 def test_github_analysis_summarizes_readme_with_fallback_metadata() -> None:

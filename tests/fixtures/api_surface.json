@@ -453,6 +453,22 @@
   },
   {
     "kind": "route",
+    "path": "/resources/inventory",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/inventory/{snapshot_id}.xlsx",
+    "methods": [
+      "GET"
+    ],
+    "response_model": null
+  },
+  {
+    "kind": "route",
     "path": "/resources/recommend",
     "methods": [
       "POST"
@@ -488,6 +504,46 @@
     "path": "/resources/refresh/settings",
     "methods": [
       "PUT"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/review",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "list[ResourceItem]"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/validity-policy",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "ArtifactValidityPolicy"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/validity-policy",
+    "methods": [
+      "PUT"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/validity-policy/impact",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/validity-policy/revalidate",
+    "methods": [
+      "POST"
     ],
     "response_model": "dict"
   },
@@ -530,6 +586,14 @@
       "POST"
     ],
     "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/resources/{resource_id}/review",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ResourceItem"
   },
   {
     "kind": "route",
@@ -707,43 +771,57 @@
   {
     "kind": "route",
     "path": "/v1/executions",
-    "methods": ["POST"],
+    "methods": [
+      "POST"
+    ],
     "response_model": null
   },
   {
     "kind": "route",
     "path": "/v1/executions/{execution_id}/cancel",
-    "methods": ["POST"],
+    "methods": [
+      "POST"
+    ],
     "response_model": null
   },
   {
     "kind": "route",
     "path": "/v1/health/live",
-    "methods": ["GET"],
+    "methods": [
+      "GET"
+    ],
     "response_model": "dict"
   },
   {
     "kind": "route",
     "path": "/v1/health/ready",
-    "methods": ["GET"],
+    "methods": [
+      "GET"
+    ],
     "response_model": "dict"
   },
   {
     "kind": "route",
     "path": "/v1/tasks",
-    "methods": ["GET"],
+    "methods": [
+      "GET"
+    ],
     "response_model": null
   },
   {
     "kind": "route",
     "path": "/v1/tasks/classify",
-    "methods": ["POST"],
+    "methods": [
+      "POST"
+    ],
     "response_model": null
   },
   {
     "kind": "route",
     "path": "/v1/tasks/{task_id}",
-    "methods": ["GET"],
+    "methods": [
+      "GET"
+    ],
     "response_model": null
   }
 ]

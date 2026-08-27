@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-import re
 import os
+import re
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
-from app.models import AnalyzeResult, ResourceItem, ResourceKind, ResourceRefreshSettingsUpdate
+from app.models import (
+    AnalyzeResult,
+    ResourceItem,
+    ResourceKind,
+    ResourceRefreshSettingsUpdate,
+)
 from app.resource_library import ResourceStore
-
 
 SETTINGS_KEY = "resource_refresh_settings_v1"
 STATUS_KEY = "resource_refresh_status_v1"
@@ -56,6 +60,8 @@ class ResourceRefreshCoordinator:
         self._lock = threading.Lock()
         self._job_guard = threading.Lock()
         self._job_thread: threading.Thread | None = None
+        self._analysis_cache_guard = threading.Lock()
+        self._analysis_cache: dict[tuple[str, str], Future] = {}
 
     def settings(self) -> ResourceRefreshSettingsUpdate:
         raw = self._store.get_preference(SETTINGS_KEY, {})
@@ -102,6 +108,8 @@ class ResourceRefreshCoordinator:
             ):
                 raise RuntimeError("another catalog analysis is already running")
             candidates = self._candidate_items(force=force, limit=None)
+            with self._analysis_cache_guard:
+                self._analysis_cache.clear()
             run = {
                 "run_id": f"rrun_{uuid4().hex[:12]}",
                 "owner_pid": os.getpid(),
@@ -135,17 +143,33 @@ class ResourceRefreshCoordinator:
         return self._apply_analysis(item, result, trigger=trigger, method="github")
 
     def refresh_catalog_item(self, item: ResourceItem, *, trigger: str) -> tuple[ResourceItem, int]:
+        if not self._lock.locked():
+            with self._analysis_cache_guard:
+                self._analysis_cache.clear()
         method, source_url = self._analysis_source(item)
-        if method == "github":
-            result = self._analyzer.analyze(source_url)
-        elif method == "web" and self._web_analyzer is not None:
-            result = self._web_analyzer.analyze(source_url)
-        elif method == "local" and self._local_analyzer is not None:
-            result = self._local_analyzer.analyze(item)
-        else:
-            raise LookupError(f"no analyzer is configured for {method}")
+        key = (method, source_url or item.id)
+        with self._analysis_cache_guard:
+            future = self._analysis_cache.get(key)
+            owner = future is None
+            if future is None:
+                future = Future()
+                self._analysis_cache[key] = future
+        if owner:
+            try:
+                if method == "github":
+                    result = self._analyzer.analyze(source_url)
+                elif method == "web" and self._web_analyzer is not None:
+                    result = self._web_analyzer.analyze(source_url)
+                elif method == "local" and self._local_analyzer is not None:
+                    result = self._local_analyzer.analyze(item)
+                else:
+                    raise LookupError(f"no analyzer is configured for {method}")
+                future.set_result(result)
+            except Exception as exc:
+                future.set_exception(exc)
+        result = future.result()
         updated = self._apply_analysis(item, result, trigger=trigger, method=method, source_url=source_url or None)
-        children = self._refresh_children(updated, result, method)
+        children = 0 if updated.parent_resource_id else self._refresh_children(updated, result, method)
         return self._store.get(updated.id), children
 
     def _apply_analysis(
@@ -162,6 +186,8 @@ class ResourceRefreshCoordinator:
             raise ValueError(detail)
         preview = result.preview
         existing_metadata = dict(item.metadata or {})
+        existing_metadata.pop("source_analysis_error", None)
+        existing_metadata.pop("source_verification_state", None)
         source_metadata = dict(preview.metadata or {})
         source_metadata.update({
             "source_analyzed_at": _utcnow().isoformat(),
@@ -193,7 +219,26 @@ class ResourceRefreshCoordinator:
             self._publish("resource_changed", resource_id=updated.id, scope="reanalyzed")
         return updated
 
+    def _mark_analysis_failure(self, item: ResourceItem, detail: str, *, trigger: str) -> None:
+        rate_limited = "rate limit" in detail.casefold() or "status/403" in detail.casefold()
+        metadata = {
+            **(item.metadata or {}),
+            "source_analysis_error": detail[:1000],
+            "source_analyzed_at": _utcnow().isoformat(),
+            "source_analysis_trigger": trigger,
+            "source_verification_state": "rate_limited" if rate_limited else "failed",
+        }
+        # A GitHub quota response says nothing about repository accessibility. Keep
+        # prior verified facts intact; only a genuine analysis failure invalidates them.
+        if not rate_limited:
+            metadata.update({"source_accessible": False, "detection_succeeded": False})
+        self._store.upsert(item.model_copy(update={"index_status": "active", "metadata": metadata}))
+        if self._publish:
+            self._publish("resource_changed", resource_id=item.id, scope="analysis_failed")
+
     def _refresh_children(self, item: ResourceItem, result: AnalyzeResult, method: str) -> int:
+        if (item.metadata or {}).get("nested_indexer") and self._nested_indexer is not None:
+            return int(self._nested_indexer.index(item).indexed)
         if method == "github":
             paths = list(result.skill_paths or (item.metadata or {}).get("skill_paths") or [])
             if not paths:
@@ -221,6 +266,11 @@ class ResourceRefreshCoordinator:
                     install_strategy="none",
                     metadata={
                         "skill_path": path,
+                        "skill_paths": [path],
+                        "github_stars": (item.metadata or {}).get("github_stars"),
+                        "source_accessible": (item.metadata or {}).get("source_accessible") is True,
+                        "detection_succeeded": True,
+                        "source_analyzed_at": (item.metadata or {}).get("source_analyzed_at"),
                         "provenance": {"parent_resource_id": item.id, "canonical_url": source_url, "method": "github-tree-skill-path"},
                     },
                 ))
@@ -240,7 +290,12 @@ class ResourceRefreshCoordinator:
         url = item.repo_url or item.source_url or metadata.get("homepage_url") or metadata.get("html_url")
         if url:
             host = (urlsplit(str(url)).hostname or "").casefold()
-            return ("github" if host == "github.com" else "web", str(url))
+            if host == "github.com":
+                parsed = urlsplit(str(url))
+                parts = [part for part in parsed.path.split("/") if part]
+                if len(parts) >= 2:
+                    return "github", f"https://github.com/{parts[0]}/{parts[1]}"
+            return "web", str(url)
         return "local", ""
 
     def _candidate_items(self, *, force: bool, limit: int | None) -> list[ResourceItem]:
@@ -252,12 +307,15 @@ class ResourceRefreshCoordinator:
             if not page:
                 break
             for item in page:
-                if item.parent_resource_id is not None:
+                provenance = (item.metadata or {}).get("provenance") or {}
+                collection_child = provenance.get("method") == "claude-skills-collection-readme"
+                if item.parent_resource_id is not None and not collection_child:
                     continue
                 last = _parse_datetime((item.metadata or {}).get("source_analyzed_at"))
                 if last is None:
                     last = _parse_datetime((item.metadata or {}).get("summarized_at"))
-                if force or last is None or last <= cutoff:
+                retry_pending = bool((item.metadata or {}).get("source_analysis_error"))
+                if force or retry_pending or last is None or last <= cutoff:
                     candidates.append(item)
                     if limit is not None and len(candidates) >= limit:
                         break
@@ -276,25 +334,39 @@ class ResourceRefreshCoordinator:
             run["status"] = "running"
             self._save_run(run)
             with ThreadPoolExecutor(max_workers=self._max_workers, thread_name_prefix="resource-analysis") as pool:
-                futures = {pool.submit(self._analyze_one, item, "manual"): item for item in candidates}
-                for future in as_completed(futures):
-                    item = futures[future]
-                    try:
-                        outcome, children = future.result()
-                        run[outcome] += 1
-                        run["children_indexed"] += children
-                    except LookupError as exc:
-                        run["skipped"] += 1
-                        run["failures"].append({"resource_id": item.id, "name": item.name, "detail": str(exc), "status": "skipped"})
-                    except Exception as exc:
-                        run["failed"] += 1
-                        detail = str(exc)[:1000]
-                        run["failures"].append({"resource_id": item.id, "name": item.name, "detail": detail, "status": "failed"})
-                        self._store.record_operation(resource_id=item.id, action="reanalyze", status="failed", detail=detail, metadata={"trigger": "manual"})
-                    run["processed"] += 1
-                    run["pending"] = max(0, run["total"] - run["processed"])
-                    run["failures"] = run["failures"][-100:]
-                    self._save_run(run)
+                batch = candidates
+                processed_ids: set[str] = set()
+                while batch:
+                    futures = {pool.submit(self._analyze_one, item, "manual"): item for item in batch}
+                    for future in as_completed(futures):
+                        item = futures[future]
+                        processed_ids.add(item.id)
+                        try:
+                            outcome, children = future.result()
+                            run[outcome] += 1
+                            run["children_indexed"] += children
+                        except LookupError as exc:
+                            run["skipped"] += 1
+                            run["failures"].append({"resource_id": item.id, "name": item.name, "detail": str(exc), "status": "skipped"})
+                        except Exception as exc:
+                            run["failed"] += 1
+                            detail = str(exc)[:1000]
+                            self._mark_analysis_failure(item, detail, trigger="manual")
+                            run["failures"].append({"resource_id": item.id, "name": item.name, "detail": detail, "status": "failed"})
+                            self._store.record_operation(resource_id=item.id, action="reanalyze", status="failed", detail=detail, metadata={"trigger": "manual"})
+                        run["processed"] += 1
+                        run["pending"] = max(0, run["total"] - run["processed"])
+                        run["failures"] = run["failures"][-100:]
+                        self._save_run(run)
+                    batch = [
+                        item for item in self._store.list_all_resources(include_inactive=False)
+                        if item.id not in processed_ids
+                        and ((item.metadata or {}).get("provenance") or {}).get("method") == "claude-skills-collection-readme"
+                    ]
+                    if batch:
+                        run["total"] += len(batch)
+                        run["pending"] += len(batch)
+                        self._save_run(run)
             self._store.apply_resource_taxonomy()
             run["status"] = "completed" if run["failed"] == 0 else "completed_with_errors"
             run["finished_at"] = _utcnow().isoformat()
@@ -342,6 +414,7 @@ class ResourceRefreshCoordinator:
                     updated += outcome == "updated"
                 except Exception as exc:
                     failed += 1
+                    self._mark_analysis_failure(item, str(exc), trigger="manual" if force else "scheduled")
                     self._store.record_operation(
                         resource_id=item.id, action="reanalyze", status="failed", detail=str(exc)[:1000],
                         metadata={"trigger": "manual" if force else "scheduled"},

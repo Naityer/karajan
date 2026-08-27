@@ -124,6 +124,8 @@ class GitHubResourceAnalyzer:
             warnings.append("No SKILL.md file was found; repository installation is disabled")
         description = str(metadata.get("description") or "")
         name = str(metadata.get("name") or parsed.repository)
+        raw_stars = metadata.get("stargazers_count")
+        github_stars = max(0, int(raw_stars)) if isinstance(raw_stars, (int, float)) and not isinstance(raw_stars, bool) else None
         readme = self._read_readme(parsed, default_branch, repository_paths)
         manifests = self._read_manifests(parsed, default_branch, repository_paths)
         intelligence = extract_resource_signals(metadata, repository_paths, readme, manifests)
@@ -161,7 +163,7 @@ class GitHubResourceAnalyzer:
                 *(("agent skill",) if skill_paths else ()),
             }),
             requirements=sorted({*intelligence.languages, *intelligence.frameworks}),
-            compatible_runtimes=["claude", "codex"] if skill_paths else [],
+            compatible_runtimes=["claude", "codex"],
             install_strategy="github_skill" if skill_paths else "none",
             metadata={
                 "default_branch": default_branch,
@@ -172,6 +174,9 @@ class GitHubResourceAnalyzer:
                 "license": (metadata.get("license") or {}).get("spdx_id") if isinstance(metadata.get("license"), dict) else None,
                 "archived": bool(metadata.get("archived")),
                 "fork": bool(metadata.get("fork")),
+                "github_stars": github_stars,
+                "detection_succeeded": True,
+                "source_accessible": True,
                 "html_url": parsed.canonical_url,
                 "readme_url": f"{parsed.canonical_url}#readme",
                 "readme_excerpt": readme[:4000],
@@ -279,6 +284,15 @@ class GitHubResourceAnalyzer:
             if redirected.scheme != "https" or redirected.hostname != "api.github.com":
                 raise ValueError("GitHub returned an unsafe redirect")
             response = self._client.get(location, headers=self._headers)
+        if response.status_code == 403 and (
+            response.headers.get("x-ratelimit-remaining") == "0"
+            or "rate limit" in response.text.casefold()
+        ):
+            reset = response.headers.get("x-ratelimit-reset")
+            reset_hint = ""
+            if reset and reset.isdigit():
+                reset_hint = f"; retry after {datetime.fromtimestamp(int(reset), timezone.utc).isoformat()}"
+            raise ValueError(f"GitHub API rate limit exceeded{reset_hint}")
         response.raise_for_status()
         content_length = response.headers.get("content-length")
         if content_length and int(content_length) > max_bytes:

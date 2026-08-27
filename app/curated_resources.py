@@ -186,6 +186,69 @@ def curated_resource_items() -> list[ResourceItem]:
             "homepage_url": "https://gradientsaas.blogspot.com/",
         },
     )
+    entries += (
+        {
+            "slug": "deck-gl", "name": "deck.gl", "kind": ResourceKind.CAPABILITY,
+            "repo_url": "https://github.com/visgl/deck.gl", "summary": "Framework WebGL para visualizaciones de datos geoespaciales de gran escala.",
+            "tags": ["visualization", "webgl", "maps"], "capabilities": ["geospatial visualization", "large-scale rendering"],
+            "category": "data-visualization", "use_cases": ["crear mapas y capas de datos"], "homepage_url": "https://deck.gl", "runtimes": ["claude", "codex"],
+        },
+        {
+            "slug": "dactyl", "name": "Dactyl", "kind": ResourceKind.REFERENCE,
+            "repo_url": None, "source_url": "https://dactyl.dev", "summary": "Referencia web para interfaces y herramientas de desarrollo asistidas por agentes.",
+            "tags": ["web", "developer-tools"], "capabilities": ["web reference"], "category": "developer-tools",
+            "use_cases": ["consultar una referencia web"], "homepage_url": "https://dactyl.dev", "runtimes": ["claude", "codex"],
+        },
+        {
+            "slug": "axton-obsidian-visual-skills", "name": "Axton Obsidian Visual Skills", "kind": ResourceKind.SKILL,
+            "repo_url": "https://github.com/axtonliu/axton-obsidian-visual-skills", "summary": "Colección de skills visuales para crear artefactos en Obsidian.",
+            "tags": ["skills", "obsidian", "visual"], "capabilities": ["visual artifacts", "Obsidian workflows"], "category": "design-resources",
+            "use_cases": ["crear artefactos visuales en Obsidian"], "homepage_url": "https://github.com/axtonliu/axton-obsidian-visual-skills", "runtimes": ["claude", "codex"], "install_strategy": "github_skill",
+        },
+        {
+            "slug": "production-agentic-rag-course", "name": "Production Agentic RAG Course", "kind": ResourceKind.REFERENCE,
+            "repo_url": "https://github.com/jamwithai/production-agentic-rag-course", "summary": "Curso operativo sobre sistemas RAG agénticos preparados para producción.",
+            "tags": ["rag", "agents", "course"], "capabilities": ["agentic RAG reference"], "category": "agent-infrastructure",
+            "use_cases": ["construir sistemas RAG"], "homepage_url": "https://github.com/jamwithai/production-agentic-rag-course", "runtimes": ["claude", "codex"],
+        },
+        {
+            "slug": "diagram-design", "name": "Diagramas editoriales", "kind": ResourceKind.SKILL,
+            "repo_url": "https://github.com/cathrynlavery/diagram-design", "summary": "Skill para generar diagramas HTML y SVG autocontenidos a partir de una petición en texto.",
+            "tags": ["skills", "diagrams", "svg"], "capabilities": ["diagram generation"], "category": "design-resources",
+            "use_cases": ["crear diagramas editoriales"], "homepage_url": "https://github.com/cathrynlavery/diagram-design", "runtimes": ["claude", "codex"], "install_strategy": "github_skill",
+        },
+        {
+            "slug": "watermarks-remover", "name": "Quitar marcas de IA", "kind": ResourceKind.SKILL,
+            "repo_url": "https://github.com/guillaumemeyer/watermarks-remover", "summary": "Skill para eliminar marcas Unicode invisibles y metadatos de procedencia de archivos propios.",
+            "tags": ["skills", "metadata", "text"], "capabilities": ["metadata cleanup"], "category": "document-processing",
+            "use_cases": ["limpiar metadatos de archivos propios"], "homepage_url": "https://github.com/guillaumemeyer/watermarks-remover", "runtimes": ["claude", "codex"], "install_strategy": "github_skill",
+        },
+        {
+            "slug": "gooey", "name": "Gooey", "kind": ResourceKind.REFERENCE,
+            "repo_url": None, "source_url": "https://gooey.jakubantalik.com", "summary": "Galería web de microinteracciones y componentes de interfaz.",
+            "tags": ["ui", "motion", "web"], "capabilities": ["interaction reference"], "category": "design-resources",
+            "use_cases": ["explorar patrones de interacción"], "homepage_url": "https://gooey.jakubantalik.com", "runtimes": ["claude", "codex"],
+        },
+        {
+            "slug": "x-reference-2087932975446900821", "name": "Referencia X · 2087932975446900821", "kind": ResourceKind.REFERENCE,
+            "repo_url": None, "source_url": "https://x.com/i/status/2087932975446900821", "summary": "Referencia web aportada para el catálogo de Inspiración.",
+            "tags": ["x", "web", "reference"], "capabilities": ["web reference"], "category": "discovery-directories",
+            "use_cases": ["consultar la publicación original"], "homepage_url": "https://x.com/i/status/2087932975446900821", "runtimes": ["claude", "codex"],
+        },
+        {
+            "slug": "claude-skills-collection", "name": "Claude Skills Collection", "kind": ResourceKind.REFERENCE,
+            "repo_url": "https://github.com/abubakarsiddik31/claude-skills-collection", "summary": "Colección editorial cuyos enlaces se conservan con su referencia original y se validan individualmente.",
+            "tags": ["skills", "collection", "directory"], "capabilities": ["skill discovery"], "category": "agent-infrastructure",
+            "use_cases": ["descubrir skills operativas"], "homepage_url": "https://github.com/abubakarsiddik31/claude-skills-collection", "runtimes": ["claude", "codex"],
+            "metadata_extra": {"policy_exempt": "editorial_collection", "source_role": "collection", "nested_indexer": "claude-skills-collection"},
+        },
+        {
+            "slug": "understand-anything", "name": "Understand Anything", "kind": ResourceKind.SKILL,
+            "repo_url": "https://github.com/Egonex-AI/Understand-Anything", "summary": "Skill de referencia para analizar repositorios y alimentar la vista independiente Entender.",
+            "tags": ["skills", "repository-analysis", "understand"], "capabilities": ["repository understanding"], "category": "software-architecture",
+            "use_cases": ["analizar y comprender repositorios"], "homepage_url": "https://github.com/Egonex-AI/Understand-Anything", "runtimes": ["claude", "codex"], "install_strategy": "github_skill",
+        },
+    )
     return [
         ResourceItem(
             slug=entry["slug"],
@@ -222,6 +285,7 @@ def curated_resource_items() -> list[ResourceItem]:
                     host in entry["source_url"] for host in ("itsfree.dev", "refactoring.guru", "toools.design")
                 ) else "artifact",
                 "acceptance_example": True,
+                **entry.get("metadata_extra", {}),
             },
         )
         for entry in entries

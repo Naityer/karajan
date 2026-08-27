@@ -1136,6 +1136,42 @@ class ResourceIndexRequest(BaseModel):
     confirmed: bool = False
 
 
+class ArtifactValidityPolicy(BaseModel):
+    """Operator-owned acceptance policy for the Inspiration catalog."""
+
+    version: int = Field(default=1, ge=1)
+    stars_enabled: bool = True
+    min_github_stars: int = Field(default=10_000, ge=0, le=100_000_000)
+    require_source_url: bool = True
+    require_detection_success: bool = True
+    required_runtimes: list[Literal["claude", "codex"]] = Field(default_factory=lambda: ["claude", "codex"])
+    require_web_reference: bool = True
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("required_runtimes")
+    @classmethod
+    def _clean_required_runtimes(cls, values: list[str]) -> list[str]:
+        return [value for value in ("claude", "codex") if value in set(values)]
+
+
+class ArtifactValidityPolicyImpactRequest(BaseModel):
+    stars_enabled: bool = True
+    min_github_stars: int = Field(default=10_000, ge=0, le=100_000_000)
+    require_source_url: bool = True
+    require_detection_success: bool = True
+    required_runtimes: list[Literal["claude", "codex"]] = Field(default_factory=lambda: ["claude", "codex"])
+    require_web_reference: bool = True
+
+
+class ArtifactValidityPolicyUpdate(ArtifactValidityPolicyImpactRequest):
+    expected_version: int = Field(ge=1)
+    confirm_reset: bool = False
+
+
+class ArtifactReviewDecisionRequest(BaseModel):
+    decision: Literal["accept", "discard", "automatic"]
+
+
 class ResourceRefreshSettingsUpdate(BaseModel):
     """Cadence for repository reanalysis and the Inspiration radar."""
 

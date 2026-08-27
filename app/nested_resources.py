@@ -17,14 +17,13 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
-from app.platform import http
-
 from app.models import ResourceItem, ResourceKind
+from app.platform import http
 from app.resource_intelligence import extract_resource_signals
 from app.resource_library import ResourceStore, deterministic_summary
 
-
 MAX_CHILDREN = 150
+MAX_COLLECTION_CHILDREN = 300
 MAX_PAGE_BYTES = 256 * 1024
 MAX_TOTAL_BYTES = 32 * 1024 * 1024
 MAX_WORKERS = 4
@@ -419,10 +418,78 @@ class TooolsDesignAdapter:
         return children
 
 
+class ClaudeSkillsCollectionAdapter:
+    """Materialize the collection's Markdown links without losing provenance."""
+
+    repository = "https://github.com/abubakarsiddik31/claude-skills-collection"
+    raw_readme = "https://raw.githubusercontent.com/abubakarsiddik31/claude-skills-collection/main/README.md"
+
+    def __init__(self, client: httpx.Client | None = None) -> None:
+        self.client = client or http.build_client(timeout=15.0, follow_redirects=True)
+
+    def supports(self, resource: ResourceItem) -> bool:
+        candidate = (resource.repo_url or resource.source_url or "").rstrip("/").casefold()
+        return candidate == self.repository.casefold()
+
+    def discover(self, resource: ResourceItem) -> list[ResourceItem]:
+        response = self.client.get(self.raw_readme, headers={"Accept": "text/markdown", "User-Agent": "Karajan-Indexer/1"})
+        response.raise_for_status()
+        if len(response.content) > MAX_PAGE_BYTES:
+            raise ValueError("collection README exceeds the 256 KB inspection limit")
+        markdown = response.content.decode("utf-8", errors="replace")
+        links = re.findall(r"\[([^\]]{1,160})\]\((https://github\.com/[^)\s]+)\)", markdown, flags=re.IGNORECASE)
+        now = datetime.now(timezone.utc)
+        children: list[ResourceItem] = []
+        seen: set[str] = set()
+        for label, link in links:
+            parsed = urlsplit(link.rstrip("/.,"))
+            parts = [part for part in parsed.path.split("/") if part]
+            if len(parts) < 2:
+                continue
+            canonical = urlunsplit(("https", "github.com", "/" + "/".join(parts), "", ""))
+            identity = canonical.casefold()
+            if identity in seen or identity.rstrip("/") == self.repository.casefold():
+                continue
+            seen.add(identity)
+            name = _SPACE_RE.sub(" ", label).strip()
+            if name.casefold() in {"source", "github", "repo", "repository", "view"}:
+                name = parts[-1].replace("-", " ").replace("_", " ").title()
+            slug = _SLUG_RE.sub("-", f"{parts[0]}-{parts[1]}-{name}".casefold()).strip("-")[:90]
+            summary = f"Skill referenciada por Claude Skills Collection: {name}."
+            children.append(ResourceItem(
+                slug=f"{resource.slug}--{slug}"[:120],
+                name=name[:160],
+                kind=ResourceKind.SKILL,
+                source="claude-skills-collection",
+                parent_resource_id=resource.id,
+                source_url=canonical,
+                summary=summary,
+                tags=["skill", "collection", "pending-validation"],
+                capabilities=["agent skill"],
+                compatible_runtimes=["claude", "codex"],
+                install_strategy="none",
+                indexed_at=now,
+                metadata={
+                    "homepage_url": canonical,
+                    "source_accessible": True,
+                    "detection_succeeded": False,
+                    "provenance": {
+                        "parent_resource_id": resource.id,
+                        "canonical_url": canonical,
+                        "collection_url": self.repository,
+                        "method": "claude-skills-collection-readme",
+                    },
+                },
+            ))
+            if len(children) >= MAX_COLLECTION_CHILDREN:
+                break
+        return children
+
+
 class NestedResourceIndexer:
     def __init__(self, store: ResourceStore, adapters: Iterable[DirectoryAdapter] | None = None) -> None:
         self.store = store
-        self.adapters = list(adapters or [ItsFreeAdapter(), RefactoringGuruAdapter(), TooolsDesignAdapter()])
+        self.adapters = list(adapters or [ItsFreeAdapter(), RefactoringGuruAdapter(), TooolsDesignAdapter(), ClaudeSkillsCollectionAdapter()])
 
     def index(self, resource: ResourceItem) -> IndexResult:
         adapter = next((candidate for candidate in self.adapters if candidate.supports(resource)), None)
@@ -440,5 +507,5 @@ class NestedResourceIndexer:
 
 __all__ = [
     "DirectoryAdapter", "GenericHtmlDirectoryAdapter", "IndexResult", "ItsFreeAdapter",
-    "RefactoringGuruAdapter", "TooolsDesignAdapter", "NestedResourceIndexer",
+    "RefactoringGuruAdapter", "TooolsDesignAdapter", "ClaudeSkillsCollectionAdapter", "NestedResourceIndexer",
 ]

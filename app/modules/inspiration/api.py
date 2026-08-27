@@ -14,11 +14,25 @@ import hashlib
 import re
 import threading
 import uuid
+from datetime import (
+    datetime,
+    timezone,
+)
+from io import BytesIO
+from urllib.parse import urlsplit, urlunsplit
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+)
+from fastapi.responses import StreamingResponse
 
 from app import events
+from app import runtime as runtime_module
 from app.atlas_auth import require_atlas_token
 from app.auth import require_token
-from app.github_resources import validate_github_repository_url
 from app.inspiration_feed import (
     DEFAULT_SOURCE_IDS,
     SOURCES,
@@ -27,6 +41,10 @@ from app.inspiration_feed import (
 from app.models import (
     AnalyzeRequest,
     AnalyzeResult,
+    ArtifactReviewDecisionRequest,
+    ArtifactValidityPolicy,
+    ArtifactValidityPolicyImpactRequest,
+    ArtifactValidityPolicyUpdate,
     DiscoverySource,
     DiscoverySourceCreateRequest,
     InspirationSourcePreference,
@@ -46,22 +64,40 @@ from app.models import (
     ResourceVisibilityRequest,
 )
 from app.resource_intelligence import rank_resources
+from app.resource_inventory import create_inventory_snapshot, get_inventory_snapshot
 from app.resource_sources import classify_external_url
+from app.resource_validity import (
+    PolicyResetConfirmationRequired,
+    PolicyVersionConflict,
+    decide_resource,
+    decorate_catalog_resources,
+    decorate_resource,
+    is_internal_repository_component,
+    is_internal_local_reference,
+    is_local_repository_alias,
+    load_policy,
+    policy_impact,
+    update_policy,
+)
 from app.web_references import validate_reference_url
-from datetime import (
-    datetime,
-    timezone,
-)
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-)
-from urllib.parse import urlsplit
 
-from app import runtime as runtime_module
 
+def _github_resource_parts(value: str) -> tuple[str, str, bool] | None:
+    """Return (repository root, canonical source path, is_internal_path)."""
+    parsed = urlsplit(str(value or "").strip())
+    if parsed.scheme != "https" or (parsed.hostname or "").casefold() != "github.com":
+        return None
+    if parsed.username or parsed.password or parsed.port or parsed.query or parsed.fragment:
+        raise ValueError("Las URLs GitHub no pueden incluir credenciales, puertos, consultas ni fragmentos")
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2:
+        raise ValueError("La URL debe apuntar a un repositorio GitHub o a un componente interno")
+    owner, repository = parts[:2]
+    if repository.endswith(".git"):
+        repository = repository[:-4]
+    root = urlunsplit(("https", "github.com", f"/{owner}/{repository}", "", ""))
+    source = urlunsplit(("https", "github.com", "/" + "/".join([owner, repository, *parts[2:]]), "", ""))
+    return root, source, len(parts) > 2
 
 router = APIRouter(tags=["inspiration"])
 
@@ -179,6 +215,7 @@ def list_resources(
     tags: list[str] | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    accepted_only: bool = Query(default=False),
 ) -> list[ResourceItem]:
     """Searchable catalog shared by the dashboard and autonomous agents."""
     if q and q.strip():
@@ -211,7 +248,19 @@ def list_resources(
         current = unique.get(identity)
         if current is None or (len(item.summary), len(item.capabilities), len(item.metadata)) > (len(current.summary), len(current.capabilities), len(current.metadata)):
             unique[identity] = item
-    return list(unique.values())[offset : offset + limit]
+    policy = load_policy(runtime_module.current().resources)
+    selected = list(unique.values())
+    parent_ids = {item.parent_resource_id for item in selected if item.parent_resource_id}
+    parents = [runtime_module.current().resources.get(parent_id) for parent_id in parent_ids if parent_id]
+    decorated = decorate_catalog_resources(selected, policy, parent_items=parents)
+    if accepted_only:
+        decorated = [item for item in decorated if not (item.metadata.get("validity") or {}).get("alias_of")]
+    if accepted_only:
+        decorated = [
+            item for item in decorated
+            if item.metadata.get("validity", {}).get("state") in {"accepted", "accepted_override"}
+        ]
+    return decorated[offset : offset + limit]
 
 
 @router.get("/resources/index")
@@ -459,10 +508,23 @@ def analyze_resource(
                 metadata={"source_role": "discovery_source"},
             ),
         )
-    is_github = urlsplit(request.repo_url.strip()).hostname.lower() == "github.com" if urlsplit(request.repo_url.strip()).hostname else False
-    result = runtime_module.current().resource_analyzer.analyze(request.repo_url) if is_github else runtime_module.current().web_reference_analyzer.analyze(request.repo_url)
+    try:
+        github_parts = _github_resource_parts(request.repo_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result = (
+        runtime_module.current().resource_analyzer.analyze(github_parts[0])
+        if github_parts
+        else runtime_module.current().web_reference_analyzer.analyze(request.repo_url)
+    )
     if not result.valid or result.preview is None:
         return result
+    if github_parts and github_parts[2]:
+        root, source, _ = github_parts
+        result = result.model_copy(update={
+            "repo_url": root,
+            "preview": result.preview.model_copy(update={"repo_url": root, "source_url": source}),
+        })
     token = uuid.uuid4().hex
     now = datetime.now(timezone.utc).timestamp()
     with _resource_analysis_guard:
@@ -487,9 +549,10 @@ def create_resource(
                 status_code=409,
                 detail="Las cuentas y publicaciones se registran como fuentes de Radar, no como artefactos de Biblioteca",
             )
-        parsed_host = urlsplit(request.repo_url.strip()).hostname
         try:
-            canonical = validate_github_repository_url(request.repo_url).canonical_url if parsed_host and parsed_host.lower() == "github.com" else validate_reference_url(request.repo_url)
+            github_parts = _github_resource_parts(request.repo_url)
+            canonical = github_parts[0] if github_parts else validate_reference_url(request.repo_url)
+            source_canonical = github_parts[1] if github_parts and github_parts[2] else (request.source_url or canonical)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         token = request.analysis_token or ""
@@ -508,6 +571,7 @@ def create_resource(
             preview_metadata["inspiration_collection"] = collection
         request = request.model_copy(update={
             "repo_url": canonical,
+            "source_url": source_canonical,
             "install_strategy": preview.install_strategy,
             "metadata": preview_metadata,
             "tags": request.tags or preview.tags,
@@ -515,6 +579,18 @@ def create_resource(
             "capabilities": request.capabilities or preview.capabilities,
             "compatible_runtimes": request.compatible_runtimes or preview.compatible_runtimes,
         })
+        # A direct blob/tree URL is a component of its repository, never a
+        # second repository. Reuse the existing root or materialize it from
+        # the already verified analysis preview before saving the child.
+        if github_parts and github_parts[2]:
+            parent = runtime_module.current().resources.find_by_repo_url(canonical)
+            if parent is None:
+                parent = runtime_module.current().resources.create(preview.model_copy(update={
+                    "repo_url": canonical,
+                    "source_url": None,
+                    "metadata": {**preview.metadata, "inspiration_collection": "catalog"},
+                }))
+            request = request.model_copy(update={"parent_resource_id": parent.id})
     else:
         # Installer provenance is server-owned. Manual/reference entries may
         # carry editorial metadata, but cannot opt themselves into a privileged
@@ -550,9 +626,104 @@ def create_resource(
     return item
 
 
+@router.get("/resources/validity-policy", response_model=ArtifactValidityPolicy)
+def get_validity_policy() -> ArtifactValidityPolicy:
+    return load_policy(runtime_module.current().resources)
+
+
+@router.post("/resources/validity-policy/impact")
+def preview_validity_policy_impact(request: ArtifactValidityPolicyImpactRequest) -> dict:
+    policy = ArtifactValidityPolicy(**request.model_dump())
+    return policy_impact(runtime_module.current().resources, policy)
+
+
+@router.put("/resources/validity-policy")
+def save_validity_policy(
+    request: ArtifactValidityPolicyUpdate,
+    _: None = Depends(require_token),
+) -> dict:
+    store = runtime_module.current().resources
+    try:
+        policy = update_policy(store, request)
+    except PolicyVersionConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": "policy_version_conflict", "message": str(exc)}) from exc
+    except PolicyResetConfirmationRequired as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "decision_reset_confirmation_required", "manual_decisions_to_reset": exc.decisions},
+        ) from exc
+    events.publish("resource_changed", scope="validity_policy")
+    return {"policy": policy.model_dump(mode="json"), "impact": policy_impact(store, policy)}
+
+
+@router.post("/resources/validity-policy/revalidate")
+def revalidate_validity_policy(_: None = Depends(require_token)) -> dict:
+    try:
+        return runtime_module.current().resource_refresh.start_full_refresh(force=True)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/resources/review", response_model=list[ResourceItem])
+def list_resources_for_review(
+    state: str = Query(default="pending_review", pattern="^(pending_review|accepted_override|discarded|all)$"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> list[ResourceItem]:
+    store = runtime_module.current().resources
+    policy = load_policy(store)
+    resources = decorate_catalog_resources(store.list_all_resources(include_inactive=True), policy)
+    if state == "all":
+        return resources[offset : offset + limit]
+    matches = [item for item in resources if not is_internal_repository_component(item) and not is_internal_local_reference(item) and not (item.metadata.get("validity") or {}).get("alias_of") and item.metadata.get("validity", {}).get("state") == state]
+    return matches[offset : offset + limit]
+
+
+@router.post("/resources/{resource_id}/review", response_model=ResourceItem)
+def review_resource(
+    resource_id: str,
+    request: ArtifactReviewDecisionRequest,
+    _: None = Depends(require_token),
+) -> ResourceItem:
+    _resource_or_404(resource_id)
+    item = decide_resource(runtime_module.current().resources, _resource_or_404(resource_id), request)
+    events.publish("resource_changed", resource_id=resource_id, scope="validity_review")
+    return item
+
+
+@router.post("/resources/inventory")
+def prepare_resource_inventory(_: None = Depends(require_token)) -> dict:
+    snapshot = create_inventory_snapshot(runtime_module.current().resources)
+    return {
+        "snapshot_id": snapshot.id,
+        "filename": snapshot.filename,
+        "created_at": snapshot.created_at.isoformat(),
+        "total": len(snapshot.rows),
+        "rows": snapshot.rows[:50],
+        "policy": snapshot.policy,
+        "download_url": f"/resources/inventory/{snapshot.id}.xlsx",
+    }
+
+
+@router.get("/resources/inventory/{snapshot_id}.xlsx")
+def download_resource_inventory(snapshot_id: str) -> StreamingResponse:
+    try:
+        snapshot = get_inventory_snapshot(snapshot_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="inventory snapshot not found or expired") from exc
+    return StreamingResponse(
+        BytesIO(snapshot.content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="inventario-inspiracion-{snapshot_id[:8]}.xlsx"'},
+    )
+
+
 @router.get("/resources/{resource_id}")
 def resource_detail(resource_id: str) -> dict:
-    item = _resource_or_404(resource_id)
+    all_items = runtime_module.current().resources.list_all_resources(include_inactive=True)
+    by_id = {entry.id: entry for entry in all_items}
+    raw_item = _resource_or_404(resource_id)
+    item = decorate_resource(raw_item, load_policy(runtime_module.current().resources), parent=by_id.get(raw_item.parent_resource_id))
     return {
         **item.model_dump(mode="json"),
         "operations": [entry.model_dump(mode="json") for entry in runtime_module.current().resources.list_operations(item.id)],

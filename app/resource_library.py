@@ -700,6 +700,39 @@ class ResourceStore:
             )
         return value
 
+    def apply_validity_policy_transition(
+        self,
+        preference_key: str,
+        preference_value: object,
+        resources: Iterable[ResourceItem],
+    ) -> None:
+        """Persist policy and decision resets in one SQLite transaction."""
+        now = _now().isoformat()
+        encoded_policy = json.dumps(preference_value, ensure_ascii=False, separators=(",", ":"))
+        rows = [
+            (
+                item.index_status,
+                json.dumps(item.metadata, ensure_ascii=False, separators=(",", ":")),
+                now,
+                item.id,
+            )
+            for item in resources
+        ]
+        with self._connect() as conn:
+            conn.executemany(
+                "UPDATE resources SET index_status=?, metadata_json=?, updated_at=? WHERE id=?",
+                rows,
+            )
+            conn.execute(
+                """
+                INSERT INTO resource_preferences(preference_key, value_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(preference_key) DO UPDATE SET
+                    value_json=excluded.value_json, updated_at=excluded.updated_at
+                """,
+                (preference_key, encoded_policy, now),
+            )
+
     def upsert_discovery_source(self, source: DiscoverySource) -> DiscoverySource:
         payload = source.model_copy(update={"updated_at": _now()})
         with self._connect() as conn:

@@ -280,6 +280,12 @@
                 <div class="insp-result-meta">
                   <div class="insp-result-copy"><b>Biblioteca</b><span id="resourceFilterState"></span></div>
                   <div class="insp-display-actions">
+                    <div class="insp-catalog-actions">
+                      <button type="button" id="resourceCriteriaToggle" aria-expanded="false" aria-controls="resourceCriteriaPanel">Criterios <small id="resourceCriteriaSummary">&gt;10k · 2 runtimes</small></button>
+                      <button type="button" id="resourceReviewOpen">Revisión <span id="resourceReviewCount">0</span></button>
+                      <button type="button" id="resourceInventoryOpen">Exportar Excel</button>
+                      <div class="resource-criteria-popover" id="resourceCriteriaPanel" hidden></div>
+                    </div>
                     <div class="insp-display-switch" id="resourceDisplaySwitch" role="group" aria-label="Presentación del catálogo">
                       <button type="button" data-resource-display="gallery" aria-pressed="true">Galería</button>
                       <button type="button" data-resource-display="list" aria-pressed="false">Lista</button>
@@ -435,7 +441,7 @@
       </div>
     </div>
 
-    <div id="resourceConfirmModal" class="app-modal resource-confirm-modal" hidden role="alertdialog" aria-modal="true" aria-labelledby="resourceConfirmTitle">
+        <div id="resourceConfirmModal" class="app-modal resource-confirm-modal" hidden role="alertdialog" aria-modal="true" aria-labelledby="resourceConfirmTitle">
       <div class="app-modal-box resource-confirm-box">
         <header><b id="resourceConfirmTitle">Confirmar operación</b></header>
         <div class="app-modal-body">
@@ -447,6 +453,12 @@
         </div>
       </div>
     </div>
+    <div id="resourceReviewModal" class="app-modal" hidden role="dialog" aria-modal="true" aria-labelledby="resourceReviewTitle">
+          <div class="app-modal-box resource-review-box"><header><b id="resourceReviewTitle">Revisión de artefactos</b><div class="resource-review-header-actions"><div class="insp-display-switch resource-review-filter" role="group" aria-label="Separar recursos por tipo"><button type="button" data-review-filter="repositories" aria-pressed="true">Skills de repositorio</button><button type="button" data-review-filter="web" aria-pressed="false">URLs web</button></div><button type="button" data-resource-review-bulk="accept" hidden disabled>Aceptar seleccionados</button><button type="button" data-resource-review-bulk="discard" hidden disabled>Desechar seleccionados</button><button type="button" class="icon-btn resource-review-close" data-resource-review-close aria-label="Cerrar revisión">✕</button></div></header><div class="app-modal-body" id="resourceReviewBody"></div></div>
+        </div>
+        <div id="resourceInventoryModal" class="app-modal" hidden role="dialog" aria-modal="true" aria-labelledby="resourceInventoryTitle">
+          <div class="app-modal-box resource-inventory-box"><header><div><b id="resourceInventoryTitle">Inventario Excel</b><small id="resourceInventoryMeta"></small></div><button type="button" class="icon-btn" data-resource-inventory-close aria-label="Cerrar inventario">✕</button></header><div class="app-modal-body" id="resourceInventoryBody"></div></div>
+        </div>
 
     <div id="toast" class="toast" hidden></div>
     <!-- `type="module"` (nota "Plan de mejora", §3): permite a app.js importar

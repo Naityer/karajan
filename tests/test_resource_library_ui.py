@@ -57,7 +57,7 @@ def test_resource_library_uses_expected_api_contract() -> None:
     source = APP_JS.read_text(encoding="utf-8")
 
     assert 'for (const kind of ["skill", "capability", "reference"])' in source
-    assert 'api(`/resources?kind=${kind}&limit=500&offset=${offset}`)' in source
+    assert 'api(`/resources?kind=${kind}&accepted_only=true&limit=500&offset=${offset}`)' in source
     assert 'api("/resources/analyze"' in source
     assert 'const normalizedUrl' in source
     assert 'https://${rawUrl}' in source
@@ -316,7 +316,7 @@ def test_catalog_reflects_editorial_taxonomy_and_refreshes_after_group_edits() -
     assert '"rgrp_domain_agents", "Agentes y automatización"' in js
     assert 'item?.metadata?.decision_taxonomy' in js
     assert 'state.resourceGroupView = buildResourceGroupView(state.resourceGroups)' in js
-    assert 'resourceArtifactIdsForGroup(group.id).length' in js
+    assert 'resourceArtifactIdsForGroup(group.id).size' in js
     assert js.count("await refreshResourceGroups();\n  renderResourceList();") >= 2
 
 
@@ -340,7 +340,7 @@ def test_catalog_uses_composite_library_artifact_child_hierarchy() -> None:
     assert 'return "Galería indexable"' in js
     assert "componentTotal" in js
     assert "artefactos · ${componentTotal} componentes" in js
-    assert 'api(`/resources?kind=${kind}&limit=500&offset=${offset}`)' in js
+    assert 'api(`/resources?kind=${kind}&accepted_only=true&limit=500&offset=${offset}`)' in js
     assert ".resource-components-disclosure > summary" in css
 
 

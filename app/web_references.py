@@ -94,10 +94,13 @@ class WebReferenceAnalyzer:
                 name=title[:160], slug=slug, kind=ResourceKind.REFERENCE, source=host[:80], repo_url=canonical,
                 summary=summary[:4000], tags=sorted({"web", host, *intelligence.tags}),
                 capabilities=sorted({"referencia web", *intelligence.capabilities}), install_strategy="none",
+                compatible_runtimes=["claude", "codex"],
                 metadata={
                     "reference_type": "webpage", "hostname": host, "content_type": content_type,
                     "source_revision": hashlib.sha256(body).hexdigest() if body else f"restricted:{response.status_code}",
                     "source_analysis_method": "web-metadata",
+                    "detection_succeeded": not access_limited,
+                    "source_accessible": not access_limited,
                     "intelligence": intelligence.to_dict(),
                 },
             )
