@@ -19,6 +19,7 @@ from app.models import (
 POLICY_KEY = "artifact_validity_policy_v1"
 INTERNAL_COMPONENT_METHODS = {
     "github-tree-skill-path",
+    "claude-skills-collection-readme",
     "itsfree-html",
     "generic-html",
     "toools-directory",
@@ -271,6 +272,12 @@ def policy_impact(store, candidate: ArtifactValidityPolicyImpactRequest | Artifa
         if item.id in aliases:
             continue
         if is_internal_repository_component(item):
+            continue
+        if is_internal_local_reference(item):
+            # Karajan's own seeded skills (source=skills_catalog, no repo_url)
+            # never show up in /resources/review (see list_resources_for_review)
+            # — counting them here just inflates the badge with a queue that
+            # never actually contains them.
             continue
         decision = str(((item.metadata or {}).get("validity") or {}).get("decision") or "automatic")
         manual += int(decision in {"accept", "discard"})

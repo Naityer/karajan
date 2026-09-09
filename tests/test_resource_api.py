@@ -48,6 +48,15 @@ def _client(karajan_install, monkeypatch, tmp_path) -> TestClient:
     return karajan_install.client
 
 
+class _RateLimitedAnalyzer:
+    def analyze(self, repo_url: str) -> AnalyzeResult:
+        return AnalyzeResult(
+            valid=False,
+            repo_url=repo_url,
+            warnings=["GitHub metadata could not be read: GitHub API rate limit exceeded; retry after 2026-01-01T00:00:00+00:00"],
+        )
+
+
 class _Feed:
     def fetch(self, source_ids: list[str], *, limit: int = 18) -> dict:
         return {
@@ -93,6 +102,32 @@ def test_resource_crud_search_index_and_analysis(karajan_install, monkeypatch, t
     assert index["resources"][0]["slug"] == "demo"
     detail = client.get(f"/resources/{resource_id}").json()
     assert detail["operations"] == []
+
+
+def test_rate_limited_github_analysis_can_still_be_saved_as_pending(karajan_install, monkeypatch, tmp_path) -> None:
+    """When GitHub's API quota is exhausted, adding a reference must not be
+    blocked outright: it saves with degraded metadata and `retry_pending` state
+    so the scheduled reanalysis loop completes it automatically once the quota
+    is available again (see `_pending_github_preview` in the inspiration API)."""
+    client = _client(karajan_install, monkeypatch, tmp_path)
+    karajan_install.runtime.resource_analyzer = _RateLimitedAnalyzer()
+    monkeypatch.setattr(main, "resource_analyzer", karajan_install.runtime.resource_analyzer)
+
+    analyzed = client.post("/resources/analyze", json={"repo_url": "https://github.com/rtk-ai/rtk"})
+    assert analyzed.status_code == 200
+    body = analyzed.json()
+    assert body["valid"] is True
+    assert body["preview"]["metadata"]["pending_analysis"] is True
+    assert body["preview"]["metadata"]["source_verification_state"] == "rate_limited"
+    assert any("cuota" in warning.casefold() for warning in body["warnings"])
+
+    create_payload = {**body["preview"], "analysis_token": body["analysis_token"]}
+    created = client.post("/resources", json=create_payload)
+    assert created.status_code == 200
+    saved = created.json()
+    assert saved["repo_url"] == "https://github.com/rtk-ai/rtk"
+    assert saved["metadata"]["source_analysis_error"]
+    assert saved["metadata"]["pending_analysis"] is True
 
 
 def test_github_resource_requires_matching_analysis_ticket(karajan_install, monkeypatch, tmp_path) -> None:

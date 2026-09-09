@@ -80,7 +80,7 @@ class GitHubResourceAnalyzer:
         if self._owns_client:
             self._client.close()
 
-    def analyze(self, repo_url: str) -> AnalyzeResult:
+    def analyze(self, repo_url: str, *, summarize: bool = True) -> AnalyzeResult:
         try:
             parsed = validate_github_repository_url(repo_url)
         except ValueError as exc:
@@ -135,14 +135,14 @@ class GitHubResourceAnalyzer:
             _readme_summary(readme) or description,
             ["skill repository"] if skill_paths else ["reference"],
         )
-        if readme and self._summarizer is not None:
+        if readme and self._summarizer is not None and summarize:
             try:
                 generated = " ".join(self._summarizer(name, readme[:24_000]).split()).strip()
                 if generated:
                     summary = _clean_summary(generated)
                     summary_method = "llm"
             except Exception as exc:  # provider failures must not block cataloging
-                warnings.append(f"LLM summary unavailable; README fallback used: {type(exc).__name__}")
+                warnings.append(f"LLM summary unavailable; README fallback used: {type(exc).__name__}: {exc}")
                 summary_method = "readme_fallback"
         elif readme:
             summary_method = "readme_fallback"
@@ -293,6 +293,8 @@ class GitHubResourceAnalyzer:
             if reset and reset.isdigit():
                 reset_hint = f"; retry after {datetime.fromtimestamp(int(reset), timezone.utc).isoformat()}"
             raise ValueError(f"GitHub API rate limit exceeded{reset_hint}")
+        if response.status_code == 404:
+            raise ValueError("GitHub repository or branch not found (404)")
         response.raise_for_status()
         content_length = response.headers.get("content-length")
         if content_length and int(content_length) > max_bytes:

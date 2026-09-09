@@ -99,6 +99,36 @@ def _github_resource_parts(value: str) -> tuple[str, str, bool] | None:
     source = urlunsplit(("https", "github.com", "/" + "/".join([owner, repository, *parts[2:]]), "", ""))
     return root, source, len(parts) > 2
 
+
+def _pending_github_preview(root_url: str, error_detail: str) -> ResourceCreateRequest:
+    """Minimal preview used when a GitHub repository can't be inspected right now
+    because the API quota is exhausted (not because the repository is invalid).
+
+    `metadata.source_analysis_error` marks it `retry_pending` for
+    `ResourceRefreshCoordinator._candidate_items`, so the scheduled reanalysis
+    loop analyzes it for real as soon as the quota resets — no manual retry needed.
+    """
+    owner, repository = ([*[p for p in urlsplit(root_url).path.split("/") if p], "", ""])[:2]
+    name = repository or owner or "Repositorio de GitHub"
+    slug = re.sub(r"[^a-z0-9._-]+", "-", name.casefold()).strip("-.")[:120] or "github-resource"
+    return ResourceCreateRequest(
+        slug=slug,
+        name=name,
+        kind=ResourceKind.REFERENCE,
+        source="github",
+        repo_url=root_url,
+        summary="Pendiente de análisis: se completará automáticamente cuando la cuota de la API de GitHub se restablezca.",
+        install_strategy="none",
+        metadata={
+            "source_analysis_error": error_detail[:1000],
+            "source_verification_state": "rate_limited",
+            "detection_succeeded": False,
+            "source_accessible": None,
+            "pending_analysis": True,
+        },
+    )
+
+
 router = APIRouter(tags=["inspiration"])
 
 
@@ -518,7 +548,23 @@ def analyze_resource(
         else runtime_module.current().web_reference_analyzer.analyze(request.repo_url)
     )
     if not result.valid or result.preview is None:
-        return result
+        if github_parts and any("rate limit" in warning.casefold() for warning in result.warnings):
+            # The GitHub API quota is exhausted, not the repository invalid. Let the
+            # user save a pending reference now; the scheduled reanalysis loop
+            # (resource_refresh.py, `retry_pending`) fills in the real metadata
+            # automatically the next time the quota is available.
+            preview = _pending_github_preview(github_parts[0], "; ".join(result.warnings))
+            result = result.model_copy(update={
+                "valid": True,
+                "preview": preview,
+                "warnings": [
+                    *result.warnings,
+                    "Se guardará como pendiente: la cuota de la API de GitHub está agotada. "
+                    "El análisis completo se completará solo cuando vuelva a haber cupo.",
+                ],
+            })
+        else:
+            return result
     if github_parts and github_parts[2]:
         root, source, _ = github_parts
         result = result.model_copy(update={
@@ -675,7 +721,7 @@ def list_resources_for_review(
     resources = decorate_catalog_resources(store.list_all_resources(include_inactive=True), policy)
     if state == "all":
         return resources[offset : offset + limit]
-    matches = [item for item in resources if not is_internal_repository_component(item) and not is_internal_local_reference(item) and not (item.metadata.get("validity") or {}).get("alias_of") and item.metadata.get("validity", {}).get("state") == state]
+    matches = [item for item in resources if item.parent_resource_id is None and not is_internal_repository_component(item) and not is_internal_local_reference(item) and not (item.metadata.get("validity") or {}).get("alias_of") and item.metadata.get("validity", {}).get("state") == state]
     return matches[offset : offset + limit]
 
 

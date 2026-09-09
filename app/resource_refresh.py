@@ -15,7 +15,9 @@ from app.models import (
     ResourceKind,
     ResourceRefreshSettingsUpdate,
 )
+from app.github_resources import GitHubResourceAnalyzer
 from app.resource_library import ResourceStore
+from app.resource_validity import is_internal_local_reference
 
 SETTINGS_KEY = "resource_refresh_settings_v1"
 STATUS_KEY = "resource_refresh_status_v1"
@@ -56,12 +58,14 @@ class ResourceRefreshCoordinator:
         self._local_analyzer = local_analyzer
         self._nested_indexer = nested_indexer
         self._publish = publish
+        # Keep external API pressure bounded during global revalidation.
         self._max_workers = max(1, min(int(max_workers), 4))
         self._lock = threading.Lock()
         self._job_guard = threading.Lock()
         self._job_thread: threading.Thread | None = None
         self._analysis_cache_guard = threading.Lock()
         self._analysis_cache: dict[tuple[str, str], Future] = {}
+        self._github_rate_limited = threading.Event()
 
     def settings(self) -> ResourceRefreshSettingsUpdate:
         raw = self._store.get_preference(SETTINGS_KEY, {})
@@ -94,6 +98,12 @@ class ResourceRefreshCoordinator:
             return None
         if run_id is not None and raw.get("run_id") != run_id:
             raise KeyError(run_id)
+        # A daemon thread cannot survive a server restart. Do not leave the UI
+        # polling an orphaned run forever; expose a terminal state so the user
+        # can start a fresh, resumable revalidation.
+        if raw.get("status") in {"queued", "running"} and not _process_exists(raw.get("owner_pid")):
+            raw = {**raw, "status": "interrupted", "finished_at": _utcnow().isoformat()}
+            self._store.set_preference(RUN_KEY, raw)
         return raw
 
     def start_full_refresh(self, *, force: bool = True) -> dict:
@@ -157,7 +167,11 @@ class ResourceRefreshCoordinator:
         if owner:
             try:
                 if method == "github":
-                    result = self._analyzer.analyze(source_url)
+                    # Criteria checks need source facts, not an LLM summary.
+                    if isinstance(self._analyzer, GitHubResourceAnalyzer):
+                        result = self._analyzer.analyze(source_url, summarize=False)
+                    else:
+                        result = self._analyzer.analyze(source_url)
                 elif method == "web" and self._web_analyzer is not None:
                     result = self._web_analyzer.analyze(source_url)
                 elif method == "local" and self._local_analyzer is not None:
@@ -307,6 +321,8 @@ class ResourceRefreshCoordinator:
             if not page:
                 break
             for item in page:
+                if is_internal_local_reference(item):
+                    continue
                 provenance = (item.metadata or {}).get("provenance") or {}
                 collection_child = provenance.get("method") == "claude-skills-collection-readme"
                 if item.parent_resource_id is not None and not collection_child:
@@ -332,6 +348,7 @@ class ResourceRefreshCoordinator:
             return
         try:
             run["status"] = "running"
+            self._github_rate_limited.clear()
             self._save_run(run)
             with ThreadPoolExecutor(max_workers=self._max_workers, thread_name_prefix="resource-analysis") as pool:
                 batch = candidates
@@ -351,6 +368,8 @@ class ResourceRefreshCoordinator:
                         except Exception as exc:
                             run["failed"] += 1
                             detail = str(exc)[:1000]
+                            if "rate limit" in detail.casefold():
+                                self._github_rate_limited.set()
                             self._mark_analysis_failure(item, detail, trigger="manual")
                             run["failures"].append({"resource_id": item.id, "name": item.name, "detail": detail, "status": "failed"})
                             self._store.record_operation(resource_id=item.id, action="reanalyze", status="failed", detail=detail, metadata={"trigger": "manual"})
@@ -382,6 +401,9 @@ class ResourceRefreshCoordinator:
             self._lock.release()
 
     def _analyze_one(self, item: ResourceItem, trigger: str) -> tuple[str, int]:
+        method, _ = self._analysis_source(item)
+        if method == "github" and self._github_rate_limited.is_set():
+            raise ValueError("GitHub API rate limit exceeded; revalidation deferred")
         previous = (item.metadata or {}).get("source_revision")
         current, children = self.refresh_catalog_item(item, trigger=trigger)
         revision = (current.metadata or {}).get("source_revision")
@@ -414,11 +436,17 @@ class ResourceRefreshCoordinator:
                     updated += outcome == "updated"
                 except Exception as exc:
                     failed += 1
-                    self._mark_analysis_failure(item, str(exc), trigger="manual" if force else "scheduled")
+                    detail = str(exc)
+                    self._mark_analysis_failure(item, detail, trigger="manual" if force else "scheduled")
                     self._store.record_operation(
-                        resource_id=item.id, action="reanalyze", status="failed", detail=str(exc)[:1000],
+                        resource_id=item.id, action="reanalyze", status="failed", detail=detail[:1000],
                         metadata={"trigger": "manual" if force else "scheduled"},
                     )
+                    if "rate limit" in detail.casefold():
+                        # Every remaining GitHub candidate would fail the same way;
+                        # stop burning the rest of this batch and let the next
+                        # scheduled pass (or a token) pick them up as retry_pending.
+                        break
             status = {
                 "last_run_at": _utcnow().isoformat(), "last_analyzed": analyzed,
                 "last_updated": updated, "last_failed": failed,

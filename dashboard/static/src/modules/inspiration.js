@@ -775,7 +775,10 @@ function isResourceGroupDescendant(groupId, parentId) {
 }
 
 function resourceGroupBranch(group, depth = 0) {
-  const children = groupDescendants(group.id).filter((child) => resourceArtifactIdsForGroup(child.id).size);
+  const populatedChildren = groupDescendants(group.id).filter((child) => resourceArtifactIdsForGroup(child.id).size);
+  const directIds = new Set(resourceValues(group.resource_ids).map(resourceArtifactId));
+  if (!directIds.size && populatedChildren.length === 1) return resourceGroupBranch(populatedChildren[0], depth);
+  const children = populatedChildren;
   const active = state.resourceGroupFilter === String(group.id);
   const artifactCount = resourceArtifactIdsForGroup(group.id).size;
   return `<div class="resource-group-branch"><button type="button" class="resource-group-node ${active ? "active" : ""}" data-resource-group-filter="${escapeHtml(group.id)}" style="--group-depth:${depth}"><span>${escapeHtml(group.name)}</span><small>${artifactCount}</small></button>${children.map((child) => resourceGroupBranch(child, depth + 1)).join("")}</div>`;
@@ -1434,6 +1437,7 @@ function renderResourceDetail(item = state.resourceDetail) {
       <div class="resource-operation-actions">
         <button type="button" class="primary" data-resource-operation="${primaryAction}" data-resource-operation-id="${escapeHtml(id)}" ${installable && !pending ? "" : "disabled"}>${pending ? "Procesando..." : primaryAction === "install" ? "Instalar" : "Actualizar"}</button>
         <button type="button" data-resource-operation="verify" data-resource-operation-id="${escapeHtml(id)}" ${installable && hasInstallations && !pending ? "" : "disabled"}>Verificar</button>
+        <button type="button" class="resource-reanalyze-btn" data-resource-reanalyze="${escapeHtml(id)}" ${repo ? "" : "disabled"}>Volver a analizar fuente</button>
         <button type="button" class="danger-btn" data-resource-operation="uninstall" data-resource-operation-id="${escapeHtml(id)}" ${installable && hasInstallations && !pending ? "" : "disabled"}>Desinstalar</button>
       </div>
     </section>
@@ -1447,7 +1451,7 @@ function renderResourceDetail(item = state.resourceDetail) {
       <div><dt>Rama</dt><dd>${escapeHtml(item.metadata?.default_branch || "-")}</dd></div>
       <div><dt>Actualizado</dt><dd>${escapeHtml(formatResourceTime(item.updated_at || item.last_updated))}</dd></div>
       <div><dt>Resumen</dt><dd>${escapeHtml(item.metadata?.summary_method || "manual")}</dd></div>
-    </dl><button type="button" class="resource-reanalyze-btn" data-resource-reanalyze="${escapeHtml(id)}" ${repo ? "" : "disabled"}>Volver a analizar fuente</button></details></section>
+    </dl></details></section>
 
     <section class="resource-detail-section resource-log-section"><details><summary>Historial de operaciones <span>${logs.length}</span></summary><div class="resource-log">${logs.length ? logs.slice(0, 12).map((entry) => {
       const logStatus = String(entry.status || entry.level || "info").toLowerCase();
@@ -2059,11 +2063,24 @@ function renderReviewQueue() {
   });
   const columnFilters = state.resourceReviewColumnFilters || (state.resourceReviewColumnFilters = { starsSort: "none", starsApprox: "", related: "all" });
   const relatedValue = (item) => { const taxonomy = item.metadata?.decision_taxonomy || {}; return [item.category, item.group, taxonomy.family, taxonomy.group, item.source, ...(item.tags || []), ...(item.capabilities || [])].filter(Boolean).join(" · ") || "Sin clasificar"; };
-  const displayItems = items.filter((item) => {
+  const sort = String(columnFilters.starsSort || "none").toLowerCase();
+  const starValue = (item) => Number(item?.metadata?.validity?.github_stars ?? item?.metadata?.validity?.checks?.stars?.actual);
+  const orderedItems = [...items];
+  if (sort === "asc" || sort === "desc") {
+    const direction = sort === "asc" ? 1 : -1;
+    orderedItems.sort((a, b) => {
+      const av = starValue(a); const bv = starValue(b);
+      const left = Number.isFinite(av) ? av : -1;
+      const right = Number.isFinite(bv) ? bv : -1;
+      return direction * (left - right);
+    });
+  }
+  const displayItems = orderedItems.filter((item) => {
     const validity = item?.metadata?.validity || {};
     const stars = Number.isFinite(Number(validity.github_stars)) ? Number(validity.github_stars) : null;
-    const approximate = Number(columnFilters.starsApprox);
-    const starsMatch = !Number.isFinite(approximate) || (stars !== null && Math.abs(stars - approximate) <= Math.max(10, approximate * 0.1));
+    const approximateText = String(columnFilters.starsApprox ?? "").trim();
+    const approximate = approximateText === "" ? null : Number(approximateText);
+    const starsMatch = approximate === null || !Number.isFinite(approximate) || (stars !== null && Math.abs(stars - approximate) <= Math.max(10, approximate * 0.1));
     const relatedMatch = !columnFilters.related || columnFilters.related === "all" || relatedValue(item) === columnFilters.related;
     return starsMatch && relatedMatch;
   });
@@ -2071,8 +2088,6 @@ function renderReviewQueue() {
   const selected = state.resourceReviewSelection || new Set();
   const ids = displayItems.map(resourceId);
   const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
-  const sort = columnFilters.starsSort;
-  if (sort === "asc" || sort === "desc") displayItems.sort((a, b) => { const av = Number(a?.metadata?.validity?.github_stars); const bv = Number(b?.metadata?.validity?.github_stars); const diff = (Number.isFinite(av) ? av : -1) - (Number.isFinite(bv) ? bv : -1); return sort === "asc" ? diff : -diff; });
   const rows = displayItems.map((item) => {
     const validity = item?.metadata?.validity || {};
     const source = safeExternalUrl(validity.source_url || item.repo_url || item.source_url);
@@ -2258,6 +2273,14 @@ export function initResourceLibraryControls() {
     if (columnFilter) {
       state.resourceReviewColumnFilters = state.resourceReviewColumnFilters || { starsSort: "none", starsApprox: "", related: "all" };
       state.resourceReviewColumnFilters[columnFilter.dataset.reviewColumnFilter] = columnFilter.value;
+      if (columnFilter.dataset.reviewColumnFilter === "starsSort") {
+        const direction = columnFilter.value === "asc" ? 1 : -1;
+        state.resourceReviewItems = [...(state.resourceReviewItems || [])].sort((a, b) => {
+          const av = Number(a?.metadata?.validity?.github_stars ?? a?.metadata?.validity?.checks?.stars?.actual);
+          const bv = Number(b?.metadata?.validity?.github_stars ?? b?.metadata?.validity?.checks?.stars?.actual);
+          return direction * ((Number.isFinite(av) ? av : -1) - (Number.isFinite(bv) ? bv : -1));
+        });
+      }
       renderReviewQueue();
       requestAnimationFrame(() => { const input = $("#resourceReviewBody")?.querySelector("[data-review-column-filter=\"starsApprox\"]"); if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); } });
       return;

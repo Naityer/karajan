@@ -21,7 +21,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="http://127.0.0.1:11434",
         signup_url="https://ollama.com/download",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama serve",
         probe_command="ollama list",
     ),
@@ -39,7 +44,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="http://127.0.0.1:11434",
         signup_url="https://ollama.com/download",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama serve",
         probe_command="ollama list",
     ),
@@ -56,7 +66,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="http://127.0.0.1:11434",
         signup_url="https://ollama.com/download",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama serve",
         probe_command="ollama list",
     ),
@@ -76,7 +91,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="http://127.0.0.1:11434",
         signup_url="https://ollama.com/download",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama serve",
         probe_command="ollama list",
     ),
@@ -95,7 +115,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="http://127.0.0.1:11434",
         signup_url="https://ollama.com/download",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama serve",
         probe_command="ollama list",
     ),
@@ -114,7 +139,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="http://127.0.0.1:11434",
         signup_url="https://ollama.com/download",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama serve",
         probe_command="ollama list",
     ),
@@ -133,7 +163,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="http://127.0.0.1:11434",
         signup_url="https://ollama.com/library/ornith",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama serve",
         probe_command="ollama list",
     ),
@@ -153,7 +188,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="https://ollama.com",
         signup_url="https://ollama.com/library/glm-5.2",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama signin",
         probe_command="ollama list",
     ),
@@ -171,7 +211,12 @@ _CATALOG: tuple[ProviderInfo, ...] = (
         },
         endpoint="https://ollama.com",
         signup_url="https://ollama.com/library/kimi-k2.7-code",
-        cli_command="ollama run {model}",
+        # --nowordwrap: without a real TTY, `ollama run` still soft-wraps at a
+        # fallback column width using cursor-back + erase-line + reprint ANSI
+        # sequences. Stripping those sequences (CliModelProvider._strip_ansi)
+        # removes the codes but not the erased fragment they represented,
+        # leaving duplicated word fragments in the captured output.
+        cli_command="ollama run {model} --nowordwrap",
         login_command="ollama signin",
         probe_command="ollama list",
     ),

@@ -203,6 +203,18 @@ def test_github_analysis_never_turns_missing_stars_into_zero() -> None:
     assert result.preview.metadata["github_stars"] is None
 
 
+def test_github_analysis_returns_controlled_not_found_result() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"message": "Not Found"})
+
+    analyzer = GitHubResourceAnalyzer(httpx.Client(transport=httpx.MockTransport(handler)))
+    result = analyzer.analyze("https://github.com/acme/missing")
+
+    assert not result.valid
+    assert result.preview is None
+    assert result.warnings == ["GitHub metadata could not be read: GitHub repository or branch not found (404)"]
+
+
 def test_github_analysis_summarizes_readme_with_fallback_metadata() -> None:
     readme = "# Demo\n\nDemo ayuda a crear agentes reproducibles. Requiere Python 3.12."
 

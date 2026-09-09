@@ -117,7 +117,10 @@ async def _resource_refresh_loop() -> None:
     await asyncio.sleep(2)
     while True:
         try:
-            await asyncio.to_thread(resource_refresh.run_due, limit=None)
+            # No `limit`: keeps run_due's own default cap (25) instead of
+            # unboundedly re-analyzing the whole stale catalog against GitHub's
+            # anonymous API in one burst after the app has been closed a while.
+            await asyncio.to_thread(resource_refresh.run_due)
         except asyncio.CancelledError:
             raise
         except Exception:

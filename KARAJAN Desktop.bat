@@ -9,6 +9,8 @@ if not exist ".env" (
   >> ".env" echo # Leave KARAJAN_TOKEN empty to keep local mutation auth disabled.
   >> ".env" echo KARAJAN_TOKEN=
   >> ".env" echo KARAJAN_LOG_LEVEL=INFO
+  >> ".env" echo # Sube el limite de la API de GitHub de 60 a 5000 peticiones/hora:
+  >> ".env" echo # GITHUB_TOKEN=
   >> ".env" echo # Optional provider keys:
   >> ".env" echo # OPENAI_API_KEY=
   >> ".env" echo # ANTHROPIC_API_KEY=
