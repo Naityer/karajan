@@ -1,0 +1,1417 @@
+{
+ "ahora": "2026-10-01T12:00:00+00:00",
+ "metricas": {
+  "total_tasks": 16,
+  "by_level": {
+   "level_1_simple": 10,
+   "level_2_moderate": 6
+  },
+  "by_model": {
+   "cheap_model": 10,
+   "cheap_or_medium_model": 6
+  },
+  "by_backend": {
+   "cli": 22
+  },
+  "by_status": {
+   "classified": 5,
+   "completed": 11
+  },
+  "by_skill": {
+   "security-review": 20,
+   "cti-analyst": 2,
+   "repo-analyzer": 15,
+   "backend-builder": 3,
+   "frontend-builder": 5,
+   "ponytail": 23,
+   "promptfoo": 2
+  },
+  "total_subtasks": 32,
+  "delegated_tasks": 11,
+  "human_review_required": 3,
+  "total_estimated_cost_usd": 0.081,
+  "average_complexity_score": 1.5
+ },
+ "agentes": [
+  {
+   "provider_name": "claude-cli",
+   "task_count": 6,
+   "error_count": 2,
+   "avg_latency_ms": 307.5,
+   "total_cost": 0.0195,
+   "total_tokens": 840
+  },
+  {
+   "provider_name": "codex-cli",
+   "task_count": 11,
+   "error_count": 3,
+   "avg_latency_ms": 400.0,
+   "total_cost": 0.041,
+   "total_tokens": 1606
+  },
+  {
+   "provider_name": "ollama",
+   "task_count": 5,
+   "error_count": 1,
+   "avg_latency_ms": 477.0,
+   "total_cost": 0.0205,
+   "total_tokens": 755
+  }
+ ],
+ "skills_conocidas": [
+  "repo-analyzer",
+  "cti-analyst",
+  "frontend-builder",
+  "backend-builder",
+  "security-review",
+  "ponytail",
+  "promptfoo",
+  "aider",
+  "docx",
+  "pptx",
+  "xlsx",
+  "pdf",
+  "mcp-builder",
+  "skill-creator",
+  "webapp-testing",
+  "web-artifacts-builder",
+  "karajan",
+  "task-router"
+ ],
+ "analitica": {
+  "0": {
+   "period_days": 0,
+   "generated_at": "2026-10-01T12:00:00+00:00",
+   "summary": {
+    "catalog_skills": 18,
+    "recommended_tasks": 16,
+    "executed_tasks": 11,
+    "executions": 22,
+    "active_skills": 4,
+    "unused_skills": 14,
+    "successes": 16,
+    "failures": 6,
+    "success_rate": 0.7273,
+    "assignment_coverage": 0.6875
+   },
+   "skills": [
+    {
+     "name": "security-review",
+     "recommended_tasks": 16,
+     "executed_tasks": 11,
+     "executions": 13,
+     "successes": 9,
+     "failures": 4,
+     "success_rate": 0.6923,
+     "avg_latency_ms": 450.5,
+     "total_cost_usd": 0.0501,
+     "agents": {
+      "CODEX-CLI": 6,
+      "OLLAMA": 5,
+      "claude-cli": 1,
+      "codex-cli": 1
+     },
+     "task_types": {
+      "classify_and_plan": 4,
+      "diagnose_and_fix": 3,
+      "implement_feature": 3,
+      "analyze_or_review": 2,
+      "transform_or_extract": 1
+     },
+     "last_used_at": "2026-10-01T12:05:00+00:00"
+    },
+    {
+     "name": "ponytail",
+     "recommended_tasks": 16,
+     "executed_tasks": 4,
+     "executions": 4,
+     "successes": 3,
+     "failures": 1,
+     "success_rate": 0.75,
+     "avg_latency_ms": 306.5,
+     "total_cost_usd": 0.0118,
+     "agents": {
+      "claude-cli": 2,
+      "codex-cli": 2
+     },
+     "task_types": {
+      "classify_and_plan": 2,
+      "implement_feature": 1,
+      "transform_or_extract": 1
+     },
+     "last_used_at": "2026-09-04T09:05:00.123456+00:00"
+    },
+    {
+     "name": "repo-analyzer",
+     "recommended_tasks": 9,
+     "executed_tasks": 4,
+     "executions": 4,
+     "successes": 4,
+     "failures": 0,
+     "success_rate": 1.0,
+     "avg_latency_ms": 308.8,
+     "total_cost_usd": 0.0145,
+     "agents": {
+      "claude-cli": 2,
+      "codex-cli": 2
+     },
+     "task_types": {
+      "implement_feature": 2,
+      "classify_and_plan": 1,
+      "diagnose_and_fix": 1
+     },
+     "last_used_at": "2026-09-22T11:05:00.123456+00:00"
+    },
+    {
+     "name": "frontend-builder",
+     "recommended_tasks": 4,
+     "executed_tasks": 1,
+     "executions": 1,
+     "successes": 0,
+     "failures": 1,
+     "success_rate": 0.0,
+     "avg_latency_ms": 312.0,
+     "total_cost_usd": 0.0046,
+     "agents": {
+      "claude-cli": 1
+     },
+     "task_types": {
+      "classify_and_plan": 1
+     },
+     "last_used_at": "2026-06-15T00:05:00+00:00"
+    },
+    {
+     "name": "backend-builder",
+     "recommended_tasks": 3,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "cti-analyst",
+     "recommended_tasks": 2,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "promptfoo",
+     "recommended_tasks": 2,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "aider",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "docx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "karajan",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "mcp-builder",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "pdf",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "pptx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "skill-creator",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "task-router",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "web-artifacts-builder",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "webapp-testing",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "xlsx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    }
+   ],
+   "by_agent": [
+    {
+     "agent": "claude-cli",
+     "executions": 6,
+     "skills": {
+      "security-review": 1,
+      "ponytail": 2,
+      "repo-analyzer": 2,
+      "frontend-builder": 1
+     }
+    },
+    {
+     "agent": "CODEX-CLI",
+     "executions": 6,
+     "skills": {
+      "security-review": 6
+     }
+    },
+    {
+     "agent": "codex-cli",
+     "executions": 5,
+     "skills": {
+      "repo-analyzer": 2,
+      "ponytail": 2,
+      "security-review": 1
+     }
+    },
+    {
+     "agent": "OLLAMA",
+     "executions": 5,
+     "skills": {
+      "security-review": 5
+     }
+    }
+   ],
+   "by_task_type": [
+    {
+     "task_type": "classify_and_plan",
+     "executions": 8,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 4,
+      "ponytail": 2,
+      "frontend-builder": 1
+     }
+    },
+    {
+     "task_type": "implement_feature",
+     "executions": 6,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 3,
+      "repo-analyzer": 2
+     }
+    },
+    {
+     "task_type": "diagnose_and_fix",
+     "executions": 4,
+     "skills": {
+      "security-review": 3,
+      "repo-analyzer": 1
+     }
+    },
+    {
+     "task_type": "analyze_or_review",
+     "executions": 2,
+     "skills": {
+      "security-review": 2
+     }
+    },
+    {
+     "task_type": "transform_or_extract",
+     "executions": 2,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    }
+   ],
+   "timeline": [
+    {
+     "date": "2026-05-18",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-06-05",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-06-15",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "frontend-builder": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-07-03",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-07-12",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-07-30",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "security-review": 2
+     }
+    },
+    {
+     "date": "2026-08-08",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-08-26",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-09-04",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-09-22",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-10-01",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "security-review": 2
+     }
+    }
+   ],
+   "definitions": {
+    "recommended": "Skill sugerida por la clasificación o por una subtarea.",
+    "execution": "Subtarea ejecutada que declara explícitamente una skill.",
+    "success_rate": "Ejecuciones completadas / ejecuciones de la skill.",
+    "assignment_coverage": "Tareas con una skill ejecutada / tareas con skills recomendadas."
+   }
+  },
+  "30": {
+   "period_days": 30,
+   "generated_at": "2026-10-01T12:00:00+00:00",
+   "summary": {
+    "catalog_skills": 18,
+    "recommended_tasks": 4,
+    "executed_tasks": 3,
+    "executions": 6,
+    "active_skills": 3,
+    "unused_skills": 15,
+    "successes": 4,
+    "failures": 2,
+    "success_rate": 0.6667,
+    "assignment_coverage": 0.75
+   },
+   "skills": [
+    {
+     "name": "security-review",
+     "recommended_tasks": 4,
+     "executed_tasks": 3,
+     "executions": 4,
+     "successes": 2,
+     "failures": 2,
+     "success_rate": 0.5,
+     "avg_latency_ms": 428.5,
+     "total_cost_usd": 0.0082,
+     "agents": {
+      "CODEX-CLI": 2,
+      "claude-cli": 1,
+      "OLLAMA": 1
+     },
+     "task_types": {
+      "diagnose_and_fix": 3,
+      "implement_feature": 1
+     },
+     "last_used_at": "2026-10-01T12:05:00+00:00"
+    },
+    {
+     "name": "ponytail",
+     "recommended_tasks": 4,
+     "executed_tasks": 1,
+     "executions": 1,
+     "successes": 1,
+     "failures": 0,
+     "success_rate": 1.0,
+     "avg_latency_ms": 303.0,
+     "total_cost_usd": 0.0019,
+     "agents": {
+      "claude-cli": 1
+     },
+     "task_types": {
+      "implement_feature": 1
+     },
+     "last_used_at": "2026-09-04T09:05:00.123456+00:00"
+    },
+    {
+     "name": "repo-analyzer",
+     "recommended_tasks": 3,
+     "executed_tasks": 1,
+     "executions": 1,
+     "successes": 1,
+     "failures": 0,
+     "success_rate": 1.0,
+     "avg_latency_ms": 301.0,
+     "total_cost_usd": 0.0013,
+     "agents": {
+      "codex-cli": 1
+     },
+     "task_types": {
+      "diagnose_and_fix": 1
+     },
+     "last_used_at": "2026-09-22T11:05:00.123456+00:00"
+    },
+    {
+     "name": "backend-builder",
+     "recommended_tasks": 2,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "frontend-builder",
+     "recommended_tasks": 2,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "cti-analyst",
+     "recommended_tasks": 1,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "promptfoo",
+     "recommended_tasks": 1,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "aider",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "docx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "karajan",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "mcp-builder",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "pdf",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "pptx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "skill-creator",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "task-router",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "web-artifacts-builder",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "webapp-testing",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "xlsx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    }
+   ],
+   "by_agent": [
+    {
+     "agent": "claude-cli",
+     "executions": 2,
+     "skills": {
+      "security-review": 1,
+      "ponytail": 1
+     }
+    },
+    {
+     "agent": "CODEX-CLI",
+     "executions": 2,
+     "skills": {
+      "security-review": 2
+     }
+    },
+    {
+     "agent": "codex-cli",
+     "executions": 1,
+     "skills": {
+      "repo-analyzer": 1
+     }
+    },
+    {
+     "agent": "OLLAMA",
+     "executions": 1,
+     "skills": {
+      "security-review": 1
+     }
+    }
+   ],
+   "by_task_type": [
+    {
+     "task_type": "diagnose_and_fix",
+     "executions": 4,
+     "skills": {
+      "security-review": 3,
+      "repo-analyzer": 1
+     }
+    },
+    {
+     "task_type": "implement_feature",
+     "executions": 2,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    }
+   ],
+   "timeline": [
+    {
+     "date": "2026-09-04",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-09-22",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-10-01",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "security-review": 2
+     }
+    }
+   ],
+   "definitions": {
+    "recommended": "Skill sugerida por la clasificación o por una subtarea.",
+    "execution": "Subtarea ejecutada que declara explícitamente una skill.",
+    "success_rate": "Ejecuciones completadas / ejecuciones de la skill.",
+    "assignment_coverage": "Tareas con una skill ejecutada / tareas con skills recomendadas."
+   }
+  },
+  "3650": {
+   "period_days": 3650,
+   "generated_at": "2026-10-01T12:00:00+00:00",
+   "summary": {
+    "catalog_skills": 18,
+    "recommended_tasks": 16,
+    "executed_tasks": 11,
+    "executions": 22,
+    "active_skills": 4,
+    "unused_skills": 14,
+    "successes": 16,
+    "failures": 6,
+    "success_rate": 0.7273,
+    "assignment_coverage": 0.6875
+   },
+   "skills": [
+    {
+     "name": "security-review",
+     "recommended_tasks": 16,
+     "executed_tasks": 11,
+     "executions": 13,
+     "successes": 9,
+     "failures": 4,
+     "success_rate": 0.6923,
+     "avg_latency_ms": 450.5,
+     "total_cost_usd": 0.0501,
+     "agents": {
+      "CODEX-CLI": 6,
+      "OLLAMA": 5,
+      "claude-cli": 1,
+      "codex-cli": 1
+     },
+     "task_types": {
+      "classify_and_plan": 4,
+      "diagnose_and_fix": 3,
+      "implement_feature": 3,
+      "analyze_or_review": 2,
+      "transform_or_extract": 1
+     },
+     "last_used_at": "2026-10-01T12:05:00+00:00"
+    },
+    {
+     "name": "ponytail",
+     "recommended_tasks": 16,
+     "executed_tasks": 4,
+     "executions": 4,
+     "successes": 3,
+     "failures": 1,
+     "success_rate": 0.75,
+     "avg_latency_ms": 306.5,
+     "total_cost_usd": 0.0118,
+     "agents": {
+      "claude-cli": 2,
+      "codex-cli": 2
+     },
+     "task_types": {
+      "classify_and_plan": 2,
+      "implement_feature": 1,
+      "transform_or_extract": 1
+     },
+     "last_used_at": "2026-09-04T09:05:00.123456+00:00"
+    },
+    {
+     "name": "repo-analyzer",
+     "recommended_tasks": 9,
+     "executed_tasks": 4,
+     "executions": 4,
+     "successes": 4,
+     "failures": 0,
+     "success_rate": 1.0,
+     "avg_latency_ms": 308.8,
+     "total_cost_usd": 0.0145,
+     "agents": {
+      "claude-cli": 2,
+      "codex-cli": 2
+     },
+     "task_types": {
+      "implement_feature": 2,
+      "classify_and_plan": 1,
+      "diagnose_and_fix": 1
+     },
+     "last_used_at": "2026-09-22T11:05:00.123456+00:00"
+    },
+    {
+     "name": "frontend-builder",
+     "recommended_tasks": 4,
+     "executed_tasks": 1,
+     "executions": 1,
+     "successes": 0,
+     "failures": 1,
+     "success_rate": 0.0,
+     "avg_latency_ms": 312.0,
+     "total_cost_usd": 0.0046,
+     "agents": {
+      "claude-cli": 1
+     },
+     "task_types": {
+      "classify_and_plan": 1
+     },
+     "last_used_at": "2026-06-15T00:05:00+00:00"
+    },
+    {
+     "name": "backend-builder",
+     "recommended_tasks": 3,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "cti-analyst",
+     "recommended_tasks": 2,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "promptfoo",
+     "recommended_tasks": 2,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "aider",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "docx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "karajan",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "mcp-builder",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "pdf",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "pptx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "skill-creator",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "task-router",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "web-artifacts-builder",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "webapp-testing",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    },
+    {
+     "name": "xlsx",
+     "recommended_tasks": 0,
+     "executed_tasks": 0,
+     "executions": 0,
+     "successes": 0,
+     "failures": 0,
+     "success_rate": null,
+     "avg_latency_ms": null,
+     "total_cost_usd": 0.0,
+     "agents": {},
+     "task_types": {},
+     "last_used_at": null
+    }
+   ],
+   "by_agent": [
+    {
+     "agent": "claude-cli",
+     "executions": 6,
+     "skills": {
+      "security-review": 1,
+      "ponytail": 2,
+      "repo-analyzer": 2,
+      "frontend-builder": 1
+     }
+    },
+    {
+     "agent": "CODEX-CLI",
+     "executions": 6,
+     "skills": {
+      "security-review": 6
+     }
+    },
+    {
+     "agent": "codex-cli",
+     "executions": 5,
+     "skills": {
+      "repo-analyzer": 2,
+      "ponytail": 2,
+      "security-review": 1
+     }
+    },
+    {
+     "agent": "OLLAMA",
+     "executions": 5,
+     "skills": {
+      "security-review": 5
+     }
+    }
+   ],
+   "by_task_type": [
+    {
+     "task_type": "classify_and_plan",
+     "executions": 8,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 4,
+      "ponytail": 2,
+      "frontend-builder": 1
+     }
+    },
+    {
+     "task_type": "implement_feature",
+     "executions": 6,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 3,
+      "repo-analyzer": 2
+     }
+    },
+    {
+     "task_type": "diagnose_and_fix",
+     "executions": 4,
+     "skills": {
+      "security-review": 3,
+      "repo-analyzer": 1
+     }
+    },
+    {
+     "task_type": "analyze_or_review",
+     "executions": 2,
+     "skills": {
+      "security-review": 2
+     }
+    },
+    {
+     "task_type": "transform_or_extract",
+     "executions": 2,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    }
+   ],
+   "timeline": [
+    {
+     "date": "2026-05-18",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-06-05",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-06-15",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "frontend-builder": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-07-03",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-07-12",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-07-30",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "security-review": 2
+     }
+    },
+    {
+     "date": "2026-08-08",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-08-26",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-09-04",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "ponytail": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-09-22",
+     "executions": 2,
+     "successes": 2,
+     "skills": {
+      "repo-analyzer": 1,
+      "security-review": 1
+     }
+    },
+    {
+     "date": "2026-10-01",
+     "executions": 2,
+     "successes": 1,
+     "skills": {
+      "security-review": 2
+     }
+    }
+   ],
+   "definitions": {
+    "recommended": "Skill sugerida por la clasificación o por una subtarea.",
+    "execution": "Subtarea ejecutada que declara explícitamente una skill.",
+    "success_rate": "Ejecuciones completadas / ejecuciones de la skill.",
+    "assignment_coverage": "Tareas con una skill ejecutada / tareas con skills recomendadas."
+   }
+  }
+ }
+}

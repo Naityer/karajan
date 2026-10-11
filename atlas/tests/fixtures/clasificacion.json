@@ -1,0 +1,3046 @@
+[
+ {
+  "prompt": "Corrige el bug en el login: la API devuelve 500 cuando el token expira",
+  "con_config": {
+   "original_prompt": "Corrige el bug en el login: la API devuelve 500 cuando el token expira",
+   "domain": [
+    "security",
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 2.6,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.36,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "security-review",
+    "cti-analyst",
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected diagnose_and_fix across security, programming. Highest driver is operational_risk=2.6, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Corrige el bug en el login: la API devuelve 500 cuando el token expira",
+   "domain": [
+    "security",
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 2.6,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.36,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "security-review",
+    "cti-analyst",
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected diagnose_and_fix across security, programming. Highest driver is operational_risk=2.6, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "fix the failing unit test in the backend",
+  "con_config": {
+   "original_prompt": "fix the failing unit test in the backend",
+   "domain": [
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.29,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected diagnose_and_fix across programming. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "fix the failing unit test in the backend",
+   "domain": [
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.29,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected diagnose_and_fix across programming. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Crea un dashboard con métricas de ventas y un informe en PDF",
+  "con_config": {
+   "original_prompt": "Crea un dashboard con métricas de ventas y un informe en PDF",
+   "domain": [
+    "data",
+    "documents"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.21,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "promptfoo",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across data, documents. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Crea un dashboard con métricas de ventas y un informe en PDF",
+   "domain": [
+    "data",
+    "documents"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.21,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "promptfoo",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across data, documents. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Implementa una cache LRU con TTL y pruebas unitarias",
+  "con_config": {
+   "original_prompt": "Implementa una cache LRU con TTL y pruebas unitarias",
+   "domain": [
+    "general"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 2.95,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.67,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across general. Highest driver is reasoning_depth=3.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Implementa una cache LRU con TTL y pruebas unitarias",
+   "domain": [
+    "general"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 2.95,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.67,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across general. Highest driver is reasoning_depth=3.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Resume este documento",
+  "con_config": {
+   "original_prompt": "Resume este documento",
+   "domain": [
+    "general"
+   ],
+   "intent": "transform_or_extract",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected transform_or_extract across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Resume este documento",
+   "domain": [
+    "general"
+   ],
+   "intent": "transform_or_extract",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected transform_or_extract across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Revisa la arquitectura del sistema distribuido y decide si migrar a microservicios, con riesgo en producción",
+  "con_config": {
+   "original_prompt": "Revisa la arquitectura del sistema distribuido y decide si migrar a microservicios, con riesgo en producción",
+   "domain": [
+    "general"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 4.4,
+    "reasoning_depth": 3.6,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.6,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 2.33,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across general. Highest driver is context_required=4.4, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Revisa la arquitectura del sistema distribuido y decide si migrar a microservicios, con riesgo en producción",
+   "domain": [
+    "general"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 4.4,
+    "reasoning_depth": 3.6,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.6,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 2.33,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across general. Highest driver is context_required=4.4, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Despliega a producción el pipeline de Jenkins con docker y kubernetes; borrar los secretos antiguos",
+  "con_config": {
+   "original_prompt": "Despliega a producción el pipeline de Jenkins con docker y kubernetes; borrar los secretos antiguos",
+   "domain": [
+    "devops"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 2.8000000000000003,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 4.2,
+    "validation_difficulty": 2.7
+   },
+   "complexity_score": 2.01,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected classify_and_plan across devops. Highest driver is operational_risk=4.2, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Despliega a producción el pipeline de Jenkins con docker y kubernetes; borrar los secretos antiguos",
+   "domain": [
+    "devops"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 2.8000000000000003,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 4.2,
+    "validation_difficulty": 2.7
+   },
+   "complexity_score": 2.01,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected classify_and_plan across devops. Highest driver is operational_risk=4.2, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Analiza la vulnerabilidad en las credenciales y el permiso de auth del servicio",
+  "con_config": {
+   "original_prompt": "Analiza la vulnerabilidad en las credenciales y el permiso de auth del servicio",
+   "domain": [
+    "security"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.8,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 1.33,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "security-review",
+    "cti-analyst",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected analyze_or_review across security. Highest driver is context_required=1.8, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Analiza la vulnerabilidad en las credenciales y el permiso de auth del servicio",
+   "domain": [
+    "security"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.8,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 1.33,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "security-review",
+    "cti-analyst",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across security. Highest driver is context_required=1.8, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Hola",
+  "con_config": {
+   "original_prompt": "Hola",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Hola",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "hacer algo mejor, rápido y simple, varios cambios etc?",
+  "con_config": {
+   "original_prompt": "hacer algo mejor, rápido y simple, varios cambios etc?",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 5.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.85,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "hacer algo mejor, rápido y simple, varios cambios etc?",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 5.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.85,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "¿Qué es mejor? ¿Algo así o algo asá? ¿Cómo lo hacemos?",
+  "con_config": {
+   "original_prompt": "¿Qué es mejor? ¿Algo así o algo asá? ¿Cómo lo hacemos?",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 4.3,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.63,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=4.3, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "¿Qué es mejor? ¿Algo así o algo asá? ¿Cómo lo hacemos?",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 4.3,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.63,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=4.3, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Traduce el texto al inglés",
+  "con_config": {
+   "original_prompt": "Traduce el texto al inglés",
+   "domain": [
+    "general"
+   ],
+   "intent": "transform_or_extract",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected transform_or_extract across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Traduce el texto al inglés",
+   "domain": [
+    "general"
+   ],
+   "intent": "transform_or_extract",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected transform_or_extract across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Diseña un workflow multi-agente con orquestador, cola async y optimiza el rendimiento y la escalabilidad del algoritmo",
+  "con_config": {
+   "original_prompt": "Diseña un workflow multi-agente con orquestador, cola async y optimiza el rendimiento y la escalabilidad del algoritmo",
+   "domain": [
+    "product"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.7,
+    "context_required": 1.2,
+    "reasoning_depth": 5.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 2.06,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "frontend-builder",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across product. Highest driver is reasoning_depth=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Diseña un workflow multi-agente con orquestador, cola async y optimiza el rendimiento y la escalabilidad del algoritmo",
+   "domain": [
+    "product"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.7,
+    "context_required": 1.2,
+    "reasoning_depth": 5.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 2.06,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "frontend-builder",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across product. Highest driver is reasoning_depth=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Add a new feature to the frontend: a ux roadmap view with requirements, ui components, and tests",
+  "con_config": {
+   "original_prompt": "Add a new feature to the frontend: a ux roadmap view with requirements, ui components, and tests",
+   "domain": [
+    "programming",
+    "product"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.18,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across programming, product. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Add a new feature to the frontend: a ux roadmap view with requirements, ui components, and tests",
+   "domain": [
+    "programming",
+    "product"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.18,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across programming, product. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Extrae las tablas del contrato docx con ocr",
+  "con_config": {
+   "original_prompt": "Extrae las tablas del contrato docx con ocr",
+   "domain": [
+    "documents"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across documents. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Extrae las tablas del contrato docx con ocr",
+   "domain": [
+    "documents"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across documents. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "build an ETL that loads csv into sql and reports analytics metrics on a dashboard",
+  "con_config": {
+   "original_prompt": "build an ETL that loads csv into sql and reports analytics metrics on a dashboard",
+   "domain": [
+    "data"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.8,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.37,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "promptfoo",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across data. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "build an ETL that loads csv into sql and reports analytics metrics on a dashboard",
+   "domain": [
+    "data"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.8,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.37,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "promptfoo",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across data. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "audita el repo con varios archivos, base de datos, logs, existing pipeline, sistema, modulo, componente, servicio, clase, interfaz",
+  "con_config": {
+   "original_prompt": "audita el repo con varios archivos, base de datos, logs, existing pipeline, sistema, modulo, componente, servicio, clase, interfaz",
+   "domain": [
+    "devops"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.7,
+    "context_required": 5.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 2.7
+   },
+   "complexity_score": 2.23,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected analyze_or_review across devops. Highest driver is context_required=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "audita el repo con varios archivos, base de datos, logs, existing pipeline, sistema, modulo, componente, servicio, clase, interfaz",
+   "domain": [
+    "devops"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.7,
+    "context_required": 5.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 2.7
+   },
+   "complexity_score": 2.23,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across devops. Highest driver is context_required=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Escribe una función",
+  "con_config": {
+   "original_prompt": "Escribe una función",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 1.33,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Escribe una función",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.75,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 1.33,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Automatiza end to end el despliegue: construye, ejecuta tests, genera el release y deploy en producción con dinero y legal en juego",
+  "con_config": {
+   "original_prompt": "Automatiza end to end el despliegue: construye, ejecuta tests, genera el release y deploy en producción con dinero y legal en juego",
+   "domain": [
+    "devops"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 2.2,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 4.75,
+    "operational_risk": 5.0,
+    "validation_difficulty": 2.7
+   },
+   "complexity_score": 2.57,
+   "complexity_level": "level_3_intermediate",
+   "recommended_strategy": "bounded_analysis_then_execute",
+   "recommended_model": "medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Analizar intención y contexto",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: analizar intención y contexto"
+    },
+    {
+     "id": "sub_002",
+     "name": "Dividir trabajo",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: dividir trabajo"
+    },
+    {
+     "id": "sub_003",
+     "name": "Ejecutar subtareas delimitadas",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: ejecutar subtareas delimitadas"
+    },
+    {
+     "id": "sub_004",
+     "name": "Validar coherencia final",
+     "complexity": 3,
+     "recommended_model": "medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: validar coherencia final"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected classify_and_plan across devops. Highest driver is operational_risk=5.0, producing level_3_intermediate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Automatiza end to end el despliegue: construye, ejecuta tests, genera el release y deploy en producción con dinero y legal en juego",
+   "domain": [
+    "devops"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 2.2,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 4.75,
+    "operational_risk": 5.0,
+    "validation_difficulty": 2.7
+   },
+   "complexity_score": 2.57,
+   "complexity_level": "level_3_intermediate",
+   "recommended_strategy": "bounded_analysis_then_execute",
+   "recommended_model": "medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Analizar intención y contexto",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: analizar intención y contexto"
+    },
+    {
+     "id": "sub_002",
+     "name": "Dividir trabajo",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: dividir trabajo"
+    },
+    {
+     "id": "sub_003",
+     "name": "Ejecutar subtareas delimitadas",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: ejecutar subtareas delimitadas"
+    },
+    {
+     "id": "sub_004",
+     "name": "Validar coherencia final",
+     "complexity": 3,
+     "recommended_model": "medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "bounded_analysis_then_execute",
+     "validation": "Comprobar evidencia para: validar coherencia final"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected classify_and_plan across devops. Highest driver is operational_risk=5.0, producing level_3_intermediate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Refactor the code to improve performance; fix the error in the database layer and add coverage with assert, mock and fixture",
+  "con_config": {
+   "original_prompt": "Refactor the code to improve performance; fix the error in the database layer and add coverage with assert, mock and fixture",
+   "domain": [
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.65,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 4.05
+   },
+   "complexity_score": 1.49,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected diagnose_and_fix across programming. Highest driver is validation_difficulty=4.0, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Refactor the code to improve performance; fix the error in the database layer and add coverage with assert, mock and fixture",
+   "domain": [
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.65,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 4.05
+   },
+   "complexity_score": 1.49,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected diagnose_and_fix across programming. Highest driver is validation_difficulty=4.0, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Seguridad: revisa el token, el secret y el malware; amenaza y threat model con permisos",
+  "con_config": {
+   "original_prompt": "Seguridad: revisa el token, el secret y el malware; amenaza y threat model con permisos",
+   "domain": [
+    "security"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 4.2,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.56,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "security-review",
+    "cti-analyst",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected analyze_or_review across security. Highest driver is operational_risk=4.2, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Seguridad: revisa el token, el secret y el malware; amenaza y threat model con permisos",
+   "domain": [
+    "security"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 1.4,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 4.2,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.56,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "security-review",
+    "cti-analyst",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected analyze_or_review across security. Highest driver is operational_risk=4.2, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "ci cd release",
+  "con_config": {
+   "original_prompt": "ci cd release",
+   "domain": [
+    "devops"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.45,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected classify_and_plan across devops. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "ci cd release",
+   "domain": [
+    "devops"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 2.25
+   },
+   "complexity_score": 1.45,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across devops. Highest driver is validation_difficulty=2.2, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema con arquitectura distribuida y multi workflow",
+  "con_config": {
+   "original_prompt": "analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema con arquitectura distribuida y multi workflow",
+   "domain": [
+    "product"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 3.3,
+    "reasoning_depth": 3.95,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 2.02,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "frontend-builder",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across product. Highest driver is reasoning_depth=4.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema analiza el sistema con arquitectura distribuida y multi workflow",
+   "domain": [
+    "product"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 3.3,
+    "reasoning_depth": 3.95,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 2.02,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "frontend-builder",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across product. Highest driver is reasoning_depth=4.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente",
+  "con_config": {
+   "original_prompt": "revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente",
+   "domain": [
+    "general"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 3.3,
+    "reasoning_depth": 2.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.63,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across general. Highest driver is context_required=3.3, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente revisa el componente",
+   "domain": [
+    "general"
+   ],
+   "intent": "analyze_or_review",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 3.3,
+    "reasoning_depth": 2.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.63,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected analyze_or_review across general. Highest driver is context_required=3.3, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "implementa, desarrolla, construye, diseña, crea, escribe y genera con build create develop ejecuta automatiza",
+  "con_config": {
+   "original_prompt": "implementa, desarrolla, construye, diseña, crea, escribe y genera con build create develop ejecuta automatiza",
+   "domain": [
+    "general"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 2.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 5.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.77,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across general. Highest driver is autonomy_required=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "implementa, desarrolla, construye, diseña, crea, escribe y genera con build create develop ejecuta automatiza",
+   "domain": [
+    "general"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 1.0,
+    "context_required": 2.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 5.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.77,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across general. Highest driver is autonomy_required=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "optimiza la complejidad del árbol y del graph con algoritmo y patron decorator memoiz",
+  "con_config": {
+   "original_prompt": "optimiza la complejidad del árbol y del graph con algoritmo y patron decorator memoiz",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.7,
+    "context_required": 1.0,
+    "reasoning_depth": 5.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.91,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is reasoning_depth=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "optimiza la complejidad del árbol y del graph con algoritmo y patron decorator memoiz",
+   "domain": [
+    "general"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 1.7,
+    "context_required": 1.0,
+    "reasoning_depth": 5.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.91,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across general. Highest driver is reasoning_depth=5.0, producing level_2_moderate.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "sqlite test unitario integracion cobertura api database dashboard visual",
+  "con_config": {
+   "original_prompt": "sqlite test unitario integracion cobertura api database dashboard visual",
+   "domain": [
+    "programming",
+    "data"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 5.0
+   },
+   "complexity_score": 1.57,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "promptfoo",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across programming, data. Highest driver is validation_difficulty=5.0, producing level_2_moderate.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "sqlite test unitario integracion cobertura api database dashboard visual",
+   "domain": [
+    "programming",
+    "data"
+   ],
+   "intent": "classify_and_plan",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 5.0
+   },
+   "complexity_score": 1.57,
+   "complexity_level": "level_2_moderate",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_or_medium_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "promptfoo",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 2,
+     "recommended_model": "cheap_or_medium_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected classify_and_plan across programming, data. Highest driver is validation_difficulty=5.0, producing level_2_moderate.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Translate and summarize and extract",
+  "con_config": {
+   "original_prompt": "Translate and summarize and extract",
+   "domain": [
+    "documents"
+   ],
+   "intent": "transform_or_extract",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected transform_or_extract across documents. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Translate and summarize and extract",
+   "domain": [
+    "documents"
+   ],
+   "intent": "transform_or_extract",
+   "criteria": {
+    "ambiguity": 2.0,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.0
+   },
+   "complexity_score": 1.17,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "repo-analyzer",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "repo-analyzer",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected transform_or_extract across documents. Highest driver is ambiguity=2.0, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Que haces con ñandú y camión? añade acentuación",
+  "con_config": {
+   "original_prompt": "Que haces con ñandú y camión? añade acentuación",
+   "domain": [
+    "general"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 2.3,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 1.27,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across general. Highest driver is ambiguity=2.3, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Que haces con ñandú y camión? añade acentuación",
+   "domain": [
+    "general"
+   ],
+   "intent": "implement_feature",
+   "criteria": {
+    "ambiguity": 2.3,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 0.8,
+    "validation_difficulty": 1.45
+   },
+   "complexity_score": 1.27,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "ponytail",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected implement_feature across general. Highest driver is ambiguity=2.3, producing level_1_simple.",
+   "validation_plan": "Confirm output matches the original request and record validation evidence.",
+   "classified_by": "heuristic"
+  }
+ },
+ {
+  "prompt": "Auth bug in prod?",
+  "con_config": {
+   "original_prompt": "Auth bug in prod?",
+   "domain": [
+    "security",
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 2.3,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 1.8
+   },
+   "complexity_score": 1.46,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "security-review",
+    "cti-analyst",
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": true,
+   "reason": "Detected diagnose_and_fix across security, programming. Highest driver is ambiguity=2.3, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  },
+  "sin_config": {
+   "original_prompt": "Auth bug in prod?",
+   "domain": [
+    "security",
+    "programming"
+   ],
+   "intent": "diagnose_and_fix",
+   "criteria": {
+    "ambiguity": 2.3,
+    "context_required": 1.0,
+    "reasoning_depth": 1.0,
+    "autonomy_required": 1.0,
+    "operational_risk": 1.8,
+    "validation_difficulty": 1.8
+   },
+   "complexity_score": 1.46,
+   "complexity_level": "level_1_simple",
+   "recommended_strategy": "single_model_execution",
+   "recommended_model": "cheap_model",
+   "recommended_skills": [
+    "security-review",
+    "cti-analyst",
+    "repo-analyzer",
+    "backend-builder",
+    "frontend-builder",
+    "ponytail"
+   ],
+   "recommended_resources": [],
+   "subtasks": [
+    {
+     "id": "sub_001",
+     "name": "Resolver tarea principal",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: resolver tarea principal"
+    },
+    {
+     "id": "sub_002",
+     "name": "Validar salida",
+     "complexity": 1,
+     "recommended_model": "cheap_model",
+     "recommended_skill": "security-review",
+     "recommended_strategy": "single_model_execution",
+     "validation": "Comprobar evidencia para: validar salida"
+    }
+   ],
+   "requires_human_review": false,
+   "reason": "Detected diagnose_and_fix across security, programming. Highest driver is ambiguity=2.3, producing level_1_simple.",
+   "validation_plan": "Run focused unit/API checks and confirm no contract regressions.",
+   "classified_by": "heuristic"
+  }
+ }
+]

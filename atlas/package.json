@@ -1,0 +1,13 @@
+{
+  "name": "karajan-atlas",
+  "private": true,
+  "type": "module",
+  "description": "Núcleo de Karajan en TypeScript para el paquete de Atlas dev (ver PORTE.md).",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node ejecutar-tests.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}

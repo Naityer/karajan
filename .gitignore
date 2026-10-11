@@ -24,3 +24,8 @@ data/audit_reports/
 
 # Capturas de referencia del smoke del dashboard (se regeneran al ejecutarlo)
 tests/artifacts/
+
+# Paquete de Atlas dev (generado)
+dist-atlas/
+dist-paquete/
+atlas/node_modules/
