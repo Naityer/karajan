@@ -20,7 +20,8 @@ export const PROVEEDORES: Proveedor[] = [
   {
     nombre: 'codex', etiqueta: 'OpenAI Codex CLI (local)', binario: 'codex', gratis: false, login: 'codex login',
     modelos: { cheap_model: 'default', cheap_or_medium_model: 'default', medium_model: 'default', strong_model: 'default', strong_model_with_human_review: 'default' },
-    args: () => ['exec', '--ephemeral', '--color', 'never', '-'],
+    // `--skip-git-repo-check`: desde Atlas dev la carpeta de trabajo puede ser el Workspace, que no es un repo (el nativo corre en el suyo).
+    args: () => ['exec', '--ephemeral', '--color', 'never', '--skip-git-repo-check', '-'],
   },
   {
     nombre: 'ollama-qwen', etiqueta: 'Qwen (local)', binario: 'ollama', gratis: true, login: 'ollama serve', modeloLocal: 'qwen2.5:7b',
@@ -82,7 +83,8 @@ export const ejecutarProveedor: Ejecutor = (p, modelo, instruccion, { cwd, timeo
   hijo.on('close', (codigo) => {
     clearTimeout(reloj);
     const limpia = salida.replace(ANSI, '').trim();
-    resolver({ salida: limpia, error: codigo === 0 && limpia ? null : (error.replace(ANSI, '').trim() || `terminó con código ${codigo}`).slice(0, 2000), latenciaMs: Date.now() - inicio, modelo });
+    // Algunos CLI (claude) escriben el motivo del fallo en stdout: si stderr viene vacío, ese es el error.
+    resolver({ salida: limpia, error: codigo === 0 && limpia ? null : (error.replace(ANSI, '').trim() || limpia || `terminó con código ${codigo}`).slice(0, 2000), latenciaMs: Date.now() - inicio, modelo });
   });
   hijo.stdin.end(instruccion, 'utf8');
 });
