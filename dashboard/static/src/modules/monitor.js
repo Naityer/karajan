@@ -492,8 +492,10 @@ async function renderResumen(pre) {
   });
 
   const relationSection = analytics ? resumenAgentTaskSection(analytics) : "";
+  const prod = await cargarProduccion();
 
   el.innerHTML = `
+    ${produccionHtml(prod)}
     <div class="resumen-kpis">${kpis}</div>
     ${activityFrame}
     ${relationSection}
@@ -540,54 +542,6 @@ function resumenHeatmapHtml() {
 }
 
 // Cost-vs-latency efficiency scatter: one bubble per agent×tipo, hue by tipo.
-function resumenScatterHtml(rows) {
-  const active = rows.filter((r) => Number(r.run_count) > 0);
-  if (!active.length) return `<div class="chart-empty">sin ejecuciones</div>`;
-  const types = [...new Set(active.map((r) => r.task_type))].sort();
-  const ti = new Map(types.map((t, i) => [t, i]));
-  const points = active.map((r) => ({
-    x: Math.round(Number(r.avg_latency_ms) || 0),
-    y: Number(r.avg_cost_per_run) || 0,
-    size: Number(r.run_count) || 1,
-    seriesIndex: ti.get(r.task_type),
-    tip: `${r.provider_name} · ${r.task_type} · ${dvNum(r.run_count)} ejec · $${Number(r.avg_cost_per_run).toFixed(4)}/ejec · ${dvNum(Math.round(Number(r.avg_latency_ms) || 0))} ms`,
-  }));
-  return scatterPlot({
-    points, xLabel: "Latencia media (ms)", yLabel: "Coste medio (USD)",
-    xFormat: (v) => dvNum(v), yFormat: (v) => `$${Number(v).toFixed(4)}`,
-  }) + chartLegend({ series: types.map((t, i) => ({ name: t, seriesIndex: i })) });
-}
-
-// Tipo → Agente → Estado flow Sankey from the 3-way agent_task_flow grouping.
-function resumenSankeyHtml(flow) {
-  if (!flow.length) return `<div class="chart-empty">sin datos de flujo</div>`;
-  // Sort task types the same way the scatter does so a given tipo keeps ONE hue
-  // across both charts (cross-chart colour consistency).
-  const types = [...new Set(flow.map((f) => f.task_type))].sort();
-  const provs = [...new Set(flow.map((f) => f.provider_name))];
-  const stats = [...new Set(flow.map((f) => f.status))];
-  const ti = new Map(types.map((t, i) => [t, i]));
-  const typeNodes = types.map((t) => ({ id: `t:${t}`, label: _shortLabel(t, 18), color: dvSeries(ti.get(t)) }));
-  const provNodes = provs.map((p) => ({ id: `p:${p}`, label: _shortLabel(p, 18) }));
-  const statNodes = stats.map((s) => ({ id: `s:${s}`, label: s, color: tareasPillColor(s) }));
-  const l1 = {}, l2 = {};
-  flow.forEach((f) => {
-    l1[`t:${f.task_type}>p:${f.provider_name}`] = (l1[`t:${f.task_type}>p:${f.provider_name}`] || 0) + Number(f.run_count);
-    l2[`p:${f.provider_name}>s:${f.status}`] = (l2[`p:${f.provider_name}>s:${f.status}`] || 0) + Number(f.run_count);
-  });
-  const links = [];
-  Object.entries(l1).forEach(([k, v]) => { const [from, to] = k.split(">"); links.push({ from, to, value: v, color: dvSeries(ti.get(from.slice(2))) }); });
-  Object.entries(l2).forEach(([k, v]) => { const [from, to] = k.split(">"); links.push({ from, to, value: v, color: tareasPillColor(to.slice(2)) }); });
-  return sankeyChart({
-    columns: [
-      { title: "Tipo de tarea", nodes: typeNodes },
-      { title: "Agente", nodes: provNodes },
-      { title: "Estado", nodes: statNodes },
-    ],
-    links,
-  });
-}
-
 // KPI band summarising the agent↔task relationship (top agent/type/combo, cost
 // focus, coverage, concentration) — all derived from the same cross-tab.
 function resumenRelationKpis(rows) {
@@ -625,41 +579,6 @@ function resumenAgentTaskSection(analytics) {
     controls: switchHtml,
     body: `<div id="resumenHeatmap" class="resumen-heatmap">${resumenHeatmapHtml()}</div>`,
   });
-  // Colour-heavy frames ship a "ver tabla" view: the dataviz method requires a
-  // table (or direct labels) as relief whenever categorical hues sit below the
-  // 3:1 contrast floor — true for several series on both surfaces.
-  const scatterFrame = chartFrame({
-    title: "Eficiencia: coste vs latencia",
-    subtitle: "cada burbuja es agente × tipo · tamaño = volumen",
-    body: resumenScatterHtml(rows),
-    table: dataTable({
-      columns: [
-        { key: "provider_name", label: "Agente" },
-        { key: "task_type", label: "Tipo" },
-        { key: "run_count", label: "Ejec.", numeric: true, format: (v) => dvNum(v) },
-        { key: "avg_cost_per_run", label: "Coste/ejec.", numeric: true, format: (v) => `$${Number(v).toFixed(4)}` },
-        { key: "avg_latency_ms", label: "Latencia media", numeric: true, format: (v) => `${dvNum(Math.round(Number(v) || 0))} ms` },
-        { key: "success_rate", label: "Éxito %", numeric: true, format: (v) => `${Math.round((Number(v) || 0) * 100)}%` },
-      ],
-      rows: rows.filter((r) => Number(r.run_count) > 0),
-      defaultSort: "run_count",
-    }),
-  });
-  const sankeyFrame = chartFrame({
-    title: "Flujo: tipo → agente → estado",
-    subtitle: "reparto de ejecuciones por la cadena",
-    body: resumenSankeyHtml(flow),
-    table: dataTable({
-      columns: [
-        { key: "task_type", label: "Tipo de tarea" },
-        { key: "provider_name", label: "Agente" },
-        { key: "status", label: "Estado" },
-        { key: "run_count", label: "Ejec.", numeric: true, format: (v) => dvNum(v) },
-      ],
-      rows: flow,
-      defaultSort: "run_count",
-    }),
-  });
   return `<section class="resumen-relation">
     <div class="resumen-relation-head">
       <span class="eyebrow">Relación Tareas ↔ Agentes</span>
@@ -667,7 +586,6 @@ function resumenAgentTaskSection(analytics) {
     </div>
     <div class="resumen-relation-kpis">${resumenRelationKpis(rows)}</div>
     ${heatFrame}
-    <div class="resumen-2up">${scatterFrame}${sankeyFrame}</div>
   </section>`;
 }
 
@@ -724,8 +642,12 @@ async function renderAgentes(pre) {
     state.resumenAnalytics = await api("/analytics/dashboard?days=30").catch(() => null);
   }
   const analytics = state.resumenAnalytics || {};
-  const percentiles = (analytics.latency_percentiles || []).filter((p) => p && p.provider_name);
-  const leaderboard = (analytics.provider_leaderboard || []).filter((p) => p && p.provider_name);
+  const prod = await cargarProduccion();
+  const enPerfil = prod && prod.agentes_perfil ? new Set(prod.agentes_perfil) : null;
+  const delPerfil = (p) => !enPerfil || enPerfil.has(p.provider_name);
+  performance = performance.filter(delPerfil);
+  const percentiles = (analytics.latency_percentiles || []).filter((p) => p && p.provider_name && delPerfil(p));
+  const leaderboard = (analytics.provider_leaderboard || []).filter((p) => p && p.provider_name && delPerfil(p));
   const nodes = (observability.nodes || []);
 
   // --- Stable ENTITY→seriesIndex map (alphabetical, never rank-based) ---
@@ -845,13 +767,10 @@ async function renderAgentes(pre) {
     }) : null,
   });
 
-  const skillsFrame = chartFrame({
-    title: "Skills por prompt en el tiempo",
-    subtitle: "clic en una tarea para ver matriz skill × agente",
-    body: agentSkillsTimeline(tasks, nodes),
-  });
+  const skillsFrame = prod ? produccionMatrizFrame(prod) : "";
 
   el.innerHTML = `
+    ${produccionAlcance(prod)}
     <div class="agentes-kpis">${kpis}</div>
     <div class="agentes-analytics-row">${leaderFrame}${latencyFrame}</div>
     ${skillsFrame}`;
@@ -931,153 +850,6 @@ function agentLeaderboardGraph(rows) {
       <span><i class="dot"></i> latencia media</span>
       <span><i class="success"></i> éxito</span>
       <span>coste total y coste/ejec. a la derecha</span>
-    </div>
-  </div>`;
-}
-
-function taskSkillSet(task) {
-  const c = task?.classification || {};
-  const skills = new Set((c.recommended_skills || []).filter(Boolean));
-  (c.subtasks || []).forEach((sub) => {
-    if (sub?.recommended_skill) skills.add(sub.recommended_skill);
-  });
-  return [...skills].sort();
-}
-
-function taskPromptLabel(task) {
-  const c = task?.classification || {};
-  const text = task?.prompt || c.original_prompt || c.prompt || c.intent || task?.task_id || "Tarea";
-  return String(text).replace(/\s+/g, " ").trim();
-}
-
-function taskAgentSkillCounts(task) {
-  const c = task?.classification || {};
-  const subtasks = c.subtasks || [];
-  const bySubtask = new Map(subtasks.map((sub) => [sub.id, sub]));
-  const counts = {};
-  const add = (agent, skill, n = 1) => {
-    if (!agent || !skill) return;
-    counts[agent] ||= {};
-    counts[agent][skill] = (counts[agent][skill] || 0) + n;
-  };
-  (task?.delegation?.executions || []).forEach((ex) => {
-    const agent = ex.model_used || ex.backend || "sin agente";
-    const sub = bySubtask.get(ex.subtask_id);
-    if (sub?.recommended_skill) add(agent, sub.recommended_skill);
-    else taskSkillSet(task).forEach((skill) => add(agent, skill, 0));
-  });
-  if (!Object.keys(counts).length) {
-    const agent = c.classified_by || c.recommended_model || "sin ejecución";
-    taskSkillSet(task).forEach((skill) => add(agent, skill));
-  }
-  return counts;
-}
-
-function skillMatrixFromTasks(tasks, selectedTaskId) {
-  const selected = selectedTaskId ? tasks.find((task) => task.task_id === selectedTaskId) : null;
-  const source = selected ? [selected] : tasks;
-  const counts = {};
-  source.forEach((task) => {
-    const taskCounts = taskAgentSkillCounts(task);
-    Object.entries(taskCounts).forEach(([agent, skills]) => {
-      counts[agent] ||= {};
-      Object.entries(skills).forEach(([skill, value]) => {
-        counts[agent][skill] = (counts[agent][skill] || 0) + Number(value || 0);
-      });
-    });
-  });
-  const rows = Object.keys(counts).sort();
-  const cols = [...new Set(rows.flatMap((row) => Object.keys(counts[row] || {})))].sort();
-  const matrix = rows.map((row) => cols.map((col) => Number(counts[row]?.[col] || 0)));
-  return { rows, cols, matrix, selected };
-}
-
-function agentSkillsTimeline(tasks, nodes = []) {
-  const withSkills = (tasks || [])
-    .filter((task) => task && task.task_id && taskSkillSet(task).length)
-    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
-  if (!withSkills.length) {
-    const skillNodes = (nodes || []).filter((n) => n.skill_usage && Object.keys(n.skill_usage).length);
-    const skillCols = [...new Set(skillNodes.flatMap((n) => Object.keys(n.skill_usage)))].sort();
-    if (!skillNodes.length || !skillCols.length) return `<div class="chart-empty">aún no se han usado skills</div>`;
-    const hmRows = skillNodes.map((n) => n.name || n.active_model || "—");
-    const matrix = skillNodes.map((n) => skillCols.map((s) => Number(n.skill_usage[s] || 0)));
-    return heatmap({ rows: hmRows, cols: skillCols, matrix, valueFormat: (v) => dvNum(v) });
-  }
-  if (state.agentesSkillTask && !withSkills.some((task) => task.task_id === state.agentesSkillTask)) {
-    state.agentesSkillTask = null;
-  }
-  const selectedId = state.agentesSkillTask || withSkills[withSkills.length - 1].task_id;
-  state.agentesSkillTask = selectedId;
-  const allSkills = [...new Set(withSkills.flatMap(taskSkillSet))].sort();
-  const width = Math.max(880, 160 + withSkills.length * 96);
-  const height = 320;
-  const pad = { l: 58, r: 28, t: 24, b: 78 };
-  const plotW = width - pad.l - pad.r;
-  const plotH = height - pad.t - pad.b;
-  const xAt = (i) => pad.l + (withSkills.length === 1 ? plotW / 2 : (plotW * i) / (withSkills.length - 1));
-  const countsByTask = withSkills.map((task) => {
-    const counts = {};
-    const taskCounts = taskAgentSkillCounts(task);
-    Object.values(taskCounts).forEach((skills) => {
-      Object.entries(skills).forEach(([skill, value]) => {
-        counts[skill] = (counts[skill] || 0) + Number(value || 0);
-      });
-    });
-    taskSkillSet(task).forEach((skill) => { if (!counts[skill]) counts[skill] = 1; });
-    return counts;
-  });
-  const maxY = Math.max(1, ...countsByTask.flatMap((counts) => Object.values(counts)));
-  const yAt = (v) => pad.t + plotH * (1 - (Number(v) || 0) / maxY);
-  const yTicks = [0, Math.ceil(maxY / 2), maxY];
-  const grid = yTicks.map((v) => {
-    const y = yAt(v);
-    return `<g><line class="agent-skill-grid" x1="${pad.l}" y1="${y}" x2="${width - pad.r}" y2="${y}"></line><text class="agent-skill-axis" x="${pad.l - 10}" y="${y}" text-anchor="end">${dvEsc(dvNum(v))}</text></g>`;
-  }).join("");
-  const lines = allSkills.map((skill, si2) => {
-    const points = countsByTask.map((counts, i) => `${xAt(i).toFixed(1)},${yAt(counts[skill] || 0).toFixed(1)}`).join(" ");
-    const color = dvSeries(si2);
-    const circles = countsByTask.map((counts, i) => {
-      const x = xAt(i), y = yAt(counts[skill] || 0);
-      const active = withSkills[i].task_id === selectedId;
-      return `<circle class="agent-skill-point${active ? " active" : ""}" data-agent-skill-task="${dvEsc(withSkills[i].task_id)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${active ? 5.4 : 4.2}" fill="${color}"><title>${dvEsc(skill)} · ${dvEsc(taskPromptLabel(withSkills[i]))}: ${dvNum(counts[skill] || 0)}</title></circle>`;
-    }).join("");
-    return `<g><polyline class="agent-skill-line" points="${points}" style="stroke:${color}"></polyline>${circles}</g>`;
-  }).join("");
-  const xLabels = withSkills.map((task, i) => {
-    const x = xAt(i);
-    const label = taskPromptLabel(task);
-    const short = label.length > 18 ? `${label.slice(0, 17)}…` : label;
-    const active = task.task_id === selectedId;
-    return `<g class="agent-skill-xlabel${active ? " active" : ""}" data-agent-skill-task="${dvEsc(task.task_id)}">
-      <line class="agent-skill-xmark" x1="${x}" y1="${pad.t + plotH}" x2="${x}" y2="${pad.t + plotH + 6}"></line>
-      <text class="agent-skill-axis x" x="${x}" y="${pad.t + plotH + 20}" text-anchor="middle">${dvEsc(String(task.created_at || "").slice(5, 10) || "—")}</text>
-      <text class="agent-skill-axis prompt" x="${x}" y="${pad.t + plotH + 38}" text-anchor="middle">${dvEsc(short)}</text>
-    </g>`;
-  }).join("");
-  const legend = allSkills.map((skill, i) => `<span><i style="background:${dvSeries(i)}"></i>${dvEsc(skill)}</span>`).join("");
-  const { rows, cols, matrix, selected } = skillMatrixFromTasks(withSkills, selectedId);
-  const matrixHtml = rows.length && cols.length
-    ? heatmap({ rows, cols, matrix, valueFormat: (v) => dvNum(v) })
-    : `<div class="chart-empty">sin matriz para esta tarea</div>`;
-  return `<div class="agent-skill-workbench">
-    <div class="agent-skill-linechart">
-      <svg viewBox="0 0 ${width} ${height}" style="width:${width}px;height:${height}px" preserveAspectRatio="xMinYMin meet" role="img" aria-label="Uso de skills por prompt en el tiempo">
-        <text class="agent-skill-title" x="${pad.l}" y="12">Uso por prompt</text>
-        <text class="agent-skill-axis" x="10" y="${pad.t + 4}">usos</text>
-        ${grid}
-        <line class="agent-skill-base" x1="${pad.l}" y1="${pad.t + plotH}" x2="${width - pad.r}" y2="${pad.t + plotH}"></line>
-        ${lines}
-        ${xLabels}
-      </svg>
-      <div class="agent-skill-legend">${legend}</div>
-    </div>
-    <div class="agent-skill-matrix">
-      <div class="agent-skill-matrix-head">
-        <span class="eyebrow">Matriz skill × agente</span>
-        <b>${dvEsc(selected ? taskPromptLabel(selected) : "Todas las tareas")}</b>
-      </div>
-      ${matrixHtml}
     </div>
   </div>`;
 }
@@ -2618,12 +2390,6 @@ export function initDataviz() {
       leaderToggle.textContent = showGraph ? "ver tabla" : "ver gráfico";
       return;
     }
-    const skillNode = e.target.closest?.("[data-agent-skill-task]");
-    if (skillNode) {
-      state.agentesSkillTask = skillNode.dataset.agentSkillTask || null;
-      renderAgentes({ metrics: state.lastMetrics, tasks: state.tasks, observability: state.lastObservability, performance: state.agentPerformance }).catch(() => {});
-      return;
-    }
     const tog = e.target.closest?.("[data-dv-table-toggle]");
     if (tog) dvToggleTable(tog);
   });
@@ -3514,4 +3280,173 @@ async function renderDetail(task) {
   } catch {
     $("#dDecisions").innerHTML = `<div class="row">No disponible.</div>`;
   }
+}
+
+
+// ---- Producción: acierto, flujo, eficiencia, matriz de skills y «qué mejorar» ---------------------------------
+// Lo calcula /analytics/produccion (app/analytics/produccion.py; el paquete de Atlas dev sirve lo mismo). El alcance
+// «Perfil que ejecuta» deja solo los agentes del perfil por defecto; «Todo el histórico» enseña también los retirados.
+const PROD_PERFIL_KEY = "karajan-produccion-perfil";
+const PROD_NOMBRE = { "claude-cli": "Claude", codex: "Codex", "ollama-qwen": "Qwen local", "atlas-dev": "Atlas dev", "skill /karajan": "Skill /karajan", desconocido: "Sin registrar", "sin delegar": "Sin delegar" };
+const PROD_ESTADO = { classified: "Clasificada", delegated: "Delegada", queued: "En cola", completed: "Completada", failed: "Fallida" };
+const prodNombre = (id) => PROD_NOMBRE[id] || id;
+const prodPct = (v) => (v === null || v === undefined ? "—" : `${Math.round(v * 100)}%`);
+const prodTono = (v) => (v === null || v === undefined ? undefined : v >= 0.8 ? "good" : v >= 0.6 ? "warning" : "critical");
+const prodColor = (v) => (dvStatus(prodTono(v)) || { v: "var(--muted)" }).v;
+
+async function cargarProduccion() {
+  if (!state.produccionPerfil) {
+    try { state.produccionPerfil = localStorage.getItem(PROD_PERFIL_KEY) || "activo"; } catch { state.produccionPerfil = "activo"; }
+  }
+  initProduccion();
+  return api(`/analytics/produccion?dias=0&perfil=${state.produccionPerfil}`).catch(() => null);
+}
+
+function initProduccion() {
+  if (document._prodBound) return;
+  document._prodBound = true;
+  document.addEventListener("click", (e) => {
+    const alcance = e.target.closest?.("[data-produccion-perfil]");
+    if (alcance) {
+      state.produccionPerfil = alcance.dataset.produccionPerfil;
+      try { localStorage.setItem(PROD_PERFIL_KEY, state.produccionPerfil); } catch { /* sin almacenamiento */ }
+      refreshMonitor().catch(() => {});
+      return;
+    }
+    const matriz = e.target.closest?.("[data-produccion-matriz]");
+    if (matriz) {
+      state.produccionMatriz = matriz.dataset.produccionMatriz;
+      refreshMonitor().catch(() => {});
+    }
+  });
+}
+
+function produccionAlcance(prod) {
+  const actual = state.produccionPerfil || "activo";
+  const btn = (id, label) => `<button type="button" class="dv-seg-btn${actual === id ? " active" : ""}" data-produccion-perfil="${id}" aria-pressed="${actual === id}">${label}</button>`;
+  const agentes = prod && prod.agentes_perfil ? prod.agentes_perfil.map(prodNombre).join(" · ") : "todos los agentes registrados";
+  return `<div class="produccion-alcance" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px">
+    <div class="dv-seg" role="group" aria-label="Alcance de las métricas">${btn("activo", "Perfil que ejecuta")}${btn("todos", "Todo el histórico")}</div>
+    <span class="hint">${dvEsc(agentes)}${prod && prod.ultima ? ` · último dato ${dvEsc(String(prod.ultima).slice(0, 10))}` : ""}</span>
+  </div>`;
+}
+
+function produccionHtml(prod) {
+  if (!prod) return `<section class="card"><div class="chart-empty">la analítica de producción no está disponible</div></section>`;
+  const k = prod.kpis || {};
+  const kpis = statTileRow([
+    { label: "Tareas", value: dvNum(k.tareas || 0), sub: `${dvNum(k.delegadas || 0)} delegadas` },
+    { label: "Acierto", value: prodPct(k.acierto), sub: "sin re-trabajo, completada y validada", status: prodTono(k.acierto) },
+    { label: "Re-trabajo", value: prodPct(k.retrabajo), sub: "prompts que vuelven sobre lo mismo", status: k.retrabajo >= 0.4 ? "warning" : undefined },
+    { label: "Revisadas en el baúl", value: dvNum(k.revisadas || 0), sub: "cabecera de agente de las notas" },
+  ]);
+  return `<section class="resumen-relation produccion">
+    <div class="resumen-relation-head">
+      <span class="eyebrow">Producción</span>
+      <h3>Quién recibe cada tarea, a quién se delega y cuánto acierta</h3>
+    </div>
+    ${produccionAlcance(prod)}
+    <div class="resumen-kpis">${kpis}</div>
+    ${produccionSankeyFrame(prod)}
+    <div class="resumen-2up">${produccionEficienciaFrame(prod)}${produccionMejorasFrame(prod)}</div>
+    ${produccionMatrizFrame(prod)}
+    ${produccionCatalogoFrame(prod)}
+  </section>`;
+}
+
+function produccionSankeyFrame(prod) {
+  const f = prod.flujo || { nodos: [], enlaces: [] };
+  const etiqueta = (n) => (n.capa === "entrada" || n.capa === "agente" ? prodNombre(n.nombre) : n.capa === "estado" ? PROD_ESTADO[n.nombre] || n.nombre : n.nombre);
+  const capas = [["entrada", "Entrada"], ["nivel", "Nivel"], ["agente", "Agente"], ["estado", "Estado"]];
+  const columns = capas.map(([c, title], ci) => ({
+    title,
+    nodes: f.nodos.filter((n) => n.capa === c).map((n) => ({ id: n.id, label: `${_shortLabel(etiqueta(n), 16)} ${n.valor}`, color: c === "estado" ? tareasPillColor(n.nombre) : dvSeries(ci) })),
+  }));
+  const links = f.enlaces.map((e) => ({ from: e.origen, to: e.destino, value: e.valor, color: prodColor(e.acierto) }));
+  return chartFrame({
+    title: "Flujo: entrada → nivel → agente → estado",
+    subtitle: `${dvNum(f.total || 0)} tareas · color del tramo = acierto${f.desajustes_nivel ? ` · ${f.desajustes_nivel} con el nivel corregido en la revisión` : ""}`,
+    // Con cuatro capas el Sankey ocuparía media pantalla a todo el ancho: se limita su alto (el SVG mantiene la proporción).
+    body: sankeyChart({ columns, links }).replace("<svg", '<svg style="max-height:380px;width:100%"'),
+    table: dataTable({
+      columns: [
+        { key: "origen", label: "Desde" }, { key: "destino", label: "Hacia" },
+        { key: "valor", label: "Tareas", numeric: true, format: (v) => dvNum(v) },
+        { key: "acierto", label: "Acierto", numeric: true, format: (v) => prodPct(v) },
+      ],
+      rows: f.enlaces, defaultSort: "valor",
+    }),
+  });
+}
+
+function produccionEficienciaFrame(prod) {
+  const agentes = (prod.eficiencia && prod.eficiencia.agentes) || [];
+  const points = agentes.filter((a) => a.latencia_media !== null).map((a) => ({
+    x: Math.round(a.latencia_media), y: a.coste_medio, size: a.tareas, color: prodColor(a.acierto),
+    tip: `${prodNombre(a.agente)} · acierto ${prodPct(a.acierto)} · re-trabajo ${prodPct(a.retrabajo)} · ${a.tareas} tareas · $${Number(a.coste_medio).toFixed(4)}/ejec · ${dvNum(Math.round(a.latencia_media))} ms`,
+  }));
+  return chartFrame({
+    title: "Eficiencia: coste vs latencia",
+    subtitle: "cada burbuja es un agente · tamaño = tareas · color = acierto",
+    body: scatterPlot({ points, xLabel: "Latencia media (ms)", yLabel: "Coste medio (USD)", xFormat: (v) => dvNum(v), yFormat: (v) => `$${Number(v).toFixed(4)}` }),
+    table: dataTable({
+      columns: [
+        { key: "agente", label: "Agente", format: (v) => prodNombre(v) },
+        { key: "tareas", label: "Tareas", numeric: true },
+        { key: "acierto", label: "Acierto", numeric: true, format: (v) => prodPct(v) },
+        { key: "retrabajo", label: "Re-trabajo", numeric: true, format: (v) => prodPct(v) },
+        { key: "coste_medio", label: "Coste/ejec.", numeric: true, format: (v) => `$${Number(v).toFixed(4)}` },
+        { key: "p90", label: "p90 (ms)", numeric: true, format: (v) => dvNum(v || 0) },
+      ],
+      rows: agentes, defaultSort: "tareas",
+    }),
+  });
+}
+
+function produccionMejorasFrame(prod) {
+  const lista = prod.sugerencias || [];
+  const tono = { alta: "critical", media: "warning", baja: "good" };
+  const body = lista.length ? `<ul class="produccion-mejoras" style="list-style:none;margin:0;padding:0;display:grid;gap:8px">${lista.map((sg) => {
+    const st = dvStatus(tono[sg.severidad]) || { v: "var(--muted)", icon: "●" };
+    return `<li style="display:flex;gap:8px;align-items:flex-start;font-size:12px"><span style="color:${st.v}">${st.icon}</span><span>${dvEsc(sg.texto)}${sg.skills ? `<br><span class="hint">${dvEsc(sg.skills.slice(0, 8).join(", "))}${sg.skills.length > 8 ? "…" : ""}</span>` : ""}</span></li>`;
+  }).join("")}</ul>` : `<div class="chart-empty">nada que corregir con los datos del periodo</div>`;
+  return chartFrame({ title: "Qué mejorar", subtitle: "se aplican desde Configuración o el Monitor de agentes de Atlas dev", body });
+}
+
+function produccionMatrizFrame(prod) {
+  const m = prod.matriz || { filas: [], categorias: [] };
+  const alcance = state.produccionMatriz || "usadas";
+  const filas = m.filas.filter((f) => (alcance === "usadas" ? f.usada : alcance === "recomendadas" ? f.usada || f.recomendada > 0 : true)).slice(0, 60);
+  const btn = (id, label) => `<button type="button" class="dv-seg-btn${alcance === id ? " active" : ""}" data-produccion-matriz="${id}" aria-pressed="${alcance === id}">${label}</button>`;
+  return chartFrame({
+    title: "Skills × categoría de tarea",
+    subtitle: `${m.usadas || 0} usadas de ${m.total || 0} en el catálogo · valor = usos`,
+    controls: `<div class="dv-seg" role="group" aria-label="Qué skills ver">${btn("usadas", "Solo usadas")}${btn("recomendadas", "+ recomendadas")}${btn("todas", "Todas")}</div>`,
+    body: filas.length
+      ? heatmap({ rows: filas.map((f) => `${f.skill} · ${f.categoria}`), cols: m.categorias, matrix: filas.map((f) => m.categorias.map((c) => (f.celdas[c] ? f.celdas[c].usos : 0))), valueFormat: (v) => dvNum(v) })
+      : `<div class="chart-empty">ninguna skill en este alcance</div>`,
+    table: dataTable({
+      columns: [
+        { key: "skill", label: "Skill" }, { key: "categoria", label: "Tipo" },
+        { key: "usos", label: "Usos", numeric: true }, { key: "recomendada", label: "Recomendada", numeric: true },
+        { key: "acierto", label: "Acierto", numeric: true, format: (v) => prodPct(v) },
+      ],
+      rows: m.filas.filter((f) => f.usada || f.recomendada), defaultSort: "usos",
+    }),
+  });
+}
+
+function produccionCatalogoFrame(prod) {
+  const c = prod.catalogo || {};
+  const grupo = (titulo, lista) => `<div><p class="eyebrow" style="margin:0 0 6px">${dvEsc(titulo)} · ${(lista || []).length}</p>
+    <ul style="list-style:none;margin:0;padding:0;font-size:12px;display:grid;gap:3px">${(lista || []).slice(0, 8).map((sk) => `<li style="display:flex;gap:6px"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${dvEsc(sk.skill)}">${dvEsc(sk.skill)}</span><span class="hint">${dvEsc(sk.categoria)} · ${sk.usos} usos</span></li>`).join("")}</ul></div>`;
+  const porCat = Object.entries(c.por_categoria || {}).map(([k, n]) => `<span class="pill">${dvEsc(k)} ${n}</span>`).join(" ");
+  return chartFrame({
+    title: "Catálogo de skills",
+    subtitle: porCat ? "" : "sin catálogo",
+    body: `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">${porCat}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+        ${grupo("Top usadas", c.top)}${grupo("Recomendadas sin instalar", c.recomendadas_no_instaladas)}${grupo("Sin actividad", c.sin_actividad)}
+      </div>`,
+  });
 }
