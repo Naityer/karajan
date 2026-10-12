@@ -323,14 +323,17 @@ def matriz_skills(tareas: list[Mapping[str, Any]], acierto: Mapping[str, Mapping
     def fila(nombre: str, descripcion: str = "", instalada: bool = False) -> dict[str, Any]:
         clave = nombres.setdefault(nombre.casefold(), nombre)
         if clave not in filas:
-            filas[clave] = {"skill": clave, "categoria": categoria_skill(clave, descripcion), "instalada": instalada, "usos": 0, "recomendada": 0, "celdas": {}, "_acierto": []}
+            filas[clave] = {"skill": clave, "categoria": categoria_skill(clave, descripcion), "instalada": instalada, "usos": 0, "recomendada": 0, "celdas": {}, "agentes": {}, "_acierto": []}
         return filas[clave]
 
     for s in catalogo:
         fila(str(s["nombre"]), str(s.get("descripcion") or ""), bool(s.get("instalada")))
     categorias: set[str] = set()
+    serie: dict[tuple[str, str], int] = {}
     for t in tareas:
         dominio = _dominio(t)
+        agente = _agente(t)
+        semana = _semana(t["created_at"])
         categorias.add(dominio)
         score = acierto[t["task_id"]]["score"]
         for nombre in sorted(set(t.get("recomendadas") or [])):
@@ -342,6 +345,8 @@ def matriz_skills(tareas: list[Mapping[str, Any]], acierto: Mapping[str, Mapping
             celda = f["celdas"].setdefault(dominio, {"usos": 0, "_acierto": []})
             celda["usos"] += 1
             celda["_acierto"].append(score)
+            f["agentes"][agente] = f["agentes"].get(agente, 0) + 1
+            serie[(semana, f["skill"])] = serie.get((semana, f["skill"]), 0) + 1
     salida = []
     for f in filas.values():
         valores = f.pop("_acierto")
@@ -356,6 +361,7 @@ def matriz_skills(tareas: list[Mapping[str, Any]], acierto: Mapping[str, Mapping
         "filas": sorted(salida, key=lambda f: (-f["usos"], -f["recomendada"], f["skill"].casefold())),
         "usadas": sum(1 for f in salida if f["usada"]),
         "total": len(salida),
+        "serie": [{"semana": s, "skill": k, "usos": n} for (s, k), n in sorted(serie.items())],
     }
 
 

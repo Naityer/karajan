@@ -1390,6 +1390,10 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "codex-cli": 5,
+        "claude-cli": 3
+       },
        "acierto": 0.893,
        "usada": true
       },
@@ -1413,6 +1417,10 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "codex-cli": 2,
+        "claude-cli": 2
+       },
        "acierto": 0.928,
        "usada": true
       },
@@ -1427,6 +1435,10 @@
          "usos": 3,
          "acierto": 0.905
         }
+       },
+       "agentes": {
+        "claude-cli": 2,
+        "codex-cli": 1
        },
        "acierto": 0.905,
        "usada": true
@@ -1443,6 +1455,9 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "claude-cli": 1
+       },
        "acierto": 0.714,
        "usada": true
       },
@@ -1453,6 +1468,7 @@
        "usos": 0,
        "recomendada": 4,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -1463,6 +1479,7 @@
        "usos": 0,
        "recomendada": 3,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -1473,6 +1490,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -1483,6 +1501,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -1493,6 +1512,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -1503,12 +1523,95 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 4,
-     "total": 10
+     "total": 10,
+     "serie": [
+      {
+       "semana": "2026-05-18",
+       "skill": "repo-analyzer",
+       "usos": 1
+      },
+      {
+       "semana": "2026-06-01",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-06-01",
+       "skill": "repo-analyzer",
+       "usos": 1
+      },
+      {
+       "semana": "2026-06-15",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-06-29",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-06-29",
+       "skill": "ponytail",
+       "usos": 1
+      },
+      {
+       "semana": "2026-07-06",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-07-06",
+       "skill": "ponytail",
+       "usos": 1
+      },
+      {
+       "semana": "2026-07-27",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-08-03",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-08-03",
+       "skill": "repo-analyzer",
+       "usos": 1
+      },
+      {
+       "semana": "2026-08-24",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-08-31",
+       "skill": "ponytail",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-21",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-21",
+       "skill": "repo-analyzer",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "docx",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {
@@ -2058,6 +2161,9 @@
          "acierto": 1.0
         }
        },
+       "agentes": {
+        "codex-cli": 1
+       },
        "acierto": 1.0,
        "usada": true
       },
@@ -2072,6 +2178,9 @@
          "usos": 1,
          "acierto": 1.0
         }
+       },
+       "agentes": {
+        "codex-cli": 1
        },
        "acierto": 1.0,
        "usada": true
@@ -2088,6 +2197,9 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "claude-cli": 1
+       },
        "acierto": 0.714,
        "usada": true
       },
@@ -2098,6 +2210,7 @@
        "usos": 0,
        "recomendada": 3,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2108,6 +2221,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2118,6 +2232,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2128,6 +2243,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2138,6 +2254,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2148,6 +2265,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2158,12 +2276,30 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 3,
-     "total": 10
+     "total": 10,
+     "serie": [
+      {
+       "semana": "2026-09-21",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-21",
+       "skill": "repo-analyzer",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "docx",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {
@@ -2662,6 +2798,9 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "claude-cli": 3
+       },
        "acierto": 0.905,
        "usada": true
       },
@@ -2676,6 +2815,9 @@
          "usos": 2,
          "acierto": 0.857
         }
+       },
+       "agentes": {
+        "claude-cli": 2
        },
        "acierto": 0.857,
        "usada": true
@@ -2696,6 +2838,9 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "claude-cli": 2
+       },
        "acierto": 0.857,
        "usada": true
       },
@@ -2711,6 +2856,9 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "claude-cli": 1
+       },
        "acierto": 0.714,
        "usada": true
       },
@@ -2721,6 +2869,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2731,6 +2880,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2741,6 +2891,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2751,6 +2902,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2761,6 +2913,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -2771,12 +2924,55 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 4,
-     "total": 10
+     "total": 10,
+     "serie": [
+      {
+       "semana": "2026-05-18",
+       "skill": "repo-analyzer",
+       "usos": 1
+      },
+      {
+       "semana": "2026-06-15",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-07-06",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-07-06",
+       "skill": "ponytail",
+       "usos": 1
+      },
+      {
+       "semana": "2026-08-03",
+       "skill": "Security-Review",
+       "usos": 1
+      },
+      {
+       "semana": "2026-08-03",
+       "skill": "repo-analyzer",
+       "usos": 1
+      },
+      {
+       "semana": "2026-08-31",
+       "skill": "ponytail",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "docx",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {
@@ -3229,6 +3425,9 @@
          "acierto": 0.714
         }
        },
+       "agentes": {
+        "claude-cli": 1
+       },
        "acierto": 0.714,
        "usada": true
       },
@@ -3239,6 +3438,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3249,6 +3449,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3259,6 +3460,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3269,6 +3471,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3279,6 +3482,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3289,6 +3493,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3299,6 +3504,7 @@
        "usos": 0,
        "recomendada": 1,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3309,6 +3515,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3319,12 +3526,20 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 1,
-     "total": 10
+     "total": 10,
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "skill": "docx",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {
@@ -3929,6 +4144,9 @@
          "acierto": 0.722
         }
        },
+       "agentes": {
+        "codex": 2
+       },
        "acierto": 0.722,
        "usada": true
       },
@@ -3943,6 +4161,9 @@
          "usos": 1,
          "acierto": 1.0
         }
+       },
+       "agentes": {
+        "codex": 1
        },
        "acierto": 1.0,
        "usada": true
@@ -3959,6 +4180,9 @@
          "acierto": 0.222
         }
        },
+       "agentes": {
+        "ollama-qwen": 1
+       },
        "acierto": 0.222,
        "usada": true
       },
@@ -3969,6 +4193,7 @@
        "usos": 0,
        "recomendada": 3,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3979,6 +4204,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -3989,12 +4215,30 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 3,
-     "total": 6
+     "total": 6,
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "skill": "frontend-builder",
+       "usos": 2
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "impeccable",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "pdf",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {
@@ -4644,6 +4888,9 @@
          "acierto": 0.722
         }
        },
+       "agentes": {
+        "codex": 2
+       },
        "acierto": 0.722,
        "usada": true
       },
@@ -4658,6 +4905,9 @@
          "usos": 1,
          "acierto": 1.0
         }
+       },
+       "agentes": {
+        "codex": 1
        },
        "acierto": 1.0,
        "usada": true
@@ -4674,6 +4924,9 @@
          "acierto": 0.222
         }
        },
+       "agentes": {
+        "ollama-qwen": 1
+       },
        "acierto": 0.222,
        "usada": true
       },
@@ -4684,6 +4937,7 @@
        "usos": 0,
        "recomendada": 3,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -4694,6 +4948,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -4704,12 +4959,30 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 3,
-     "total": 6
+     "total": 6,
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "skill": "frontend-builder",
+       "usos": 2
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "impeccable",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "pdf",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {
@@ -5320,6 +5593,9 @@
          "acierto": 0.722
         }
        },
+       "agentes": {
+        "codex": 2
+       },
        "acierto": 0.722,
        "usada": true
       },
@@ -5334,6 +5610,9 @@
          "usos": 1,
          "acierto": 1.0
         }
+       },
+       "agentes": {
+        "codex": 1
        },
        "acierto": 1.0,
        "usada": true
@@ -5350,6 +5629,9 @@
          "acierto": 0.222
         }
        },
+       "agentes": {
+        "ollama-qwen": 1
+       },
        "acierto": 0.222,
        "usada": true
       },
@@ -5360,6 +5642,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -5370,6 +5653,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -5380,12 +5664,30 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 3,
-     "total": 6
+     "total": 6,
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "skill": "frontend-builder",
+       "usos": 2
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "impeccable",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "pdf",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {
@@ -5984,6 +6286,9 @@
          "acierto": 0.722
         }
        },
+       "agentes": {
+        "codex": 2
+       },
        "acierto": 0.722,
        "usada": true
       },
@@ -5998,6 +6303,9 @@
          "usos": 1,
          "acierto": 1.0
         }
+       },
+       "agentes": {
+        "codex": 1
        },
        "acierto": 1.0,
        "usada": true
@@ -6014,6 +6322,9 @@
          "acierto": 0.222
         }
        },
+       "agentes": {
+        "ollama-qwen": 1
+       },
        "acierto": 0.222,
        "usada": true
       },
@@ -6024,6 +6335,7 @@
        "usos": 0,
        "recomendada": 2,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -6034,6 +6346,7 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       },
@@ -6044,12 +6357,30 @@
        "usos": 0,
        "recomendada": 0,
        "celdas": {},
+       "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
      "usadas": 3,
-     "total": 6
+     "total": 6,
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "skill": "frontend-builder",
+       "usos": 2
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "impeccable",
+       "usos": 1
+      },
+      {
+       "semana": "2026-09-28",
+       "skill": "pdf",
+       "usos": 1
+      }
+     ]
     },
     "sugerencias": [
      {

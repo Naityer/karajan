@@ -163,25 +163,16 @@ def test_monitor_ui_exposes_statistics_and_skills_tab() -> None:
     assert 'data-view="monitor">Estadísticas<' in html
     assert 'data-subview="skills"' in html
     assert 'id="subview-skills"' in html
-    assert 'api(`/analytics/skills?days=${state.skillAnalyticsDays}`)' in js
+    # La pestaña Skills lee la analítica de producción (la misma que Resumen y que Atlas dev), con su periodo.
+    assert "const prod = await cargarProduccion(dias);" in js
+    assert "api(`/analytics/produccion?dias=${Number(dias) || 0}&perfil=${state.produccionPerfil}`)" in js
 
 
-def test_skills_tab_falls_back_when_running_backend_predates_endpoint() -> None:
+def test_skills_tab_defaults_to_the_whole_history() -> None:
     js = _frontend_js()
-    assert "function buildSkillsAnalyticsFallback(records, catalogSkills, days)" in js
-    assert "async function loadSkillsAnalyticsReport()" in js
-    assert "if (error.status !== 404) throw error;" in js
-    assert 'api("/tasks?limit=500")' in js
-    assert 'api("/skills")' in js
-    assert "compatibility_mode: true" in js
-    assert "const report = await loadSkillsAnalyticsReport();" in js
-    # `error.status` lo pone `ApiClient.request` (src/core/api-client.js), del
-    # que `api()` es un wrapper desde la extracción a módulos del frontend
-    # (nota "Plan de mejora", §3/§19) — antes vivía inline en app.js.
-    api_client_js = (Path(__file__).parents[1] / "dashboard" / "static" / "src" / "core" / "api-client.js").read_text(
-        encoding="utf-8"
-    )
-    assert "error.status = res.status" in api_client_js
+    # Con «30 días» y los datos parados, la pestaña salía vacía: por defecto, todo el histórico.
+    assert "if (!state._skillsDiasInit) { state.skillAnalyticsDays = 0; state._skillsDiasInit = true; }" in js
+    assert "buildSkillsAnalyticsFallback" not in js
 
 
 def test_skill_inventory_can_switch_to_per_skill_timeline() -> None:
@@ -189,9 +180,8 @@ def test_skill_inventory_can_switch_to_per_skill_timeline() -> None:
     assert 'data-skills-inventory-view="table"' in js
     assert 'data-skills-inventory-view="timeline"' in js
     assert 'localStorage.setItem("karajan-skill-inventory-view"' in js
-    assert "y: Number(point.skills?.[row.name]) || 0" in js
-    assert 'yLabel: "Usos verificados por skill"' in js
-    assert "legendAlways: true" in js
+    assert "(m.serie.find((x) => x.semana === sem && x.skill === f.skill) || {}).usos || 0" in js
+    assert 'yLabel: "Usos por semana", legendAlways: true' in js
 
 
 def test_skill_analytics_endpoint_is_readable_without_mutating_state(karajan_install) -> None:

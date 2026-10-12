@@ -240,7 +240,7 @@ export function eficiencia(tareas: TareaAnalitica[], acierto: Record<string, Aci
   };
 }
 
-interface FilaMatriz { skill: string; categoria: string; instalada: boolean; usos: number; recomendada: number; celdas: Record<string, { usos: number; acierto: number }>; acierto: number | null; usada: boolean }
+interface FilaMatriz { skill: string; categoria: string; instalada: boolean; usos: number; recomendada: number; celdas: Record<string, { usos: number; acierto: number }>; agentes: Record<string, number>; acierto: number | null; usada: boolean }
 
 export function matrizSkills(tareas: TareaAnalitica[], acierto: Record<string, Acierto>, catalogo: SkillCatalogo[]) {
   const filas = new Map<string, FilaMatriz & { _a: number[]; _c: Record<string, number[]> }>();
@@ -249,13 +249,16 @@ export function matrizSkills(tareas: TareaAnalitica[], acierto: Record<string, A
     const k = plegar(nombre);
     if (!nombres.has(k)) nombres.set(k, nombre);
     const clave = nombres.get(k)!;
-    if (!filas.has(clave)) filas.set(clave, { skill: clave, categoria: categoriaSkill(clave, descripcion), instalada, usos: 0, recomendada: 0, celdas: {}, acierto: null, usada: false, _a: [], _c: {} });
+    if (!filas.has(clave)) filas.set(clave, { skill: clave, categoria: categoriaSkill(clave, descripcion), instalada, usos: 0, recomendada: 0, celdas: {}, agentes: {}, acierto: null, usada: false, _a: [], _c: {} });
     return filas.get(clave)!;
   };
   for (const s of catalogo) fila(String(s.nombre), String(s.descripcion ?? ''), Boolean(s.instalada));
   const categorias = new Set<string>();
+  const serie = new Map<string, { semana: string; skill: string; usos: number }>();
   for (const t of tareas) {
     const dominio = dominioDe(t);
+    const agente = agenteDe(t);
+    const sem = semana(t.created_at);
     categorias.add(dominio);
     const score = acierto[t.task_id]!.score;
     for (const n of [...new Set(t.recomendadas ?? [])].sort(cmp)) fila(n).recomendada++;
@@ -264,6 +267,11 @@ export function matrizSkills(tareas: TareaAnalitica[], acierto: Record<string, A
       f.usos++;
       f._a.push(score);
       (f._c[dominio] ??= []).push(score);
+      f.agentes[agente] = (f.agentes[agente] ?? 0) + 1;
+      const ks = `${sem} ${f.skill}`;
+      const p = serie.get(ks) ?? { semana: sem, skill: f.skill, usos: 0 };
+      p.usos++;
+      serie.set(ks, p);
     }
   }
   const salida: FilaMatriz[] = [...filas.values()].map(({ _a, _c, ...f }) => ({
@@ -277,6 +285,7 @@ export function matrizSkills(tareas: TareaAnalitica[], acierto: Record<string, A
     filas: salida.sort((a, b) => b.usos - a.usos || b.recomendada - a.recomendada || cmp(plegar(a.skill), plegar(b.skill))),
     usadas: salida.filter((f) => f.usada).length,
     total: salida.length,
+    serie: [...serie.values()].sort((a, b) => cmp(a.semana, b.semana) || cmp(a.skill, b.skill)),
   };
 }
 

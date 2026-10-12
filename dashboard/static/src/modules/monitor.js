@@ -130,346 +130,102 @@ export async function refreshMonitor() {
 // Recommendations are useful demand signals, but only explicit subtask
 // executions count as usage. Keeping both visible avoids inflated adoption and
 // success rates.
-function buildSkillsAnalyticsFallback(records, catalogSkills, days) {
-  const cutoff = days === 0 ? 0 : Date.now() - days * 86400000;
-  const rows = new Map();
-  const agents = new Map();
-  const taskTypes = new Map();
-  const timeline = new Map();
-  const recommendedTasks = new Set();
-  const executedTasks = new Set();
-  const rowFor = (rawName) => {
-    const name = String(rawName || "").trim();
-    if (!name) return null;
-    const key = name.toLocaleLowerCase();
-    if (!rows.has(key)) rows.set(key, { name, recommended: new Set(), executed: new Set(), executions: 0, successes: 0, failures: 0, latency: 0, cost: 0, agents: {}, task_types: {}, last_used_at: null });
-    return rows.get(key);
-  };
-  (catalogSkills || []).forEach((skill) => rowFor(skill?.name || skill?.slug || skill));
-  const addDimension = (map, dimension, skill) => {
-    if (!map.has(dimension)) map.set(dimension, {});
-    map.get(dimension)[skill] = (map.get(dimension)[skill] || 0) + 1;
-  };
-
-  (records || []).forEach((record) => {
-    const classification = record.classification || {};
-    const taskId = record.task_id || record.id;
-    const taskType = classification.intent || "sin tipo";
-    const classifiedAt = Date.parse(classification.created_at || record.created_at || 0) || 0;
-    if (!cutoff || classifiedAt >= cutoff) {
-      const recommendations = new Set([...(classification.recommended_skills || []), ...(classification.subtasks || []).map((subtask) => subtask.recommended_skill).filter(Boolean)]);
-      recommendations.forEach((skill) => { const row = rowFor(skill); if (row) { row.recommended.add(taskId); recommendedTasks.add(taskId); } });
-    }
-    const delegation = record.delegation;
-    if (!delegation) return;
-    const completedAt = Date.parse(delegation.completed_at || record.updated_at || 0) || 0;
-    if (cutoff && completedAt < cutoff) return;
-    const subtasks = new Map((classification.subtasks || []).map((subtask) => [subtask.id, subtask]));
-    (delegation.executions || []).forEach((execution) => {
-      const skill = subtasks.get(execution.subtask_id)?.recommended_skill;
-      const row = rowFor(skill);
-      if (!row) return;
-      const success = String(execution.status || "").toLowerCase() === "completed";
-      const agent = execution.model_used || execution.backend || "Agente sin identificar";
-      const day = new Date(completedAt || Date.now()).toISOString().slice(0, 10);
-      row.executed.add(taskId);
-      row.executions += 1;
-      row[success ? "successes" : "failures"] += 1;
-      row.latency += Math.max(0, Number(execution.latency_ms) || 0);
-      row.cost += Math.max(0, Number(execution.estimated_cost_usd) || 0);
-      row.agents[agent] = (row.agents[agent] || 0) + 1;
-      row.task_types[taskType] = (row.task_types[taskType] || 0) + 1;
-      row.last_used_at = new Date(completedAt || Date.now()).toISOString();
-      addDimension(agents, agent, row.name);
-      addDimension(taskTypes, taskType, row.name);
-      const point = timeline.get(day) || { date: day, executions: 0, successes: 0, skills: {} };
-      point.executions += 1;
-      point.successes += success ? 1 : 0;
-      point.skills[row.name] = (point.skills[row.name] || 0) + 1;
-      timeline.set(day, point);
-      executedTasks.add(taskId);
-    });
-  });
-
-  const skills = [...rows.values()].map((row) => ({
-    name: row.name,
-    recommended_tasks: row.recommended.size,
-    executed_tasks: row.executed.size,
-    executions: row.executions,
-    successes: row.successes,
-    failures: row.failures,
-    success_rate: row.executions ? row.successes / row.executions : null,
-    avg_latency_ms: row.executions ? row.latency / row.executions : null,
-    total_cost_usd: row.cost,
-    agents: row.agents,
-    task_types: row.task_types,
-    last_used_at: row.last_used_at,
-  })).sort((a, b) => b.executions - a.executions || b.recommended_tasks - a.recommended_tasks || a.name.localeCompare(b.name));
-  const dimensionRows = (source, key) => [...source.entries()].map(([name, values]) => ({ [key]: name, executions: Object.values(values).reduce((sum, value) => sum + value, 0), skills: values })).sort((a, b) => b.executions - a.executions);
-  const executions = skills.reduce((sum, row) => sum + row.executions, 0);
-  const successes = skills.reduce((sum, row) => sum + row.successes, 0);
-  const activeSkills = skills.filter((row) => row.executions > 0).length;
-  return {
-    period_days: days,
-    generated_at: new Date().toISOString(),
-    summary: { catalog_skills: skills.length, recommended_tasks: recommendedTasks.size, executed_tasks: executedTasks.size, executions, active_skills: activeSkills, unused_skills: Math.max(0, skills.length - activeSkills), successes, failures: executions - successes, success_rate: executions ? successes / executions : null, assignment_coverage: recommendedTasks.size ? executedTasks.size / recommendedTasks.size : null },
-    skills,
-    by_agent: dimensionRows(agents, "agent"),
-    by_task_type: dimensionRows(taskTypes, "task_type"),
-    timeline: [...timeline.values()].sort((a, b) => a.date.localeCompare(b.date)),
-    compatibility_mode: true,
-  };
-}
-
-async function loadSkillsAnalyticsReport() {
-  try {
-    return await api(`/analytics/skills?days=${state.skillAnalyticsDays}`);
-  } catch (error) {
-    if (error.status !== 404) throw error;
-    const [tasks, skills] = await Promise.all([
-      api("/tasks?limit=500").catch(() => state.tasks || []),
-      api("/skills").catch(() => state.skills || []),
-    ]);
-    return buildSkillsAnalyticsFallback(tasks, skills, state.skillAnalyticsDays);
-  }
-}
-
 export async function renderSkillsAnalytics() {
   const el = $("#skillsView");
   if (!el) return;
-  const report = await loadSkillsAnalyticsReport();
-  const summary = report.summary || {};
-  const skills = report.skills || [];
-  const active = skills.filter((row) => row.executions > 0);
-  const pct = (value) => value == null ? "—" : `${Math.round(Number(value) * 100)}%`;
-  const periodLabel = state.skillAnalyticsDays === 0 ? "Todo" : `${state.skillAnalyticsDays} días`;
-  const periodControls = [7, 30, 90, 365, 0].map((days) =>
-    `<button type="button" class="skills-period${state.skillAnalyticsDays === days ? " active" : ""}" data-skills-period="${days}">${days === 0 ? "Todo" : `${days} d`}</button>`
-  ).join("");
+  // Por defecto, todo el histórico: con los datos parados, «30 días» enseñaba la página vacía.
+  if (!state._skillsDiasInit) { state.skillAnalyticsDays = 0; state._skillsDiasInit = true; }
+  const dias = Number(state.skillAnalyticsDays) || 0;
+  const prod = await cargarProduccion(dias);
+  if (!prod) { el.innerHTML = `<div class="chart-empty">la analítica de producción no está disponible</div>`; return; }
+  const m = prod.matriz || { filas: [], categorias: [], serie: [] };
+  const usadas = m.filas.filter((f) => f.usada);
+  const usos = usadas.reduce((a, f) => a + f.usos, 0);
+  const aciertoMedio = usos ? usadas.reduce((a, f) => a + (f.acierto || 0) * f.usos, 0) / usos : null;
+  const sinEjecutar = m.filas.filter((f) => f.recomendada > 0 && !f.usada);
+  const sinUso = (prod.catalogo && prod.catalogo.sin_actividad) || [];
+  const periodControls = [7, 30, 90, 365, 0].map((d) =>
+    `<button type="button" class="skills-period${dias === d ? " active" : ""}" data-skills-period="${d}">${d === 0 ? "Todo" : `${d} d`}</button>`).join("");
 
-  const timeline = report.timeline || [];
-  const timelineChart = lineChart({
-    series: [
-      { name: "Ejecuciones", seriesIndex: 0, points: timeline.map((row) => ({ x: row.date, y: row.executions })) },
-      { name: "Correctas", seriesIndex: 2, points: timeline.map((row) => ({ x: row.date, y: row.successes })) },
-    ],
-    xFormat: (value) => String(value).slice(5),
-    yFormat: "int",
-    yLabel: "Ejecuciones verificadas",
-    small: true,
-  });
-  const ranking = hbarChart({
-    rows: active.slice(0, 10).map((row, index) => ({ label: row.name, value: row.executions, seriesIndex: index })),
-    valueFormat: "int",
-    maxLabelWidth: 160,
-  });
-  const taskRows = (report.by_task_type || []).slice(0, 10).map((row, index) => ({
-    label: row.task_type,
-    value: row.executions,
-    seriesIndex: index,
-  }));
-  const taskChart = hbarChart({ rows: taskRows, valueFormat: "int", maxLabelWidth: 180 });
+  // Uso semanal (total) y por skill.
+  const semanas = [...new Set((m.serie || []).map((x) => x.semana))].sort();
+  const porSemana = semanas.map((sem) => ({ x: sem, y: m.serie.filter((x) => x.semana === sem).reduce((a, x) => a + x.usos, 0) }));
+  const actividad = semanas.length
+    ? lineChart({ series: [{ name: "Usos verificados", seriesIndex: 0, points: porSemana }], xFormat: (v) => String(v).slice(5), yFormat: "int", yLabel: "Usos por semana", small: true })
+    : `<div class="chart-empty">sin usos verificados en el periodo</div>`;
+  const ranking = usadas.length
+    ? hbarChart({ rows: usadas.slice(0, 10).map((f, i) => ({ label: f.skill, value: f.usos, seriesIndex: i })), valueFormat: "int", maxLabelWidth: 160 })
+    : `<div class="chart-empty">ninguna skill ejecutada</div>`;
+  const porCategoria = {};
+  usadas.forEach((f) => { porCategoria[f.categoria] = (porCategoria[f.categoria] || 0) + f.usos; });
+  const categorias = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
+  const categoriaChart = categorias.length
+    ? hbarChart({ rows: categorias.map(([k, v], i) => ({ label: k, value: v, seriesIndex: i })), valueFormat: "int", maxLabelWidth: 120 })
+    : `<div class="chart-empty">sin datos</div>`;
+  const top = usadas.slice(0, 8);
+  const agentes = [...new Set(top.flatMap((f) => Object.keys(f.agentes || {})))].sort();
+  const agenteSkill = top.length && agentes.length
+    ? heatmap({ rows: agentes.map(prodNombre), cols: top.map((f) => f.skill), matrix: agentes.map((a) => top.map((f) => (f.agentes || {})[a] || 0)), valueFormat: "int" })
+    : `<div class="chart-empty">sin datos</div>`;
 
-  const topSkills = active.slice(0, 8).map((row) => row.name);
-  const agents = (report.by_agent || []).slice(0, 8);
-  const agentMatrix = agents.map((agent) => topSkills.map((skill) => Number(agent.skills?.[skill]) || 0));
-  const agentHeatmap = heatmap({
-    rows: agents.map((row) => row.agent),
-    cols: topSkills,
-    matrix: agentMatrix,
-    valueFormat: "int",
-  });
-
-  const detailRows = skills.map((row, seriesIndex) => ({
-    ...row,
-    seriesIndex,
-    agents_label: Object.keys(row.agents || {}).join(", ") || "—",
-  }));
-  const detailTable = dataTable({
+  const inventario = dataTable({
     columns: [
-      { key: "name", label: "Skill", dot: true },
-      { key: "recommended_tasks", label: "Recomendada", numeric: true },
-      { key: "executions", label: "Usos", numeric: true },
-      { key: "success_rate", label: "Acierto", numeric: true, format: (value, row) => `${pct(value)} <span class="hint">n=${row.executions}</span>` },
-      { key: "agents_label", label: "Agentes" },
-      { key: "avg_latency_ms", label: "Latencia", numeric: true, format: (value) => value == null ? "—" : `${Math.round(value)} ms` },
-      { key: "total_cost_usd", label: "Coste", numeric: true, format: (value) => `$${Number(value || 0).toFixed(4)}` },
+      { key: "skill", label: "Skill" },
+      { key: "categoria", label: "Tipo" },
+      { key: "recomendada", label: "Recomendada", numeric: true },
+      { key: "usos", label: "Usos", numeric: true },
+      { key: "acierto", label: "Acierto", numeric: true, format: (v) => prodPct(v) },
+      { key: "_agentes", label: "Agentes" },
+      { key: "_instalada", label: "Instalada" },
     ],
-    rows: detailRows,
-  });
-  const evolutionSeries = active.map((row, seriesIndex) => ({
-    name: row.name,
-    seriesIndex,
-    points: timeline.map((point) => ({
-      x: point.date,
-      y: Number(point.skills?.[row.name]) || 0,
+    rows: m.filas.filter((f) => f.usada || f.recomendada).map((f) => ({
+      ...f, _agentes: Object.keys(f.agentes || {}).map(prodNombre).join(", ") || "—", _instalada: f.instalada ? "sí" : "no",
     })),
-  }));
-  const evolutionChart = evolutionSeries.length && timeline.length
+    defaultSort: "usos", defaultDir: "desc",
+  });
+  const evolucion = usadas.length && semanas.length
     ? lineChart({
-        series: evolutionSeries,
-        xFormat: (value) => String(value).slice(5),
-        yFormat: "int",
-        yLabel: "Usos verificados por skill",
-        legendAlways: true,
+        series: usadas.slice(0, 8).map((f, i) => ({ name: f.skill, seriesIndex: i, points: semanas.map((sem) => ({ x: sem, y: (m.serie.find((x) => x.semana === sem && x.skill === f.skill) || {}).usos || 0 })) })),
+        xFormat: (v) => String(v).slice(5), yFormat: "int", yLabel: "Usos por semana", legendAlways: true,
       })
-    : `<div class="chart-empty">Todavía no hay ejecuciones verificadas para dibujar la evolución.</div>`;
+    : `<div class="chart-empty">Todavía no hay usos verificados para dibujar la evolución.</div>`;
   const inventoryControls = `<div class="skills-inventory-toggle" role="group" aria-label="Vista del inventario">
     <button type="button" data-skills-inventory-view="table" aria-pressed="${state.skillInventoryView === "table"}" class="${state.skillInventoryView === "table" ? "active" : ""}">Inventario</button>
     <button type="button" data-skills-inventory-view="timeline" aria-pressed="${state.skillInventoryView === "timeline"}" class="${state.skillInventoryView === "timeline" ? "active" : ""}">Evolución</button>
   </div>`;
-  const inventoryBody = state.skillInventoryView === "timeline" ? evolutionChart : detailTable;
 
   el.innerHTML = `<div class="skills-head">
-      <div><span class="eyebrow">TELEMETRÍA DE SKILLS</span><h1>Uso y efectividad</h1><p>Qué skills se recomiendan, cuáles se ejecutan y qué agentes obtienen resultados.</p></div>
+      <div><span class="eyebrow">TELEMETRÍA DE SKILLS</span><h1>Uso y efectividad</h1><p>Qué skills se recomiendan, cuáles se usan de verdad (o se revisaron en el baúl) y con qué acierto.</p></div>
       <div class="skills-periods" role="group" aria-label="Periodo de análisis">${periodControls}</div>
     </div>
+    ${produccionAlcance(prod)}
     ${statTileRow([
-      { label: "Skills activas", value: summary.active_skills ?? 0, sub: `${summary.catalog_skills ?? 0} identificadas · ${periodLabel}` },
-      { label: "Usos verificados", value: summary.executions ?? 0, sub: `${summary.executed_tasks ?? 0} tareas con ejecución` },
-      { label: "Tasa de acierto", value: pct(summary.success_rate), sub: `n=${summary.executions ?? 0} ejecuciones` },
-      { label: "Cobertura de asignación", value: pct(summary.assignment_coverage), sub: `${summary.recommended_tasks ?? 0} tareas con recomendación` },
-      { label: "Sin uso", value: summary.unused_skills ?? 0, sub: "Oportunidad de revisión o retirada" },
+      { label: "Skills usadas", value: dvNum(usadas.length), sub: `de ${dvNum(m.total || 0)} en el catálogo` },
+      { label: "Usos verificados", value: dvNum(usos), sub: "subtareas ejecutadas o revisadas" },
+      { label: "Acierto con skill", value: prodPct(aciertoMedio), sub: "de las tareas en que se usaron", status: prodTono(aciertoMedio) },
+      { label: "Recomendadas sin usar", value: dvNum(sinEjecutar.length), sub: "candidatas a asignar a un agente", status: sinEjecutar.length ? "warning" : undefined },
+      { label: "Instaladas sin uso", value: dvNum(sinUso.length), sub: "oportunidad de revisión o retirada" },
     ])}
     <div class="skills-grid skills-grid-primary">
-      ${chartFrame({ title: "Actividad", subtitle: "uso real por día", body: timelineChart })}
-      ${chartFrame({ title: "Skills más utilizadas", subtitle: "ejecuciones verificadas", body: ranking })}
+      ${chartFrame({ title: "Actividad", subtitle: "usos verificados por semana", body: actividad })}
+      ${chartFrame({ title: "Skills más utilizadas", subtitle: "usos verificados", body: ranking })}
     </div>
     <div class="skills-grid skills-grid-secondary">
-      ${chartFrame({ title: "Reparto por tarea", subtitle: "intención clasificada", body: taskChart })}
-      ${chartFrame({ title: "Agente × skill", subtitle: "quién utilizó cada capacidad", body: agentHeatmap })}
+      ${chartFrame({ title: "Por tipo de skill", subtitle: "usos por categoría", body: categoriaChart })}
+      ${chartFrame({ title: "Agente × skill", subtitle: "quién utilizó cada capacidad", body: agenteSkill })}
     </div>
-    ${chartFrame({ title: "Inventario de comportamiento", subtitle: state.skillInventoryView === "timeline" ? "evolución diaria por skill activa" : "recomendación y ejecución no se mezclan", controls: inventoryControls, body: inventoryBody })}
-    <p class="skills-method"><b>Método.</b> Un uso solo se contabiliza cuando una subtarea ejecutada declara la skill. La tasa de acierto es completadas / ejecuciones; el tamaño de muestra aparece como <code>n</code>.${report.compatibility_mode ? " <span>Datos calculados en modo compatible; reinicia el backend para activar el endpoint dedicado.</span>" : ""}</p>`;
+    ${produccionMatrizFrame(prod)}
+    ${chartFrame({ title: "Inventario de comportamiento", subtitle: state.skillInventoryView === "timeline" ? "evolución semanal de las más usadas" : "recomendación y uso no se mezclan", controls: inventoryControls, body: state.skillInventoryView === "timeline" ? evolucion : inventario })}
+    ${produccionCatalogoFrame(prod)}
+    <p class="skills-method"><b>Método.</b> Un uso cuenta cuando una subtarea ejecutada declara la skill o cuando la cabecera de agente de la tarea en el baúl la marca como usada. El acierto pesa el re-trabajo (prompts que vuelven sobre lo mismo), que la tarea se complete, la validación y la revisión humana.</p>`;
 }
 
-// ---- Resumen sub-view (Phase B) --------------------------------------------
-// Executive KPI/analytics dashboard built entirely from the Phase A dataviz
-// component library (statTileRow, smallMultiples, hbarChart, chartFrame,
-// dataTable) so it is theme-aware (dark/light/amber) and colourblind-safe by
-// construction. Accepts an optional pre-fetched {metrics, observability,
-// performance} bundle (the refreshMonitor hot path passes it to avoid a
-// duplicate round-trip); otherwise it self-fetches. The richer over-time
-// analytics (/analytics/dashboard) is cached in state.resumenAnalytics — fetched
-// fresh on sub-view entry, reused on SSE/poll so DuckDB stays off the hot loop.
 async function renderResumen(pre) {
   const el = $("#resumenView");
   if (!el) return;
-  let metrics, observability, performance;
-  if (pre && pre.metrics && pre.observability) {
-    ({ metrics, observability, performance } = pre);
-  } else {
-    [metrics, observability, performance] = await Promise.all([
-      api("/metrics"),
-      api("/observability"),
-      api("/agents/performance").catch(() => []),
-    ]);
-  }
-  metrics = metrics || {};
-  observability = observability || {};
-  performance = performance || [];
-  if (!state.resumenAnalytics) {
-    state.resumenAnalytics = await api("/analytics/dashboard?days=30").catch(() => null);
-  }
-  const analytics = state.resumenAnalytics;
-
-  const cl = computeCostLatency(performance);
-  const health = observability.health || {};
-  const modelUsage = observability.model_usage || [];
-  const byLevel = metrics.by_level || {};
-  const rot = (analytics && analytics.runs_over_time) || [];
-
-  // --- 1) Hero KPI tiles ---
-  let successPct = null;
-  if (rot.length) {
-    const r = rot.reduce((a, b) => a + Number(b.run_count || 0), 0);
-    const s = rot.reduce((a, b) => a + Number(b.success_count || 0), 0);
-    successPct = r ? Math.round((s / r) * 100) : 100;
-  } else if (cl.tasks) {
-    successPct = Math.round((1 - cl.errors / cl.tasks) * 100);
-  }
-  const successStatus = successPct == null ? undefined
-    : successPct >= 90 ? "good" : successPct >= 60 ? "warning" : "critical";
-  const activeAgents = performance.filter((p) => Number(p.task_count || 0) > 0).length;
-  const humanReview = Number(metrics.human_review_required || 0);
-  const totalCost = cl.hasData ? cl.totalCost : Number(metrics.total_estimated_cost_usd || 0);
-  const avgLatency = cl.hasData ? cl.avgLatency : Number(health.avg_latency_ms || 0);
-  const completed = metrics.by_status?.completed || 0;
-  const kpis = statTileRow([
-    { label: "Total tareas", value: dvNum(metrics.total_tasks || 0), sub: `${completed} completadas · ${metrics.total_subtasks || 0} subtareas` },
-    { label: "Coste total", value: `$${Number(totalCost).toFixed(4)}`, sub: "acumulado (histórico)" },
-    { label: "Latencia media", value: `${dvNum(Math.round(avgLatency))} ms`, sub: "ponderada por ejecuciones" },
-    { label: "Tasa de éxito", value: successPct == null ? "—" : `${successPct}%`, sub: `${cl.errors} errores`, status: successStatus },
-    { label: "Agentes activos", value: dvNum(activeAgents), sub: `${performance.length} proveedores` },
-    { label: "En revisión humana", value: dvNum(humanReview), sub: humanReview > 0 ? "requiere atención" : "al día", status: humanReview > 0 ? "warning" : "good" },
-  ]);
-
-  // --- 2) Actividad en el tiempo (small multiples, shared x-axis) ---
-  const xFmt = (x) => String(x || "").slice(5, 10); // MM-DD
-  const smCharts = [
-    { title: "Ejecuciones/día", xFormat: xFmt, yFormat: (v) => dvNum(v),
-      series: [{ name: "Ejecuciones", seriesIndex: 0, points: rot.map((b) => ({ x: b.bucket, y: Number(b.run_count || 0) })) }] },
-    { title: "Coste/día (USD)", xFormat: xFmt, yFormat: (v) => `$${Number(v).toFixed(4)}`,
-      series: [{ name: "Coste", seriesIndex: 1, points: rot.map((b) => ({ x: b.bucket, y: Number(b.total_cost || 0) })) }] },
-    { title: "Latencia media/día (ms)", xFormat: xFmt, yFormat: (v) => dvNum(v),
-      series: [{ name: "Latencia", seriesIndex: 2, points: rot.map((b) => ({ x: b.bucket, y: Math.round(Number(b.avg_latency_ms || 0)) })) }] },
-  ];
-  const activityBody = rot.length
-    ? smallMultiples({ charts: smCharts })
-    : `<div class="chart-empty">${analytics ? "sin ejecuciones en la ventana" : "analítica no disponible (DuckDB opcional)"}</div>`;
-  const activityFrame = chartFrame({
-    title: "Actividad en el tiempo",
-    subtitle: analytics ? `últimos ${analytics.window_days || 30} días · una escala Y por métrica` : "",
-    body: activityBody,
-    table: rot.length ? dataTable({
-      columns: [
-        { key: "bucket", label: "Día", format: (v) => xFmt(v) },
-        { key: "run_count", label: "Ejec", numeric: true },
-        { key: "total_cost", label: "Coste", numeric: true, format: (v) => `$${Number(v).toFixed(4)}` },
-        { key: "avg_latency_ms", label: "Latencia (ms)", numeric: true, format: (v) => dvNum(Math.round(Number(v) || 0)) },
-      ],
-      rows: rot,
-    }) : null,
-  });
-
-  // --- 3) Distribución por nivel de complejidad (ordinal) ---
-  const LEVELS = [
-    ["level_1_simple", "1 · Simple"], ["level_2_moderate", "2 · Moderado"],
-    ["level_3_intermediate", "3 · Intermedio"], ["level_4_complex", "4 · Complejo"],
-    ["level_5_critical", "5 · Crítico"],
-  ];
-  const levelRows = LEVELS.map(([k, lab], i) => ({ label: lab, value: Number(byLevel[k] || 0), seriesIndex: i }));
-  const complexityFrame = chartFrame({
-    title: "Distribución por nivel de complejidad",
-    subtitle: `${dvNum(metrics.total_tasks || 0)} tareas · complejidad media ${dvNum(metrics.average_complexity_score || 0)}`,
-    body: hbarChart({ rows: levelRows, valueFormat: (v) => dvNum(v), maxLabelWidth: 96 }),
-    table: dataTable({
-      columns: [{ key: "label", label: "Nivel", dot: true }, { key: "value", label: "Tareas", numeric: true }],
-      rows: levelRows,
-    }),
-  });
-
-  // --- 4) Reparto por modelo (llamadas; table adds coste/latencia) ---
-  const modelRows = modelUsage.slice()
-    .sort((a, b) => Number(b.calls || 0) - Number(a.calls || 0))
-    .map((m, i) => ({ label: m.model, value: Number(m.calls || 0), seriesIndex: i }));
-  const modelFrame = chartFrame({
-    title: "Reparto por modelo",
-    subtitle: "llamadas por modelo",
-    body: modelRows.length ? hbarChart({ rows: modelRows, valueFormat: (v) => dvNum(v), maxLabelWidth: 160 })
-      : `<div class="chart-empty">sin llamadas a modelo</div>`,
-    table: modelUsage.length ? dataTable({
-      columns: [
-        { key: "model", label: "Modelo" },
-        { key: "calls", label: "Llamadas", numeric: true },
-        { key: "estimated_cost", label: "Coste", numeric: true, format: (v) => `$${Number(v || 0).toFixed(4)}` },
-        { key: "latency_ms", label: "Latencia (ms)", numeric: true, format: (v) => dvNum(Number(v) || 0) },
-      ],
-      rows: modelUsage,
-    }) : null,
-  });
-
-  // --- 5) Salud del sistema (compact status tiles + donut) ---
+  const observability = (pre && pre.observability) || await api("/observability").catch(() => ({}));
+  const prod = await cargarProduccion();
+  const health = (observability && observability.health) || {};
   const healthPct = health.observed_nodes ? Math.round((health.healthy_nodes / health.observed_nodes) * 100) : 0;
   const tone = health.status === "healthy" ? "ok" : health.status === "error" ? "bad" : "warn";
   const healthTiles = statTileRow([
@@ -478,128 +234,15 @@ async function renderResumen(pre) {
     { label: "En error", value: dvNum(health.error_nodes || 0), status: health.error_nodes > 0 ? "critical" : undefined },
     { label: "Tareas activas", value: dvNum(health.active_tasks || 0), sub: `${health.blocked_tasks || 0} bloqueadas` },
   ]);
-  const healthBody = `<div class="resumen-health">
-    <div class="resumen-health-ring">
-      ${svgDonut(healthPct, { tone, sub: "salud" })}
-      <span class="pill ${tone}">${dvEsc(health.status || "—")}</span>
-    </div>
-    <div class="resumen-health-tiles">${healthTiles}</div>
-  </div>`;
   const healthFrame = chartFrame({
     title: "Salud del sistema",
-    subtitle: `latencia media ${dvNum(Math.round(health.avg_latency_ms || 0))} ms`,
-    body: healthBody,
+    subtitle: "estado de los agentes del perfil ahora mismo",
+    body: `<div class="resumen-health">
+      <div class="resumen-health-ring">${svgDonut(healthPct, { tone, sub: "salud" })}<span class="pill ${tone}">${dvEsc(health.status || "—")}</span></div>
+      <div class="resumen-health-tiles">${healthTiles}</div>
+    </div>`,
   });
-
-  const relationSection = analytics ? resumenAgentTaskSection(analytics) : "";
-  const prod = await cargarProduccion();
-
-  el.innerHTML = `
-    ${produccionHtml(prod)}
-    <div class="resumen-kpis">${kpis}</div>
-    ${activityFrame}
-    ${relationSection}
-    <div class="resumen-2up">${complexityFrame}${modelFrame}</div>
-    ${healthFrame}`;
-}
-
-// ---- Resumen: relación Tareas ↔ Agentes ------------------------------------
-// Built on the additive DuckDB cross-tabs (agent_task_matrix / agent_task_flow):
-// a KPI band, a metric-switchable Agente×Tipo heatmap, a cost-vs-latency
-// efficiency scatter and a Tipo→Agente→Estado flow Sankey. Every mark reads real
-// run data; the whole section is omitted when analytics is unavailable/empty.
-const RESUMEN_HM_METRICS = {
-  volumen: { label: "Volumen", pick: (r) => Number(r.run_count) || 0, fmt: (v) => dvNum(v), note: "ejecuciones por combinación" },
-  exito: { label: "Éxito %", pick: (r) => Math.round((Number(r.success_rate) || 0) * 100), fmt: (v) => `${dvNum(v)}%`, note: "% de ejecuciones completadas sin error" },
-  coste: { label: "Coste medio", pick: (r) => Number(r.avg_cost_per_run) || 0, fmt: (v) => `$${Number(v).toFixed(4)}`, note: "coste medio por ejecución (USD)" },
-  latencia: { label: "Latencia media", pick: (r) => Math.round(Number(r.avg_latency_ms) || 0), fmt: (v) => `${dvNum(v)} ms`, note: "latencia media por ejecución" },
-};
-
-const _shortLabel = (s, n = 22) => { s = String(s || "—"); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
-
-function resumenAgentTaskPivot(rows, metricKey) {
-  const m = RESUMEN_HM_METRICS[metricKey] || RESUMEN_HM_METRICS.volumen;
-  const agentVol = {}, typeVol = {};
-  rows.forEach((r) => {
-    agentVol[r.provider_name] = (agentVol[r.provider_name] || 0) + Number(r.run_count || 0);
-    typeVol[r.task_type] = (typeVol[r.task_type] || 0) + Number(r.run_count || 0);
-  });
-  const agents = Object.keys(agentVol).sort((a, b) => agentVol[b] - agentVol[a]).slice(0, 10);
-  const types = Object.keys(typeVol).sort((a, b) => typeVol[b] - typeVol[a]).slice(0, 8);
-  const look = new Map(rows.map((r) => [`${r.provider_name}||${r.task_type}`, r]));
-  const matrix = agents.map((a) => types.map((t) => { const r = look.get(`${a}||${t}`); return r ? m.pick(r) : 0; }));
-  return { agents, types, matrix, valueFormat: m.fmt, note: m.note, label: m.label };
-}
-
-// Heatmap body as an HTML string (used for the first paint and on metric switch).
-function resumenHeatmapHtml() {
-  const rows = (state.resumenAnalytics && state.resumenAnalytics.agent_task_matrix) || [];
-  if (!rows.length) return `<div class="chart-empty">sin datos de agente × tarea</div>`;
-  const metric = state.resumenHeatMetric || "volumen";
-  const p = resumenAgentTaskPivot(rows, metric);
-  return heatmap({ rows: p.agents, cols: p.types, matrix: p.matrix, valueFormat: p.valueFormat }) +
-    `<p class="dv-hm-note"><b>${dvEsc(p.label)}</b> — ${dvEsc(p.note)}</p>`;
-}
-
-// Cost-vs-latency efficiency scatter: one bubble per agent×tipo, hue by tipo.
-// KPI band summarising the agent↔task relationship (top agent/type/combo, cost
-// focus, coverage, concentration) — all derived from the same cross-tab.
-function resumenRelationKpis(rows) {
-  const totalRuns = rows.reduce((a, r) => a + Number(r.run_count || 0), 0) || 1;
-  const agentVol = {}, typeVol = {};
-  rows.forEach((r) => {
-    agentVol[r.provider_name] = (agentVol[r.provider_name] || 0) + Number(r.run_count || 0);
-    typeVol[r.task_type] = (typeVol[r.task_type] || 0) + Number(r.run_count || 0);
-  });
-  const topAgent = Object.entries(agentVol).sort((a, b) => b[1] - a[1])[0];
-  const topType = Object.entries(typeVol).sort((a, b) => b[1] - a[1])[0];
-  const topCombo = rows.slice().sort((a, b) => Number(b.run_count) - Number(a.run_count))[0];
-  const costCombo = rows.slice().sort((a, b) => Number(b.total_cost) - Number(a.total_cost))[0];
-  const nAgents = Object.keys(agentVol).length, nTypes = Object.keys(typeVol).length;
-  const concentration = topCombo ? Math.round((Number(topCombo.run_count) / totalRuns) * 100) : 0;
-  return statTileRow([
-    { label: "Agente más activo", value: _shortLabel(topAgent ? topAgent[0] : "—", 16), sub: topAgent ? `${Math.round((topAgent[1] / totalRuns) * 100)}% de ejecuciones` : "—" },
-    { label: "Tipo dominante", value: _shortLabel(topType ? topType[0] : "—", 16), sub: topType ? `${dvNum(topType[1])} ejecuciones` : "—" },
-    { label: "Combinación estrella", value: topCombo ? `${dvNum(topCombo.run_count)} ejec` : "—", sub: topCombo ? `${_shortLabel(topCombo.provider_name, 12)} · ${_shortLabel(topCombo.task_type, 12)}` : "—" },
-    { label: "Foco de coste", value: costCombo ? `$${Number(costCombo.total_cost).toFixed(4)}` : "—", sub: costCombo ? `${_shortLabel(costCombo.provider_name, 12)} · ${_shortLabel(costCombo.task_type, 12)}` : "—" },
-    { label: "Cobertura", value: `${nAgents}×${nTypes}`, sub: `${rows.length} combinaciones activas` },
-    { label: "Concentración", value: `${concentration}%`, sub: "en la combinación top", status: concentration >= 60 ? "warning" : undefined },
-  ]);
-}
-
-function resumenAgentTaskSection(analytics) {
-  const rows = (analytics && analytics.agent_task_matrix) || [];
-  const flow = (analytics && analytics.agent_task_flow) || [];
-  if (!rows.length) return ""; // omit entirely when the cross-tab is empty
-  const metric = state.resumenHeatMetric || "volumen";
-  const switchHtml = `<div class="dv-seg" role="tablist" aria-label="Métrica del heatmap">${Object.entries(RESUMEN_HM_METRICS).map(([k, m]) => `<button type="button" class="dv-seg-btn${k === metric ? " active" : ""}" data-resumen-hm-metric="${k}" role="tab" aria-selected="${k === metric}">${dvEsc(m.label)}</button>`).join("")}</div>`;
-  const heatFrame = chartFrame({
-    title: "Agente × Tipo de tarea",
-    subtitle: "especialización y carga · elige la métrica",
-    controls: switchHtml,
-    body: `<div id="resumenHeatmap" class="resumen-heatmap">${resumenHeatmapHtml()}</div>`,
-  });
-  return `<section class="resumen-relation">
-    <div class="resumen-relation-head">
-      <span class="eyebrow">Relación Tareas ↔ Agentes</span>
-      <h3>Quién ejecuta qué, con qué eficiencia y cómo fluye</h3>
-    </div>
-    <div class="resumen-relation-kpis">${resumenRelationKpis(rows)}</div>
-    ${heatFrame}
-  </section>`;
-}
-
-// Metric switch: repaint only the heatmap body (keeps the rest of Resumen stable).
-function updateResumenHeatmap(metric) {
-  if (!RESUMEN_HM_METRICS[metric]) return;
-  state.resumenHeatMetric = metric;
-  const box = $("#resumenHeatmap");
-  if (box) box.innerHTML = resumenHeatmapHtml();
-  $$("[data-resumen-hm-metric]").forEach((b) => {
-    const on = b.dataset.resumenHmMetric === metric;
-    b.classList.toggle("active", on);
-    b.setAttribute("aria-selected", String(on));
-  });
+  el.innerHTML = `${produccionHtml(prod)}${healthFrame}`;
 }
 
 function _renderAgentPanels(nodes, flow, audit) {
@@ -697,7 +340,10 @@ async function renderAgentes(pre) {
   ]);
 
   // --- 1) Leaderboard (sortable dataTable, default: ejecuciones desc) ---
+  const efic = new Map(((prod && prod.eficiencia && prod.eficiencia.agentes) || []).map((a) => [a.agente, a]));
   const leaderRows = rows.map((r) => ({
+    acierto: efic.get(r.provider) ? efic.get(r.provider).acierto : null,
+    retrabajo: efic.get(r.provider) ? efic.get(r.provider).retrabajo : null,
     provider: r.provider,
     seriesIndex: r.seriesIndex,
     tasks: r.tasks,
@@ -712,14 +358,14 @@ async function renderAgentes(pre) {
     columns: [
       { key: "provider", label: "Agente", dot: true },
       { key: "tasks", label: "Ejecuciones", numeric: true, format: (v) => dvNum(v) },
-      { key: "successPct", label: "Éxito %", numeric: true, align: "right",
-        format: (v) => `<span class="tnum">${dvEsc(v)}</span>`, },
+      { key: "acierto", label: "Acierto", numeric: true, format: (v) => `<span class="tnum" style="color:${prodColor(v)}">${prodPct(v)}</span>` },
+      { key: "retrabajo", label: "Re-trabajo", numeric: true, format: (v) => `<span class="tnum">${prodPct(v)}</span>` },
       { key: "avgLatency", label: "Latencia media", numeric: true, format: (v) => `<span class="tnum">${dvNum(v)} ms</span>` },
       { key: "cost", label: "Coste total", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
       { key: "costPer", label: "Coste/ejec.", numeric: true, format: (v) => `<span class="tnum">$${Number(v).toFixed(4)}</span>` },
     ],
     rows: leaderRows,
-    defaultSort: "tasks",
+    defaultSort: "tasks", defaultDir: "desc",
   }) : `<div class="chart-empty">sin ejecuciones registradas</div>`;
   const leaderFrame = chartFrame({
     title: "Leaderboard de agentes",
@@ -775,12 +421,6 @@ async function renderAgentes(pre) {
     <div class="agentes-analytics-row">${leaderFrame}${latencyFrame}</div>
     ${skillsFrame}`;
 
-  // Land the leaderboard on ejecuciones DESC (dataTable starts a fresh sort asc).
-  const lead = el.querySelector(".agentes-analytics-row .dv-frame:first-child .dv-table[data-dv-table]");
-  if (lead) {
-    const th = lead.querySelector('th[data-dv-sort="tasks"]');
-    if (th) { dvSortTable(th); } // asc→ now desc handled by toggle logic on re-entry
-  }
 }
 
 function agentLeaderboardGraph(rows) {
@@ -906,8 +546,13 @@ async function renderTareas(pre) {
     state.resumenAnalytics = await api("/analytics/dashboard?days=30").catch(() => null);
   }
   const analytics = state.resumenAnalytics;
+  if (!state.produccionPerfil) await cargarProduccion();
+  const ac = await api(`/analytics/acierto?dias=0&perfil=${state.produccionPerfil}`).catch(() => null);
+  state.tareasAcierto = (ac && ac.tareas) || {};
+  // Con «Perfil que ejecuta», solo las tareas no delegadas o delegadas en un agente del perfil.
+  if (ac && ac.tareas) tasks = tasks.filter((t) => t.task_id in ac.tareas);
 
-  const band = tareasBand(tasks, metrics, analytics);
+  const band = produccionAlcance(ac) + tareasBand(tasks, metrics, analytics, ac);
 
   // Keep the task table as the primary surface. When a task is open, the view
   // splits 50/50: list on the left, trace/detail on the right.
@@ -931,7 +576,7 @@ async function renderTareas(pre) {
 }
 
 // --- Analytics band: KPI tiles + compact analytics KPIs ----------------------
-function tareasBand(tasks, metrics, analytics) {
+function tareasBand(tasks, metrics, analytics, ac) {
   const total = tasks.length;
   const byStatus = {};
   let costSum = 0, latSum = 0, latN = 0;
@@ -947,21 +592,14 @@ function tareasBand(tasks, metrics, analytics) {
   const avgLat = latN ? Math.round(latSum / latN) : 0;
   // Volumen en el tiempo (runs_over_time, else task created_at bucketed by day)
   // as a compact KPI instead of a chart/table.
-  const rot = (analytics && analytics.runs_over_time) || [];
-  let volumeTotal = 0, volumeSub = "sin actividad", volumeDelta = null;
-  if (rot.length) {
-    volumeTotal = rot.reduce((acc, b) => acc + Number(b.run_count || 0), 0);
-    const volumeLast = Number(rot[rot.length - 1]?.run_count || 0);
-    const prev = Number(rot[rot.length - 2]?.run_count || 0);
-    volumeDelta = volumeLast - prev;
-    volumeSub = `${rot.length} días activos · último ${String(rot[rot.length - 1]?.bucket || "").slice(5, 10)}`;
-  } else {
-    const buckets = {};
-    tasks.forEach((t) => { const d = String(t.created_at || "").slice(0, 10); if (d) buckets[d] = (buckets[d] || 0) + 1; });
-    const days = Object.keys(buckets).sort();
-    volumeTotal = days.reduce((acc, d) => acc + buckets[d], 0);
-    volumeSub = days.length ? `${days.length} días activos · tareas creadas` : "sin actividad";
-  }
+  // Volumen: tareas creadas por día dentro del alcance (la analítica DuckDB no filtra por perfil).
+  let volumeDelta = null;
+  const buckets = {};
+  tasks.forEach((t) => { const d = String(t.created_at || "").slice(0, 10); if (d) buckets[d] = (buckets[d] || 0) + 1; });
+  const days = Object.keys(buckets).sort();
+  const volumeTotal = days.reduce((acc, d) => acc + buckets[d], 0);
+  const volumeSub = days.length ? `${days.length} días activos · último ${days[days.length - 1].slice(5)}` : "sin actividad";
+  if (days.length > 1) volumeDelta = buckets[days[days.length - 1]] - buckets[days[days.length - 2]];
 
   // Distribución por estado as a KPI: dominant status + concise spread.
   const statusRows = Object.entries(byStatus)
@@ -970,12 +608,7 @@ function tareasBand(tasks, metrics, analytics) {
   const topStatus = statusRows[0];
   const statusSub = statusRows.slice(0, 3).map((r) => `${r.label} ${r.value}`).join(" · ") || "sin tareas";
 
-  // Éxito por tipo de tarea as a KPI: weighted success across all task types.
-  const sbt = (analytics && analytics.success_rate_by_task_type) || [];
-  const totalRuns = sbt.reduce((acc, r) => acc + Number(r.run_count || 0), 0);
-  const weightedOk = sbt.reduce((acc, r) => acc + Number(r.run_count || 0) * Number(r.success_rate || 0), 0);
-  const successPct = totalRuns ? Math.round((weightedOk / totalRuns) * 100) : null;
-  const bestType = sbt.slice().sort((a, b) => Number(b.run_count || 0) - Number(a.run_count || 0))[0];
+  const k = (ac && ac.kpis) || {};
   const summaryItems = [
     { label: "Tareas", value: dvNum(total), sub: `${dvNum(metrics.total_subtasks || 0)} subtareas` },
     { label: "Completadas", value: dvNum(completed), sub: total ? `${Math.round((completed / total) * 100)}% del total` : "sin base" },
@@ -997,12 +630,8 @@ function tareasBand(tasks, metrics, analytics) {
       sub: statusSub,
       tone: topStatus ? tareasTone(topStatus.label) : null,
     },
-    {
-      label: "Éxito por tipo",
-      value: successPct == null ? "—" : `${successPct}%`,
-      sub: bestType ? `${bestType.task_type} · ${bestType.run_count} ejec.` : "analítica no disponible",
-      tone: successPct == null ? null : successPct >= 90 ? "good" : successPct >= 70 ? "warning" : "critical",
-    },
+    { label: "Acierto", value: prodPct(k.acierto), sub: "sin re-trabajo, completada y validada", tone: prodTono(k.acierto) },
+    { label: "Re-trabajo", value: prodPct(k.retrabajo), sub: "prompts que vuelven sobre lo mismo", tone: k.retrabajo >= 0.4 ? "warning" : null },
   ];
   const itemHtml = (item) => {
     const st = dvStatus(item.tone);
@@ -1038,7 +667,11 @@ function tareasList(tasks) {
       status: t.status,
       coste: taskCost(t),
       latencia: taskLatency(t),
-      creada: String(t.created_at || "").slice(0, 10),
+      creada: String(t.created_at || "").slice(0, 16).replace("T", " "),
+      entrada: prodNombre(c.entry_agent || (c.classified_by === "model:/karajan" ? "skill /karajan" : "desconocido")),
+      agente: prodNombre((((t.delegation || {}).executions || [])[0] || {}).model_used?.split(":")[0] || "sin delegar"),
+      acierto: (state.tareasAcierto[t.task_id] || {}).score ?? null,
+      _retrabajo: (state.tareasAcierto[t.task_id] || {}).retrabajo || "",
     };
   });
   const table = dataTable({
@@ -1046,14 +679,16 @@ function tareasList(tasks) {
       { key: "_short", label: "ID", format: (v, row) => `<button type="button" class="tareas-idlink" data-task="${dvEsc(row.task_id)}"><code>${dvEsc(v)}</code></button>` },
       { key: "tipo", label: "Tipo / Intención" },
       { key: "nivel", label: "Nivel" },
-      { key: "modelo", label: "Modelo" },
+      { key: "entrada", label: "Entrada" },
+      { key: "agente", label: "Agente" },
       { key: "status", label: "Estado", format: (v) => tareasPill(v) },
+      { key: "acierto", label: "Acierto", numeric: true, format: (v, row) => `<span class="tnum" style="color:${prodColor(v)}" title="${dvEsc(row._retrabajo || "sin re-trabajo")}">${prodPct(v)}</span>` },
       { key: "coste", label: "Coste", numeric: true, format: (v) => `$${Number(v).toFixed(4)}` },
       { key: "latencia", label: "Latencia", numeric: true, format: (v) => (v ? `${dvNum(v)} ms` : "—") },
       { key: "creada", label: "Creada" },
     ],
     rows,
-    defaultSort: "creada",
+    defaultSort: "creada", defaultDir: "desc",
   });
   // Merged toolbar + table: one cohesive surface (title + count on the left,
   // full-text search on the right) instead of two stacked cards.
@@ -2263,9 +1898,9 @@ function sankeyChart({ columns = [], links = [] } = {}) {
 // -- dataTable: sortable table (doubles as the accessible table view) ---------
 const _dvTables = {};
 
-function dataTable({ columns = [], rows = [], sortable = true, defaultSort } = {}) {
+function dataTable({ columns = [], rows = [], sortable = true, defaultSort, defaultDir } = {}) {
   const id = dvId("tbl");
-  _dvTables[id] = { columns, rows, sort: defaultSort || null, dir: 1 };
+  _dvTables[id] = { columns, rows, sort: defaultSort || null, dir: defaultDir === "desc" ? -1 : 1 };
   return `<div class="dv-table-wrap"><table class="dv-table" data-dv-table="${id}">
     <thead>${dvTableHead(id)}</thead>
     <tbody>${dvTableBody(id)}</tbody>
@@ -2373,8 +2008,6 @@ export function initDataviz() {
   document.addEventListener("click", (e) => {
     const th = e.target.closest?.(".dv-table th[data-dv-sort]");
     if (th) { dvSortTable(th); return; }
-    const hmMetric = e.target.closest?.("[data-resumen-hm-metric]");
-    if (hmMetric) { updateResumenHeatmap(hmMetric.dataset.resumenHmMetric); return; }
     const leaderToggle = e.target.closest?.("[data-agentes-leader-toggle]");
     if (leaderToggle) {
       const frame = leaderToggle.closest(".dv-frame");
@@ -3286,6 +2919,7 @@ async function renderDetail(task) {
 // ---- Producción: acierto, flujo, eficiencia, matriz de skills y «qué mejorar» ---------------------------------
 // Lo calcula /analytics/produccion (app/analytics/produccion.py; el paquete de Atlas dev sirve lo mismo). El alcance
 // «Perfil que ejecuta» deja solo los agentes del perfil por defecto; «Todo el histórico» enseña también los retirados.
+const _shortLabel = (v, n = 22) => { v = String(v || "—"); return v.length > n ? `${v.slice(0, n - 1)}…` : v; };
 const PROD_PERFIL_KEY = "karajan-produccion-perfil";
 const PROD_NOMBRE = { "claude-cli": "Claude", codex: "Codex", "ollama-qwen": "Qwen local", "atlas-dev": "Atlas dev", "skill /karajan": "Skill /karajan", desconocido: "Sin registrar", "sin delegar": "Sin delegar" };
 const PROD_ESTADO = { classified: "Clasificada", delegated: "Delegada", queued: "En cola", completed: "Completada", failed: "Fallida" };
@@ -3294,12 +2928,12 @@ const prodPct = (v) => (v === null || v === undefined ? "—" : `${Math.round(v 
 const prodTono = (v) => (v === null || v === undefined ? undefined : v >= 0.8 ? "good" : v >= 0.6 ? "warning" : "critical");
 const prodColor = (v) => (dvStatus(prodTono(v)) || { v: "var(--muted)" }).v;
 
-async function cargarProduccion() {
+async function cargarProduccion(dias = 0) {
   if (!state.produccionPerfil) {
     try { state.produccionPerfil = localStorage.getItem(PROD_PERFIL_KEY) || "activo"; } catch { state.produccionPerfil = "activo"; }
   }
   initProduccion();
-  return api(`/analytics/produccion?dias=0&perfil=${state.produccionPerfil}`).catch(() => null);
+  return api(`/analytics/produccion?dias=${Number(dias) || 0}&perfil=${state.produccionPerfil}`).catch(() => null);
 }
 
 function initProduccion() {
@@ -3334,8 +2968,14 @@ function produccionAlcance(prod) {
 function produccionHtml(prod) {
   if (!prod) return `<section class="card"><div class="chart-empty">la analítica de producción no está disponible</div></section>`;
   const k = prod.kpis || {};
+  const ag = (prod.eficiencia && prod.eficiencia.agentes) || [];
+  const coste = ag.reduce((a, x) => a + Number(x.coste_total || 0), 0);
+  const runs = ag.reduce((a, x) => a + (x.latencia_media === null ? 0 : Number(x.runs || 0)), 0);
+  const latencia = runs ? ag.reduce((a, x) => a + (x.latencia_media === null ? 0 : x.latencia_media * x.runs), 0) / runs : 0;
   const kpis = statTileRow([
     { label: "Tareas", value: dvNum(k.tareas || 0), sub: `${dvNum(k.delegadas || 0)} delegadas` },
+    { label: "Coste", value: `$${coste.toFixed(4)}`, sub: "agentes del alcance" },
+    { label: "Latencia media", value: `${dvNum(Math.round(latencia))} ms`, sub: "ponderada por ejecuciones" },
     { label: "Acierto", value: prodPct(k.acierto), sub: "sin re-trabajo, completada y validada", status: prodTono(k.acierto) },
     { label: "Re-trabajo", value: prodPct(k.retrabajo), sub: "prompts que vuelven sobre lo mismo", status: k.retrabajo >= 0.4 ? "warning" : undefined },
     { label: "Revisadas en el baúl", value: dvNum(k.revisadas || 0), sub: "cabecera de agente de las notas" },
