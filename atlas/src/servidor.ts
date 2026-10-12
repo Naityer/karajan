@@ -23,10 +23,10 @@ import { disponibilidad, PROVEEDORES } from './proveedores';
  * ejecuta de verdad Claude Code, Codex o Qwen (ollama) según las reglas del perfil por defecto. Qué no (ver PORTE.md): el
  * recomendador y la biblioteca de recursos, el scheduler en modo cola y el SSE: responden 501.
  *
- * Datos: `<datos>/task_logs.db` y `<datos>/active_config.json`. Si no existen y `ATLAS_KARAJAN_DATA` apunta a la carpeta
- * `data/` de un Karajan, se copian al arrancar (copia: el registro de tareas no se comparte, para no escribir los dos a la
- * vez). Los perfiles SÍ se comparten: `ATLAS_KARAJAN_LAYOUT`, o `<ATLAS_KARAJAN_DATA>/routing_layout.json`, o
- * `<datos>/routing_layout.json` si no hay Karajan. Las carpetas de trabajo de `/delegate-task` deben estar dentro de
+ * Datos: con un Karajan nativo en el Workspace (`ATLAS_KARAJAN_DATA` o `<ATLAS_WORKSPACE>/karajan/data`) se COMPARTEN su
+ * `task_logs.db`, su `active_config.json` y sus perfiles, para que las gráficas de Atlas dev y las del dashboard nativo
+ * cuenten lo mismo (ver `datosKarajan`). Sin él, o con `ATLAS_KARAJAN_COMPARTIR=0`, se usan `<datos>/task_logs.db` y
+ * `<datos>/routing_layout.json` (copiando antes el registro de `ATLAS_KARAJAN_DATA` si lo hay). Las carpetas de trabajo de `/delegate-task` deben estar dentro de
  * `ATLAS_WORKSPACE` (o de la carpeta de usuario).
  */
 const NO_DISPONIBLE = 'No disponible en el paquete de Atlas dev: necesita proveedores o la biblioteca de recursos (ver PORTE.md).';
@@ -56,22 +56,36 @@ const entero = (v: string | undefined, defecto: number, min: number, max: number
 };
 const falla = (estado: number, detail: string) => Object.assign(new Error(detail), { status: estado });
 
+/**
+ * La carpeta `data/` del Karajan nativo, si la hay: `ATLAS_KARAJAN_DATA`, o `<ATLAS_WORKSPACE>/karajan/data`. Con ella el
+ * paquete y el Karajan nativo comparten registro de tareas y perfiles (SQLite en WAL admite los dos procesos), así las
+ * gráficas de Atlas dev y las del dashboard nativo cuentan lo mismo. `ATLAS_KARAJAN_COMPARTIR=0` vuelve a la copia propia.
+ */
+function datosKarajan(): string | null {
+  const explicita = process.env['ATLAS_KARAJAN_DATA'];
+  if (explicita) return existsSync(explicita) ? explicita : null;
+  const ws = process.env['ATLAS_WORKSPACE'];
+  return ws && existsSync(join(ws, 'karajan', 'data', 'task_logs.db')) ? join(ws, 'karajan', 'data') : null;
+}
+
 export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
-  const importada = importarDatos(ctx.datos);
+  const nativo = datosKarajan();
+  const compartida = nativo !== null && process.env['ATLAS_KARAJAN_COMPARTIR'] !== '0' && existsSync(join(nativo, 'task_logs.db'));
+  const importada = compartida ? false : importarDatos(ctx.datos);
   mkdirSync(ctx.datos, { recursive: true });
-  const almacen = new Almacen(join(ctx.datos, 'task_logs.db'));
+  const dirDatos = compartida ? nativo! : ctx.datos;
+  const almacen = new Almacen(join(dirDatos, 'task_logs.db'));
   const config = () => {
-    try { return configDesde(JSON.parse(readFileSync(join(ctx.datos, 'active_config.json'), 'utf8'))); } catch { return configDesde(null); }
+    try { return configDesde(JSON.parse(readFileSync(join(dirDatos, 'active_config.json'), 'utf8'))); } catch { return configDesde(null); }
   };
 
-  const rutaLayout = process.env['ATLAS_KARAJAN_LAYOUT']
-    ?? (process.env['ATLAS_KARAJAN_DATA'] && existsSync(process.env['ATLAS_KARAJAN_DATA']) ? join(process.env['ATLAS_KARAJAN_DATA'], 'routing_layout.json') : join(ctx.datos, 'routing_layout.json'));
+  const rutaLayout = process.env['ATLAS_KARAJAN_LAYOUT'] ?? (nativo ? join(nativo, 'routing_layout.json') : join(ctx.datos, 'routing_layout.json'));
   const perfiles = new Perfiles(rutaLayout);
   const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir() });
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno' }));
 
-  app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, tareas: almacen.contar() }));
+  app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
   app.get('/metrics', () => almacen.metricas());
   app.get('/agents/performance', () => almacen.rendimientoAgentes());
 
