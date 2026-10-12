@@ -73,7 +73,7 @@ El paquete `karajan` de Atlas dev lee y escribe **el mismo** `routing_layout.jso
 Además ejecuta de verdad: `POST /delegate-task {prompt, force_entity_id?, cwd?, human_approved?}` clasifica (heurística), elige el
 agente con las reglas del perfil por defecto y lanza su CLI como subproceso (sin shell, instrucción por stdin), y responde `202`
 con el plan; el resultado se lee en `/tasks/:id`, `/tasks/:id/runs` y `/tasks/:id/decisions`. `POST /routing/plan` devuelve el
-plan sin ejecutar nada. Las tareas que exigen revisión humana responden `409` hasta que se reenvían con `human_approved: true`.
+plan sin ejecutar nada. Las tareas que exigen revisión humana no se ejecutan: la respuesta trae `bloqueada` con el motivo hasta que se reenvían con `human_approved: true`.
 
 Para que la skill `karajan` de Claude Code o Codex hable con el paquete en vez de con el servidor Python:
 

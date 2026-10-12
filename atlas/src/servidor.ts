@@ -124,7 +124,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.post('/delegate-task', (req, reply) => {
     const b = (req.body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown };
     const plan = delegador.delegar(leerPrompt(req.body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true });
-    reply.code(plan.bloqueada ? 409 : 202);
+    reply.code(plan.bloqueada ? 200 : 202);
     return plan;
   });
 
