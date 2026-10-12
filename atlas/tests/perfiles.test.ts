@@ -106,3 +106,12 @@ describe('delegación real', () => {
     assert.throws(() => delegador.planificar('x y z', 'no-existe'), /no existe/);
   });
 });
+
+describe('motivo de fallo de un CLI', () => {
+  it('se queda con la línea de error y no con los avisos', async () => {
+    const { motivoFallo } = await import('../src/proveedores');
+    const stderr = 'x ERROR codex_core: failed to load skill C:/a/SKILL.md\nwarning: algo\nERROR: {"message":"The model is not supported"}\n';
+    assert.equal(motivoFallo(stderr), 'ERROR: {"message":"The model is not supported"}');
+    assert.equal(motivoFallo('a\nb\nc\nd'), 'b · c · d');
+  });
+});

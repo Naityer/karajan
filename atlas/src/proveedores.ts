@@ -63,6 +63,13 @@ export function disponibilidad(p: Proveedor, ejecutar = spawnSync): Disponibilid
 export interface ResultadoEjecucion { salida: string; error: string | null; latenciaMs: number; modelo: string }
 export type Ejecutor = (p: Proveedor, modelo: string, instruccion: string, op: { cwd: string; timeoutMs: number }) => Promise<ResultadoEjecucion>;
 
+/** El motivo útil de un fallo: las últimas líneas con «error» (los CLI llenan stderr de avisos), o el final del texto. */
+export function motivoFallo(texto: string): string {
+  const lineas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const errores = lineas.filter((l) => /\berror\b/i.test(l) && !/failed to load skill/i.test(l));
+  return (errores.length ? [...new Set(errores)].slice(-2).join(' · ') : lineas.slice(-3).join(' · ')).slice(0, 1000);
+}
+
 const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g;
 
 /** Ejecuta de verdad un proveedor. En Windows los `.cmd` de npm necesitan `cmd.exe /d /s /c` (los argumentos son fijos). */
@@ -84,7 +91,7 @@ export const ejecutarProveedor: Ejecutor = (p, modelo, instruccion, { cwd, timeo
     clearTimeout(reloj);
     const limpia = salida.replace(ANSI, '').trim();
     // Algunos CLI (claude) escriben el motivo del fallo en stdout: si stderr viene vacío, ese es el error.
-    resolver({ salida: limpia, error: codigo === 0 && limpia ? null : (error.replace(ANSI, '').trim() || limpia || `terminó con código ${codigo}`).slice(0, 2000), latenciaMs: Date.now() - inicio, modelo });
+    resolver({ salida: limpia, error: codigo === 0 && limpia ? null : (motivoFallo(error.replace(ANSI, '')) || limpia || `terminó con código ${codigo}`).slice(0, 2000), latenciaMs: Date.now() - inicio, modelo });
   });
   hijo.stdin.end(instruccion, 'utf8');
 });
