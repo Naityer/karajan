@@ -19,6 +19,12 @@ from app import (
     skills_catalog,
 )
 from app.analytics import duckdb_ops
+from app.analytics import produccion as produccion_ops
+from app.analytics import produccion_datos
+from app.auth import require_token
+from app import credentials
+from datetime import datetime, timezone
+from pydantic import BaseModel, Field
 from app.analytics import ml as ml_ops
 from app.analytics.duckdb_ops import AnalyticsUnavailable
 from app.analytics.ml import MLUnavailable, ModelNotTrained
@@ -33,6 +39,7 @@ from app.models import (
 )
 from fastapi import (
     APIRouter,
+    Depends,
     HTTPException,
     Query,
 )
@@ -207,3 +214,102 @@ def predict_task(request: PredictTaskRequest) -> PredictTaskResponse:
     except ModelNotTrained as exc:
         raise HTTPException(status_code=503, detail={"error": "not trained", "message": str(exc)}) from exc
     return PredictTaskResponse(**result)
+
+
+# --- Producción: acierto, flujo, eficiencia, matriz de skills y «qué mejorar» -----------------------------------
+# Un mismo cálculo (app/analytics/produccion.py, con port idéntico en atlas/src/produccion.ts) del que cada ruta sirve su
+# parte. `perfil=activo` (por defecto) deja solo los agentes del perfil por defecto; `todos` enseña el histórico completo.
+
+
+def _produccion(dias: int, perfil: str) -> dict:
+    rt = runtime_module.current()
+    layout = rt.routing.load()
+    agentes = produccion_datos.agentes_del_perfil(layout) if perfil == "activo" else None
+    no_disponibles: list[str] = []
+    if agentes is not None:
+        estado = {c.provider: c.ready for c in credentials.detect_all()}
+        no_disponibles = [a for a in agentes if a in estado and not estado[a]]
+    return produccion_ops.produccion(
+        produccion_datos.tareas_planas(rt.tasks),
+        catalogo=produccion_datos.catalogo_real(),
+        agentes_perfil=agentes,
+        dias=dias,
+        ahora=datetime.now(timezone.utc),
+        no_disponibles=no_disponibles,
+    )
+
+
+_DIAS = Query(default=0, ge=0, le=3650)
+_PERFIL = Query(default="activo", pattern="^(activo|todos)$")
+
+
+def _cabecera(p: dict) -> dict:
+    return {k: p[k] for k in ("dias", "perfil", "agentes_perfil", "ultima", "kpis")}
+
+
+@router.get("/analytics/produccion")
+def analytics_produccion(dias: int = _DIAS, perfil: str = _PERFIL) -> dict:
+    p = _produccion(dias, perfil)
+    p.pop("acierto")
+    return p
+
+
+@router.get("/analytics/flujo")
+def analytics_flujo(dias: int = _DIAS, perfil: str = _PERFIL) -> dict:
+    p = _produccion(dias, perfil)
+    return {**_cabecera(p), **p["flujo"]}
+
+
+@router.get("/analytics/eficiencia")
+def analytics_eficiencia(dias: int = _DIAS, perfil: str = _PERFIL) -> dict:
+    p = _produccion(dias, perfil)
+    return {**_cabecera(p), **p["eficiencia"]}
+
+
+@router.get("/analytics/matriz-skills")
+def analytics_matriz_skills(dias: int = _DIAS, perfil: str = _PERFIL) -> dict:
+    p = _produccion(dias, perfil)
+    return {**_cabecera(p), **p["matriz"]}
+
+
+@router.get("/analytics/sugerencias")
+def analytics_sugerencias(dias: int = _DIAS, perfil: str = _PERFIL) -> dict:
+    p = _produccion(dias, perfil)
+    return {**_cabecera(p), "sugerencias": p["sugerencias"]}
+
+
+@router.get("/analytics/acierto")
+def analytics_acierto(dias: int = _DIAS, perfil: str = _PERFIL) -> dict:
+    p = _produccion(dias, perfil)
+    return {**_cabecera(p), "tareas": p["acierto"]}
+
+
+@router.get("/skills/catalogo")
+def skills_catalogo(dias: int = Query(default=90, ge=0, le=3650)) -> dict:
+    p = _produccion(dias, "todos")
+    return {"dias": dias, **p["catalogo"]}
+
+
+class Revision(BaseModel):
+    task_id: str = Field(min_length=1, max_length=80)
+    campos: dict[str, list[str]] = Field(default_factory=dict)
+    revisado_en: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class Revisiones(BaseModel):
+    revisiones: list[Revision] = Field(default_factory=list, max_length=5000)
+
+
+_CAMPOS_REVISION = {"agente_entrada", "agente", "skills_usadas", "categoria_skill", "nivel_tarea", "dominio", "intencion", "palabras_clave"}
+
+
+@router.post("/feedback/revisiones")
+def feedback_revisiones(body: Revisiones, _: None = Depends(require_token)) -> dict:
+    """Lo revisado por el usuario en la cabecera de agente de las notas del baúl (lo envía Atlas dev al reindexar)."""
+    store = runtime_module.current().tasks
+    guardadas = 0
+    for r in body.revisiones:
+        campos = {k: [str(v)[:120] for v in vs[:50]] for k, vs in r.campos.items() if k in _CAMPOS_REVISION}
+        store.save_reviews(r.task_id, campos, r.revisado_en)
+        guardadas += 1
+    return {"guardadas": guardadas}

@@ -132,6 +132,18 @@ class TaskStore:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_task ON decisions(task_id)")
+            # Lo que el usuario revisa en la nota del baúl (cabecera de agente): manda sobre lo clasificado en la analítica.
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS reviews (
+                    task_id TEXT NOT NULL,
+                    campo TEXT NOT NULL,
+                    valor TEXT NOT NULL,
+                    revisado_en TEXT NOT NULL,
+                    PRIMARY KEY (task_id, campo, valor)
+                )
+                """
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)")
             # Rolling snapshot of aggregate KPIs, one row per completed delegation —
             # lets the Monitor view chart cost/tokens/latency trends over time
@@ -1295,6 +1307,26 @@ class TaskStore:
                 for entry in decisions
             ],
         )
+
+    def save_reviews(self, task_id: str, campos: dict[str, list[str]], revisado_en: str) -> None:
+        """Sustituye la revisión de una tarea (los campos de su cabecera en el baúl)."""
+        with self._connect() as conn:
+            conn.execute("DELETE FROM reviews WHERE task_id = ?", (task_id,))
+            conn.executemany(
+                "INSERT OR IGNORE INTO reviews (task_id, campo, valor, revisado_en) VALUES (?, ?, ?, ?)",
+                [(task_id, campo, valor, revisado_en) for campo, valores in campos.items() for valor in valores if valor],
+            )
+
+    def list_reviews(self) -> dict[str, dict[str, list[str]]]:
+        with self._connect() as conn:
+            try:
+                rows = conn.execute("SELECT task_id, campo, valor FROM reviews ORDER BY task_id, campo, valor").fetchall()
+            except sqlite3.DatabaseError:
+                rows = []
+        salida: dict[str, dict[str, list[str]]] = {}
+        for row in rows:
+            salida.setdefault(row["task_id"], {}).setdefault(row["campo"], []).append(row["valor"])
+        return salida
 
     def list_decisions(self, task_id: str | None = None) -> list[DecisionLogEntry]:
         with self._connect() as conn:

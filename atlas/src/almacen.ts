@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 
 import { redondear } from './redondeo';
 import type { RegistroTarea, Run } from './analitica';
+import type { TareaAnalitica } from './produccion';
 
 /**
  * Registro de tareas de Karajan (`task_logs.db`, el mismo esquema que `app/database.py`): lectura de tareas, runs y decisiones,
@@ -22,7 +23,8 @@ CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, run
 CREATE INDEX IF NOT EXISTS idx_decisions_task ON decisions(task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
 CREATE INDEX IF NOT EXISTS idx_runs_provider ON runs(provider_name);
-CREATE INDEX IF NOT EXISTS idx_runs_task ON runs(task_id);`;
+CREATE INDEX IF NOT EXISTS idx_runs_task ON runs(task_id);
+CREATE TABLE IF NOT EXISTS reviews (task_id TEXT NOT NULL, campo TEXT NOT NULL, valor TEXT NOT NULL, revisado_en TEXT NOT NULL, PRIMARY KEY (task_id, campo, valor));`;
 
 type Fila = Record<string, unknown>;
 const ESTADOS = new Set(['classified', 'delegated', 'queued', 'completed', 'failed', 'cancel_requested', 'outcome_unknown']);
@@ -141,6 +143,44 @@ export class Almacen {
       .run(id, r.task_id, indice, r.provider_name, r.routing_entity_id, r.routing_entity_name_snapshot, r.model_id, r.backend, r.status, r.started_at, r.completed_at,
         r.latency_ms, r.input_tokens, r.output_tokens, r.estimated_cost_usd, r.error);
     return id;
+  }
+
+  // ── Revisiones del baúl (cabecera de agente de las notas) ──────────────
+  guardarRevision(taskId: string, campos: Record<string, string[]>, revisadoEn: string): void {
+    this.db.prepare('DELETE FROM reviews WHERE task_id = ?').run(taskId);
+    const ins = this.db.prepare('INSERT OR IGNORE INTO reviews (task_id, campo, valor, revisado_en) VALUES (?, ?, ?, ?)');
+    for (const [campo, valores] of Object.entries(campos)) for (const v of valores) if (v) ins.run(taskId, campo, v, revisadoEn);
+  }
+
+  revisiones(): Record<string, Record<string, string[]>> {
+    const salida: Record<string, Record<string, string[]>> = {};
+    for (const f of this.todas('SELECT task_id, campo, valor FROM reviews ORDER BY task_id, campo, valor')) {
+      ((salida[String(f['task_id'])] ??= {})[String(f['campo'])] ??= []).push(String(f['valor']));
+    }
+    return salida;
+  }
+
+  /** La entrada de `produccion.ts`, igual que `produccion_datos.tareas_planas` en Python. */
+  tareasPlanas(): TareaAnalitica[] {
+    const revisiones = this.revisiones();
+    const decisiones: Record<string, string[]> = {};
+    for (const d of this.decisiones()) (decisiones[String(d['task_id'])] ??= []).push(String(d['decision']));
+    const orden = (s: Set<string>) => [...s].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return this.listarTareas().map((t) => {
+      const c = t.classification as RegistroTarea['classification'] & { entry_agent?: string | null; classified_by?: string; complexity_level?: string; domain?: string[] };
+      const hechas = new Set((t.delegation?.executions ?? []).filter((e) => e.status === 'completed').map((e) => e.subtask_id));
+      const ejecutadas = new Set(t.delegation ? (c.subtasks ?? []).filter((s) => s.recommended_skill && hechas.has(s.id)).map((s) => s.recommended_skill!) : []);
+      const recomendadas = new Set([...(c.recommended_skills ?? []), ...(c.subtasks ?? []).map((s) => s.recommended_skill).filter((s): s is string => !!s)]);
+      return {
+        task_id: t.task_id, prompt: t.prompt, status: t.status, created_at: t.created_at, entry_agent: c.entry_agent ?? null, classified_by: c.classified_by ?? null,
+        nivel: c.complexity_level ?? null, dominios: [...(c.domain ?? [])], intencion: c.intent ?? null, recomendadas: orden(recomendadas), ejecutadas: orden(ejecutadas),
+        runs: (t.delegation ? this.runs(t.task_id) : []).map((r) => ({
+          provider_name: (r['provider_name'] ?? null) as string | null, status: String(r['status']), latency_ms: (r['latency_ms'] ?? null) as number | null,
+          estimated_cost_usd: (r['estimated_cost_usd'] ?? null) as number | null, error: (r['error'] ?? null) as string | null,
+        })),
+        decisiones: decisiones[t.task_id] ?? [], revision: revisiones[t.task_id] ?? {},
+      };
+    });
   }
 
   /** Búsqueda simple por texto (el original usa FTS5 con bm25 y recurre a LIKE; aquí siempre LIKE, sin depender de FTS). */

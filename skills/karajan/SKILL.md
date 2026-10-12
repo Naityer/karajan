@@ -11,7 +11,7 @@ No reproduzcas manualmente su clasificador ni construyas payloads `/ingest` salv
 ## Flujo normal
 
 1. Comprueba el servicio con `karajan activate`. Si no responde, ejecuta una sola vez `karajan activate --start`.
-2. Para clasificar y registrar una tarea sin ejecutarla externamente: `karajan --json classify "<tarea>"`.
+2. Para clasificar y registrar una tarea sin ejecutarla externamente: `karajan --json classify --entry <agente> "<tarea>"`, donde `<agente>` es quien recibió el prompt (`claude`, `codex`, `qwen`…). Así el Monitor de agentes sabe qué punto de entrada se usó.
 3. Lee el nivel, estrategia, skills y agente recomendados y continúa localmente cuando el entorno actual sea el ejecutor adecuado.
 
 No llames por separado a `/health`, `/ingest`, `/tasks` y `/decisions` para una operación que ya cubre el CLI.

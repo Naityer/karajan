@@ -112,7 +112,7 @@ def _apply_selected_effort(
 @router.post("/classify-task", response_model=TaskRecord)
 def classify_task(request: TaskRequest, _: None = Depends(require_token), __: dict | None = Depends(require_atlas_token)) -> TaskRecord:
     view = runtime_module.current().application.classify(
-        ClassifyCommand(prompt=request.prompt, effort_level=request.effort_level)
+        ClassifyCommand(prompt=request.prompt, effort_level=request.effort_level, entry_agent=request.entry_agent)
     )
     events.publish("task_changed", task_id=view.task_id)
     return TaskRecord.model_validate(view.legacy_payload())
@@ -129,6 +129,7 @@ def ingest(request: IngestRequest, _: None = Depends(require_token), __: dict | 
         request.model_dump(exclude_none=True), runtime_module.current().config, source="model:/karajan"
     )
     classification = attach_resource_recommendations(classification, runtime_module.current().resources, runtime_module.current().resource_ranking_engine)
+    classification = classification.model_copy(update={"entry_agent": request.entry_agent or "skill /karajan"})
     decision = monitoring.build_classify_decision(classification)
     record = runtime_module.current().tasks.save_classification(classification, decision)
     events.publish("task_changed", task_id=record.task_id)

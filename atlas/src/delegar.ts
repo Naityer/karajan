@@ -92,10 +92,12 @@ export class Delegador {
   }
 
   /** Clasifica, registra y lanza la ejecución en segundo plano. */
-  delegar(prompt: string, { forzarEntidad = null, cwd, aprobada = false }: { forzarEntidad?: string | null; cwd?: unknown; aprobada?: boolean } = {}): Plan {
+  delegar(prompt: string, { forzarEntidad = null, cwd, aprobada = false, entrada = null }: { forzarEntidad?: string | null; cwd?: unknown; aprobada?: boolean; entrada?: string | null } = {}): Plan {
     const carpeta = this.carpeta(cwd);
     const plan = this.planificar(prompt, forzarEntidad);
     const c = plan.clasificacion;
+    // Agente que recibió el prompt (punto de entrada), como `ClassificationResult.entry_agent` en Python.
+    if (entrada) Object.assign(c, { entry_agent: entrada.slice(0, 60) });
     const { almacen } = this.op;
     almacen.guardarTarea(c, 'classified');
     almacen.registrarDecision({ task_id: c.task_id, phase: 'classify', decision: `model=${c.recommended_model}`, score: c.complexity_score, reason: c.reason });

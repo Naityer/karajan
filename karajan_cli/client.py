@@ -65,8 +65,9 @@ class HttpKarajanClient:
         return self._request("GET", "/health")
 
     # -- classify / ingest / delegate --
-    def classify(self, prompt: str) -> dict:
-        return self._request("POST", "/classify-task", json={"prompt": prompt})
+    def classify(self, prompt: str, entry_agent: str | None = None) -> dict:
+        body = {"prompt": prompt, **({"entry_agent": entry_agent} if entry_agent else {})}
+        return self._request("POST", "/classify-task", json=body)
 
     def ingest(self, payload: dict) -> dict:
         return self._request("POST", "/ingest", json=payload)
@@ -184,10 +185,10 @@ class EmbeddedKarajanClient:
     def health(self) -> dict:
         return self.management.health()
 
-    def classify(self, prompt: str) -> dict:
+    def classify(self, prompt: str, entry_agent: str | None = None) -> dict:
         from app.application_dto import ClassifyCommand
 
-        return self.application.classify(ClassifyCommand(prompt=prompt)).legacy_payload()
+        return self.application.classify(ClassifyCommand(prompt=prompt, entry_agent=entry_agent)).legacy_payload()
 
     def delegate(
         self, task_id: str, *, force_provider: str | None = None, force_entity_id: str | None = None

@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -45,4 +45,29 @@ export function listarSkills(casa: string = homedir()): InfoSkill[] {
     const instalada = raices.some((r) => carpetaDe(join(r, s.name)));
     return { name: s.name, description: s.description, installed: instalada, recommended: instalada, applies_to: s.applies_to, install_command: instalada ? null : `claude skill install ${s.name}`, repo_url: s.repo_url ?? null };
   });
+}
+
+/** Descripción del frontmatter de un SKILL.md (como `produccion_datos._descripcion`). */
+function descripcion(md: string): string {
+  try {
+    const m = /^description:\s*(.+)$/m.exec(readFileSync(md, 'utf8').slice(0, 4000));
+    return m ? m[1]!.trim().replace(/^["']+|["']+$/g, '') : '';
+  } catch { return ''; }
+}
+
+/** Las skills instaladas de verdad (carpetas con SKILL.md) más el catálogo conocido, sin duplicados (`produccion_datos.catalogo_real`). */
+export function catalogoReal(casa: string = homedir()): { nombre: string; descripcion: string; instalada: boolean }[] {
+  const vistas = new Map<string, { nombre: string; descripcion: string; instalada: boolean }>();
+  for (const raiz of [join(casa, '.claude', 'skills'), join(casa, '.agents', 'skills'), join(casa, '.codex', 'skills')]) {
+    let carpetas: string[] = [];
+    try { carpetas = readdirSync(raiz).sort(); } catch { continue; }
+    for (const nombre of carpetas) {
+      // Las desactivadas (`_nombre`, `nombre.disabled`) no cuentan como instaladas.
+      if (nombre.startsWith('_') || nombre.startsWith('.') || nombre.endsWith('.disabled')) continue;
+      const md = join(raiz, nombre, 'SKILL.md');
+      if (carpetaDe(join(raiz, nombre)) && existsSync(md) && !vistas.has(nombre.toLowerCase())) vistas.set(nombre.toLowerCase(), { nombre, descripcion: descripcion(md), instalada: true });
+    }
+  }
+  for (const s of listarSkills(casa)) if (!vistas.has(s.name.toLowerCase())) vistas.set(s.name.toLowerCase(), { nombre: s.name, descripcion: s.description, instalada: s.installed });
+  return [...vistas.values()].sort((a, b) => { const x = a.nombre.toLowerCase(), y = b.nombre.toLowerCase(); return x < y ? -1 : x > y ? 1 : 0; });
 }

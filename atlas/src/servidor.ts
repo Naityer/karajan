@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import { construirAnaliticaSkills } from './analitica';
 import { Almacen } from './almacen';
-import { listarSkills } from './catalogo';
+import { catalogoReal, listarSkills } from './catalogo';
+import { produccion } from './produccion';
 import { Delegador } from './delegar';
 import { clasificar, configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles } from './perfiles';
@@ -122,10 +123,52 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     return delegador.planificar(leerPrompt(req.body), typeof b.force_entity_id === 'string' ? b.force_entity_id : null);
   });
   app.post('/delegate-task', (req, reply) => {
-    const b = (req.body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown };
-    const plan = delegador.delegar(leerPrompt(req.body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true });
+    const b = (req.body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown; entry_agent?: unknown };
+    const plan = delegador.delegar(leerPrompt(req.body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true, entrada: typeof b.entry_agent === 'string' ? b.entry_agent : null });
     reply.code(plan.bloqueada ? 200 : 202);
     return plan;
+  });
+
+  // ── Producción: acierto, flujo, eficiencia, matriz de skills y «qué mejorar» (port de app/analytics/produccion.py) ──
+  // `perfil=activo` (por defecto) deja solo los agentes del perfil por defecto; `todos`, el histórico completo.
+  const calcular = (q: Record<string, string | undefined>) => {
+    const dias = entero(q['dias'], 0, 0, 3650);
+    let agentes: string[] | null = null;
+    let noDisponibles: string[] = [];
+    if (q['perfil'] !== 'todos') {
+      const layout = perfiles.leer() as { default_profile_id?: string; profiles?: { id: string; entities?: { provider?: string | null }[] }[] };
+      const p = layout.profiles?.find((x) => x.id === layout.default_profile_id);
+      agentes = [...new Set((p?.entities ?? []).map((e) => e.provider).filter((x): x is string => !!x))].sort();
+      const estado = new Map(PROVEEDORES.map((pr) => [pr.nombre, disponibilidad(pr).disponible] as const));
+      noDisponibles = agentes.filter((a) => estado.has(a) && !estado.get(a));
+    }
+    return produccion(almacen.tareasPlanas(), { catalogo: catalogoReal(), agentesPerfil: agentes, dias, ahora: new Date(), noDisponibles });
+  };
+  const cabecera = (p: ReturnType<typeof calcular>) => ({ dias: p.dias, perfil: p.perfil, agentes_perfil: p.agentes_perfil, ultima: p.ultima, kpis: p.kpis });
+  app.get('/analytics/produccion', (req) => { const { acierto: _a, ...p } = calcular(req.query); return p; });
+  app.get('/analytics/flujo', (req) => { const p = calcular(req.query); return { ...cabecera(p), ...p.flujo }; });
+  app.get('/analytics/eficiencia', (req) => { const p = calcular(req.query); return { ...cabecera(p), ...p.eficiencia }; });
+  app.get('/analytics/matriz-skills', (req) => { const p = calcular(req.query); return { ...cabecera(p), ...p.matriz }; });
+  app.get('/analytics/sugerencias', (req) => { const p = calcular(req.query); return { ...cabecera(p), sugerencias: p.sugerencias }; });
+  app.get('/analytics/acierto', (req) => { const p = calcular(req.query); return { ...cabecera(p), tareas: p.acierto }; });
+  app.get('/skills/catalogo', (req) => { const p = calcular({ dias: req.query['dias'] ?? '90', perfil: 'todos' }); return { dias: p.dias, ...p.catalogo }; });
+
+  // Lo revisado por el usuario en la cabecera de agente de las notas del baúl (lo envía Atlas dev al reindexar).
+  const CAMPOS_REVISION = new Set(['agente_entrada', 'agente', 'skills_usadas', 'categoria_skill', 'nivel_tarea', 'dominio', 'intencion', 'palabras_clave']);
+  app.post('/feedback/revisiones', (req) => {
+    const lista = (req.body as { revisiones?: unknown } | null)?.revisiones;
+    if (!Array.isArray(lista) || lista.length > 5000) throw falla(422, 'revisiones: lista de hasta 5000 {task_id, campos}');
+    let guardadas = 0;
+    for (const r of lista as { task_id?: unknown; campos?: unknown; revisado_en?: unknown }[]) {
+      if (typeof r?.task_id !== 'string' || !r.task_id || r.task_id.length > 80) continue;
+      const campos: Record<string, string[]> = {};
+      for (const [k, vs] of Object.entries((r.campos ?? {}) as Record<string, unknown>)) {
+        if (CAMPOS_REVISION.has(k) && Array.isArray(vs)) campos[k] = vs.slice(0, 50).map((v) => String(v).slice(0, 120));
+      }
+      almacen.guardarRevision(r.task_id, campos, typeof r.revisado_en === 'string' ? r.revisado_en : new Date().toISOString());
+      guardadas++;
+    }
+    return { guardadas };
   });
 
   for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/executions'], ['post', '/ingest']] as const) {

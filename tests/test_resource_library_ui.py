@@ -36,14 +36,16 @@ def _inspiration_css() -> str:
     return css.split(INSPIRATION_CSS_MARKER, 1)[1]
 
 
-def test_resource_library_is_between_agents_and_configuration() -> None:
+def test_resource_library_is_between_statistics_and_agents() -> None:
     source = INDEX_HTML.read_text(encoding="utf-8")
 
+    monitor = source.index('data-view="monitor"')
     agents = source.index('data-view="agents"')
     resources = source.index('data-view="resources"')
     configuration = source.index('data-view="flow"')
 
-    assert agents < resources < configuration
+    # Orden de la barra: Control, Estadísticas, Inspiration, Agentes, Configuración.
+    assert monitor < resources < agents < configuration
     assert 'data-view="resources">Inspiration</button>' in source
     assert '<section class="view" id="view-resources">' in source
     assert "<h1>Inspiration</h1>" not in source

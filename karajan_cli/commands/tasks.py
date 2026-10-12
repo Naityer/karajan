@@ -11,10 +11,14 @@ from karajan_cli.client import KarajanClient
 app = typer.Typer(no_args_is_help=True)
 
 
-def classify(ctx: typer.Context, prompt: str = typer.Argument(..., help="Prompt a clasificar.")) -> None:
+def classify(
+    ctx: typer.Context,
+    prompt: str = typer.Argument(..., help="Prompt a clasificar."),
+    entry: str | None = typer.Option(None, "--entry", envvar="KARAJAN_ENTRY_AGENT", help="Agente que recibió el prompt (claude, codex, qwen…)."),
+) -> None:
     """Clasifica un prompt sin delegarlo (POST /classify-task)."""
     client: KarajanClient = ctx.obj["client"]
-    record = client.classify(prompt)
+    record = client.classify(prompt, entry)
     if ctx.obj["json"]:
         output.print_json(record)
         return

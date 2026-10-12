@@ -21,6 +21,7 @@ class ClassifyCommand:
     correlation_id: str = field(default_factory=lambda: f"cor_{uuid4().hex}")
     idempotency_key: str = ""
     effort_level: ComplexityLevel | None = None  # compatibilidad legacy instrumentada
+    entry_agent: str | None = None  # agente que recibió el prompt
 
     def payload_hash(self) -> str:
         payload = {"prompt": self.prompt.strip(), "effort_level": self.effort_level}

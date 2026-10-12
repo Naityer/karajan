@@ -33,7 +33,39 @@
   },
   {
     "kind": "route",
+    "path": "/analytics/acierto",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
     "path": "/analytics/dashboard",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/analytics/eficiencia",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/analytics/flujo",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/analytics/matriz-skills",
     "methods": [
       "GET"
     ],
@@ -49,7 +81,23 @@
   },
   {
     "kind": "route",
+    "path": "/analytics/produccion",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
     "path": "/analytics/skills",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/analytics/sugerencias",
     "methods": [
       "GET"
     ],
@@ -124,6 +172,14 @@
       "GET"
     ],
     "response_model": null
+  },
+  {
+    "kind": "route",
+    "path": "/feedback/revisiones",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "dict"
   },
   {
     "kind": "route",
@@ -698,6 +754,14 @@
       "GET"
     ],
     "response_model": "list[SkillInfo]"
+  },
+  {
+    "kind": "route",
+    "path": "/skills/catalogo",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
   },
   {
     "kind": "route",

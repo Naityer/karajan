@@ -1,0 +1,6256 @@
+{
+ "ahora": "2026-10-12T09:30:00+00:00",
+ "catalogo": [
+  {
+   "nombre": "frontend-builder",
+   "descripcion": "UI, componentes, dashboards",
+   "instalada": true
+  },
+  {
+   "nombre": "impeccable",
+   "descripcion": "Polish and audit interfaces",
+   "instalada": true
+  },
+  {
+   "nombre": "docx",
+   "descripcion": "Word documents",
+   "instalada": true
+  },
+  {
+   "nombre": "Security-Review",
+   "descripcion": "secretos y permisos",
+   "instalada": false
+  },
+  {
+   "nombre": "pdf",
+   "descripcion": "",
+   "instalada": true
+  }
+ ],
+ "revision_db": {
+  "task_id": "tsk_fix000",
+  "campos": {
+   "nivel_tarea": [
+    "N4"
+   ],
+   "skills_usadas": [
+    "docx"
+   ]
+  }
+ },
+ "desde_db": [
+  {
+   "task_id": "tsk_fix000",
+   "prompt": "Corrige el bug en el login: la API devuelve 500 cuando el token expira",
+   "status": "completed",
+   "created_at": "2026-10-01T12:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "security",
+    "programming"
+   ],
+   "intencion": "diagnose_and_fix",
+   "recomendadas": [
+    "backend-builder",
+    "cti-analyst",
+    "frontend-builder",
+    "ponytail",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "failed",
+     "latency_ms": 300,
+     "estimated_cost_usd": 0.001,
+     "error": "fallo"
+    },
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 470,
+     "estimated_cost_usd": 0.002,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {
+    "nivel_tarea": [
+     "N4"
+    ],
+    "skills_usadas": [
+     "docx"
+    ]
+   }
+  },
+  {
+   "task_id": "tsk_fix001",
+   "prompt": "fix the failing unit test in the backend",
+   "status": "completed",
+   "created_at": "2026-09-22T11:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "programming"
+   ],
+   "intencion": "diagnose_and_fix",
+   "recomendadas": [
+    "backend-builder",
+    "frontend-builder",
+    "ponytail",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "repo-analyzer",
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 301,
+     "estimated_cost_usd": 0.0013,
+     "error": null
+    },
+    {
+     "provider_name": "ollama",
+     "status": "completed",
+     "latency_ms": 471,
+     "estimated_cost_usd": 0.0023,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix002",
+   "prompt": "Crea un dashboard con métricas de ventas y un informe en PDF",
+   "status": "classified",
+   "created_at": "2026-09-13T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "data",
+    "documents"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "ponytail",
+    "promptfoo",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix003",
+   "prompt": "Implementa una cache LRU con TTL y pruebas unitarias",
+   "status": "completed",
+   "created_at": "2026-09-04T09:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "general"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "ponytail"
+   ],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 303,
+     "estimated_cost_usd": 0.0019,
+     "error": null
+    },
+    {
+     "provider_name": "codex-cli",
+     "status": "failed",
+     "latency_ms": 473,
+     "estimated_cost_usd": 0.0029,
+     "error": "fallo"
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix004",
+   "prompt": "Resume este documento",
+   "status": "completed",
+   "created_at": "2026-08-26T08:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "general"
+   ],
+   "intencion": "transform_or_extract",
+   "recomendadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "codex-cli",
+     "status": "failed",
+     "latency_ms": 304,
+     "estimated_cost_usd": 0.0022,
+     "error": "fallo"
+    },
+    {
+     "provider_name": "ollama",
+     "status": "completed",
+     "latency_ms": 474,
+     "estimated_cost_usd": 0.0032,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix005",
+   "prompt": "Revisa la arquitectura del sistema distribuido y decide si migrar a microservicios, con riesgo en producción",
+   "status": "classified",
+   "created_at": "2026-08-17T07:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "general"
+   ],
+   "intencion": "analyze_or_review",
+   "recomendadas": [
+    "ponytail",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix006",
+   "prompt": "Despliega a producción el pipeline de Jenkins con docker y kubernetes; borrar los secretos antiguos",
+   "status": "completed",
+   "created_at": "2026-08-08T06:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "devops"
+   ],
+   "intencion": "classify_and_plan",
+   "recomendadas": [
+    "ponytail",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "repo-analyzer",
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 306,
+     "estimated_cost_usd": 0.0028,
+     "error": null
+    },
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 476,
+     "estimated_cost_usd": 0.0038,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix007",
+   "prompt": "Analiza la vulnerabilidad en las credenciales y el permiso de auth del servicio",
+   "status": "completed",
+   "created_at": "2026-07-30T05:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "security"
+   ],
+   "intencion": "analyze_or_review",
+   "recomendadas": [
+    "cti-analyst",
+    "ponytail",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 307,
+     "estimated_cost_usd": 0.0031,
+     "error": null
+    },
+    {
+     "provider_name": "ollama",
+     "status": "failed",
+     "latency_ms": 477,
+     "estimated_cost_usd": 0.0041,
+     "error": "fallo"
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix008",
+   "prompt": "Hola",
+   "status": "classified",
+   "created_at": "2026-07-21T04:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "general"
+   ],
+   "intencion": "classify_and_plan",
+   "recomendadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix009",
+   "prompt": "hacer algo mejor, rápido y simple, varios cambios etc?",
+   "status": "completed",
+   "created_at": "2026-07-12T03:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "general"
+   ],
+   "intencion": "classify_and_plan",
+   "recomendadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 309,
+     "estimated_cost_usd": 0.0037,
+     "error": null
+    },
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 479,
+     "estimated_cost_usd": 0.0047,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix010",
+   "prompt": "¿Qué es mejor? ¿Algo así o algo asá? ¿Cómo lo hacemos?",
+   "status": "completed",
+   "created_at": "2026-07-03T02:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "general"
+   ],
+   "intencion": "classify_and_plan",
+   "recomendadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 310,
+     "estimated_cost_usd": 0.004,
+     "error": null
+    },
+    {
+     "provider_name": "ollama",
+     "status": "completed",
+     "latency_ms": 480,
+     "estimated_cost_usd": 0.005,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix011",
+   "prompt": "Traduce el texto al inglés",
+   "status": "classified",
+   "created_at": "2026-06-24T01:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "general"
+   ],
+   "intencion": "transform_or_extract",
+   "recomendadas": [
+    "ponytail",
+    "security-review"
+   ],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix012",
+   "prompt": "Diseña un workflow multi-agente con orquestador, cola async y optimiza el rendimiento y la escalabilidad del algoritmo",
+   "status": "completed",
+   "created_at": "2026-06-15T00:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "product"
+   ],
+   "intencion": "classify_and_plan",
+   "recomendadas": [
+    "frontend-builder",
+    "ponytail",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "failed",
+     "latency_ms": 312,
+     "estimated_cost_usd": 0.0046,
+     "error": "fallo"
+    },
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 482,
+     "estimated_cost_usd": 0.0056,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix013",
+   "prompt": "Add a new feature to the frontend: a ux roadmap view with requirements, ui components, and tests",
+   "status": "completed",
+   "created_at": "2026-06-05T23:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "programming",
+    "product"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "backend-builder",
+    "frontend-builder",
+    "ponytail",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "repo-analyzer",
+    "security-review"
+   ],
+   "runs": [
+    {
+     "provider_name": "codex-cli",
+     "status": "completed",
+     "latency_ms": 313,
+     "estimated_cost_usd": 0.0049,
+     "error": null
+    },
+    {
+     "provider_name": "ollama",
+     "status": "completed",
+     "latency_ms": 483,
+     "estimated_cost_usd": 0.0059,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix014",
+   "prompt": "Extrae las tablas del contrato docx con ocr",
+   "status": "classified",
+   "created_at": "2026-05-27T22:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "documents"
+   ],
+   "intencion": "classify_and_plan",
+   "recomendadas": [
+    "ponytail",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "tsk_fix015",
+   "prompt": "build an ETL that loads csv into sql and reports analytics metrics on a dashboard",
+   "status": "completed",
+   "created_at": "2026-05-18T21:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "data"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "ponytail",
+    "promptfoo",
+    "repo-analyzer",
+    "security-review"
+   ],
+   "ejecutadas": [
+    "repo-analyzer"
+   ],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 315,
+     "estimated_cost_usd": 0.0055,
+     "error": null
+    },
+    {
+     "provider_name": "codex-cli",
+     "status": "failed",
+     "latency_ms": 485,
+     "estimated_cost_usd": 0.0065,
+     "error": "fallo"
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  }
+ ],
+ "sinteticas": [
+  {
+   "task_id": "s01",
+   "prompt": "Haz que las tarjetas del mapa sean cápsulas compactas y añade un chevron",
+   "status": "completed",
+   "created_at": "2026-10-01T10:00:00.123456+00:00",
+   "entry_agent": "claude",
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "frontend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "frontend-builder"
+   ],
+   "ejecutadas": [
+    "frontend-builder"
+   ],
+   "runs": [
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [
+    "sub_001:validator=Worker;verdict=approved;priority=P3"
+   ],
+   "revision": {}
+  },
+  {
+   "task_id": "s02",
+   "prompt": "Las tarjetas del mapa siguen sin ser cápsulas compactas, corrige eso",
+   "status": "completed",
+   "created_at": "2026-10-01T11:30:00+00:00",
+   "entry_agent": "claude",
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "frontend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "impeccable"
+   ],
+   "ejecutadas": [
+    "impeccable"
+   ],
+   "runs": [
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {
+    "nivel_tarea": [
+     "N3"
+    ],
+    "skills_usadas": [
+     "impeccable",
+     "frontend-builder"
+    ]
+   }
+  },
+  {
+   "task_id": "s03",
+   "prompt": "Ajusta mapa-espacio.tsx y layout.ts para el autoenfoque del MapaEspacio",
+   "status": "completed",
+   "created_at": "2026-10-02T09:00:00+00:00",
+   "entry_agent": "codex",
+   "classified_by": "heuristic",
+   "nivel": "level_3_intermediate",
+   "dominios": [
+    "frontend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "s04",
+   "prompt": "En mapa-espacio.tsx el layout.ts no centra bien el MapaEspacio",
+   "status": "completed",
+   "created_at": "2026-10-02T12:00:00+00:00",
+   "entry_agent": "codex",
+   "classified_by": "heuristic",
+   "nivel": "level_3_intermediate",
+   "dominios": [
+    "frontend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "claude-cli",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [
+    "human_review_gate=blocked"
+   ],
+   "revision": {}
+  },
+  {
+   "task_id": "s05",
+   "prompt": "Exporta el informe trimestral en PDF con las ventas por región",
+   "status": "completed",
+   "created_at": "2026-10-03T08:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "documents"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "pdf"
+   ],
+   "ejecutadas": [
+    "pdf"
+   ],
+   "runs": [
+    {
+     "provider_name": "ollama-qwen",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.0002,
+     "error": null
+    },
+    {
+     "provider_name": "ollama-qwen",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 6.666666666666667e-05,
+     "error": null
+    }
+   ],
+   "decisiones": [
+    "sub_001:verdict=needs_revision;iteration=1;"
+   ],
+   "revision": {}
+  },
+  {
+   "task_id": "s06",
+   "prompt": "exporta el informe trimestral en pdf con las ventas por region otra vez",
+   "status": "failed",
+   "created_at": "2026-10-03T09:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "documents"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "ollama-qwen",
+     "status": "failed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": "fallo"
+    },
+    {
+     "provider_name": "ollama-qwen",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "s07",
+   "prompt": "exporta el informe trimestral en pdf con las ventas por region otra vez",
+   "status": "failed",
+   "created_at": "2026-10-03T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_1_simple",
+   "dominios": [
+    "documents"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "ollama-qwen",
+     "status": "failed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": "fallo"
+    },
+    {
+     "provider_name": "ollama-qwen",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "s08",
+   "prompt": "Crea un endpoint de usuarios con paginación",
+   "status": "classified",
+   "created_at": "2026-10-05T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "backend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "backend-builder"
+   ],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "s09",
+   "prompt": "Diseña la pantalla de ajustes",
+   "status": "completed",
+   "created_at": "2026-10-06T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "frontend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "backend-builder"
+   ],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "simulated",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "simulated",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "s10",
+   "prompt": "Diseña la pantalla de ajustes con modo oscuro",
+   "status": "completed",
+   "created_at": "2026-10-08T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "model:/karajan",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "frontend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [
+    "backend-builder"
+   ],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {
+    "agente": [
+     "claude-cli"
+    ],
+    "agente_entrada": [
+     "claude"
+    ],
+    "dominio": [
+     "interfaz"
+    ]
+   }
+  },
+  {
+   "task_id": "s11",
+   "prompt": "Una tarea antigua del verano",
+   "status": "completed",
+   "created_at": "2026-07-01T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "frontend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 500,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 1007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  }
+ ],
+ "casos": [
+  {
+   "entrada": "db",
+   "perfil": null,
+   "dias": 0,
+   "no_disponibles": [],
+   "salida": {
+    "dias": 0,
+    "perfil": "todos",
+    "agentes_perfil": null,
+    "ultima": "2026-10-01T12:00:00+00:00",
+    "kpis": {
+     "tareas": 16,
+     "delegadas": 11,
+     "acierto": 0.844,
+     "retrabajo": 0.0,
+     "revisadas": 1
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 16
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 9
+      },
+      {
+       "id": "nivel:N2",
+       "capa": "nivel",
+       "nombre": "N2",
+       "valor": 6
+      },
+      {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 1
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 6
+      },
+      {
+       "id": "agente:codex-cli",
+       "capa": "agente",
+       "nombre": "codex-cli",
+       "valor": 5
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 5
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 11
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 5
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 6,
+       "tareas": [
+        "tsk_fix000",
+        "tsk_fix003",
+        "tsk_fix006",
+        "tsk_fix009",
+        "tsk_fix012",
+        "tsk_fix015"
+       ],
+       "acierto": 0.809
+      },
+      {
+       "origen": "agente:codex-cli",
+       "destino": "estado:completed",
+       "valor": 5,
+       "tareas": [
+        "tsk_fix001",
+        "tsk_fix004",
+        "tsk_fix007",
+        "tsk_fix010",
+        "tsk_fix013"
+       ],
+       "acierto": 0.886
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 5,
+       "tareas": [
+        "tsk_fix002",
+        "tsk_fix005",
+        "tsk_fix008",
+        "tsk_fix011",
+        "tsk_fix014"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 9,
+       "tareas": [
+        "tsk_fix001",
+        "tsk_fix002",
+        "tsk_fix004",
+        "tsk_fix007",
+        "tsk_fix008",
+        "tsk_fix011",
+        "tsk_fix013",
+        "tsk_fix014",
+        "tsk_fix015"
+       ],
+       "acierto": 0.905
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 6,
+       "tareas": [
+        "tsk_fix003",
+        "tsk_fix005",
+        "tsk_fix006",
+        "tsk_fix009",
+        "tsk_fix010",
+        "tsk_fix012"
+       ],
+       "acierto": 0.905
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N4",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:codex-cli",
+       "valor": 4,
+       "tareas": [
+        "tsk_fix001",
+        "tsk_fix004",
+        "tsk_fix007",
+        "tsk_fix013"
+       ],
+       "acierto": 0.857
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:sin delegar",
+       "valor": 4,
+       "tareas": [
+        "tsk_fix002",
+        "tsk_fix008",
+        "tsk_fix011",
+        "tsk_fix014"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix015"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:claude-cli",
+       "valor": 4,
+       "tareas": [
+        "tsk_fix003",
+        "tsk_fix006",
+        "tsk_fix009",
+        "tsk_fix012"
+       ],
+       "acierto": 0.857
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:codex-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix010"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix005"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      }
+     ],
+     "total": 16,
+     "desajustes_nivel": 1,
+     "revisadas": 1
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 6,
+       "runs": 12,
+       "coste_medio": 0.00375,
+       "coste_total": 0.045,
+       "latencia_media": 392.5,
+       "p50": 315.0,
+       "p90": 482.0,
+       "acierto": 0.809,
+       "retrabajo": 0.0
+      },
+      {
+       "agente": "codex-cli",
+       "tareas": 5,
+       "runs": 10,
+       "coste_medio": 0.0036,
+       "coste_total": 0.036,
+       "latencia_media": 392.0,
+       "p50": 313.0,
+       "p90": 480.0,
+       "acierto": 0.886,
+       "retrabajo": 0.0
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N1",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N2",
+       "tareas": 4,
+       "acierto": 0.857
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "agente": "codex-cli",
+       "nivel": "N1",
+       "tareas": 4,
+       "acierto": 0.857
+      },
+      {
+       "agente": "codex-cli",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-05-18",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-06-01",
+       "agente": "codex-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-06-15",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-06-29",
+       "agente": "codex-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-07-06",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-07-27",
+       "agente": "codex-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-08-03",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-08-24",
+       "agente": "codex-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-08-31",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-09-21",
+       "agente": "codex-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "data",
+      "devops",
+      "documents",
+      "general",
+      "product",
+      "programming",
+      "security"
+     ],
+     "filas": [
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 8,
+       "recomendada": 16,
+       "celdas": {
+        "programming": {
+         "usos": 2,
+         "acierto": 1.0
+        },
+        "general": {
+         "usos": 3,
+         "acierto": 0.905
+        },
+        "devops": {
+         "usos": 1,
+         "acierto": 1.0
+        },
+        "security": {
+         "usos": 1,
+         "acierto": 0.714
+        },
+        "product": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.893,
+       "usada": true
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 4,
+       "recomendada": 9,
+       "celdas": {
+        "programming": {
+         "usos": 2,
+         "acierto": 1.0
+        },
+        "devops": {
+         "usos": 1,
+         "acierto": 1.0
+        },
+        "data": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.928,
+       "usada": true
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 3,
+       "recomendada": 16,
+       "celdas": {
+        "general": {
+         "usos": 3,
+         "acierto": 0.905
+        }
+       },
+       "acierto": 0.905,
+       "usada": true
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "celdas": {
+        "security": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.714,
+       "usada": true
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 4,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 4,
+     "total": 10
+    },
+    "sugerencias": [
+     {
+      "id": "skill-sin-ejecutar:frontend-builder",
+      "severidad": "media",
+      "texto": "frontend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "frontend-builder"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:backend-builder",
+      "severidad": "media",
+      "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "backend-builder"
+      }
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "2 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "impeccable",
+       "pdf"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 4,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 4,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 8,
+       "recomendada": 16,
+       "acierto": 0.893
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 4,
+       "recomendada": 9,
+       "acierto": 0.928
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 3,
+       "recomendada": 16,
+       "acierto": 0.905
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 8,
+       "recomendada": 16,
+       "acierto": 0.893
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 4,
+       "recomendada": 9,
+       "acierto": 0.928
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 3,
+       "recomendada": 16,
+       "acierto": 0.905
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "acierto": null
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "agentes": 1,
+      "codigo": 2,
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 2
+     }
+    },
+    "acierto": {
+     "tsk_fix000": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix001": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix002": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix003": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix004": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix005": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix006": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix007": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix008": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix009": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix010": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix011": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix012": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix013": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix014": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix015": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  },
+  {
+   "entrada": "db",
+   "perfil": null,
+   "dias": 30,
+   "no_disponibles": [],
+   "salida": {
+    "dias": 30,
+    "perfil": "todos",
+    "agentes_perfil": null,
+    "ultima": "2026-10-01T12:00:00+00:00",
+    "kpis": {
+     "tareas": 3,
+     "delegadas": 2,
+     "acierto": 0.857,
+     "retrabajo": 0.0,
+     "revisadas": 1
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 3
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 2
+      },
+      {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 1
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 1
+      },
+      {
+       "id": "agente:codex-cli",
+       "capa": "agente",
+       "nombre": "codex-cli",
+       "valor": 1
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 1
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 2
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 1
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "agente:codex-cli",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix001"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix002"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 2,
+       "tareas": [
+        "tsk_fix001",
+        "tsk_fix002"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N4",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:codex-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix001"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix002"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      }
+     ],
+     "total": 3,
+     "desajustes_nivel": 1,
+     "revisadas": 1
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 1,
+       "runs": 2,
+       "coste_medio": 0.0015,
+       "coste_total": 0.003,
+       "latencia_media": 385.0,
+       "p50": 300.0,
+       "p90": 470.0,
+       "acierto": 0.714,
+       "retrabajo": 0.0
+      },
+      {
+       "agente": "codex-cli",
+       "tareas": 1,
+       "runs": 2,
+       "coste_medio": 0.0018,
+       "coste_total": 0.0036,
+       "latencia_media": 386.0,
+       "p50": 301.0,
+       "p90": 471.0,
+       "acierto": 1.0,
+       "retrabajo": 0.0
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "agente": "codex-cli",
+       "nivel": "N1",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-09-21",
+       "agente": "codex-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "data",
+      "programming",
+      "security"
+     ],
+     "filas": [
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 1,
+       "recomendada": 3,
+       "celdas": {
+        "programming": {
+         "usos": 1,
+         "acierto": 1.0
+        }
+       },
+       "acierto": 1.0,
+       "usada": true
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 1,
+       "recomendada": 3,
+       "celdas": {
+        "programming": {
+         "usos": 1,
+         "acierto": 1.0
+        }
+       },
+       "acierto": 1.0,
+       "usada": true
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "celdas": {
+        "security": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.714,
+       "usada": true
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 3,
+     "total": 10
+    },
+    "sugerencias": [
+     {
+      "id": "skill-sin-ejecutar:ponytail",
+      "severidad": "media",
+      "texto": "ponytail se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "ponytail"
+      }
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "2 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "impeccable",
+       "pdf"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 1,
+       "recomendada": 3,
+       "acierto": 1.0
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 1,
+       "recomendada": 3,
+       "acierto": 1.0
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 1,
+       "recomendada": 3,
+       "acierto": 1.0
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 1,
+       "recomendada": 3,
+       "acierto": 1.0
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "acierto": null
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "agentes": 1,
+      "codigo": 2,
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 2
+     }
+    },
+    "acierto": {
+     "tsk_fix000": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix001": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix002": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  },
+  {
+   "entrada": "db",
+   "perfil": [
+    "claude-cli",
+    "codex",
+    "ollama-qwen"
+   ],
+   "dias": 0,
+   "no_disponibles": [
+    "ollama-qwen"
+   ],
+   "salida": {
+    "dias": 0,
+    "perfil": "activo",
+    "agentes_perfil": [
+     "claude-cli",
+     "codex",
+     "ollama-qwen"
+    ],
+    "ultima": "2026-10-01T12:00:00+00:00",
+    "kpis": {
+     "tareas": 11,
+     "delegadas": 6,
+     "acierto": 0.809,
+     "retrabajo": 0.0,
+     "revisadas": 1
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 11
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 5
+      },
+      {
+       "id": "nivel:N2",
+       "capa": "nivel",
+       "nombre": "N2",
+       "valor": 5
+      },
+      {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 1
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 6
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 5
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 6
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 5
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 6,
+       "tareas": [
+        "tsk_fix000",
+        "tsk_fix003",
+        "tsk_fix006",
+        "tsk_fix009",
+        "tsk_fix012",
+        "tsk_fix015"
+       ],
+       "acierto": 0.809
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 5,
+       "tareas": [
+        "tsk_fix002",
+        "tsk_fix005",
+        "tsk_fix008",
+        "tsk_fix011",
+        "tsk_fix014"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 5,
+       "tareas": [
+        "tsk_fix002",
+        "tsk_fix008",
+        "tsk_fix011",
+        "tsk_fix014",
+        "tsk_fix015"
+       ],
+       "acierto": 0.943
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 5,
+       "tareas": [
+        "tsk_fix003",
+        "tsk_fix005",
+        "tsk_fix006",
+        "tsk_fix009",
+        "tsk_fix012"
+       ],
+       "acierto": 0.886
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N4",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:sin delegar",
+       "valor": 4,
+       "tareas": [
+        "tsk_fix002",
+        "tsk_fix008",
+        "tsk_fix011",
+        "tsk_fix014"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix015"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:claude-cli",
+       "valor": 4,
+       "tareas": [
+        "tsk_fix003",
+        "tsk_fix006",
+        "tsk_fix009",
+        "tsk_fix012"
+       ],
+       "acierto": 0.857
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix005"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      }
+     ],
+     "total": 11,
+     "desajustes_nivel": 1,
+     "revisadas": 1
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 6,
+       "runs": 12,
+       "coste_medio": 0.00375,
+       "coste_total": 0.045,
+       "latencia_media": 392.5,
+       "p50": 315.0,
+       "p90": 482.0,
+       "acierto": 0.809,
+       "retrabajo": 0.0
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N1",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N2",
+       "tareas": 4,
+       "acierto": 0.857
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 1,
+       "acierto": 0.714
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-05-18",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-06-15",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-07-06",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-08-03",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-08-31",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "data",
+      "devops",
+      "documents",
+      "general",
+      "product",
+      "security"
+     ],
+     "filas": [
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 3,
+       "recomendada": 11,
+       "celdas": {
+        "devops": {
+         "usos": 1,
+         "acierto": 1.0
+        },
+        "general": {
+         "usos": 1,
+         "acierto": 1.0
+        },
+        "product": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.905,
+       "usada": true
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 2,
+       "recomendada": 11,
+       "celdas": {
+        "general": {
+         "usos": 2,
+         "acierto": 0.857
+        }
+       },
+       "acierto": 0.857,
+       "usada": true
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 2,
+       "recomendada": 6,
+       "celdas": {
+        "devops": {
+         "usos": 1,
+         "acierto": 1.0
+        },
+        "data": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.857,
+       "usada": true
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "celdas": {
+        "security": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.714,
+       "usada": true
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 4,
+     "total": 10
+    },
+    "sugerencias": [
+     {
+      "id": "no-disponible:ollama-qwen",
+      "severidad": "alta",
+      "texto": "ollama-qwen está en el perfil pero no está disponible: sus tareas irán al respaldo.",
+      "accion": null
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "2 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "impeccable",
+       "pdf"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 3,
+       "recomendada": 11,
+       "acierto": 0.905
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 2,
+       "recomendada": 11,
+       "acierto": 0.857
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 2,
+       "recomendada": 6,
+       "acierto": 0.857
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 3,
+       "recomendada": 11,
+       "acierto": 0.905
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 2,
+       "recomendada": 11,
+       "acierto": 0.857
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 2,
+       "recomendada": 6,
+       "acierto": 0.857
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "agentes": 1,
+      "codigo": 2,
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 2
+     }
+    },
+    "acierto": {
+     "tsk_fix000": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix002": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix003": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix005": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix006": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix008": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix009": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix011": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix012": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix014": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix015": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  },
+  {
+   "entrada": "db",
+   "perfil": [
+    "claude-cli",
+    "codex",
+    "ollama-qwen"
+   ],
+   "dias": 30,
+   "no_disponibles": [
+    "ollama-qwen"
+   ],
+   "salida": {
+    "dias": 30,
+    "perfil": "activo",
+    "agentes_perfil": [
+     "claude-cli",
+     "codex",
+     "ollama-qwen"
+    ],
+    "ultima": "2026-10-01T12:00:00+00:00",
+    "kpis": {
+     "tareas": 2,
+     "delegadas": 1,
+     "acierto": 0.714,
+     "retrabajo": 0.0,
+     "revisadas": 1
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 2
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 1
+      },
+      {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 1
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 1
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 1
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 1
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 1
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix002"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix002"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N4",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix002"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "tsk_fix000"
+       ],
+       "acierto": 0.714
+      }
+     ],
+     "total": 2,
+     "desajustes_nivel": 1,
+     "revisadas": 1
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 1,
+       "runs": 2,
+       "coste_medio": 0.0015,
+       "coste_total": 0.003,
+       "latencia_media": 385.0,
+       "p50": 300.0,
+       "p90": 470.0,
+       "acierto": 0.714,
+       "retrabajo": 0.0
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 1,
+       "acierto": 0.714
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 0.714
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "data",
+      "security"
+     ],
+     "filas": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "celdas": {
+        "security": {
+         "usos": 1,
+         "acierto": 0.714
+        }
+       },
+       "acierto": 0.714,
+       "usada": true
+      },
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 1,
+     "total": 10
+    },
+    "sugerencias": [
+     {
+      "id": "no-disponible:ollama-qwen",
+      "severidad": "alta",
+      "texto": "ollama-qwen está en el perfil pero no está disponible: sus tareas irán al respaldo.",
+      "accion": null
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "2 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "impeccable",
+       "pdf"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      },
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 0,
+       "acierto": 0.714
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      },
+      {
+       "skill": "cti-analyst",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      },
+      {
+       "skill": "promptfoo",
+       "categoria": "agentes",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 1,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "agentes": 1,
+      "codigo": 2,
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 2
+     }
+    },
+    "acierto": {
+     "tsk_fix000": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "tsk_fix002": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  },
+  {
+   "entrada": "sinteticas",
+   "perfil": null,
+   "dias": 0,
+   "no_disponibles": [],
+   "salida": {
+    "dias": 0,
+    "perfil": "todos",
+    "agentes_perfil": null,
+    "ultima": "2026-10-08T10:00:00+00:00",
+    "kpis": {
+     "tareas": 11,
+     "delegadas": 10,
+     "acierto": 0.654,
+     "retrabajo": 0.364,
+     "revisadas": 2
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 6
+      },
+      {
+       "id": "entrada:claude",
+       "capa": "entrada",
+       "nombre": "claude",
+       "valor": 3
+      },
+      {
+       "id": "entrada:codex",
+       "capa": "entrada",
+       "nombre": "codex",
+       "valor": 2
+      },
+      {
+       "id": "nivel:N2",
+       "capa": "nivel",
+       "nombre": "N2",
+       "valor": 5
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 3
+      },
+      {
+       "id": "nivel:N3",
+       "capa": "nivel",
+       "nombre": "N3",
+       "valor": 3
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 3
+      },
+      {
+       "id": "agente:codex",
+       "capa": "agente",
+       "nombre": "codex",
+       "valor": 3
+      },
+      {
+       "id": "agente:ollama-qwen",
+       "capa": "agente",
+       "nombre": "ollama-qwen",
+       "valor": 3
+      },
+      {
+       "id": "agente:simulated",
+       "capa": "agente",
+       "nombre": "simulated",
+       "valor": 1
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 1
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 8
+      },
+      {
+       "id": "estado:failed",
+       "capa": "estado",
+       "nombre": "failed",
+       "valor": 2
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 1
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s03",
+        "s04",
+        "s10"
+       ],
+       "acierto": 0.72
+      },
+      {
+       "origen": "agente:codex",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s01",
+        "s02",
+        "s11"
+       ],
+       "acierto": 0.815
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:failed",
+       "valor": 2,
+       "tareas": [
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.357
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "s05"
+       ],
+       "acierto": 0.222
+      },
+      {
+       "origen": "agente:simulated",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "s09"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N2",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s10"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N3",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:codex",
+       "destino": "nivel:N3",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 3,
+       "tareas": [
+        "s08",
+        "s09",
+        "s11"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:ollama-qwen",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:codex",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s11"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "s10"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:simulated",
+       "valor": 1,
+       "tareas": [
+        "s09"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:codex",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      }
+     ],
+     "total": 11,
+     "desajustes_nivel": 1,
+     "revisadas": 2
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00067,
+       "coste_total": 0.004,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.72,
+       "retrabajo": 0.333
+      },
+      {
+       "agente": "codex",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00067,
+       "coste_total": 0.004,
+       "latencia_media": 1253.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.815,
+       "retrabajo": 0.333
+      },
+      {
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00049,
+       "coste_total": 0.00293,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.312,
+       "retrabajo": 0.667
+      },
+      {
+       "agente": "simulated",
+       "tareas": 1,
+       "runs": 2,
+       "coste_medio": 0.00067,
+       "coste_total": 0.00133,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 1.0,
+       "retrabajo": 0.0
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N3",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "agente": "codex",
+       "nivel": "N2",
+       "tareas": 2,
+       "acierto": 0.722
+      },
+      {
+       "agente": "codex",
+       "nivel": "N3",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "ollama-qwen",
+       "nivel": "N1",
+       "tareas": 3,
+       "acierto": 0.312
+      },
+      {
+       "agente": "simulated",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-06-29",
+       "agente": "codex",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "codex",
+       "tareas": 2,
+       "acierto": 0.722
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "acierto": 0.312
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "simulated",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "backend",
+      "documents",
+      "frontend",
+      "interfaz"
+     ],
+     "filas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 2,
+         "acierto": 0.722
+        }
+       },
+       "acierto": 0.722,
+       "usada": true
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 1,
+         "acierto": 1.0
+        }
+       },
+       "acierto": 1.0,
+       "usada": true
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "documents": {
+         "usos": 1,
+         "acierto": 0.222
+        }
+       },
+       "acierto": 0.222,
+       "usada": true
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 3,
+     "total": 6
+    },
+    "sugerencias": [
+     {
+      "id": "nivel:ollama-qwen:N1",
+      "severidad": "alta",
+      "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
+      "accion": {
+       "tipo": "quitar_nivel",
+       "agente": "ollama-qwen",
+       "nivel": "N1"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:backend-builder",
+      "severidad": "media",
+      "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "backend-builder"
+      }
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "1 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 1
+     }
+    },
+    "acierto": {
+     "s01": {
+      "score": 0.444,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 1.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s02"
+     },
+     "s02": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s03": {
+      "score": 0.286,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0
+      },
+      "retrabajo": "vuelve sobre los mismos ficheros o componentes",
+      "repetida_por": "s04"
+     },
+     "s04": {
+      "score": 0.875,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s05": {
+      "score": 0.222,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s06"
+     },
+     "s06": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s07"
+     },
+     "s07": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s08": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s09": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s10": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s11": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  },
+  {
+   "entrada": "sinteticas",
+   "perfil": null,
+   "dias": 30,
+   "no_disponibles": [],
+   "salida": {
+    "dias": 30,
+    "perfil": "todos",
+    "agentes_perfil": null,
+    "ultima": "2026-10-08T10:00:00+00:00",
+    "kpis": {
+     "tareas": 10,
+     "delegadas": 9,
+     "acierto": 0.616,
+     "retrabajo": 0.4,
+     "revisadas": 2
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 5
+      },
+      {
+       "id": "entrada:claude",
+       "capa": "entrada",
+       "nombre": "claude",
+       "valor": 3
+      },
+      {
+       "id": "entrada:codex",
+       "capa": "entrada",
+       "nombre": "codex",
+       "valor": 2
+      },
+      {
+       "id": "nivel:N2",
+       "capa": "nivel",
+       "nombre": "N2",
+       "valor": 4
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 3
+      },
+      {
+       "id": "nivel:N3",
+       "capa": "nivel",
+       "nombre": "N3",
+       "valor": 3
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 3
+      },
+      {
+       "id": "agente:ollama-qwen",
+       "capa": "agente",
+       "nombre": "ollama-qwen",
+       "valor": 3
+      },
+      {
+       "id": "agente:codex",
+       "capa": "agente",
+       "nombre": "codex",
+       "valor": 2
+      },
+      {
+       "id": "agente:simulated",
+       "capa": "agente",
+       "nombre": "simulated",
+       "valor": 1
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 1
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 7
+      },
+      {
+       "id": "estado:failed",
+       "capa": "estado",
+       "nombre": "failed",
+       "valor": 2
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 1
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s03",
+        "s04",
+        "s10"
+       ],
+       "acierto": 0.72
+      },
+      {
+       "origen": "agente:codex",
+       "destino": "estado:completed",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s02"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:failed",
+       "valor": 2,
+       "tareas": [
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.357
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "s05"
+       ],
+       "acierto": 0.222
+      },
+      {
+       "origen": "agente:simulated",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "s09"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N2",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s10"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N3",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:codex",
+       "destino": "nivel:N3",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 2,
+       "tareas": [
+        "s08",
+        "s09"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:ollama-qwen",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "s10"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:codex",
+       "valor": 1,
+       "tareas": [
+        "s01"
+       ],
+       "acierto": 0.444
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:simulated",
+       "valor": 1,
+       "tareas": [
+        "s09"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:codex",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      }
+     ],
+     "total": 10,
+     "desajustes_nivel": 1,
+     "revisadas": 2
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00067,
+       "coste_total": 0.004,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.72,
+       "retrabajo": 0.333
+      },
+      {
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00049,
+       "coste_total": 0.00293,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.312,
+       "retrabajo": 0.667
+      },
+      {
+       "agente": "codex",
+       "tareas": 2,
+       "runs": 4,
+       "coste_medio": 0.00067,
+       "coste_total": 0.00267,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.722,
+       "retrabajo": 0.5
+      },
+      {
+       "agente": "simulated",
+       "tareas": 1,
+       "runs": 2,
+       "coste_medio": 0.00067,
+       "coste_total": 0.00133,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 1.0,
+       "retrabajo": 0.0
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N3",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "agente": "codex",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 0.444
+      },
+      {
+       "agente": "codex",
+       "nivel": "N3",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "ollama-qwen",
+       "nivel": "N1",
+       "tareas": 3,
+       "acierto": 0.312
+      },
+      {
+       "agente": "simulated",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "codex",
+       "tareas": 2,
+       "acierto": 0.722
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "acierto": 0.312
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "simulated",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "backend",
+      "documents",
+      "frontend",
+      "interfaz"
+     ],
+     "filas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 2,
+         "acierto": 0.722
+        }
+       },
+       "acierto": 0.722,
+       "usada": true
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 1,
+         "acierto": 1.0
+        }
+       },
+       "acierto": 1.0,
+       "usada": true
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "documents": {
+         "usos": 1,
+         "acierto": 0.222
+        }
+       },
+       "acierto": 0.222,
+       "usada": true
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 3,
+     "total": 6
+    },
+    "sugerencias": [
+     {
+      "id": "nivel:ollama-qwen:N1",
+      "severidad": "alta",
+      "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
+      "accion": {
+       "tipo": "quitar_nivel",
+       "agente": "ollama-qwen",
+       "nivel": "N1"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:backend-builder",
+      "severidad": "media",
+      "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "backend-builder"
+      }
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "1 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 1
+     }
+    },
+    "acierto": {
+     "s01": {
+      "score": 0.444,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 1.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s02"
+     },
+     "s02": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s03": {
+      "score": 0.286,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0
+      },
+      "retrabajo": "vuelve sobre los mismos ficheros o componentes",
+      "repetida_por": "s04"
+     },
+     "s04": {
+      "score": 0.875,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s05": {
+      "score": 0.222,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s06"
+     },
+     "s06": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s07"
+     },
+     "s07": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s08": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s09": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s10": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  },
+  {
+   "entrada": "sinteticas",
+   "perfil": [
+    "claude-cli",
+    "codex",
+    "ollama-qwen"
+   ],
+   "dias": 0,
+   "no_disponibles": [
+    "ollama-qwen"
+   ],
+   "salida": {
+    "dias": 0,
+    "perfil": "activo",
+    "agentes_perfil": [
+     "claude-cli",
+     "codex",
+     "ollama-qwen"
+    ],
+    "ultima": "2026-10-08T10:00:00+00:00",
+    "kpis": {
+     "tareas": 10,
+     "delegadas": 9,
+     "acierto": 0.616,
+     "retrabajo": 0.4,
+     "revisadas": 2
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 5
+      },
+      {
+       "id": "entrada:claude",
+       "capa": "entrada",
+       "nombre": "claude",
+       "valor": 3
+      },
+      {
+       "id": "entrada:codex",
+       "capa": "entrada",
+       "nombre": "codex",
+       "valor": 2
+      },
+      {
+       "id": "nivel:N2",
+       "capa": "nivel",
+       "nombre": "N2",
+       "valor": 4
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 3
+      },
+      {
+       "id": "nivel:N3",
+       "capa": "nivel",
+       "nombre": "N3",
+       "valor": 3
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 3
+      },
+      {
+       "id": "agente:codex",
+       "capa": "agente",
+       "nombre": "codex",
+       "valor": 3
+      },
+      {
+       "id": "agente:ollama-qwen",
+       "capa": "agente",
+       "nombre": "ollama-qwen",
+       "valor": 3
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 1
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 7
+      },
+      {
+       "id": "estado:failed",
+       "capa": "estado",
+       "nombre": "failed",
+       "valor": 2
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 1
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s03",
+        "s04",
+        "s10"
+       ],
+       "acierto": 0.72
+      },
+      {
+       "origen": "agente:codex",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s01",
+        "s02",
+        "s11"
+       ],
+       "acierto": 0.815
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:failed",
+       "valor": 2,
+       "tareas": [
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.357
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "s05"
+       ],
+       "acierto": 0.222
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N2",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s10"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N3",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:codex",
+       "destino": "nivel:N3",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 2,
+       "tareas": [
+        "s08",
+        "s11"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:ollama-qwen",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:codex",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s11"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "s10"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:codex",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      }
+     ],
+     "total": 10,
+     "desajustes_nivel": 1,
+     "revisadas": 2
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00067,
+       "coste_total": 0.004,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.72,
+       "retrabajo": 0.333
+      },
+      {
+       "agente": "codex",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00067,
+       "coste_total": 0.004,
+       "latencia_media": 1253.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.815,
+       "retrabajo": 0.333
+      },
+      {
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00049,
+       "coste_total": 0.00293,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.312,
+       "retrabajo": 0.667
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N3",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "agente": "codex",
+       "nivel": "N2",
+       "tareas": 2,
+       "acierto": 0.722
+      },
+      {
+       "agente": "codex",
+       "nivel": "N3",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "ollama-qwen",
+       "nivel": "N1",
+       "tareas": 3,
+       "acierto": 0.312
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-06-29",
+       "agente": "codex",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "codex",
+       "tareas": 2,
+       "acierto": 0.722
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "acierto": 0.312
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "backend",
+      "documents",
+      "frontend",
+      "interfaz"
+     ],
+     "filas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 2,
+         "acierto": 0.722
+        }
+       },
+       "acierto": 0.722,
+       "usada": true
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 1,
+         "acierto": 1.0
+        }
+       },
+       "acierto": 1.0,
+       "usada": true
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "documents": {
+         "usos": 1,
+         "acierto": 0.222
+        }
+       },
+       "acierto": 0.222,
+       "usada": true
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 3,
+     "total": 6
+    },
+    "sugerencias": [
+     {
+      "id": "no-disponible:ollama-qwen",
+      "severidad": "alta",
+      "texto": "ollama-qwen está en el perfil pero no está disponible: sus tareas irán al respaldo.",
+      "accion": null
+     },
+     {
+      "id": "nivel:ollama-qwen:N1",
+      "severidad": "alta",
+      "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
+      "accion": {
+       "tipo": "quitar_nivel",
+       "agente": "ollama-qwen",
+       "nivel": "N1"
+      }
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "1 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 1
+     }
+    },
+    "acierto": {
+     "s01": {
+      "score": 0.444,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 1.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s02"
+     },
+     "s02": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s03": {
+      "score": 0.286,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0
+      },
+      "retrabajo": "vuelve sobre los mismos ficheros o componentes",
+      "repetida_por": "s04"
+     },
+     "s04": {
+      "score": 0.875,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s05": {
+      "score": 0.222,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s06"
+     },
+     "s06": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s07"
+     },
+     "s07": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s08": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s10": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s11": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  },
+  {
+   "entrada": "sinteticas",
+   "perfil": [
+    "claude-cli",
+    "codex",
+    "ollama-qwen"
+   ],
+   "dias": 30,
+   "no_disponibles": [
+    "ollama-qwen"
+   ],
+   "salida": {
+    "dias": 30,
+    "perfil": "activo",
+    "agentes_perfil": [
+     "claude-cli",
+     "codex",
+     "ollama-qwen"
+    ],
+    "ultima": "2026-10-08T10:00:00+00:00",
+    "kpis": {
+     "tareas": 9,
+     "delegadas": 8,
+     "acierto": 0.568,
+     "retrabajo": 0.444,
+     "revisadas": 2
+    },
+    "flujo": {
+     "nodos": [
+      {
+       "id": "entrada:desconocido",
+       "capa": "entrada",
+       "nombre": "desconocido",
+       "valor": 4
+      },
+      {
+       "id": "entrada:claude",
+       "capa": "entrada",
+       "nombre": "claude",
+       "valor": 3
+      },
+      {
+       "id": "entrada:codex",
+       "capa": "entrada",
+       "nombre": "codex",
+       "valor": 2
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
+       "valor": 3
+      },
+      {
+       "id": "nivel:N2",
+       "capa": "nivel",
+       "nombre": "N2",
+       "valor": 3
+      },
+      {
+       "id": "nivel:N3",
+       "capa": "nivel",
+       "nombre": "N3",
+       "valor": 3
+      },
+      {
+       "id": "agente:claude-cli",
+       "capa": "agente",
+       "nombre": "claude-cli",
+       "valor": 3
+      },
+      {
+       "id": "agente:ollama-qwen",
+       "capa": "agente",
+       "nombre": "ollama-qwen",
+       "valor": 3
+      },
+      {
+       "id": "agente:codex",
+       "capa": "agente",
+       "nombre": "codex",
+       "valor": 2
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
+       "valor": 1
+      },
+      {
+       "id": "estado:completed",
+       "capa": "estado",
+       "nombre": "completed",
+       "valor": 6
+      },
+      {
+       "id": "estado:failed",
+       "capa": "estado",
+       "nombre": "failed",
+       "valor": 2
+      },
+      {
+       "id": "estado:classified",
+       "capa": "estado",
+       "nombre": "classified",
+       "valor": 1
+      }
+     ],
+     "enlaces": [
+      {
+       "origen": "agente:claude-cli",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s03",
+        "s04",
+        "s10"
+       ],
+       "acierto": 0.72
+      },
+      {
+       "origen": "agente:codex",
+       "destino": "estado:completed",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s02"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:failed",
+       "valor": 2,
+       "tareas": [
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.357
+      },
+      {
+       "origen": "agente:ollama-qwen",
+       "destino": "estado:completed",
+       "valor": 1,
+       "tareas": [
+        "s05"
+       ],
+       "acierto": 0.222
+      },
+      {
+       "origen": "agente:sin delegar",
+       "destino": "estado:classified",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N2",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s10"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "entrada:claude",
+       "destino": "nivel:N3",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:codex",
+       "destino": "nivel:N3",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N1",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N1",
+       "destino": "agente:ollama-qwen",
+       "valor": 3,
+       "tareas": [
+        "s05",
+        "s06",
+        "s07"
+       ],
+       "acierto": 0.312
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:claude-cli",
+       "valor": 1,
+       "tareas": [
+        "s10"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:codex",
+       "valor": 1,
+       "tareas": [
+        "s01"
+       ],
+       "acierto": 0.444
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 1,
+       "tareas": [
+        "s08"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s03",
+        "s04"
+       ],
+       "acierto": 0.581
+      },
+      {
+       "origen": "nivel:N3",
+       "destino": "agente:codex",
+       "valor": 1,
+       "tareas": [
+        "s02"
+       ],
+       "acierto": 1.0
+      }
+     ],
+     "total": 9,
+     "desajustes_nivel": 1,
+     "revisadas": 2
+    },
+    "eficiencia": {
+     "agentes": [
+      {
+       "agente": "claude-cli",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00067,
+       "coste_total": 0.004,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.72,
+       "retrabajo": 0.333
+      },
+      {
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "runs": 6,
+       "coste_medio": 0.00049,
+       "coste_total": 0.00293,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.312,
+       "retrabajo": 0.667
+      },
+      {
+       "agente": "codex",
+       "tareas": 2,
+       "runs": 4,
+       "coste_medio": 0.00067,
+       "coste_total": 0.00267,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.722,
+       "retrabajo": 0.5
+      }
+     ],
+     "por_nivel": [
+      {
+       "agente": "claude-cli",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "claude-cli",
+       "nivel": "N3",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "agente": "codex",
+       "nivel": "N2",
+       "tareas": 1,
+       "acierto": 0.444
+      },
+      {
+       "agente": "codex",
+       "nivel": "N3",
+       "tareas": 1,
+       "acierto": 1.0
+      },
+      {
+       "agente": "ollama-qwen",
+       "nivel": "N1",
+       "tareas": 3,
+       "acierto": 0.312
+      }
+     ],
+     "serie": [
+      {
+       "semana": "2026-09-28",
+       "agente": "claude-cli",
+       "tareas": 2,
+       "acierto": 0.581
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "codex",
+       "tareas": 2,
+       "acierto": 0.722
+      },
+      {
+       "semana": "2026-09-28",
+       "agente": "ollama-qwen",
+       "tareas": 3,
+       "acierto": 0.312
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "claude-cli",
+       "tareas": 1,
+       "acierto": 1.0
+      }
+     ]
+    },
+    "matriz": {
+     "categorias": [
+      "backend",
+      "documents",
+      "frontend",
+      "interfaz"
+     ],
+     "filas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 2,
+         "acierto": 0.722
+        }
+       },
+       "acierto": 0.722,
+       "usada": true
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "frontend": {
+         "usos": 1,
+         "acierto": 1.0
+        }
+       },
+       "acierto": 1.0,
+       "usada": true
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "celdas": {
+        "documents": {
+         "usos": 1,
+         "acierto": 0.222
+        }
+       },
+       "acierto": 0.222,
+       "usada": true
+      },
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 0,
+       "celdas": {},
+       "acierto": null,
+       "usada": false
+      }
+     ],
+     "usadas": 3,
+     "total": 6
+    },
+    "sugerencias": [
+     {
+      "id": "no-disponible:ollama-qwen",
+      "severidad": "alta",
+      "texto": "ollama-qwen está en el perfil pero no está disponible: sus tareas irán al respaldo.",
+      "accion": null
+     },
+     {
+      "id": "nivel:ollama-qwen:N1",
+      "severidad": "alta",
+      "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
+      "accion": {
+       "tipo": "quitar_nivel",
+       "agente": "ollama-qwen",
+       "nivel": "N1"
+      }
+     },
+     {
+      "id": "skills-sin-uso",
+      "severidad": "baja",
+      "texto": "1 skills instaladas no se han usado en el periodo: candidatas a retirar.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
+     }
+    ],
+    "catalogo": {
+     "instaladas": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      },
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "sin_actividad": [
+      {
+       "skill": "docx",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 0,
+       "recomendada": 0,
+       "acierto": null
+      }
+     ],
+     "top": [
+      {
+       "skill": "frontend-builder",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 2,
+       "recomendada": 1,
+       "acierto": 0.722
+      },
+      {
+       "skill": "impeccable",
+       "categoria": "interfaz",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 1.0
+      },
+      {
+       "skill": "pdf",
+       "categoria": "documentos",
+       "instalada": true,
+       "usos": 1,
+       "recomendada": 1,
+       "acierto": 0.222
+      }
+     ],
+     "recomendadas_no_instaladas": [
+      {
+       "skill": "backend-builder",
+       "categoria": "interfaz",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 2,
+       "acierto": null
+      }
+     ],
+     "por_categoria": {
+      "documentos": 2,
+      "interfaz": 3,
+      "seguridad": 1
+     }
+    },
+    "acierto": {
+     "s01": {
+      "score": 0.444,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 1.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s02"
+     },
+     "s02": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s03": {
+      "score": 0.286,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0
+      },
+      "retrabajo": "vuelve sobre los mismos ficheros o componentes",
+      "repetida_por": "s04"
+     },
+     "s04": {
+      "score": 0.875,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s05": {
+      "score": 0.222,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 1.0,
+       "validacion": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s06"
+     },
+     "s06": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "cita el prompt anterior",
+      "repetida_por": "s07"
+     },
+     "s07": {
+      "score": 0.714,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s08": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s10": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     }
+    }
+   }
+  }
+ ]
+}

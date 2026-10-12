@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import typer
 
 from karajan_cli import output
@@ -26,7 +28,7 @@ def assign(
         raise typer.Exit(code=1)
 
     if prompt:
-        classified = client.classify(prompt)
+        classified = client.classify(prompt, os.environ.get("KARAJAN_ENTRY_AGENT") or None)
         task_id = classified["task_id"]
 
     force_provider = None if entity else to

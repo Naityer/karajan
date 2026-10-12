@@ -97,6 +97,7 @@ class CriteriaScores(BaseModel):
 class TaskRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=20000)
     effort_level: ComplexityLevel | None = None
+    entry_agent: str | None = Field(default=None, max_length=60)
 
     @field_validator("prompt")
     @classmethod
@@ -146,6 +147,8 @@ class ClassificationResult(BaseModel):
     reason: str
     validation_plan: str
     classified_by: str = "heuristic"  # "heuristic" | "llm:<provider>"
+    # Agente que recibió el prompt (punto de entrada): claude, codex, qwen, atlas-dev… None en el histórico anterior.
+    entry_agent: str | None = Field(default=None, max_length=60)
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -157,6 +160,7 @@ class IngestRequest(BaseModel):
     """
 
     original_prompt: str = Field(min_length=1, max_length=20000)
+    entry_agent: str | None = Field(default=None, max_length=60)
     domain: list[str] = Field(default_factory=lambda: ["general"])
     intent: str = "classify_and_plan"
     criteria: CriteriaScores

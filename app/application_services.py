@@ -81,6 +81,8 @@ class ClassificationService:
 
             result = classifier.classify(command.prompt, self.runtime.config)
             result = self._apply_effort(result, command.effort_level)
+            if command.entry_agent:
+                result = result.model_copy(update={"entry_agent": command.entry_agent})
             result = attach_resource_recommendations(
                 result, self.runtime.resources, self.runtime.resource_ranking_engine
             )
