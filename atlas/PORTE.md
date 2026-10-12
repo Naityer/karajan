@@ -17,10 +17,16 @@ comprueba contra él (ver «Paridad»).
 | Analítica de skills (recomendada ≠ ejecutada) | `app/skill_analytics.py` | `src/analitica.ts` |
 | Catálogo de skills con su estado de instalación | `app/skills_catalog.py` (lectura) | `src/catalogo.ts` |
 | Servidor | `app/modules/monitoring/api.py` y rutas de tareas | `src/servidor.ts` (`registrar(app, ctx)` de Fastify) |
+| Perfiles de enrutado (lectura y escritura, compartidos) | `app/routing_layout.py`, `RoutingLayout` de `app/models.py` | `src/perfiles.ts` |
+| Reglas por dominio y preset «Claude · Codex · Qwen» | `app/routing_rules.py` | `src/reglas.ts` |
+| Proveedores CLI (Claude Code, Codex, Qwen/ollama) | `app/catalog.py`, `app/providers/cli.py` | `src/proveedores.ts` |
+| Delegación real (clasificar, elegir agente, ejecutar, registrar) | `app/delegation.py` (camino síncrono, sin validador ni bucle de herramientas) | `src/delegar.ts` |
 
 Rutas (las de la API de Karajan, para que lo que ya habla con ella funcione igual): `GET /health`, `/metrics`,
 `/agents/performance`, `/analytics/skills?days=`, `/tasks`, `/tasks/:id`, `/tasks/:id/runs`, `/tasks/:id/decisions`,
-`/search/tasks?q=`, `/skills`, `/config` y `POST /classify-task` (heurístico, **no persiste**).
+`/search/tasks?q=`, `/skills`, `/config` y `POST /classify-task` (heurístico, **no persiste**). Desde v0.2: `GET/PUT /routing-layout`,
+`POST /routing-layout/presets/dominios`, `GET /providers`, `POST /routing/plan` (a quién iría cada subtarea, sin ejecutar) y
+`POST /delegate-task` (**ejecuta de verdad**; ver `docs/perfiles-y-reglas.md`).
 
 Atlas dev reenvía `/paquetes/karajan/api/*` a este servidor y su puente `/karajan/*` (widgets «Estadísticas» e «Inspection» del
 Home) se resuelve contra él cuando el paquete está instalado.
@@ -31,10 +37,15 @@ Home) se resuelve contra él cuando el paquete está instalado.
 Karajan, se **copian** al arrancar (no se comparte fichero con el Karajan nativo). El esquema es el de Karajan, de modo que la
 copia es compatible en los dos sentidos.
 
+Los **perfiles** sí se comparten con el Karajan nativo: `ATLAS_KARAJAN_LAYOUT`, o `<ATLAS_KARAJAN_DATA>/routing_layout.json`, o
+`<datos>/routing_layout.json` si no hay Karajan. Las tareas que delega el paquete se registran en su copia de `task_logs.db`
+(tablas `tasks`, `decisions` y `runs`; no en `tasks_v2` ni en FTS), así que el Karajan nativo no las ve.
+
 ## Todavía no (responden 501)
 
-- **Delegar y ejecutar** (`/delegate-task`, `/executions`, `/ingest`): necesitan proveedores (CLI de Claude/Codex/Ollama/Aider, APIs),
-  el bucle de herramientas con shell, reintentos, el validador y la persistencia con su doble escritura `tasks`/`tasks_v2`.
+- **`/executions` e `/ingest`**, y en `/delegate-task` lo que va más allá del camino síncrono: el bucle de herramientas con shell,
+  los reintentos, el validador, el modo cola (scheduler) y la doble escritura `tasks`/`tasks_v2`. Proveedores: solo los tres CLI
+  del perfil por dominio (Claude Code, Codex y Qwen con ollama); ni APIs ni el resto de modelos locales.
 - **Clasificación con LLM** (`app/classifier.py::_llm_classify`) y `reconcile` de `/ingest`.
 - **Biblioteca de recursos «Inspiration»** y el **recomendador** (`resource_library`, `resource_intelligence`, ~1900 líneas más
   `resources.db` de 18 MB con heurísticas y datos propios): `/resources/*`. El widget Inspection lo muestra como error del servicio.
@@ -43,9 +54,8 @@ copia es compatible en los dos sentidos.
 - **Búsqueda FTS5**: aquí `LIKE` sobre el prompt (el original ya recurre a `LIKE` cuando FTS5 no está).
 - La interfaz completa de Karajan (DOM imperativo y 13 k líneas de CSS global): no se porta; se queda en su repo.
 
-Orden recomendado para lo que falta: (1) persistir clasificaciones (`/classify-task` guardando en `tasks`/`decisions`, con la doble
-escritura a `tasks_v2`); (2) delegación con un único proveedor CLI y sin bucle de herramientas; (3) biblioteca de recursos;
-(4) el resto.
+Orden recomendado para lo que falta: (1) clasificación con LLM (la heurística puntúa bajo los prompts cortos); (2) validador y
+reintentos en la delegación; (3) biblioteca de recursos; (4) el resto.
 
 ## Paridad con Python
 

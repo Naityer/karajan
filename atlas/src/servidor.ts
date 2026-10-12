@@ -1,10 +1,14 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { construirAnaliticaSkills } from './analitica';
 import { Almacen } from './almacen';
 import { listarSkills } from './catalogo';
+import { Delegador } from './delegar';
 import { clasificar, configDesde } from './heuristica';
+import { ErrorPerfil, Perfiles } from './perfiles';
+import { disponibilidad, PROVEEDORES } from './proveedores';
 
 /**
  * Karajan como paquete de Atlas dev: su núcleo de lectura y clasificación, en TypeScript y dentro del proceso de Atlas dev.
@@ -13,18 +17,24 @@ import { clasificar, configDesde } from './heuristica';
  * que lo que ya habla con ella (el puente `/karajan` de Atlas dev y sus widgets) funciona igual contra el paquete.
  *
  * Qué hay: `/health`, `/metrics`, `/agents/performance`, `/analytics/skills`, `/tasks` (+ detalle, runs y decisiones),
- * `/search/tasks`, `/skills`, `/config` y `/classify-task` (heurístico, sin persistir). Qué no (ver PORTE.md): delegar y
- * ejecutar con proveedores, el recomendador y la biblioteca de recursos, el scheduler y el SSE: responden 501.
+ * `/search/tasks`, `/skills`, `/config`, `/classify-task` (heurístico, sin persistir), los perfiles (`/routing-layout`, compartido
+ * con el Karajan nativo), `/providers`, `/routing/plan` (a quién iría cada subtarea, sin ejecutar) y `/delegate-task`, que
+ * ejecuta de verdad Claude Code, Codex o Qwen (ollama) según las reglas del perfil por defecto. Qué no (ver PORTE.md): el
+ * recomendador y la biblioteca de recursos, el scheduler en modo cola y el SSE: responden 501.
  *
  * Datos: `<datos>/task_logs.db` y `<datos>/active_config.json`. Si no existen y `ATLAS_KARAJAN_DATA` apunta a la carpeta
- * `data/` de un Karajan, se copian al arrancar (copia: el Karajan nativo y Atlas dev no comparten fichero).
+ * `data/` de un Karajan, se copian al arrancar (copia: el registro de tareas no se comparte, para no escribir los dos a la
+ * vez). Los perfiles SÍ se comparten: `ATLAS_KARAJAN_LAYOUT`, o `<ATLAS_KARAJAN_DATA>/routing_layout.json`, o
+ * `<datos>/routing_layout.json` si no hay Karajan. Las carpetas de trabajo de `/delegate-task` deben estar dentro de
+ * `ATLAS_WORKSPACE` (o de la carpeta de usuario).
  */
 const NO_DISPONIBLE = 'No disponible en el paquete de Atlas dev: necesita proveedores o la biblioteca de recursos (ver PORTE.md).';
 
 interface Contexto { id: string; version: string; datos: string }
 interface AppMinima {
   get(ruta: string, fn: (req: { query: Record<string, string | undefined>; params: Record<string, string> }) => unknown): void;
-  post(ruta: string, fn: (req: { body: unknown }) => unknown): void;
+  post(ruta: string, fn: (req: { body: unknown; params: Record<string, string> }, reply: { code(n: number): unknown }) => unknown): void;
+  put(ruta: string, fn: (req: { body: unknown }) => unknown): void;
   setErrorHandler(fn: (e: Error & { status?: number; statusCode?: number }, req: unknown, reply: { code(n: number): { send(b: unknown): unknown } }) => unknown): void;
 }
 
@@ -52,6 +62,11 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const config = () => {
     try { return configDesde(JSON.parse(readFileSync(join(ctx.datos, 'active_config.json'), 'utf8'))); } catch { return configDesde(null); }
   };
+
+  const rutaLayout = process.env['ATLAS_KARAJAN_LAYOUT']
+    ?? (process.env['ATLAS_KARAJAN_DATA'] && existsSync(process.env['ATLAS_KARAJAN_DATA']) ? join(process.env['ATLAS_KARAJAN_DATA'], 'routing_layout.json') : join(ctx.datos, 'routing_layout.json'));
+  const perfiles = new Perfiles(rutaLayout);
+  const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir() });
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno' }));
 
@@ -88,7 +103,32 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     return clasificar(prompt, config());
   });
 
-  for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/delegate-task'], ['post', '/executions'], ['post', '/ingest']] as const) {
+  // ── Perfiles y reglas (compartidos con el Karajan nativo) ─────────────────
+  const conPerfil = <T,>(fn: () => T): T => { try { return fn(); } catch (e) { if (e instanceof ErrorPerfil) throw falla(422, e.message); throw e; } };
+  app.get('/routing-layout', () => ({ ...perfiles.leer(), path: rutaLayout }));
+  app.put('/routing-layout', (req) => conPerfil(() => perfiles.guardar(req.body)));
+  app.post('/routing-layout/presets/dominios', (req) => conPerfil(() => perfiles.aplicarPresetDominio({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })));
+
+  // ── Proveedores y delegación real ────────────────────────────────────────
+  app.get('/providers', () => PROVEEDORES.map((p) => disponibilidad(p)));
+  const leerPrompt = (body: unknown) => {
+    const prompt = typeof (body as { prompt?: unknown } | null)?.prompt === 'string' ? ((body as { prompt: string }).prompt).trim() : '';
+    if (!prompt) throw falla(422, 'prompt cannot be blank');
+    if (prompt.length > 20_000) throw falla(422, 'prompt demasiado largo (máx. 20000 caracteres)');
+    return prompt;
+  };
+  app.post('/routing/plan', (req) => {
+    const b = (req.body ?? {}) as { force_entity_id?: unknown };
+    return delegador.planificar(leerPrompt(req.body), typeof b.force_entity_id === 'string' ? b.force_entity_id : null);
+  });
+  app.post('/delegate-task', (req, reply) => {
+    const b = (req.body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown };
+    const plan = delegador.delegar(leerPrompt(req.body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true });
+    reply.code(plan.bloqueada ? 409 : 202);
+    return plan;
+  });
+
+  for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/executions'], ['post', '/ingest']] as const) {
     app[metodo](ruta, () => { throw falla(501, NO_DISPONIBLE); });
   }
 }

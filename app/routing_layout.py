@@ -48,11 +48,12 @@ class RoutingLayoutStore:
     def save(self, layout: RoutingLayout) -> RoutingLayout:
         """Persist the diagram atomically and keep the previous file as backup."""
         saved = layout.model_copy(deep=True)
+        saved.preserve_rules_from(self._load_path(self.path) or self._load_path(self.backup_path))
         # Loaded layouts have their active projection marked as explicitly set,
         # so in-place mutations remain authoritative. A profiles-only API
         # payload has no such fields and must instead project its active profile.
         changed_canvas_fields = set(saved.model_fields_set).intersection(
-            {"entities", "groups", "zoom", "drawer_width", "openclaw_pos"}
+            {"entities", "groups", "zoom", "drawer_width", "openclaw_pos", "rules"}
         )
         saved.reconcile_active_profile(changed_canvas_fields)
         saved.updated_at = datetime.now(timezone.utc)

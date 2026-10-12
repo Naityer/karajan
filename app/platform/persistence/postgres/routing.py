@@ -25,10 +25,17 @@ class PostgresRoutingRepository:
             return RoutingLayout().project_active_profile()
         return RoutingLayout.model_validate(row[0]).project_active_profile()
 
+    def _previous(self) -> RoutingLayout | None:
+        try:
+            return self.load()
+        except Exception:  # noqa: BLE001 - a broken stored layout must not block saving a new one
+            return None
+
     def save(self, layout: RoutingLayout) -> RoutingLayout:
         saved = layout.model_copy(deep=True)
+        saved.preserve_rules_from(self._previous())
         changed_canvas_fields = set(saved.model_fields_set).intersection(
-            {"entities", "groups", "zoom", "drawer_width", "openclaw_pos"}
+            {"entities", "groups", "zoom", "drawer_width", "openclaw_pos", "rules"}
         )
         saved.reconcile_active_profile(changed_canvas_fields)
         payload = saved.model_dump(mode="json")

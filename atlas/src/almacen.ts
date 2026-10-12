@@ -6,10 +6,10 @@ import { redondear } from './redondeo';
 import type { RegistroTarea, Run } from './analitica';
 
 /**
- * Registro de tareas de Karajan (`task_logs.db`, el mismo esquema que `app/database.py`): lectura de tareas, runs y decisiones
- * y las agregaciones de `/metrics` y `/agents/performance`. Solo lectura: quien escribe tareas (clasificar y delegar con
- * persistencia) es el Karajan completo; aquí se crean las tablas vacías si no existen para que un paquete recién instalado
- * responda, y se puede importar un `task_logs.db` existente (ver servidor.ts). Las filas dañadas se saltan, como en Python.
+ * Registro de tareas de Karajan (`task_logs.db`, el mismo esquema que `app/database.py`): lectura de tareas, runs y decisiones,
+ * las agregaciones de `/metrics` y `/agents/performance`, y las escrituras que hace `/delegate-task` (tarea, decisiones y runs,
+ * con las mismas columnas que Python). Se crean las tablas vacías si no existen para que un paquete recién instalado responda,
+ * y se puede importar un `task_logs.db` existente (ver servidor.ts). Las filas dañadas se saltan, como en Python.
  */
 export interface Tarea extends RegistroTarea { prompt: string; status: string; created_at: string; updated_at: string }
 
@@ -112,6 +112,35 @@ export class Almacen {
 
   decisiones(id?: string): Fila[] {
     return id === undefined ? this.todas('SELECT * FROM decisions ORDER BY created_at') : this.todas('SELECT * FROM decisions WHERE task_id = ? ORDER BY created_at', id);
+  }
+
+  // ── Escrituras (delegación) ─────────────────────────────────────────────
+  guardarTarea(c: { task_id: string; original_prompt: string; created_at: string; complexity_level: string; recommended_model: string; complexity_score: number; requires_human_review: boolean; subtasks: unknown[] }, estado: string): void {
+    const ahora = new Date().toISOString();
+    this.db.prepare(`INSERT INTO tasks (task_id, prompt, status, classification_json, delegation_json, created_at, updated_at, level, model, score, requires_review, subtask_count, est_cost)
+      VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0)`)
+      .run(c.task_id, c.original_prompt, estado, JSON.stringify(c), c.created_at, ahora, c.complexity_level, c.recommended_model, c.complexity_score, c.requires_human_review ? 1 : 0, c.subtasks.length);
+  }
+
+  actualizarTarea(id: string, estado: string, delegacion: { total_estimated_cost_usd?: number } | null): void {
+    this.db.prepare('UPDATE tasks SET status = ?, delegation_json = ?, est_cost = COALESCE(?, est_cost), updated_at = ? WHERE task_id = ?')
+      .run(estado, delegacion ? JSON.stringify(delegacion) : null, delegacion?.total_estimated_cost_usd ?? null, new Date().toISOString(), id);
+  }
+
+  registrarDecision(d: { task_id: string; phase: string; decision: string; score?: number | null; backend?: string | null; reason?: string }): void {
+    this.db.prepare('INSERT INTO decisions (id, task_id, phase, decision, score, backend, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(`dec_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`, d.task_id, d.phase, d.decision, d.score ?? null, d.backend ?? null, d.reason ?? '', new Date().toISOString());
+  }
+
+  registrarRun(r: { task_id: string; provider_name: string; routing_entity_id: string | null; routing_entity_name_snapshot: string | null; model_id: string; backend: string; status: string;
+    started_at: string; completed_at: string | null; latency_ms: number | null; input_tokens: number; output_tokens: number; estimated_cost_usd: number; error: string | null }): string {
+    const id = `run_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    const indice = Number(this.todas('SELECT COALESCE(MAX(run_index), -1) + 1 AS n FROM runs WHERE task_id = ?', r.task_id)[0]?.['n'] ?? 0);
+    this.db.prepare(`INSERT INTO runs (id, task_id, run_index, provider_name, routing_entity_id, routing_entity_name_snapshot, model_id, backend, status, started_at, completed_at,
+      latency_ms, input_tokens, output_tokens, estimated_cost_usd, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, r.task_id, indice, r.provider_name, r.routing_entity_id, r.routing_entity_name_snapshot, r.model_id, r.backend, r.status, r.started_at, r.completed_at,
+        r.latency_ms, r.input_tokens, r.output_tokens, r.estimated_cost_usd, r.error);
+    return id;
   }
 
   /** Búsqueda simple por texto (el original usa FTS5 con bm25 y recurre a LIKE; aquí siempre LIKE, sin depender de FTS). */

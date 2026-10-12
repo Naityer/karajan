@@ -777,7 +777,28 @@ class RoutingEntity(BaseModel):
         return self
 
 
-_CANVAS_FIELD_NAMES = ("entities", "groups", "zoom", "drawer_width", "openclaw_pos")
+class RoutingRule(BaseModel):
+    """Domain rule of a profile: when a subtask matches it, its entity runs the subtask.
+
+    Rules are evaluated in order and the first enabled match wins; when none matches,
+    dispatch falls back to the usual level/tier resolution. Empty lists and missing
+    bounds mean "any". `domains` is matched against the classification domains plus
+    the routing areas (`frontend`, `backend`, `oficina`) detected in the prompt.
+    A rule whose entity no longer exists is ignored at runtime (never rejected), so
+    editing the canvas without knowing about rules can't break a save.
+    """
+
+    id: str = Field(min_length=1, max_length=80)
+    name: str = ""
+    entity_id: str
+    domains: list[str] = Field(default_factory=list)
+    intents: list[str] = Field(default_factory=list)
+    level_min: int | None = Field(default=None, ge=1, le=5)
+    level_max: int | None = Field(default=None, ge=1, le=5)
+    enabled: bool = True
+
+
+_CANVAS_FIELD_NAMES = ("entities", "groups", "zoom", "drawer_width", "openclaw_pos", "rules")
 
 
 def _reject_duplicate_group_prio(entities: list[RoutingEntity]) -> None:
@@ -803,6 +824,7 @@ class RoutingProfile(BaseModel):
     zoom: float = Field(default=1.0, ge=0.15, le=2.0)
     drawer_width: int = Field(default=320, ge=220, le=680)
     openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
+    rules: list[RoutingRule] = Field(default_factory=list)
 
     @field_validator("id", "name")
     @classmethod
@@ -824,6 +846,7 @@ class RoutingLayout(BaseModel):
     zoom: float = Field(default=1.0, ge=0.15, le=2.0)
     drawer_width: int = Field(default=320, ge=220, le=680)
     openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
+    rules: list[RoutingRule] = Field(default_factory=list)
     active_profile_id: str = "current"
     default_profile_id: str = "current"
     profiles: list[RoutingProfile] = Field(min_length=1)
@@ -879,6 +902,23 @@ class RoutingLayout(BaseModel):
         default = self.default_profile()
         for name in _CANVAS_FIELD_NAMES:
             setattr(self, name, deepcopy(getattr(default, name)))
+        return self
+
+    def preserve_rules_from(self, previous: "RoutingLayout | None") -> "RoutingLayout":
+        """Keep the saved rules of profiles that arrive without a `rules` key.
+
+        Clients that predate rules (the native Decisión canvas) rebuild profiles
+        with only their canvas fields; without this, every autosave would wipe the
+        domain rules configured elsewhere (e.g. from Atlas dev).
+        """
+        if previous is None:
+            return self
+        saved = {profile.id: profile.rules for profile in previous.profiles}
+        self.profiles = [
+            profile if "rules" in profile.model_fields_set or profile.id not in saved
+            else profile.model_copy(update={"rules": deepcopy(saved[profile.id])})
+            for profile in self.profiles
+        ]
         return self
 
     def reconcile_active_profile(self, changed_fields: set[str] | None = None) -> "RoutingLayout":

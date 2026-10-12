@@ -1,0 +1,194 @@
+[
+  {
+    "prompt": "Diseña la interfaz del dashboard con componentes React y animaciones",
+    "areas": [
+      "frontend"
+    ],
+    "dominios": [
+      "data"
+    ],
+    "intencion": "classify_and_plan",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "interfaces-complejas",
+        "entidad": "dominio-claude"
+      },
+      {
+        "nivel": 2,
+        "regla": "interfaces-complejas",
+        "entidad": "dominio-claude"
+      }
+    ]
+  },
+  {
+    "prompt": "Rediseña por completo la arquitectura de la interfaz de usuario del panel de control con un sistema de diseño nuevo y accesible",
+    "areas": [
+      "frontend"
+    ],
+    "dominios": [
+      "general"
+    ],
+    "intencion": "classify_and_plan",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "interfaces-complejas",
+        "entidad": "dominio-claude"
+      },
+      {
+        "nivel": 2,
+        "regla": "interfaces-complejas",
+        "entidad": "dominio-claude"
+      }
+    ]
+  },
+  {
+    "prompt": "Crea un endpoint REST en la API para listar usuarios y valida con tests.",
+    "areas": [
+      "backend"
+    ],
+    "dominios": [
+      "programming"
+    ],
+    "intencion": "implement_feature",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      },
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      }
+    ]
+  },
+  {
+    "prompt": "Prepara el informe mensual de gastos en Excel y envíalo por correo",
+    "areas": [
+      "oficina"
+    ],
+    "dominios": [
+      "general"
+    ],
+    "intencion": "classify_and_plan",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      },
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      }
+    ]
+  },
+  {
+    "prompt": "Renombra una variable",
+    "areas": [],
+    "dominios": [
+      "general"
+    ],
+    "intencion": "classify_and_plan",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "sencillas-local",
+        "entidad": "dominio-qwen"
+      },
+      {
+        "nivel": 1,
+        "regla": "sencillas-local",
+        "entidad": "dominio-qwen"
+      }
+    ]
+  },
+  {
+    "prompt": "Cambia el color de un botón de la interfaz",
+    "areas": [
+      "frontend"
+    ],
+    "dominios": [
+      "general"
+    ],
+    "intencion": "classify_and_plan",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "sencillas-local",
+        "entidad": "dominio-qwen"
+      },
+      {
+        "nivel": 1,
+        "regla": "sencillas-local",
+        "entidad": "dominio-qwen"
+      }
+    ]
+  },
+  {
+    "prompt": "Migra la base de datos de SQLite a Postgres sin perder datos y con un plan de rollback",
+    "areas": [
+      "backend"
+    ],
+    "dominios": [
+      "general"
+    ],
+    "intencion": "classify_and_plan",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      },
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      }
+    ]
+  },
+  {
+    "prompt": "Analiza los logs del pipeline de despliegue en Docker",
+    "areas": [],
+    "dominios": [
+      "devops"
+    ],
+    "intencion": "analyze_or_review",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      },
+      {
+        "nivel": 2,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      }
+    ]
+  },
+  {
+    "prompt": "Resume este documento PDF",
+    "areas": [],
+    "dominios": [
+      "documents"
+    ],
+    "intencion": "transform_or_extract",
+    "subtareas": [
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      },
+      {
+        "nivel": 1,
+        "regla": "backend-oficina",
+        "entidad": "dominio-codex"
+      }
+    ]
+  }
+]

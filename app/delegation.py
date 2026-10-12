@@ -23,7 +23,8 @@ from app.models import (
     TaskStatus,
 )
 from app.providers import resolve
-from app.providers.registry import Resolution, fallback_resolutions, resolve_entity
+from app.providers.registry import Resolution, fallback_resolutions, resolve_by_name, resolve_entity
+from app import routing_rules
 from app.resource_activation import build_resource_context
 
 logger = get_logger("delegation")
@@ -302,7 +303,24 @@ def run_subtask(
     attribution. `None` (used by every pre-existing caller) is a no-op."""
     started_at = datetime.now(timezone.utc).isoformat()
     assignment = flow_policy.assign_subtask(classification, subtask, layout)
-    resolution = preresolved or resolve(subtask.recommended_model, config)
+    # Domain rules of the (default) profile pick the entity before the tier-pinned
+    # resolution; an explicit force (`preresolved`) always wins over them.
+    rule_match = None
+    resolution = preresolved
+    if resolution is None:
+        rule_match = routing_rules.match_for_layout(
+            layout, domains=classification.domain, intent=classification.intent,
+            level=routing_rules.rule_level(classification.complexity_level.value, subtask.complexity),
+            prompt=classification.original_prompt,
+        )
+        if rule_match is not None and rule_match.entity.provider:
+            resolution = (
+                resolve_entity(rule_match.entity, subtask.recommended_model)
+                or resolve_by_name(rule_match.entity.provider, subtask.recommended_model)
+            )
+            if resolution is None:
+                rule_match = None  # the rule's agent can't run this tier: fall back to normal routing
+    resolution = resolution or resolve(subtask.recommended_model, config)
     if resolution is None:
         # `delegate()` gates on this up front, so reaching here means a caller
         # went straight to `run_subtask` (the scheduler, or a test). Fail loudly
@@ -352,6 +370,17 @@ def run_subtask(
             reason=f"Role policy selected owner, validator and backup chain for '{subtask.name}'.",
         )
     ]
+    if rule_match is not None:
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="assign",
+                decision=f"rule:{rule_match.rule.id}->{rule_match.entity.id}:{resolution.provider_name}",
+                score=float(subtask.complexity),
+                backend=resolution.backend,
+                reason=f"Profile rule '{rule_match.rule.name or rule_match.rule.id}' routed '{subtask.name}' to {rule_match.entity.name or rule_match.entity.id}.",
+            )
+        )
 
     # An explicit provider/entity selection is a hard routing decision. Falling
     # back silently would violate sender routing and make the audit trail claim
