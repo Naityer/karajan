@@ -110,7 +110,7 @@ export function perfilDesdeTexto(texto: string, base: Perfil): Propuesta {
         entity_id: e.id, domains: areas, intents: [],
         level_min: niveles.length ? niveles[0]! : null, level_max: niveles.length ? niveles[niveles.length - 1]! : null, enabled: true,
       };
-      const resto = perfil.rules.filter((r) => r.id !== regla.id);
+      const resto: Regla[] = perfil.rules.filter((r) => r.id !== regla.id);
       perfil.rules = [...resto.slice(0, nuevas), regla, ...resto.slice(nuevas)];
       nuevas++;
       cambios.push(`Regla: ${regla.name}`);

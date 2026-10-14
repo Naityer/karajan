@@ -6,6 +6,7 @@ import { construirAnaliticaSkills } from './analitica';
 import { Almacen } from './almacen';
 import { catalogoReal, listarSkills } from './catalogo';
 import { produccion } from './produccion';
+import { Rotador } from './rotador';
 import { Delegador } from './delegar';
 import { clasificar, configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles } from './perfiles';
@@ -81,7 +82,14 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
 
   const rutaLayout = process.env['ATLAS_KARAJAN_LAYOUT'] ?? (nativo ? join(nativo, 'routing_layout.json') : join(ctx.datos, 'routing_layout.json'));
   const perfiles = new Perfiles(rutaLayout);
-  const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir() });
+  // Último uso de cada skill en las ejecuciones de Karajan (para el rotador).
+  const usosKarajan = () => {
+    const r: Record<string, string> = {};
+    for (const t of almacen.tareasPlanas()) for (const s of t.ejecutadas ?? []) if (!r[s] || t.created_at > r[s]!) r[s] = t.created_at;
+    return r;
+  };
+  const rotador = new Rotador({ estado: join(ctx.datos, 'rotador.json'), usosKarajan });
+  const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), rotador });
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno' }));
 
@@ -174,6 +182,19 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.get('/analytics/sugerencias', (req) => { const p = calcular(req.query); return { ...cabecera(p), sugerencias: p.sugerencias }; });
   app.get('/analytics/acierto', (req) => { const p = calcular(req.query); return { ...cabecera(p), tareas: p.acierto }; });
   app.get('/skills/catalogo', (req) => { const p = calcular({ dias: req.query['dias'] ?? '90', perfil: 'todos' }); return { dias: p.dias, ...p.catalogo }; });
+
+  // ── Rotador de skills: núcleo (14 d), frecuentes (45 d) e instantáneas (bajo demanda, 3 d); el resto, al almacén ──
+  app.get('/skills/rotacion', () => {
+    const inventario = rotador.inventario();
+    const cuenta = (n: string) => inventario.filter((f) => f.nivel === n && f.instaladaEn.length).length;
+    return { config: rotador.leerEstado().config, resumen: { nucleo: cuenta('nucleo'), frecuente: cuenta('frecuente'), instantanea: cuenta('instantanea'), inactivas_instaladas: cuenta('inactiva'), en_almacen: inventario.filter((f) => f.enAlmacen.length && !f.instaladaEn.length).length }, plan: rotador.plan(), inventario };
+  });
+  /** Sin `aplicar`, solo el plan (simulación). Con él, mueve las carpetas (instaladas ⇄ almacén). */
+  app.post('/skills/rotar', (req) => {
+    const aplicar = (req.body as { aplicar?: unknown } | null)?.aplicar === true;
+    const plan = rotador.plan();
+    return { aplicado: aplicar, ...(aplicar ? rotador.aplicar(plan) : plan) };
+  });
 
   // Lo revisado por el usuario en la cabecera de agente de las notas del baúl (lo envía Atlas dev al reindexar).
   const CAMPOS_REVISION = new Set(['agente_entrada', 'agente', 'skills_usadas', 'categoria_skill', 'nivel_tarea', 'dominio', 'intencion', 'palabras_clave']);

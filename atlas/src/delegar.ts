@@ -6,6 +6,7 @@ import { perfilPorDefecto, type Perfiles } from './perfiles';
 import { disponibilidad, ejecutarProveedor, modeloPara, proveedor, type Disponibilidad, type Ejecutor, type Proveedor, type Tier } from './proveedores';
 import { claudeExcedido, leerLimites, umbralClaude, type Limites } from './limites';
 import { elegirRegla, nivelRegla, type Entidad, type Regla } from './reglas';
+import { destinoDe, type Rotador } from './rotador';
 
 /**
  * Delegación real desde el paquete: clasifica el prompt (heurística), elige el agente de cada subtarea con el perfil POR DEFECTO
@@ -26,6 +27,8 @@ interface Opciones {
   ejecutor?: Ejecutor; disponible?: (p: Proveedor) => Disponibilidad;
   /** Límites del plan (por defecto, el fichero que escribe Atlas dev). */
   limites?: () => Limites | null;
+  /** Rotador de skills: repone la skill recomendada antes de ejecutar si estaba en el almacén. */
+  rotador?: Rotador;
 }
 
 export class Delegador {
@@ -148,7 +151,14 @@ export class Delegador {
       const max = perfil.entities.find((e) => e.id === a.entidad)?.max_concurrent ?? 1;
       const liberar = await this.turno(a.entidad ?? a.proveedor, max);
       const inicio = new Date().toISOString();
-      const instruccion = `${c.original_prompt}\n\nSubtarea: ${st.name}\nValidación: ${st.validation}`;
+      let instruccion = `${c.original_prompt}\n\nSubtarea: ${st.name}\nValidación: ${st.validation}`;
+      // Skill recomendada: se deja instalada para el agente que ejecuta (desde el almacén si hace falta) y se le pide usarla.
+      const destino = destinoDe(p.nombre);
+      if (st.recommended_skill && destino && this.op.rotador) {
+        const s = this.op.rotador.asegurar(st.recommended_skill, destino);
+        if (s.disponible) instruccion += `\n\nUsa la skill «${st.recommended_skill}» si encaja con la tarea.`;
+        if (s.repuesta) almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:repuesta:${st.recommended_skill}->${destino}`, reason: s.motivo });
+      }
       let r;
       try { r = await this.ejecutor(p, a.modelo, instruccion, { cwd, timeoutMs: TIMEOUT_MS }); } finally { liberar(); }
       total += r.latenciaMs;
