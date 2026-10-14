@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "karajan",
   "nombre": "Karajan",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "tipo": "app",
   "descripcion": "Router de tareas: clasificación heurística, métricas, rendimiento por agente y analítica de skills, dentro de Atlas dev.",
   "requiere": { "node": ">=22.5" },
