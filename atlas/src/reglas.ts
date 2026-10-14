@@ -84,3 +84,21 @@ export function presetDominio(id = ID_PRESET_DOMINIO): Perfil {
     ],
   };
 }
+
+export const ID_PRESET_NIVEL = 'por-nivel';
+export const NOMBRE_PRESET_NIVEL = 'Local · Codex · Claude (por nivel)';
+export const DESCRIPCION_PRESET_NIVEL = 'Delega según el nivel de la tarea: Qwen local resuelve lo sencillo (N1–N2) sin coste, Codex lo intermedio (N3) y Claude lo complejo y crítico (N4–N5). Si Claude pasa del 50 % de su uso semanal, lo suyo va a Codex y se avisa.';
+
+/** Tres agentes y sin reglas: decide el nivel (igual que `level_preset_profile` en Python). */
+export function presetNivel(id = ID_PRESET_NIVEL): Perfil {
+  return {
+    id, name: NOMBRE_PRESET_NIVEL, description: DESCRIPCION_PRESET_NIVEL,
+    entities: [
+      { id: 'nivel-qwen', name: 'Qwen (local)', role: 'worker', role_tags: ['worker'], provider: 'ollama-qwen', tier: 1, levels: ['level_1_simple', 'level_2_moderate'], max_concurrent: 1, x: 120, y: 430 },
+      { id: 'nivel-codex', name: 'Codex', role: 'worker', role_tags: ['worker'], provider: 'codex', tier: 1, levels: ['level_3_intermediate'], max_concurrent: 2, x: 480, y: 430 },
+      { id: 'nivel-claude', name: 'Claude Code', role: 'worker', role_tags: ['worker'], provider: 'claude-cli', tier: 1, levels: ['level_4_complex', 'level_5_critical'], max_concurrent: 1, x: 840, y: 430 },
+    ],
+    groups: [],
+    rules: [],
+  };
+}

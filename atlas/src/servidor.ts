@@ -123,6 +123,14 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.get('/routing-layout', () => ({ ...perfiles.leer(), path: rutaLayout }));
   app.put('/routing-layout', (req) => conPerfil(() => perfiles.guardar(req.body)));
   app.post('/routing-layout/presets/dominios', (req) => conPerfil(() => perfiles.aplicarPresetDominio({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })));
+  app.post('/routing-layout/presets/nivel', (req) => conPerfil(() => perfiles.aplicarPresetNivel({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })));
+  // Configurar un perfil con una frase: sin `aplicar` solo devuelve la propuesta (perfil y cambios).
+  app.post('/routing-layout/desde-texto', (req) => conPerfil(() => {
+    const b = (req.body ?? {}) as { texto?: unknown; perfil_id?: unknown; aplicar?: unknown };
+    const texto = typeof b.texto === 'string' ? b.texto.trim().slice(0, 2000) : '';
+    if (!texto) throw falla(422, 'Escribe cómo quieres el perfil');
+    return perfiles.desdeTexto(texto, { perfilId: typeof b.perfil_id === 'string' ? b.perfil_id : undefined, aplicar: b.aplicar === true });
+  }));
 
   // ── Proveedores y delegación real ────────────────────────────────────────
   app.get('/providers', () => PROVEEDORES.map((p) => disponibilidad(p)));

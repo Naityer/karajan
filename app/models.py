@@ -823,6 +823,8 @@ class RoutingProfile(BaseModel):
 
     id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     name: str = Field(min_length=1, max_length=100)
+    # Qué hace el perfil, en una frase (la enseña el selector de perfiles de Atlas dev).
+    description: str = Field(default="", max_length=600)
     entities: list[RoutingEntity] = Field(default_factory=list)
     groups: list[HierarchyGroup] = Field(default_factory=list)
     zoom: float = Field(default=1.0, ge=0.15, le=2.0)

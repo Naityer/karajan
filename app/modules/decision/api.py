@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app import catalog, events, runtime as runtime_module
+from app import catalog, events, routing_rules, runtime as runtime_module
 from app.atlas_auth import require_atlas_token
 from app.auth import require_token
-from app.models import ComplexityLevel, RecommendedModel, RoutingEntity, RoutingLayout
+from app.models import ComplexityLevel, RecommendedModel, RoutingEntity, RoutingLayout, RoutingProfile
 
 router = APIRouter(tags=["decision"])
 
@@ -40,6 +40,21 @@ def update_routing_layout(
     __: dict | None = Depends(require_atlas_token),
 ) -> RoutingLayout:
     saved = runtime_module.current().routing.save(layout)
+    events.publish("layout_changed")
+    return saved
+
+
+@router.post("/routing-layout/presets/nivel", response_model=RoutingLayout)
+def apply_level_preset(
+    _: None = Depends(require_token),
+    __: dict | None = Depends(require_atlas_token),
+) -> RoutingLayout:
+    """Adds (or rebuilds) the «Local · Codex · Claude (por nivel)» profile and makes it the default one."""
+    store = runtime_module.current().routing
+    layout = store.load()
+    preset = RoutingProfile.model_validate(routing_rules.level_preset_profile())
+    profiles = [p for p in layout.profiles if p.id != preset.id] + [preset]
+    saved = store.save(layout.model_copy(update={"profiles": profiles, "active_profile_id": preset.id, "default_profile_id": preset.id}))
     events.publish("layout_changed")
     return saved
 

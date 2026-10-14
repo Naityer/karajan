@@ -4,6 +4,7 @@ import type { Almacen } from './almacen';
 import { clasificar, type Clasificacion, type Configuracion, type Subtarea } from './heuristica';
 import { perfilPorDefecto, type Perfiles } from './perfiles';
 import { disponibilidad, ejecutarProveedor, modeloPara, proveedor, type Disponibilidad, type Ejecutor, type Proveedor, type Tier } from './proveedores';
+import { claudeExcedido, leerLimites, umbralClaude, type Limites } from './limites';
 import { elegirRegla, nivelRegla, type Entidad, type Regla } from './reglas';
 
 /**
@@ -17,12 +18,14 @@ const TIMEOUT_MS = 15 * 60_000;
 /** Orden de respaldo cuando el agente elegido no está disponible en este equipo. */
 const RESPALDO = ['codex', 'claude-cli', 'ollama-qwen'];
 
-export interface Asignacion { subtarea: string; nombre: string; entidad: string | null; entidad_nombre: string | null; proveedor: string; modelo: string; regla: string | null; motivo: string }
+export interface Asignacion { subtarea: string; nombre: string; entidad: string | null; entidad_nombre: string | null; proveedor: string; modelo: string; regla: string | null; motivo: string; /** % semanal de Claude si pasó a Codex por el límite. */ limite?: number }
 export interface Plan { task_id: string; status: string; clasificacion: Clasificacion; asignaciones: Asignacion[]; bloqueada: string | null }
 
 interface Opciones {
   almacen: Almacen; perfiles: Perfiles; config: () => Configuracion; raiz: string;
   ejecutor?: Ejecutor; disponible?: (p: Proveedor) => Disponibilidad;
+  /** Límites del plan (por defecto, el fichero que escribe Atlas dev). */
+  limites?: () => Limites | null;
 }
 
 export class Delegador {
@@ -72,9 +75,11 @@ export class Delegador {
     const m = elegirRegla(perfil, { dominios: c.domain, intencion: c.intent, nivel: nivelRegla(c.complexity_level, st.complexity), prompt: c.original_prompt });
     let a = m ? conEntidad(m.entidad, m.regla, `regla «${m.regla.name || m.regla.id}»`) : null;
     if (!a) {
-      const nivel = NIVEL_NOMBRE[st.complexity - 1]!;
+      // El nivel que manda es el de la tarea o el de la subtarea si es mayor (el mismo que ven las reglas).
+      const n = nivelRegla(c.complexity_level, st.complexity);
+      const nivel = NIVEL_NOMBRE[n - 1]!;
       const e = perfil.entities.find((x) => (x.levels ?? []).includes(nivel) && proveedor(x.provider)) ?? perfil.entities.find((x) => proveedor(x.provider));
-      a = e ? conEntidad(e, null, `nivel ${st.complexity}`) : null;
+      a = e ? conEntidad(e, null, `nivel ${n}`) : null;
     }
     // Si el agente elegido no puede ejecutarse aquí, el primero disponible del respaldo (queda anotado en el motivo).
     if (!a || !this.disponible(proveedor(a.proveedor)!).disponible) {
@@ -87,6 +92,16 @@ export class Delegador {
       }
       if (a) return { ...a, motivo: `${motivo}; sin respaldo disponible` };
       return { ...base, entidad: null, entidad_nombre: null, proveedor: 'codex', modelo: 'default', regla: null, motivo };
+    }
+    // Claude por encima de su umbral semanal: lo suyo pasa a Codex (salvo que se fuerce a mano, arriba) y se avisa.
+    if (a.proveedor === 'claude-cli') {
+      const pct = claudeExcedido((this.op.limites ?? leerLimites)());
+      const codex = proveedor('codex');
+      if (pct !== null && codex && this.disponible(codex).disponible) {
+        const e = perfil.entities.find((x) => x.provider === 'codex');
+        return { ...base, entidad: e?.id ?? null, entidad_nombre: e?.name ?? 'Codex', proveedor: 'codex', modelo: modeloPara(codex, tier), regla: a.regla, limite: pct,
+          motivo: `Claude al ${Math.round(pct)} % de su uso semanal (> ${umbralClaude()} %): pasa a Codex` };
+      }
     }
     return a;
   }
@@ -102,11 +117,12 @@ export class Delegador {
     almacen.guardarTarea(c, 'classified');
     almacen.registrarDecision({ task_id: c.task_id, phase: 'classify', decision: `model=${c.recommended_model}`, score: c.complexity_score, reason: c.reason });
     if (c.requires_human_review && !aprobada) {
-      almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: 'withheld:human_review', reason: 'La tarea exige revisión humana: vuelve a delegarla aprobándola.' });
+      almacen.registrarDecision({ task_id: c.task_id, phase: 'validate', decision: 'human_review_gate=blocked', reason: 'La tarea exige revisión humana: vuelve a delegarla aprobándola.' });
       return { ...plan, bloqueada: 'La tarea exige revisión humana antes de ejecutarse.' };
     }
     for (const a of plan.asignaciones) {
       almacen.registrarDecision({ task_id: c.task_id, phase: 'assign', decision: a.regla ? `rule:${a.regla}->${a.entidad}:${a.proveedor}` : `${a.subtarea}->${a.entidad ?? '-'}:${a.proveedor}`, reason: a.motivo });
+      if (a.limite !== undefined) almacen.registrarDecision({ task_id: c.task_id, phase: 'fallback', decision: 'limite_semanal:claude->codex', reason: a.motivo });
     }
     almacen.actualizarTarea(c.task_id, 'delegated', null);
     const trabajo = this.ejecutar(c, plan.asignaciones, carpeta).catch(() => { /* registrado dentro */ });

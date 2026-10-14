@@ -135,3 +135,42 @@ def domain_preset_profile(profile_id: str = DOMAIN_PRESET_ID) -> dict:
             {"id": "resto", "name": "Todo lo demás → Codex", "entity_id": codex},
         ],
     }
+
+
+LEVEL_PRESET_ID = "por-nivel"
+LEVEL_PRESET_NAME = "Local · Codex · Claude (por nivel)"
+LEVEL_PRESET_DESCRIPTION = (
+    "Delega según el nivel de la tarea: Qwen local resuelve lo sencillo (N1–N2) sin coste, Codex lo intermedio (N3) "
+    "y Claude lo complejo y crítico (N4–N5). Si Claude pasa del 50 % de su uso semanal, lo suyo va a Codex y se avisa."
+)
+LEVEL_NAMES = ["level_1_simple", "level_2_moderate", "level_3_intermediate", "level_4_complex", "level_5_critical"]
+
+
+def level_preset_profile(profile_id: str = LEVEL_PRESET_ID) -> dict:
+    """Three agents and no rules: the task level decides (same as `presetNivel` in atlas/src/reglas.ts)."""
+    return {
+        "id": profile_id,
+        "name": LEVEL_PRESET_NAME,
+        "description": LEVEL_PRESET_DESCRIPTION,
+        "entities": [
+            {"id": "nivel-qwen", "name": "Qwen (local)", "role": "worker", "role_tags": ["worker"], "provider": "ollama-qwen", "tier": 1,
+             "levels": ["level_1_simple", "level_2_moderate"], "max_concurrent": 1, "x": 120, "y": 430},
+            {"id": "nivel-codex", "name": "Codex", "role": "worker", "role_tags": ["worker"], "provider": "codex", "tier": 1,
+             "levels": ["level_3_intermediate"], "max_concurrent": 2, "x": 480, "y": 430},
+            {"id": "nivel-claude", "name": "Claude Code", "role": "worker", "role_tags": ["worker"], "provider": "claude-cli", "tier": 1,
+             "levels": ["level_4_complex", "level_5_critical"], "max_concurrent": 1, "x": 840, "y": 430},
+        ],
+        "groups": [],
+        "rules": [],
+    }
+
+
+def entity_for_level(layout: RoutingLayout | None, complexity: int) -> RoutingEntity | None:
+    """The first entity of the (projected default) profile that serves this level, like the TS port does.
+
+    Only for flat profiles (workers, no `parent`), like the presets: a parent/child hierarchy keeps its
+    owner/validator flow (`flow_policy`), where `levels` pick roles, not the executing provider."""
+    if layout is None or not 1 <= complexity <= 5 or any(e.role == "parent" for e in layout.entities):
+        return None
+    name = LEVEL_NAMES[complexity - 1]
+    return next((e for e in layout.entities if e.provider and name in (e.levels or [])), None)

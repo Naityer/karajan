@@ -1,7 +1,8 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import { ID_PRESET_DOMINIO, presetDominio, type Perfil, type Regla } from './reglas';
+import { perfilDesdeTexto, type Propuesta } from './perfil-texto';
+import { ID_PRESET_DOMINIO, ID_PRESET_NIVEL, presetDominio, presetNivel, type Perfil, type Regla } from './reglas';
 
 /**
  * Perfiles de enrutado (`routing_layout.json`, el mismo fichero y esquema que `app/routing_layout.py`). Se comparte con el
@@ -40,6 +41,7 @@ function validarPerfil(p: unknown): Perfil {
   if (!x || typeof x !== 'object') falla('perfil no válido');
   if (typeof x.id !== 'string' || !ID_PERFIL.test(x.id.trim()) || x.id.length > 80) falla(`id de perfil no válido: ${String(x.id)}`);
   if (typeof x.name !== 'string' || !x.name.trim() || x.name.length > 100) falla(`el perfil «${x.id}» necesita un nombre`);
+  if (x['description'] !== undefined && (typeof x['description'] !== 'string' || (x['description'] as string).length > 600)) falla(`perfil «${x.id}»: la descripción debe ser un texto de hasta 600 caracteres`);
   if (!Array.isArray(x.entities)) falla(`el perfil «${x.id}» necesita una lista de entidades`);
   for (const e of x.entities) {
     if (!e || typeof e !== 'object' || typeof e.id !== 'string' || !e.id || typeof e.role !== 'string') falla(`perfil «${x.id}»: entidad sin id o sin rol`);
@@ -131,6 +133,28 @@ export class Perfiles {
     if (existsSync(this.ruta)) { try { copyFileSync(this.ruta, this.bak); } catch { /* sin copia: se sigue */ } }
     renameSync(tmp, this.ruta);
     return final;
+  }
+
+  /** Añade (o rehace) el perfil por nivel (Qwen N1–N2, Codex N3, Claude N4–N5) y lo deja activo y, si se pide, por defecto. */
+  aplicarPresetNivel({ porDefecto = true }: { porDefecto?: boolean } = {}): Layout {
+    const l = this.leer();
+    const preset = presetNivel();
+    const perfiles = [...l.profiles.filter((p) => p.id !== ID_PRESET_NIVEL), preset];
+    return this.guardar({ profiles: perfiles, active_profile_id: preset.id, default_profile_id: porDefecto ? preset.id : l.default_profile_id });
+  }
+
+  /**
+   * Configurar un perfil con una frase: devuelve la propuesta y, con `aplicar`, la guarda y la deja por defecto. Sin
+   * `perfilId` se parte del perfil por defecto.
+   */
+  desdeTexto(texto: string, { perfilId, aplicar = false }: { perfilId?: string; aplicar?: boolean } = {}): Propuesta & { layout?: Layout } {
+    const l = this.leer();
+    const base = l.profiles.find((p) => p.id === (perfilId ?? l.default_profile_id)) ?? perfilPorDefecto(l);
+    const propuesta = perfilDesdeTexto(texto, base);
+    validarPerfil(propuesta.perfil);
+    if (!aplicar || !propuesta.entendido) return propuesta;
+    const perfiles = l.profiles.map((p) => (p.id === base.id ? propuesta.perfil : p));
+    return { ...propuesta, layout: this.guardar({ profiles: perfiles, active_profile_id: base.id, default_profile_id: base.id }) };
   }
 
   /** Añade (o rehace) el perfil predefinido por dominio y lo deja activo y, si se pide, por defecto (el que ejecuta). */

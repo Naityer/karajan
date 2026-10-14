@@ -24,6 +24,7 @@ from app.models import (
 )
 from app.providers import resolve
 from app.providers.registry import Resolution, fallback_resolutions, resolve_by_name, resolve_entity
+from app import limites_plan
 from app import routing_rules
 from app.resource_activation import build_resource_context
 
@@ -320,7 +321,27 @@ def run_subtask(
             )
             if resolution is None:
                 rule_match = None  # the rule's agent can't run this tier: fall back to normal routing
+    # No rule: the profile's levels pick the agent (as in the TS port); `provider_preferences` only if none serves it.
+    level_entity = None
+    if resolution is None:
+        level_entity = routing_rules.entity_for_level(
+            layout, routing_rules.rule_level(classification.complexity_level.value, subtask.complexity)
+        )
+        if level_entity is not None:
+            resolution = resolve_entity(level_entity, subtask.recommended_model) or resolve_by_name(level_entity.provider, subtask.recommended_model)
+            if resolution is None:
+                level_entity = None
     resolution = resolution or resolve(subtask.recommended_model, config)
+    # Claude over its weekly threshold: what it would do goes to Codex (unless forced by hand) and it's recorded.
+    weekly_limit = None
+    if preresolved is None and resolution is not None and resolution.provider_name == "claude-cli":
+        weekly_limit = limites_plan.claude_excedido()
+        if weekly_limit is not None:
+            alternative = resolve_by_name("codex", subtask.recommended_model)
+            if alternative is not None:
+                resolution = alternative
+            else:
+                weekly_limit = None
     if resolution is None:
         # `delegate()` gates on this up front, so reaching here means a caller
         # went straight to `run_subtask` (the scheduler, or a test). Fail loudly
@@ -370,6 +391,28 @@ def run_subtask(
             reason=f"Role policy selected owner, validator and backup chain for '{subtask.name}'.",
         )
     ]
+    if weekly_limit is not None:
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="fallback",
+                decision="limite_semanal:claude->codex",
+                score=float(subtask.complexity),
+                backend=resolution.backend,
+                reason=f"Claude al {weekly_limit:.0f} % de su uso semanal (> {limites_plan.umbral_claude():.0f} %): pasa a Codex.",
+            )
+        )
+    if level_entity is not None and rule_match is None:
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="assign",
+                decision=f"level:{routing_rules.rule_level(classification.complexity_level.value, subtask.complexity)}->{level_entity.id}:{resolution.provider_name}",
+                score=float(subtask.complexity),
+                backend=resolution.backend,
+                reason=f"El perfil por defecto asigna ese nivel a «{level_entity.name or level_entity.id}».",
+            )
+        )
     if rule_match is not None:
         decisions.append(
             DecisionLogEntry(
