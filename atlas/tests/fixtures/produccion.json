@@ -988,6 +988,146 @@
    ],
    "decisiones": [],
    "revision": {}
+  },
+  {
+   "task_id": "s12",
+   "prompt": "Refactoriza el router de tareas",
+   "status": "failed",
+   "created_at": "2026-10-09T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_4_complex",
+   "dominios": [
+    "backend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "failed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": "Timed out after 600 s"
+    },
+    {
+     "provider_name": "claude-cli",
+     "status": "failed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": "binario no encontrado"
+    }
+   ],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "s13",
+   "prompt": "Refactoriza el router de tareas otra vez",
+   "status": "failed",
+   "created_at": "2026-10-09T11:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_4_complex",
+   "dominios": [
+    "backend"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "claude-cli",
+     "status": "failed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": "Timed out after 600 s"
+    },
+    {
+     "provider_name": "claude-cli",
+     "status": "failed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": "binario no encontrado"
+    }
+   ],
+   "decisiones": [
+    "human_review_gate=blocked"
+   ],
+   "revision": {}
+  },
+  {
+   "task_id": "s14",
+   "prompt": "Resume el informe de ventas",
+   "status": "completed",
+   "created_at": "2026-10-10T10:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "documents"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 1000,
+     "estimated_cost_usd": 0.001,
+     "error": null
+    },
+    {
+     "provider_name": "codex",
+     "status": "completed",
+     "latency_ms": 2007,
+     "estimated_cost_usd": 0.0003333333333333333,
+     "error": null
+    }
+   ],
+   "decisiones": [
+    "limite_semanal:claude->codex",
+    "skill:repuesta:docx->codex"
+   ],
+   "revision": {}
+  },
+  {
+   "task_id": "s15",
+   "prompt": "Prepara la presentación del trimestre",
+   "status": "classified",
+   "created_at": "2026-10-10T12:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "documents"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
+  },
+  {
+   "task_id": "s16",
+   "prompt": "Revisa el contrato de proveedores",
+   "status": "classified",
+   "created_at": "2026-10-11T08:00:00+00:00",
+   "entry_agent": null,
+   "classified_by": "heuristic",
+   "nivel": "level_2_moderate",
+   "dominios": [
+    "documents"
+   ],
+   "intencion": "implement_feature",
+   "recomendadas": [],
+   "ejecutadas": [],
+   "runs": [],
+   "decisiones": [],
+   "revision": {}
   }
  ],
  "casos": [
@@ -996,6 +1136,7 @@
    "perfil": null,
    "dias": 0,
    "no_disponibles": [],
+   "sin_nivel": [],
    "salida": {
     "dias": 0,
     "perfil": "todos",
@@ -1615,6 +1756,12 @@
     },
     "sugerencias": [
      {
+      "id": "fallos:claude-cli",
+      "severidad": "media",
+      "texto": "claude-cli falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
       "id": "skill-sin-ejecutar:frontend-builder",
       "severidad": "media",
       "texto": "frontend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
@@ -1631,6 +1778,12 @@
        "tipo": "asignar_skill",
        "skill": "backend-builder"
       }
+     },
+     {
+      "id": "solo-clasificadas",
+      "severidad": "baja",
+      "texto": "5 tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.",
+      "accion": null
      },
      {
       "id": "skills-sin-uso",
@@ -1944,6 +2097,7 @@
    "perfil": null,
    "dias": 30,
    "no_disponibles": [],
+   "sin_nivel": [],
    "salida": {
     "dias": 30,
     "perfil": "todos",
@@ -2508,6 +2662,9 @@
    "no_disponibles": [
     "ollama-qwen"
    ],
+   "sin_nivel": [
+    "Revisor (sin niveles)"
+   ],
    "salida": {
     "dias": 0,
     "perfil": "activo",
@@ -2982,6 +3139,30 @@
       "accion": null
      },
      {
+      "id": "sin-nivel:Revisor (sin niveles)",
+      "severidad": "media",
+      "texto": "Revisor (sin niveles) está en el perfil sin niveles ni reglas: nunca recibe tareas.",
+      "accion": null
+     },
+     {
+      "id": "fallos:claude-cli",
+      "severidad": "media",
+      "texto": "claude-cli falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
+      "id": "fallos:codex-cli",
+      "severidad": "media",
+      "texto": "codex-cli falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
+      "id": "solo-clasificadas",
+      "severidad": "baja",
+      "texto": "5 tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.",
+      "accion": null
+     },
+     {
       "id": "skills-sin-uso",
       "severidad": "baja",
       "texto": "2 skills instaladas no se han usado en el periodo: candidatas a retirar.",
@@ -3253,6 +3434,9 @@
    "dias": 30,
    "no_disponibles": [
     "ollama-qwen"
+   ],
+   "sin_nivel": [
+    "Revisor (sin niveles)"
    ],
    "salida": {
     "dias": 30,
@@ -3549,6 +3733,12 @@
       "accion": null
      },
      {
+      "id": "sin-nivel:Revisor (sin niveles)",
+      "severidad": "media",
+      "texto": "Revisor (sin niveles) está en el perfil sin niveles ni reglas: nunca recibe tareas.",
+      "accion": null
+     },
+     {
       "id": "skills-sin-uso",
       "severidad": "baja",
       "texto": "2 skills instaladas no se han usado en el periodo: candidatas a retirar.",
@@ -3714,16 +3904,17 @@
    "perfil": null,
    "dias": 0,
    "no_disponibles": [],
+   "sin_nivel": [],
    "salida": {
     "dias": 0,
     "perfil": "todos",
     "agentes_perfil": null,
-    "ultima": "2026-10-08T10:00:00+00:00",
+    "ultima": "2026-10-11T08:00:00+00:00",
     "kpis": {
-     "tareas": 11,
-     "delegadas": 10,
-     "acierto": 0.654,
-     "retrabajo": 0.364,
+     "tareas": 16,
+     "delegadas": 13,
+     "acierto": 0.628,
+     "retrabajo": 0.312,
      "revisadas": 2
     },
     "flujo": {
@@ -3732,7 +3923,7 @@
        "id": "entrada:desconocido",
        "capa": "entrada",
        "nombre": "desconocido",
-       "valor": 6
+       "valor": 11
       },
       {
        "id": "entrada:claude",
@@ -3750,7 +3941,7 @@
        "id": "nivel:N2",
        "capa": "nivel",
        "nombre": "N2",
-       "valor": 5
+       "valor": 8
       },
       {
        "id": "nivel:N1",
@@ -3765,21 +3956,33 @@
        "valor": 3
       },
       {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 2
+      },
+      {
        "id": "agente:claude-cli",
        "capa": "agente",
        "nombre": "claude-cli",
-       "valor": 3
+       "valor": 5
       },
       {
        "id": "agente:codex",
        "capa": "agente",
        "nombre": "codex",
-       "valor": 3
+       "valor": 4
       },
       {
        "id": "agente:ollama-qwen",
        "capa": "agente",
        "nombre": "ollama-qwen",
+       "valor": 3
+      },
+      {
+       "id": "agente:sin delegar",
+       "capa": "agente",
+       "nombre": "sin delegar",
        "valor": 3
       },
       {
@@ -3789,28 +3992,22 @@
        "valor": 1
       },
       {
-       "id": "agente:sin delegar",
-       "capa": "agente",
-       "nombre": "sin delegar",
-       "valor": 1
-      },
-      {
        "id": "estado:completed",
        "capa": "estado",
        "nombre": "completed",
-       "valor": 8
+       "valor": 9
       },
       {
        "id": "estado:failed",
        "capa": "estado",
        "nombre": "failed",
-       "valor": 2
+       "valor": 4
       },
       {
        "id": "estado:classified",
        "capa": "estado",
        "nombre": "classified",
-       "valor": 1
+       "valor": 3
       }
      ],
      "enlaces": [
@@ -3826,15 +4023,26 @@
        "acierto": 0.72
       },
       {
+       "origen": "agente:claude-cli",
+       "destino": "estado:failed",
+       "valor": 2,
+       "tareas": [
+        "s12",
+        "s13"
+       ],
+       "acierto": 0.312
+      },
+      {
        "origen": "agente:codex",
        "destino": "estado:completed",
-       "valor": 3,
+       "valor": 4,
        "tareas": [
         "s01",
         "s02",
-        "s11"
+        "s11",
+        "s14"
        ],
-       "acierto": 0.815
+       "acierto": 0.861
       },
       {
        "origen": "agente:ollama-qwen",
@@ -3867,9 +4075,11 @@
       {
        "origen": "agente:sin delegar",
        "destino": "estado:classified",
-       "valor": 1,
+       "valor": 3,
        "tareas": [
-        "s08"
+        "s08",
+        "s15",
+        "s16"
        ],
        "acierto": 1.0
       },
@@ -3904,6 +4114,20 @@
       },
       {
        "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 6,
+       "tareas": [
+        "s08",
+        "s09",
+        "s11",
+        "s14",
+        "s15",
+        "s16"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
        "destino": "nivel:N1",
        "valor": 3,
        "tareas": [
@@ -3915,14 +4139,13 @@
       },
       {
        "origen": "entrada:desconocido",
-       "destino": "nivel:N2",
-       "valor": 3,
+       "destino": "nivel:N4",
+       "valor": 2,
        "tareas": [
-        "s08",
-        "s09",
-        "s11"
+        "s12",
+        "s13"
        ],
-       "acierto": 1.0
+       "acierto": 0.312
       },
       {
        "origen": "nivel:N1",
@@ -3938,12 +4161,24 @@
       {
        "origen": "nivel:N2",
        "destino": "agente:codex",
-       "valor": 2,
+       "valor": 3,
        "tareas": [
         "s01",
-        "s11"
+        "s11",
+        "s14"
        ],
-       "acierto": 0.722
+       "acierto": 0.815
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 3,
+       "tareas": [
+        "s08",
+        "s15",
+        "s16"
+       ],
+       "acierto": 1.0
       },
       {
        "origen": "nivel:N2",
@@ -3960,15 +4195,6 @@
        "valor": 1,
        "tareas": [
         "s09"
-       ],
-       "acierto": 1.0
-      },
-      {
-       "origen": "nivel:N2",
-       "destino": "agente:sin delegar",
-       "valor": 1,
-       "tareas": [
-        "s08"
        ],
        "acierto": 1.0
       },
@@ -3990,9 +4216,19 @@
         "s02"
        ],
        "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s12",
+        "s13"
+       ],
+       "acierto": 0.312
       }
      ],
-     "total": 11,
+     "total": 16,
      "desajustes_nivel": 1,
      "revisadas": 2
     },
@@ -4000,27 +4236,27 @@
      "agentes": [
       {
        "agente": "claude-cli",
-       "tareas": 3,
-       "runs": 6,
+       "tareas": 5,
+       "runs": 10,
        "coste_medio": 0.00067,
-       "coste_total": 0.004,
+       "coste_total": 0.00667,
        "latencia_media": 1503.5,
        "p50": 1000.0,
        "p90": 2007.0,
-       "acierto": 0.72,
-       "retrabajo": 0.333
+       "acierto": 0.557,
+       "retrabajo": 0.4
       },
       {
        "agente": "codex",
-       "tareas": 3,
-       "runs": 6,
+       "tareas": 4,
+       "runs": 8,
        "coste_medio": 0.00067,
-       "coste_total": 0.004,
-       "latencia_media": 1253.5,
+       "coste_total": 0.00533,
+       "latencia_media": 1316.0,
        "p50": 1000.0,
        "p90": 2007.0,
-       "acierto": 0.815,
-       "retrabajo": 0.333
+       "acierto": 0.861,
+       "retrabajo": 0.25
       },
       {
        "agente": "ollama-qwen",
@@ -4061,10 +4297,16 @@
        "acierto": 0.581
       },
       {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 2,
+       "acierto": 0.312
+      },
+      {
        "agente": "codex",
        "nivel": "N2",
-       "tareas": 2,
-       "acierto": 0.722
+       "tareas": 3,
+       "acierto": 0.815
       },
       {
        "agente": "codex",
@@ -4113,6 +4355,12 @@
       {
        "semana": "2026-10-05",
        "agente": "claude-cli",
+       "tareas": 3,
+       "acierto": 0.542
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "codex",
        "tareas": 1,
        "acierto": 1.0
       },
@@ -4242,6 +4490,12 @@
     },
     "sugerencias": [
      {
+      "id": "fallos:claude-cli",
+      "severidad": "alta",
+      "texto": "claude-cli falló 4 de 8 ejecuciones (2 por tiempo agotado): revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
       "id": "nivel:ollama-qwen:N1",
       "severidad": "alta",
       "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
@@ -4252,6 +4506,24 @@
       }
      },
      {
+      "id": "fallos:ollama-qwen",
+      "severidad": "media",
+      "texto": "ollama-qwen falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
+      "id": "revision-pendiente",
+      "severidad": "media",
+      "texto": "1 tarea espera tu revisión (puerta humana bloqueada): apruébalas o recházalas desde el monitor.",
+      "accion": null
+     },
+     {
+      "id": "retrabajo:claude-cli",
+      "severidad": "media",
+      "texto": "El 40 % de las tareas de claude-cli se repiten: revisa su nivel máximo o el prompt de entrada.",
+      "accion": null
+     },
+     {
       "id": "skill-sin-ejecutar:backend-builder",
       "severidad": "media",
       "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
@@ -4259,6 +4531,27 @@
        "tipo": "asignar_skill",
        "skill": "backend-builder"
       }
+     },
+     {
+      "id": "solo-clasificadas",
+      "severidad": "baja",
+      "texto": "3 tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.",
+      "accion": null
+     },
+     {
+      "id": "limite-claude",
+      "severidad": "baja",
+      "texto": "1 tarea pasó de Claude a Codex por el límite semanal de Claude.",
+      "accion": null
+     },
+     {
+      "id": "skills-repuestas",
+      "severidad": "baja",
+      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
      },
      {
       "id": "skills-sin-uso",
@@ -4458,6 +4751,50 @@
       },
       "retrabajo": null,
       "repetida_por": null
+     },
+     "s12": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s13"
+     },
+     "s13": {
+      "score": 0.625,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s14": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s15": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s16": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
      }
     }
    }
@@ -4467,16 +4804,17 @@
    "perfil": null,
    "dias": 30,
    "no_disponibles": [],
+   "sin_nivel": [],
    "salida": {
     "dias": 30,
     "perfil": "todos",
     "agentes_perfil": null,
-    "ultima": "2026-10-08T10:00:00+00:00",
+    "ultima": "2026-10-11T08:00:00+00:00",
     "kpis": {
-     "tareas": 10,
-     "delegadas": 9,
-     "acierto": 0.616,
-     "retrabajo": 0.4,
+     "tareas": 15,
+     "delegadas": 12,
+     "acierto": 0.597,
+     "retrabajo": 0.333,
      "revisadas": 2
     },
     "flujo": {
@@ -4485,7 +4823,7 @@
        "id": "entrada:desconocido",
        "capa": "entrada",
        "nombre": "desconocido",
-       "valor": 5
+       "valor": 10
       },
       {
        "id": "entrada:claude",
@@ -4503,7 +4841,7 @@
        "id": "nivel:N2",
        "capa": "nivel",
        "nombre": "N2",
-       "valor": 4
+       "valor": 7
       },
       {
        "id": "nivel:N1",
@@ -4518,9 +4856,21 @@
        "valor": 3
       },
       {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 2
+      },
+      {
        "id": "agente:claude-cli",
        "capa": "agente",
        "nombre": "claude-cli",
+       "valor": 5
+      },
+      {
+       "id": "agente:codex",
+       "capa": "agente",
+       "nombre": "codex",
        "valor": 3
       },
       {
@@ -4530,10 +4880,10 @@
        "valor": 3
       },
       {
-       "id": "agente:codex",
+       "id": "agente:sin delegar",
        "capa": "agente",
-       "nombre": "codex",
-       "valor": 2
+       "nombre": "sin delegar",
+       "valor": 3
       },
       {
        "id": "agente:simulated",
@@ -4542,28 +4892,22 @@
        "valor": 1
       },
       {
-       "id": "agente:sin delegar",
-       "capa": "agente",
-       "nombre": "sin delegar",
-       "valor": 1
-      },
-      {
        "id": "estado:completed",
        "capa": "estado",
        "nombre": "completed",
-       "valor": 7
+       "valor": 8
       },
       {
        "id": "estado:failed",
        "capa": "estado",
        "nombre": "failed",
-       "valor": 2
+       "valor": 4
       },
       {
        "id": "estado:classified",
        "capa": "estado",
        "nombre": "classified",
-       "valor": 1
+       "valor": 3
       }
      ],
      "enlaces": [
@@ -4579,14 +4923,25 @@
        "acierto": 0.72
       },
       {
-       "origen": "agente:codex",
-       "destino": "estado:completed",
+       "origen": "agente:claude-cli",
+       "destino": "estado:failed",
        "valor": 2,
        "tareas": [
-        "s01",
-        "s02"
+        "s12",
+        "s13"
        ],
-       "acierto": 0.722
+       "acierto": 0.312
+      },
+      {
+       "origen": "agente:codex",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s01",
+        "s02",
+        "s14"
+       ],
+       "acierto": 0.815
       },
       {
        "origen": "agente:ollama-qwen",
@@ -4619,9 +4974,11 @@
       {
        "origen": "agente:sin delegar",
        "destino": "estado:classified",
-       "valor": 1,
+       "valor": 3,
        "tareas": [
-        "s08"
+        "s08",
+        "s15",
+        "s16"
        ],
        "acierto": 1.0
       },
@@ -4656,6 +5013,19 @@
       },
       {
        "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 5,
+       "tareas": [
+        "s08",
+        "s09",
+        "s14",
+        "s15",
+        "s16"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
        "destino": "nivel:N1",
        "valor": 3,
        "tareas": [
@@ -4667,13 +5037,13 @@
       },
       {
        "origen": "entrada:desconocido",
-       "destino": "nivel:N2",
+       "destino": "nivel:N4",
        "valor": 2,
        "tareas": [
-        "s08",
-        "s09"
+        "s12",
+        "s13"
        ],
-       "acierto": 1.0
+       "acierto": 0.312
       },
       {
        "origen": "nivel:N1",
@@ -4688,6 +5058,27 @@
       },
       {
        "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 3,
+       "tareas": [
+        "s08",
+        "s15",
+        "s16"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:codex",
+       "valor": 2,
+       "tareas": [
+        "s01",
+        "s14"
+       ],
+       "acierto": 0.722
+      },
+      {
+       "origen": "nivel:N2",
        "destino": "agente:claude-cli",
        "valor": 1,
        "tareas": [
@@ -4697,28 +5088,10 @@
       },
       {
        "origen": "nivel:N2",
-       "destino": "agente:codex",
-       "valor": 1,
-       "tareas": [
-        "s01"
-       ],
-       "acierto": 0.444
-      },
-      {
-       "origen": "nivel:N2",
        "destino": "agente:simulated",
        "valor": 1,
        "tareas": [
         "s09"
-       ],
-       "acierto": 1.0
-      },
-      {
-       "origen": "nivel:N2",
-       "destino": "agente:sin delegar",
-       "valor": 1,
-       "tareas": [
-        "s08"
        ],
        "acierto": 1.0
       },
@@ -4740,9 +5113,19 @@
         "s02"
        ],
        "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s12",
+        "s13"
+       ],
+       "acierto": 0.312
       }
      ],
-     "total": 10,
+     "total": 15,
      "desajustes_nivel": 1,
      "revisadas": 2
     },
@@ -4750,6 +5133,18 @@
      "agentes": [
       {
        "agente": "claude-cli",
+       "tareas": 5,
+       "runs": 10,
+       "coste_medio": 0.00067,
+       "coste_total": 0.00667,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.557,
+       "retrabajo": 0.4
+      },
+      {
+       "agente": "codex",
        "tareas": 3,
        "runs": 6,
        "coste_medio": 0.00067,
@@ -4757,7 +5152,7 @@
        "latencia_media": 1503.5,
        "p50": 1000.0,
        "p90": 2007.0,
-       "acierto": 0.72,
+       "acierto": 0.815,
        "retrabajo": 0.333
       },
       {
@@ -4771,18 +5166,6 @@
        "p90": 2007.0,
        "acierto": 0.312,
        "retrabajo": 0.667
-      },
-      {
-       "agente": "codex",
-       "tareas": 2,
-       "runs": 4,
-       "coste_medio": 0.00067,
-       "coste_total": 0.00267,
-       "latencia_media": 1503.5,
-       "p50": 1000.0,
-       "p90": 2007.0,
-       "acierto": 0.722,
-       "retrabajo": 0.5
       },
       {
        "agente": "simulated",
@@ -4811,10 +5194,16 @@
        "acierto": 0.581
       },
       {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 2,
+       "acierto": 0.312
+      },
+      {
        "agente": "codex",
        "nivel": "N2",
-       "tareas": 1,
-       "acierto": 0.444
+       "tareas": 2,
+       "acierto": 0.722
       },
       {
        "agente": "codex",
@@ -4857,6 +5246,12 @@
       {
        "semana": "2026-10-05",
        "agente": "claude-cli",
+       "tareas": 3,
+       "acierto": 0.542
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "codex",
        "tareas": 1,
        "acierto": 1.0
       },
@@ -4986,6 +5381,12 @@
     },
     "sugerencias": [
      {
+      "id": "fallos:claude-cli",
+      "severidad": "alta",
+      "texto": "claude-cli falló 4 de 8 ejecuciones (2 por tiempo agotado): revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
       "id": "nivel:ollama-qwen:N1",
       "severidad": "alta",
       "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
@@ -4996,6 +5397,24 @@
       }
      },
      {
+      "id": "fallos:ollama-qwen",
+      "severidad": "media",
+      "texto": "ollama-qwen falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
+      "id": "revision-pendiente",
+      "severidad": "media",
+      "texto": "1 tarea espera tu revisión (puerta humana bloqueada): apruébalas o recházalas desde el monitor.",
+      "accion": null
+     },
+     {
+      "id": "retrabajo:claude-cli",
+      "severidad": "media",
+      "texto": "El 40 % de las tareas de claude-cli se repiten: revisa su nivel máximo o el prompt de entrada.",
+      "accion": null
+     },
+     {
       "id": "skill-sin-ejecutar:backend-builder",
       "severidad": "media",
       "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
@@ -5003,6 +5422,27 @@
        "tipo": "asignar_skill",
        "skill": "backend-builder"
       }
+     },
+     {
+      "id": "solo-clasificadas",
+      "severidad": "baja",
+      "texto": "3 tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.",
+      "accion": null
+     },
+     {
+      "id": "limite-claude",
+      "severidad": "baja",
+      "texto": "1 tarea pasó de Claude a Codex por el límite semanal de Claude.",
+      "accion": null
+     },
+     {
+      "id": "skills-repuestas",
+      "severidad": "baja",
+      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
      },
      {
       "id": "skills-sin-uso",
@@ -5190,6 +5630,50 @@
       "senales": {
        "retrabajo": 1.0,
        "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s12": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s13"
+     },
+     "s13": {
+      "score": 0.625,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s14": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s15": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s16": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
       },
       "retrabajo": null,
       "repetida_por": null
@@ -5208,6 +5692,9 @@
    "no_disponibles": [
     "ollama-qwen"
    ],
+   "sin_nivel": [
+    "Revisor (sin niveles)"
+   ],
    "salida": {
     "dias": 0,
     "perfil": "activo",
@@ -5216,12 +5703,12 @@
      "codex",
      "ollama-qwen"
     ],
-    "ultima": "2026-10-08T10:00:00+00:00",
+    "ultima": "2026-10-11T08:00:00+00:00",
     "kpis": {
-     "tareas": 10,
-     "delegadas": 9,
-     "acierto": 0.616,
-     "retrabajo": 0.4,
+     "tareas": 15,
+     "delegadas": 12,
+     "acierto": 0.597,
+     "retrabajo": 0.333,
      "revisadas": 2
     },
     "flujo": {
@@ -5230,7 +5717,7 @@
        "id": "entrada:desconocido",
        "capa": "entrada",
        "nombre": "desconocido",
-       "valor": 5
+       "valor": 10
       },
       {
        "id": "entrada:claude",
@@ -5248,7 +5735,7 @@
        "id": "nivel:N2",
        "capa": "nivel",
        "nombre": "N2",
-       "valor": 4
+       "valor": 7
       },
       {
        "id": "nivel:N1",
@@ -5263,16 +5750,22 @@
        "valor": 3
       },
       {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 2
+      },
+      {
        "id": "agente:claude-cli",
        "capa": "agente",
        "nombre": "claude-cli",
-       "valor": 3
+       "valor": 5
       },
       {
        "id": "agente:codex",
        "capa": "agente",
        "nombre": "codex",
-       "valor": 3
+       "valor": 4
       },
       {
        "id": "agente:ollama-qwen",
@@ -5284,25 +5777,25 @@
        "id": "agente:sin delegar",
        "capa": "agente",
        "nombre": "sin delegar",
-       "valor": 1
+       "valor": 3
       },
       {
        "id": "estado:completed",
        "capa": "estado",
        "nombre": "completed",
-       "valor": 7
+       "valor": 8
       },
       {
        "id": "estado:failed",
        "capa": "estado",
        "nombre": "failed",
-       "valor": 2
+       "valor": 4
       },
       {
        "id": "estado:classified",
        "capa": "estado",
        "nombre": "classified",
-       "valor": 1
+       "valor": 3
       }
      ],
      "enlaces": [
@@ -5318,15 +5811,26 @@
        "acierto": 0.72
       },
       {
+       "origen": "agente:claude-cli",
+       "destino": "estado:failed",
+       "valor": 2,
+       "tareas": [
+        "s12",
+        "s13"
+       ],
+       "acierto": 0.312
+      },
+      {
        "origen": "agente:codex",
        "destino": "estado:completed",
-       "valor": 3,
+       "valor": 4,
        "tareas": [
         "s01",
         "s02",
-        "s11"
+        "s11",
+        "s14"
        ],
-       "acierto": 0.815
+       "acierto": 0.861
       },
       {
        "origen": "agente:ollama-qwen",
@@ -5350,9 +5854,11 @@
       {
        "origen": "agente:sin delegar",
        "destino": "estado:classified",
-       "valor": 1,
+       "valor": 3,
        "tareas": [
-        "s08"
+        "s08",
+        "s15",
+        "s16"
        ],
        "acierto": 1.0
       },
@@ -5387,6 +5893,19 @@
       },
       {
        "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 5,
+       "tareas": [
+        "s08",
+        "s11",
+        "s14",
+        "s15",
+        "s16"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
        "destino": "nivel:N1",
        "valor": 3,
        "tareas": [
@@ -5398,13 +5917,13 @@
       },
       {
        "origen": "entrada:desconocido",
-       "destino": "nivel:N2",
+       "destino": "nivel:N4",
        "valor": 2,
        "tareas": [
-        "s08",
-        "s11"
+        "s12",
+        "s13"
        ],
-       "acierto": 1.0
+       "acierto": 0.312
       },
       {
        "origen": "nivel:N1",
@@ -5420,12 +5939,24 @@
       {
        "origen": "nivel:N2",
        "destino": "agente:codex",
-       "valor": 2,
+       "valor": 3,
        "tareas": [
         "s01",
-        "s11"
+        "s11",
+        "s14"
        ],
-       "acierto": 0.722
+       "acierto": 0.815
+      },
+      {
+       "origen": "nivel:N2",
+       "destino": "agente:sin delegar",
+       "valor": 3,
+       "tareas": [
+        "s08",
+        "s15",
+        "s16"
+       ],
+       "acierto": 1.0
       },
       {
        "origen": "nivel:N2",
@@ -5433,15 +5964,6 @@
        "valor": 1,
        "tareas": [
         "s10"
-       ],
-       "acierto": 1.0
-      },
-      {
-       "origen": "nivel:N2",
-       "destino": "agente:sin delegar",
-       "valor": 1,
-       "tareas": [
-        "s08"
        ],
        "acierto": 1.0
       },
@@ -5463,9 +5985,19 @@
         "s02"
        ],
        "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s12",
+        "s13"
+       ],
+       "acierto": 0.312
       }
      ],
-     "total": 10,
+     "total": 15,
      "desajustes_nivel": 1,
      "revisadas": 2
     },
@@ -5473,27 +6005,27 @@
      "agentes": [
       {
        "agente": "claude-cli",
-       "tareas": 3,
-       "runs": 6,
+       "tareas": 5,
+       "runs": 10,
        "coste_medio": 0.00067,
-       "coste_total": 0.004,
+       "coste_total": 0.00667,
        "latencia_media": 1503.5,
        "p50": 1000.0,
        "p90": 2007.0,
-       "acierto": 0.72,
-       "retrabajo": 0.333
+       "acierto": 0.557,
+       "retrabajo": 0.4
       },
       {
        "agente": "codex",
-       "tareas": 3,
-       "runs": 6,
+       "tareas": 4,
+       "runs": 8,
        "coste_medio": 0.00067,
-       "coste_total": 0.004,
-       "latencia_media": 1253.5,
+       "coste_total": 0.00533,
+       "latencia_media": 1316.0,
        "p50": 1000.0,
        "p90": 2007.0,
-       "acierto": 0.815,
-       "retrabajo": 0.333
+       "acierto": 0.861,
+       "retrabajo": 0.25
       },
       {
        "agente": "ollama-qwen",
@@ -5522,10 +6054,16 @@
        "acierto": 0.581
       },
       {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 2,
+       "acierto": 0.312
+      },
+      {
        "agente": "codex",
        "nivel": "N2",
-       "tareas": 2,
-       "acierto": 0.722
+       "tareas": 3,
+       "acierto": 0.815
       },
       {
        "agente": "codex",
@@ -5568,6 +6106,12 @@
       {
        "semana": "2026-10-05",
        "agente": "claude-cli",
+       "tareas": 3,
+       "acierto": 0.542
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "codex",
        "tareas": 1,
        "acierto": 1.0
       }
@@ -5697,6 +6241,12 @@
       "accion": null
      },
      {
+      "id": "fallos:claude-cli",
+      "severidad": "alta",
+      "texto": "claude-cli falló 4 de 8 ejecuciones (2 por tiempo agotado): revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
       "id": "nivel:ollama-qwen:N1",
       "severidad": "alta",
       "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
@@ -5705,6 +6255,51 @@
        "agente": "ollama-qwen",
        "nivel": "N1"
       }
+     },
+     {
+      "id": "sin-nivel:Revisor (sin niveles)",
+      "severidad": "media",
+      "texto": "Revisor (sin niveles) está en el perfil sin niveles ni reglas: nunca recibe tareas.",
+      "accion": null
+     },
+     {
+      "id": "fallos:ollama-qwen",
+      "severidad": "media",
+      "texto": "ollama-qwen falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
+      "id": "revision-pendiente",
+      "severidad": "media",
+      "texto": "1 tarea espera tu revisión (puerta humana bloqueada): apruébalas o recházalas desde el monitor.",
+      "accion": null
+     },
+     {
+      "id": "retrabajo:claude-cli",
+      "severidad": "media",
+      "texto": "El 40 % de las tareas de claude-cli se repiten: revisa su nivel máximo o el prompt de entrada.",
+      "accion": null
+     },
+     {
+      "id": "solo-clasificadas",
+      "severidad": "baja",
+      "texto": "3 tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.",
+      "accion": null
+     },
+     {
+      "id": "limite-claude",
+      "severidad": "baja",
+      "texto": "1 tarea pasó de Claude a Codex por el límite semanal de Claude.",
+      "accion": null
+     },
+     {
+      "id": "skills-repuestas",
+      "severidad": "baja",
+      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
      },
      {
       "id": "skills-sin-uso",
@@ -5895,6 +6490,50 @@
       },
       "retrabajo": null,
       "repetida_por": null
+     },
+     "s12": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s13"
+     },
+     "s13": {
+      "score": 0.625,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s14": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s15": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s16": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
      }
     }
    }
@@ -5910,6 +6549,9 @@
    "no_disponibles": [
     "ollama-qwen"
    ],
+   "sin_nivel": [
+    "Revisor (sin niveles)"
+   ],
    "salida": {
     "dias": 30,
     "perfil": "activo",
@@ -5918,12 +6560,12 @@
      "codex",
      "ollama-qwen"
     ],
-    "ultima": "2026-10-08T10:00:00+00:00",
+    "ultima": "2026-10-11T08:00:00+00:00",
     "kpis": {
-     "tareas": 9,
-     "delegadas": 8,
-     "acierto": 0.568,
-     "retrabajo": 0.444,
+     "tareas": 14,
+     "delegadas": 11,
+     "acierto": 0.561,
+     "retrabajo": 0.357,
      "revisadas": 2
     },
     "flujo": {
@@ -5932,7 +6574,7 @@
        "id": "entrada:desconocido",
        "capa": "entrada",
        "nombre": "desconocido",
-       "valor": 4
+       "valor": 9
       },
       {
        "id": "entrada:claude",
@@ -5947,15 +6589,15 @@
        "valor": 2
       },
       {
-       "id": "nivel:N1",
-       "capa": "nivel",
-       "nombre": "N1",
-       "valor": 3
-      },
-      {
        "id": "nivel:N2",
        "capa": "nivel",
        "nombre": "N2",
+       "valor": 6
+      },
+      {
+       "id": "nivel:N1",
+       "capa": "nivel",
+       "nombre": "N1",
        "valor": 3
       },
       {
@@ -5965,9 +6607,21 @@
        "valor": 3
       },
       {
+       "id": "nivel:N4",
+       "capa": "nivel",
+       "nombre": "N4",
+       "valor": 2
+      },
+      {
        "id": "agente:claude-cli",
        "capa": "agente",
        "nombre": "claude-cli",
+       "valor": 5
+      },
+      {
+       "id": "agente:codex",
+       "capa": "agente",
+       "nombre": "codex",
        "valor": 3
       },
       {
@@ -5977,34 +6631,28 @@
        "valor": 3
       },
       {
-       "id": "agente:codex",
-       "capa": "agente",
-       "nombre": "codex",
-       "valor": 2
-      },
-      {
        "id": "agente:sin delegar",
        "capa": "agente",
        "nombre": "sin delegar",
-       "valor": 1
+       "valor": 3
       },
       {
        "id": "estado:completed",
        "capa": "estado",
        "nombre": "completed",
-       "valor": 6
+       "valor": 7
       },
       {
        "id": "estado:failed",
        "capa": "estado",
        "nombre": "failed",
-       "valor": 2
+       "valor": 4
       },
       {
        "id": "estado:classified",
        "capa": "estado",
        "nombre": "classified",
-       "valor": 1
+       "valor": 3
       }
      ],
      "enlaces": [
@@ -6020,14 +6668,25 @@
        "acierto": 0.72
       },
       {
-       "origen": "agente:codex",
-       "destino": "estado:completed",
+       "origen": "agente:claude-cli",
+       "destino": "estado:failed",
        "valor": 2,
        "tareas": [
-        "s01",
-        "s02"
+        "s12",
+        "s13"
        ],
-       "acierto": 0.722
+       "acierto": 0.312
+      },
+      {
+       "origen": "agente:codex",
+       "destino": "estado:completed",
+       "valor": 3,
+       "tareas": [
+        "s01",
+        "s02",
+        "s14"
+       ],
+       "acierto": 0.815
       },
       {
        "origen": "agente:ollama-qwen",
@@ -6051,9 +6710,11 @@
       {
        "origen": "agente:sin delegar",
        "destino": "estado:classified",
-       "valor": 1,
+       "valor": 3,
        "tareas": [
-        "s08"
+        "s08",
+        "s15",
+        "s16"
        ],
        "acierto": 1.0
       },
@@ -6088,6 +6749,18 @@
       },
       {
        "origen": "entrada:desconocido",
+       "destino": "nivel:N2",
+       "valor": 4,
+       "tareas": [
+        "s08",
+        "s14",
+        "s15",
+        "s16"
+       ],
+       "acierto": 1.0
+      },
+      {
+       "origen": "entrada:desconocido",
        "destino": "nivel:N1",
        "valor": 3,
        "tareas": [
@@ -6099,12 +6772,13 @@
       },
       {
        "origen": "entrada:desconocido",
-       "destino": "nivel:N2",
-       "valor": 1,
+       "destino": "nivel:N4",
+       "valor": 2,
        "tareas": [
-        "s08"
+        "s12",
+        "s13"
        ],
-       "acierto": 1.0
+       "acierto": 0.312
       },
       {
        "origen": "nivel:N1",
@@ -6119,28 +6793,31 @@
       },
       {
        "origen": "nivel:N2",
-       "destino": "agente:claude-cli",
-       "valor": 1,
+       "destino": "agente:sin delegar",
+       "valor": 3,
        "tareas": [
-        "s10"
+        "s08",
+        "s15",
+        "s16"
        ],
        "acierto": 1.0
       },
       {
        "origen": "nivel:N2",
        "destino": "agente:codex",
-       "valor": 1,
+       "valor": 2,
        "tareas": [
-        "s01"
+        "s01",
+        "s14"
        ],
-       "acierto": 0.444
+       "acierto": 0.722
       },
       {
        "origen": "nivel:N2",
-       "destino": "agente:sin delegar",
+       "destino": "agente:claude-cli",
        "valor": 1,
        "tareas": [
-        "s08"
+        "s10"
        ],
        "acierto": 1.0
       },
@@ -6162,9 +6839,19 @@
         "s02"
        ],
        "acierto": 1.0
+      },
+      {
+       "origen": "nivel:N4",
+       "destino": "agente:claude-cli",
+       "valor": 2,
+       "tareas": [
+        "s12",
+        "s13"
+       ],
+       "acierto": 0.312
       }
      ],
-     "total": 9,
+     "total": 14,
      "desajustes_nivel": 1,
      "revisadas": 2
     },
@@ -6172,6 +6859,18 @@
      "agentes": [
       {
        "agente": "claude-cli",
+       "tareas": 5,
+       "runs": 10,
+       "coste_medio": 0.00067,
+       "coste_total": 0.00667,
+       "latencia_media": 1503.5,
+       "p50": 1000.0,
+       "p90": 2007.0,
+       "acierto": 0.557,
+       "retrabajo": 0.4
+      },
+      {
+       "agente": "codex",
        "tareas": 3,
        "runs": 6,
        "coste_medio": 0.00067,
@@ -6179,7 +6878,7 @@
        "latencia_media": 1503.5,
        "p50": 1000.0,
        "p90": 2007.0,
-       "acierto": 0.72,
+       "acierto": 0.815,
        "retrabajo": 0.333
       },
       {
@@ -6193,18 +6892,6 @@
        "p90": 2007.0,
        "acierto": 0.312,
        "retrabajo": 0.667
-      },
-      {
-       "agente": "codex",
-       "tareas": 2,
-       "runs": 4,
-       "coste_medio": 0.00067,
-       "coste_total": 0.00267,
-       "latencia_media": 1503.5,
-       "p50": 1000.0,
-       "p90": 2007.0,
-       "acierto": 0.722,
-       "retrabajo": 0.5
       }
      ],
      "por_nivel": [
@@ -6221,10 +6908,16 @@
        "acierto": 0.581
       },
       {
+       "agente": "claude-cli",
+       "nivel": "N4",
+       "tareas": 2,
+       "acierto": 0.312
+      },
+      {
        "agente": "codex",
        "nivel": "N2",
-       "tareas": 1,
-       "acierto": 0.444
+       "tareas": 2,
+       "acierto": 0.722
       },
       {
        "agente": "codex",
@@ -6261,6 +6954,12 @@
       {
        "semana": "2026-10-05",
        "agente": "claude-cli",
+       "tareas": 3,
+       "acierto": 0.542
+      },
+      {
+       "semana": "2026-10-05",
+       "agente": "codex",
        "tareas": 1,
        "acierto": 1.0
       }
@@ -6390,6 +7089,12 @@
       "accion": null
      },
      {
+      "id": "fallos:claude-cli",
+      "severidad": "alta",
+      "texto": "claude-cli falló 4 de 8 ejecuciones (2 por tiempo agotado): revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
       "id": "nivel:ollama-qwen:N1",
       "severidad": "alta",
       "texto": "ollama-qwen acierta 0.31 en N1 (3 tareas): delega ese nivel en otro agente.",
@@ -6398,6 +7103,51 @@
        "agente": "ollama-qwen",
        "nivel": "N1"
       }
+     },
+     {
+      "id": "sin-nivel:Revisor (sin niveles)",
+      "severidad": "media",
+      "texto": "Revisor (sin niveles) está en el perfil sin niveles ni reglas: nunca recibe tareas.",
+      "accion": null
+     },
+     {
+      "id": "fallos:ollama-qwen",
+      "severidad": "media",
+      "texto": "ollama-qwen falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
+      "accion": null
+     },
+     {
+      "id": "revision-pendiente",
+      "severidad": "media",
+      "texto": "1 tarea espera tu revisión (puerta humana bloqueada): apruébalas o recházalas desde el monitor.",
+      "accion": null
+     },
+     {
+      "id": "retrabajo:claude-cli",
+      "severidad": "media",
+      "texto": "El 40 % de las tareas de claude-cli se repiten: revisa su nivel máximo o el prompt de entrada.",
+      "accion": null
+     },
+     {
+      "id": "solo-clasificadas",
+      "severidad": "baja",
+      "texto": "3 tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.",
+      "accion": null
+     },
+     {
+      "id": "limite-claude",
+      "severidad": "baja",
+      "texto": "1 tarea pasó de Claude a Codex por el límite semanal de Claude.",
+      "accion": null
+     },
+     {
+      "id": "skills-repuestas",
+      "severidad": "baja",
+      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "accion": null,
+      "skills": [
+       "docx"
+      ]
      },
      {
       "id": "skills-sin-uso",
@@ -6576,6 +7326,50 @@
       "senales": {
        "retrabajo": 1.0,
        "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s12": {
+      "score": 0.0,
+      "senales": {
+       "retrabajo": 0.0,
+       "completada": 0.0
+      },
+      "retrabajo": "pide corregir lo mismo",
+      "repetida_por": "s13"
+     },
+     "s13": {
+      "score": 0.625,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 0.0,
+       "revision": 0.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s14": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0,
+       "completada": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s15": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
+      },
+      "retrabajo": null,
+      "repetida_por": null
+     },
+     "s16": {
+      "score": 1.0,
+      "senales": {
+       "retrabajo": 1.0
       },
       "retrabajo": null,
       "repetida_por": null

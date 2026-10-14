@@ -293,11 +293,49 @@ type Eficiencia = ReturnType<typeof eficiencia>;
 type Matriz = ReturnType<typeof matrizSkills>;
 export interface Sugerencia { id: string; severidad: 'alta' | 'media' | 'baja'; texto: string; accion: Record<string, string> | null; skills?: string[] }
 
-export function sugerencias(efic: Eficiencia, matriz: Matriz, o: { ultima: string | null; ahora: Date; noDisponibles?: string[] }): Sugerencia[] {
+const TIEMPO = ['timeout', 'timed out', 'tiempo'];
+const cuantas = (n: number, una: string, varias: string) => `${n} ${n === 1 ? una : varias}`;
+
+/** Salud del registro de tareas: agentes que fallan, revisiones pendientes, tareas sin delegar, límite de Claude y rotador. */
+export function salud(tareas: TareaAnalitica[], sinNivel: string[] = []): Sugerencia[] {
+  const salida: Sugerencia[] = [];
+  for (const nombre of [...sinNivel].sort(cmp)) {
+    salida.push({ id: `sin-nivel:${nombre}`, severidad: 'media', texto: `${nombre} está en el perfil sin niveles ni reglas: nunca recibe tareas.`, accion: null });
+  }
+  const porAgente = new Map<string, [number, number, number]>();
+  for (const t of tareas) {
+    for (const r of t.runs ?? []) {
+      const fallo = r.status === 'failed' || Boolean(r.error);
+      const tiempo = fallo && TIEMPO.some((p) => String(r.error ?? '').toLowerCase().includes(p));
+      const a = String(r.provider_name || '?');
+      const c = porAgente.get(a) ?? [0, 0, 0];
+      porAgente.set(a, [c[0] + 1, c[1] + Number(fallo), c[2] + Number(tiempo)]);
+    }
+  }
+  for (const agente of [...porAgente.keys()].sort(cmp)) {
+    const [n, f, to] = porAgente.get(agente)!;
+    if (n >= 3 && f * 10 >= n * 3) {
+      salida.push({ id: `fallos:${agente}`, severidad: f * 2 >= n ? 'alta' : 'media', texto: `${agente} falló ${f} de ${n} ejecuciones${to ? ` (${to} por tiempo agotado)` : ''}: revisa su instalación, su sesión o su timeout.`, accion: null });
+    }
+  }
+  const decisiones = (t: TareaAnalitica) => t.decisiones ?? [];
+  const pendientes = tareas.filter((t) => decisiones(t).includes('human_review_gate=blocked') && t.status !== 'completed').length;
+  if (pendientes) salida.push({ id: 'revision-pendiente', severidad: 'media', texto: `${cuantas(pendientes, 'tarea espera', 'tareas esperan')} tu revisión (puerta humana bloqueada): apruébalas o recházalas desde el monitor.`, accion: null });
+  const solo = tareas.filter((t) => !(t.runs ?? []).length && t.status === 'classified').length;
+  if (solo >= 3) salida.push({ id: 'solo-clasificadas', severidad: 'baja', texto: `${solo} tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.`, accion: null });
+  const limite = tareas.filter((t) => decisiones(t).includes('limite_semanal:claude->codex')).length;
+  if (limite) salida.push({ id: 'limite-claude', severidad: 'baja', texto: `${cuantas(limite, 'tarea pasó', 'tareas pasaron')} de Claude a Codex por el límite semanal de Claude.`, accion: null });
+  const repuestas = [...new Set(tareas.flatMap((t) => decisiones(t).filter((d) => d.startsWith('skill:repuesta:')).map((d) => d.slice('skill:repuesta:'.length).split('->')[0]!)))].sort(cmp);
+  if (repuestas.length) salida.push({ id: 'skills-repuestas', severidad: 'baja', texto: `El rotador repuso ${cuantas(repuestas.length, 'skill', 'skills')} para delegaciones; las que se sigan usando pasarán a núcleo solas.`, accion: null, skills: repuestas.slice(0, 30) });
+  return salida;
+}
+
+export function sugerencias(efic: Eficiencia, matriz: Matriz, o: { ultima: string | null; ahora: Date; noDisponibles?: string[]; tareas?: TareaAnalitica[]; sinNivel?: string[] }): Sugerencia[] {
   const salida: Sugerencia[] = [];
   for (const agente of [...(o.noDisponibles ?? [])].sort(cmp)) {
     salida.push({ id: `no-disponible:${agente}`, severidad: 'alta', texto: `${agente} está en el perfil pero no está disponible: sus tareas irán al respaldo.`, accion: null });
   }
+  salida.push(...salud(o.tareas ?? [], o.sinNivel));
   for (const f of efic.por_nivel) {
     if (f.tareas >= 3 && f.acierto < 0.6) {
       salida.push({ id: `nivel:${f.agente}:${f.nivel}`, severidad: 'alta', texto: `${f.agente} acierta ${formatear(f.acierto, 2)} en ${f.nivel} (${f.tareas} tareas): delega ese nivel en otro agente.`,
@@ -335,7 +373,7 @@ export function catalogoAgrupado(matriz: Matriz, top = 10) {
   };
 }
 
-export function produccion(tareas: TareaAnalitica[], o: { catalogo: SkillCatalogo[]; agentesPerfil: string[] | null; dias: number; ahora: Date; noDisponibles?: string[] }) {
+export function produccion(tareas: TareaAnalitica[], o: { catalogo: SkillCatalogo[]; agentesPerfil: string[] | null; dias: number; ahora: Date; noDisponibles?: string[]; sinNivel?: string[] }) {
   const seleccion = filtrar(tareas, { agentes: o.agentesPerfil, dias: o.dias, ahora: o.ahora });
   // El re-trabajo mira el siguiente prompt aunque sea de otro agente o de fuera del periodo: se calcula sobre todas.
   const acierto = calcularAcierto(tareas);
@@ -359,7 +397,7 @@ export function produccion(tareas: TareaAnalitica[], o: { catalogo: SkillCatalog
     flujo: flujo(seleccion, acierto),
     eficiencia: efic,
     matriz,
-    sugerencias: sugerencias(efic, matriz, { ultima, ahora: o.ahora, noDisponibles: o.noDisponibles }),
+    sugerencias: sugerencias(efic, matriz, { ultima, ahora: o.ahora, noDisponibles: o.noDisponibles, tareas: seleccion, sinNivel: o.sinNivel }),
     catalogo: catalogoAgrupado(matriz),
     acierto: Object.fromEntries(seleccion.map((t) => [t.task_id, acierto[t.task_id]!])),
   };

@@ -365,6 +365,48 @@ def matriz_skills(tareas: list[Mapping[str, Any]], acierto: Mapping[str, Mapping
     }
 
 
+_TIEMPO = ("timeout", "timed out", "tiempo")
+
+
+def _cuantas(n: int, una: str, varias: str) -> str:
+    return f"{n} {una if n == 1 else varias}"
+
+
+def salud(tareas: list[Mapping[str, Any]], *, sin_nivel: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """Salud del registro de tareas: agentes que fallan, revisiones pendientes, tareas sin delegar, límite de Claude y rotador."""
+    salida: list[dict[str, Any]] = []
+    for nombre in sorted(sin_nivel):
+        salida.append({"id": f"sin-nivel:{nombre}", "severidad": "media", "texto": f"{nombre} está en el perfil sin niveles ni reglas: nunca recibe tareas.", "accion": None})
+    por_agente: dict[str, list[int]] = {}
+    for t in tareas:
+        for r in t.get("runs") or []:
+            fallo = r.get("status") == "failed" or bool(r.get("error"))
+            tiempo = fallo and any(p in str(r.get("error") or "").lower() for p in _TIEMPO)
+            c = por_agente.setdefault(str(r.get("provider_name") or "?"), [0, 0, 0])
+            c[0] += 1
+            c[1] += int(fallo)
+            c[2] += int(tiempo)
+    for agente in sorted(por_agente):
+        n, f, to = por_agente[agente]
+        if n >= 3 and f * 10 >= n * 3:
+            extra = f" ({to} por tiempo agotado)" if to else ""
+            salida.append({"id": f"fallos:{agente}", "severidad": "alta" if f * 2 >= n else "media", "texto": f"{agente} falló {f} de {n} ejecuciones{extra}: revisa su instalación, su sesión o su timeout.", "accion": None})
+    decisiones = lambda t: t.get("decisiones") or []  # noqa: E731
+    pendientes = sum(1 for t in tareas if "human_review_gate=blocked" in decisiones(t) and t.get("status") != "completed")
+    if pendientes:
+        salida.append({"id": "revision-pendiente", "severidad": "media", "texto": f"{_cuantas(pendientes, 'tarea espera', 'tareas esperan')} tu revisión (puerta humana bloqueada): apruébalas o recházalas desde el monitor.", "accion": None})
+    solo = sum(1 for t in tareas if not t.get("runs") and t.get("status") == "classified")
+    if solo >= 3:
+        salida.append({"id": "solo-clasificadas", "severidad": "baja", "texto": f"{solo} tareas solo se clasificaron y nunca se delegaron: delégalas o archívalas.", "accion": None})
+    limite = sum(1 for t in tareas if "limite_semanal:claude->codex" in decisiones(t))
+    if limite:
+        salida.append({"id": "limite-claude", "severidad": "baja", "texto": f"{_cuantas(limite, 'tarea pasó', 'tareas pasaron')} de Claude a Codex por el límite semanal de Claude.", "accion": None})
+    repuestas = sorted({d[len("skill:repuesta:"):].split("->")[0] for t in tareas for d in decisiones(t) if d.startswith("skill:repuesta:")})
+    if repuestas:
+        salida.append({"id": "skills-repuestas", "severidad": "baja", "texto": f"El rotador repuso {_cuantas(len(repuestas), 'skill', 'skills')} para delegaciones; las que se sigan usando pasarán a núcleo solas.", "accion": None, "skills": repuestas[:30]})
+    return salida
+
+
 def sugerencias(
     efic: Mapping[str, Any],
     matriz: Mapping[str, Any],
@@ -372,11 +414,14 @@ def sugerencias(
     ultima: str | None,
     ahora: datetime,
     no_disponibles: Iterable[str] = (),
+    tareas: Iterable[Mapping[str, Any]] = (),
+    sin_nivel: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
-    """«Qué mejorar»: reglas deterministas sobre la eficiencia y la matriz, de lo más urgente a lo menos."""
+    """«Qué mejorar»: reglas deterministas sobre la eficiencia, la matriz y el registro de tareas, de lo más urgente a lo menos."""
     salida: list[dict[str, Any]] = []
     for agente in sorted(no_disponibles):
         salida.append({"id": f"no-disponible:{agente}", "severidad": "alta", "texto": f"{agente} está en el perfil pero no está disponible: sus tareas irán al respaldo.", "accion": None})
+    salida.extend(salud(list(tareas), sin_nivel=sin_nivel))
     for fila in efic.get("por_nivel", []):
         if fila["tareas"] >= 3 and fila["acierto"] < 0.6:
             salida.append({
@@ -426,6 +471,7 @@ def produccion(
     dias: int,
     ahora: datetime,
     no_disponibles: Iterable[str] = (),
+    sin_nivel: Iterable[str] = (),
 ) -> dict[str, Any]:
     """Todo junto: lo que sirven `/analytics/flujo`, `/eficiencia`, `/matriz-skills`, `/sugerencias` y `/skills/catalogo`."""
     seleccion = filtrar(tareas, agentes=agentes_perfil, dias=dias, ahora=ahora)
@@ -450,7 +496,7 @@ def produccion(
         "flujo": flujo(seleccion, acierto),
         "eficiencia": efic,
         "matriz": matriz,
-        "sugerencias": sugerencias(efic, matriz, ultima=ultima, ahora=ahora, no_disponibles=no_disponibles),
+        "sugerencias": sugerencias(efic, matriz, ultima=ultima, ahora=ahora, no_disponibles=no_disponibles, tareas=seleccion, sin_nivel=sin_nivel),
         "catalogo": catalogo_agrupado(matriz),
         "acierto": {t["task_id"]: acierto[t["task_id"]] for t in seleccion},
     }

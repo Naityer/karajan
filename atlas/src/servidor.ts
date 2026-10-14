@@ -165,14 +165,17 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const dias = entero(q['dias'], 0, 0, 3650);
     let agentes: string[] | null = null;
     let noDisponibles: string[] = [];
+    let sinNivel: string[] = [];
     if (q['perfil'] !== 'todos') {
-      const layout = perfiles.leer() as { default_profile_id?: string; profiles?: { id: string; entities?: { provider?: string | null }[] }[] };
+      const layout = perfiles.leer() as { default_profile_id?: string; profiles?: { id: string; entities?: { id: string; name?: string | null; role?: string; levels?: string[]; provider?: string | null }[]; rules?: { entity_id: string; enabled?: boolean }[] }[] };
       const p = layout.profiles?.find((x) => x.id === layout.default_profile_id);
       agentes = [...new Set((p?.entities ?? []).map((e) => e.provider).filter((x): x is string => !!x))].sort();
+      const conRegla = new Set((p?.rules ?? []).filter((r) => r.enabled !== false).map((r) => r.entity_id));
+      sinNivel = (p?.entities ?? []).filter((e) => e.provider && e.role !== 'parent' && !(e.levels ?? []).length && !conRegla.has(e.id)).map((e) => e.name || e.id);
       const estado = new Map(PROVEEDORES.map((pr) => [pr.nombre, disponibilidad(pr).disponible] as const));
       noDisponibles = agentes.filter((a) => estado.has(a) && !estado.get(a));
     }
-    return produccion(almacen.tareasPlanas(), { catalogo: catalogoReal(), agentesPerfil: agentes, dias, ahora: new Date(), noDisponibles });
+    return produccion(almacen.tareasPlanas(), { catalogo: catalogoReal(), agentesPerfil: agentes, dias, ahora: new Date(), noDisponibles, sinNivel });
   };
   const cabecera = (p: ReturnType<typeof calcular>) => ({ dias: p.dias, perfil: p.perfil, agentes_perfil: p.agentes_perfil, ultima: p.ultima, kpis: p.kpis });
   app.get('/analytics/produccion', (req) => { const { acierto: _a, ...p } = calcular(req.query); return p; });

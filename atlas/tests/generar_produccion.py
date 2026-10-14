@@ -52,7 +52,19 @@ SINTETICAS = [
     t("s09", "Diseña la pantalla de ajustes", "2026-10-06T10:00:00+00:00", agente="simulated", recomendadas=["backend-builder"]),
     t("s10", "Diseña la pantalla de ajustes con modo oscuro", "2026-10-08T10:00:00+00:00", agente="codex", recomendadas=["backend-builder"], por="model:/karajan", revision={"agente": ["claude-cli"], "agente_entrada": ["claude"], "dominio": ["interfaz"]}),
     t("s11", "Una tarea antigua del verano", "2026-07-01T10:00:00+00:00", agente="codex", latencia=500),
+    # Salud: Claude cae por tiempo agotado, tareas que solo se clasificaron, una revisión pendiente, el límite semanal y el rotador.
+    t("s12", "Refactoriza el router de tareas", "2026-10-09T10:00:00+00:00", agente="claude-cli", estado="failed", nivel="level_4_complex", dominio="backend"),
+    t("s13", "Refactoriza el router de tareas otra vez", "2026-10-09T11:00:00+00:00", agente="claude-cli", estado="failed", nivel="level_4_complex", dominio="backend",
+      decisiones=["human_review_gate=blocked"]),
+    t("s14", "Resume el informe de ventas", "2026-10-10T10:00:00+00:00", agente="codex", dominio="documents", decisiones=["limite_semanal:claude->codex", "skill:repuesta:docx->codex"]),
+    t("s15", "Prepara la presentación del trimestre", "2026-10-10T12:00:00+00:00", agente=None, estado="classified", dominio="documents"),
+    t("s16", "Revisa el contrato de proveedores", "2026-10-11T08:00:00+00:00", agente=None, estado="classified", dominio="documents"),
 ]
+for s in SINTETICAS:
+    if s["task_id"] in ("s12", "s13"):
+        s["runs"][0]["error"] = "Timed out after 600 s"
+        s["runs"][1] = {**s["runs"][1], "status": "failed", "error": "binario no encontrado"}
+SIN_NIVEL = ["Revisor (sin niveles)"]
 
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
     copia = Path(tmp) / "tareas.db"
@@ -67,8 +79,8 @@ for nombre, entrada in (("db", DESDE_DB), ("sinteticas", SINTETICAS)):
     for perfil in (None, ["claude-cli", "codex", "ollama-qwen"]):
         for dias in (0, 30):
             casos.append({
-                "entrada": nombre, "perfil": perfil, "dias": dias, "no_disponibles": ["ollama-qwen"] if perfil else [],
-                "salida": produccion.produccion(entrada, catalogo=CATALOGO, agentes_perfil=perfil, dias=dias, ahora=AHORA, no_disponibles=["ollama-qwen"] if perfil else []),
+                "entrada": nombre, "perfil": perfil, "dias": dias, "no_disponibles": ["ollama-qwen"] if perfil else [], "sin_nivel": SIN_NIVEL if perfil else [],
+                "salida": produccion.produccion(entrada, catalogo=CATALOGO, agentes_perfil=perfil, dias=dias, ahora=AHORA, no_disponibles=["ollama-qwen"] if perfil else [], sin_nivel=SIN_NIVEL if perfil else []),
             })
 
 (SALIDA / "produccion.json").write_text(json.dumps({

@@ -85,3 +85,10 @@ def catalogo_real(raices: tuple[Path, ...] | None = None) -> list[dict[str, Any]
 def agentes_del_perfil(layout: RoutingLayout) -> list[str]:
     """Los proveedores de las entidades del perfil por defecto (el que se usa al delegar)."""
     return sorted({e.provider for e in layout.default_profile().entities if e.provider})
+
+
+def entidades_sin_nivel(layout: RoutingLayout) -> list[str]:
+    """Workers del perfil por defecto que no atienden ningún nivel ni ninguna regla activa: nunca reciben tareas."""
+    perfil = layout.default_profile()
+    con_regla = {r.entity_id for r in perfil.rules if r.enabled}
+    return sorted(e.name or e.id for e in perfil.entities if e.provider and e.role != "parent" and not e.levels and e.id not in con_regla)

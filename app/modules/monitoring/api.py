@@ -226,7 +226,9 @@ def _produccion(dias: int, perfil: str) -> dict:
     layout = rt.routing.load()
     agentes = produccion_datos.agentes_del_perfil(layout) if perfil == "activo" else None
     no_disponibles: list[str] = []
+    sin_nivel: list[str] = []
     if agentes is not None:
+        sin_nivel = produccion_datos.entidades_sin_nivel(layout)
         estado = {c.provider: c.ready for c in credentials.detect_all()}
         no_disponibles = [a for a in agentes if a in estado and not estado[a]]
     return produccion_ops.produccion(
@@ -236,6 +238,7 @@ def _produccion(dias: int, perfil: str) -> dict:
         dias=dias,
         ahora=datetime.now(timezone.utc),
         no_disponibles=no_disponibles,
+        sin_nivel=sin_nivel,
     )
 
 

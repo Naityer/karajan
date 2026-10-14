@@ -15,7 +15,7 @@ const fixtures = (nombre: string) => join(import.meta.dirname, 'fixtures', nombr
 const F = JSON.parse(readFileSync(fixtures('produccion.json'), 'utf8')) as {
   ahora: string; catalogo: SkillCatalogo[]; revision_db: { task_id: string; campos: Record<string, string[]> };
   desde_db: TareaAnalitica[]; sinteticas: TareaAnalitica[];
-  casos: { entrada: 'db' | 'sinteticas'; perfil: string[] | null; dias: number; no_disponibles: string[]; salida: unknown }[];
+  casos: { entrada: 'db' | 'sinteticas'; perfil: string[] | null; dias: number; no_disponibles: string[]; sin_nivel: string[]; salida: unknown }[];
 };
 // JSON de Python escribe 32860.0; al leerlo es 32860, igual que en TS. Se normaliza igual los dos lados.
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as unknown;
@@ -38,7 +38,7 @@ describe('analítica de producción: paridad', () => {
   for (const c of F.casos) {
     it(`${c.entrada} · perfil ${c.perfil ? 'activo' : 'todos'} · ${c.dias} días`, () => {
       const entrada = c.entrada === 'db' ? F.desde_db : F.sinteticas;
-      const r = produccion(entrada, { catalogo: F.catalogo, agentesPerfil: c.perfil, dias: c.dias, ahora: new Date(F.ahora), noDisponibles: c.no_disponibles });
+      const r = produccion(entrada, { catalogo: F.catalogo, agentesPerfil: c.perfil, dias: c.dias, ahora: new Date(F.ahora), noDisponibles: c.no_disponibles, sinNivel: c.sin_nivel });
       assert.deepStrictEqual(json(r), json(c.salida));
     });
   }
