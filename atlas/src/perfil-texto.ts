@@ -41,7 +41,8 @@ export function nivelesDe(texto: string): number[] {
     [/\b(simples?|sencill[oa]s?|faciles?|triviales?|basic[oa]s?)\b/, [1, 2]],
     [/\b(moderad[oa]s?)\b/, [2]],
     [/\b(intermedi[oa]s?|medi[oa]s?)\b/, [3]],
-    [/\b(complej[oa]s?|dificiles?|grandes?)\b/, [4]],
+    // «Complejo» abarca también lo crítico (N4–N5): es como se suele pedir «Claude para lo complejo».
+    [/\b(complej[oa]s?|dificiles?|grandes?)\b/, [4, 5]],
     [/\b(critic[oa]s?|arquitectura|delicad[oa]s?)\b/, [5]],
   ];
   const dePalabras = palabras.flatMap(([re, ns]) => (re.test(t) ? ns : []));
@@ -71,6 +72,7 @@ export function perfilDesdeTexto(texto: string, base: Perfil): Propuesta {
   perfil.rules = perfil.rules ?? [];
   const cambios: string[] = [];
   let entendido = false;
+  let nuevas = 0; // reglas de esta frase: van delante de las que ya había, en el orden en que se escriben
   const entidadDe = (proveedor: string): Entidad => {
     let e = perfil.entities.find((x) => x.provider === proveedor);
     if (!e) {
@@ -108,7 +110,9 @@ export function perfilDesdeTexto(texto: string, base: Perfil): Propuesta {
         entity_id: e.id, domains: areas, intents: [],
         level_min: niveles.length ? niveles[0]! : null, level_max: niveles.length ? niveles[niveles.length - 1]! : null, enabled: true,
       };
-      perfil.rules = [regla, ...perfil.rules.filter((r) => r.id !== regla.id)];
+      const resto = perfil.rules.filter((r) => r.id !== regla.id);
+      perfil.rules = [...resto.slice(0, nuevas), regla, ...resto.slice(nuevas)];
+      nuevas++;
       cambios.push(`Regla: ${regla.name}`);
       entendido = true;
     } else if (niveles.length) {
