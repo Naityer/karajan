@@ -6,6 +6,7 @@ import { perfilPorDefecto, type Perfiles } from './perfiles';
 import { disponibilidad, ejecutarProveedor, modeloPara, proveedor, type Disponibilidad, type Ejecutor, type Proveedor, type Tier } from './proveedores';
 import { claudeExcedido, leerLimites, umbralClaude, type Limites } from './limites';
 import { elegirRegla, nivelRegla, type Entidad, type Regla } from './reglas';
+import { aislar, aislarActivo, cerrar, type Aislamiento } from './aislar-git';
 import { destinoDe, type Rotador } from './rotador';
 
 /**
@@ -29,6 +30,8 @@ interface Opciones {
   limites?: () => Limites | null;
   /** Rotador de skills: repone la skill recomendada antes de ejecutar si estaba en el almacén. */
   rotador?: Rotador;
+  /** Trabajar en un worktree con rama `agente/<task_id>` (por defecto, `KARAJAN_AISLAR_GIT=1`). */
+  aislarGit?: boolean;
 }
 
 export class Delegador {
@@ -140,11 +143,20 @@ export class Delegador {
     return () => { this.enCurso.set(entidad, (this.enCurso.get(entidad) ?? 1) - 1); const cola = this.esperas.get(entidad) ?? []; const sig = cola.shift(); this.esperas.set(entidad, cola); sig?.(); };
   }
 
-  private async ejecutar(c: Clasificacion, asignaciones: Asignacion[], cwd: string): Promise<void> {
+  private async ejecutar(c: Clasificacion, asignaciones: Asignacion[], carpeta: string): Promise<void> {
     const { almacen } = this.op;
     const perfil = perfilPorDefecto(this.op.perfiles.leer());
     const ejecuciones: Record<string, unknown>[] = [];
     let total = 0;
+    // En el servidor cada tarea trabaja en su rama: main solo cambia con la integración nocturna.
+    let ais: Aislamiento | null = null;
+    if (this.op.aislarGit ?? aislarActivo()) {
+      try { ais = aislar(carpeta, c.task_id); } catch (e) {
+        almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: 'git:aislar=error', reason: String((e as Error).message ?? e).slice(0, 500) });
+      }
+      if (ais) almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `git:rama=${ais.rama}`, reason: `worktree desde ${ais.base}` });
+    }
+    const cwd = ais?.carpeta ?? carpeta;
     for (const [i, st] of c.subtasks.entries()) {
       const a = asignaciones[i]!;
       const p = proveedor(a.proveedor)!;
@@ -175,6 +187,10 @@ export class Delegador {
       });
     }
     const fallo = ejecuciones.some((e) => e['status'] === 'failed');
+    if (ais) {
+      const k = cerrar(ais, { mensaje: `karajan: ${c.original_prompt.replace(/\s+/g, ' ').trim()}` });
+      almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: k.commit ? `git:commit=${k.commit.slice(0, 12)};subida=${k.subida}` : 'git:sin-cambios', reason: k.error ?? ais.rama });
+    }
     almacen.actualizarTarea(c.task_id, fallo ? 'failed' : 'completed', {
       task_id: c.task_id, status: fallo ? 'failed' : 'completed', executions: ejecuciones, total_latency_ms: total, total_estimated_cost_usd: 0,
       total_input_tokens: ejecuciones.reduce((s, e) => s + Number(e['input_tokens']), 0), total_output_tokens: ejecuciones.reduce((s, e) => s + Number(e['output_tokens']), 0), completed_at: new Date().toISOString(),
