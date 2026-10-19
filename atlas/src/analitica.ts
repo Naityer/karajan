@@ -2,17 +2,18 @@ import { redondear } from './redondeo';
 
 /**
  * Analítica de skills (puerto de `app/skill_analytics.py`): separa «recomendada» (la sugiere la clasificación o una subtarea)
- * de «ejecutada» (una subtarea que declara la skill y se ejecutó), sin tratar una recomendación como uso.
+ * de «preparada» y «usada» (confirmada en la ejecución), sin inferir uso de una recomendación.
  */
 export interface RegistroTarea {
   task_id: string;
+  status?: string;
   classification: {
     intent?: string; created_at: string; recommended_skills?: string[];
-    subtasks?: { id: string; recommended_skill?: string | null }[];
+    subtasks?: { id: string; recommended_skill?: string | null; recommended_skills?: string[] }[];
   };
   delegation: null | {
     completed_at: string;
-    executions: { subtask_id: string; status: string; model_used?: string; latency_ms?: number; estimated_cost_usd?: number }[];
+    executions: { subtask_id: string; status: string; model_used?: string; latency_ms?: number; estimated_cost_usd?: number; prepared_skills?: string[]; used_skills?: string[] }[];
   };
 }
 export type Run = Record<string, unknown>;
@@ -43,7 +44,7 @@ function nombreAgente(run: Run | undefined, modelo: string): string {
 }
 
 interface Fila {
-  name: string; recomendadas: Set<string>; ejecutadas: Set<string>; ejecuciones: number; exitos: number; fallos: number;
+  name: string; recomendadas: Set<string>; preparadas: Set<string>; preparaciones: number; ejecutadas: Set<string>; ejecuciones: number; exitos: number; fallos: number;
   latencia: number; coste: number; agentes: Map<string, number>; tipos: Map<string, number>; ultima: Instante | null;
 }
 
@@ -53,7 +54,7 @@ function ordenado(m: Map<string, number>): Record<string, number> {
 
 export function construirAnaliticaSkills(
   registros: Iterable<RegistroTarea>,
-  opciones: { runsPorTarea?: Record<string, Run[]>; skillsConocidas?: Iterable<string>; dias?: number; ahora?: Date } = {},
+  opciones: { runsPorTarea?: Record<string, Run[]>; skillsRevisadasPorTarea?: Record<string, string[]>; skillsConocidas?: Iterable<string>; dias?: number; ahora?: Date } = {},
 ): Record<string, unknown> {
   const dias = opciones.dias ?? 30;
   const ahora = opciones.ahora ?? new Date();
@@ -72,7 +73,7 @@ export function construirAnaliticaSkills(
     const plegado = candidato.toLowerCase();
     if (!canonicos.has(plegado)) canonicos.set(plegado, candidato);
     const clave = canonicos.get(plegado)!;
-    if (!filas.has(clave)) filas.set(clave, { name: clave, recomendadas: new Set(), ejecutadas: new Set(), ejecuciones: 0, exitos: 0, fallos: 0, latencia: 0, coste: 0, agentes: new Map(), tipos: new Map(), ultima: null });
+    if (!filas.has(clave)) filas.set(clave, { name: clave, recomendadas: new Set(), preparadas: new Set(), preparaciones: 0, ejecutadas: new Set(), ejecuciones: 0, exitos: 0, fallos: 0, latencia: 0, coste: 0, agentes: new Map(), tipos: new Map(), ultima: null });
     return filas.get(clave)!;
   };
   const sumar = <K>(m: Map<K, number>, k: K) => m.set(k, (m.get(k) ?? 0) + 1);
@@ -85,20 +86,22 @@ export function construirAnaliticaSkills(
     if (corte === null || instante(c.created_at).fecha >= corte) {
       const recomendadas = new Set(c.recommended_skills ?? []);
       for (const s of c.subtasks ?? []) if (s.recommended_skill) recomendadas.add(s.recommended_skill);
+      for (const s of c.subtasks ?? []) for (const skill of s.recommended_skills ?? []) recomendadas.add(skill);
       for (const skill of recomendadas) { fila(skill).recomendadas.add(r.task_id); tareasRecomendadas.add(r.task_id); }
     }
     if (!r.delegation) continue;
     const ocurrio = instante(r.delegation.completed_at);
     if (corte !== null && ocurrio.fecha < corte) continue;
     const runs = runsPorTarea[r.task_id] ?? [];
-    const subtareas = new Map((c.subtasks ?? []).map((s) => [s.id, s]));
+    const trazadas = new Set<string>();
     r.delegation.executions.forEach((ejecucion, i) => {
-      const skill = subtareas.get(ejecucion.subtask_id)?.recommended_skill;
-      if (!skill) return;
-      const f = fila(skill);
+      for (const skill of new Set(ejecucion.prepared_skills ?? [])) { const f = fila(skill); f.preparadas.add(r.task_id); f.preparaciones++; }
       const agente = nombreAgente(runs[i], ejecucion.model_used ?? '');
       const exito = ejecucion.status === 'completed';
       const dia = ocurrio.fecha.toISOString().slice(0, 10);
+      for (const skill of new Set(ejecucion.used_skills ?? [])) {
+      trazadas.add(skill.toLowerCase());
+      const f = fila(skill);
       f.ejecutadas.add(r.task_id);
       f.ejecuciones++;
       if (exito) f.exitos++; else f.fallos++;
@@ -117,11 +120,29 @@ export function construirAnaliticaSkills(
       l.successes += exito ? 1 : 0;
       sumar(l.skills, f.name);
       tareasEjecutadas.add(r.task_id);
+      }
     });
+    for (const skill of new Set(opciones.skillsRevisadasPorTarea?.[r.task_id] ?? [])) {
+      if (trazadas.has(skill.toLowerCase())) continue;
+      const f = fila(skill), exito = r.status === 'completed', dia = ocurrio.fecha.toISOString().slice(0, 10);
+      f.ejecutadas.add(r.task_id);
+      f.ejecuciones++;
+      if (exito) f.exitos++; else f.fallos++;
+      sumar(f.tipos, tipo);
+      if (!f.ultima || ocurrio.fecha > f.ultima.fecha) f.ultima = ocurrio;
+      if (!porTipo.has(tipo)) porTipo.set(tipo, new Map());
+      sumar(porTipo.get(tipo)!, skill);
+      if (!linea.has(dia)) linea.set(dia, { executions: 0, successes: 0, skills: new Map() });
+      const l = linea.get(dia)!;
+      l.executions++;
+      l.successes += exito ? 1 : 0;
+      sumar(l.skills, f.name);
+      tareasEjecutadas.add(r.task_id);
+    }
   }
 
   const skills = [...filas.values()].map((f) => ({
-    name: f.name, recommended_tasks: f.recomendadas.size, executed_tasks: f.ejecutadas.size, executions: f.ejecuciones, successes: f.exitos, failures: f.fallos,
+    name: f.name, recommended_tasks: f.recomendadas.size, prepared_tasks: f.preparadas.size, preparations: f.preparaciones, executed_tasks: f.ejecutadas.size, executions: f.ejecuciones, successes: f.exitos, failures: f.fallos,
     success_rate: f.ejecuciones ? redondear(f.exitos / f.ejecuciones, 4) : null,
     avg_latency_ms: f.ejecuciones ? redondear(f.latencia / f.ejecuciones, 1) : null,
     total_cost_usd: redondear(f.coste, 6), agents: ordenado(f.agentes), task_types: ordenado(f.tipos),
@@ -141,7 +162,7 @@ export function construirAnaliticaSkills(
     period_days: dias,
     generated_at: `${ahora.toISOString().slice(0, 19)}+00:00`,
     summary: {
-      catalog_skills: catalogo, recommended_tasks: tareasRecomendadas.size, executed_tasks: tareasEjecutadas.size, executions: ejecuciones, active_skills: activas,
+      catalog_skills: catalogo, recommended_tasks: tareasRecomendadas.size, preparations: skills.reduce((s, x) => s + x.preparations, 0), executed_tasks: tareasEjecutadas.size, executions: ejecuciones, active_skills: activas,
       unused_skills: Math.max(0, catalogo - activas), successes: exitos, failures: ejecuciones - exitos,
       success_rate: ejecuciones ? redondear(exitos / ejecuciones, 4) : null,
       assignment_coverage: tareasRecomendadas.size ? redondear(tareasEjecutadas.size / tareasRecomendadas.size, 4) : null,
@@ -155,7 +176,7 @@ export function construirAnaliticaSkills(
     })),
     definitions: {
       recommended: 'Skill sugerida por la clasificación o por una subtarea.',
-      execution: 'Subtarea ejecutada que declara explícitamente una skill.',
+      execution: 'Uso confirmado por traza estructurada o revisión humana; ejecutar una subtarea no basta.',
       success_rate: 'Ejecuciones completadas / ejecuciones de la skill.',
       assignment_coverage: 'Tareas con una skill ejecutada / tareas con skills recomendadas.',
     },

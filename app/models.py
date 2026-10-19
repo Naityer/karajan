@@ -114,6 +114,7 @@ class Subtask(BaseModel):
     complexity: int = Field(ge=1, le=5)
     recommended_model: RecommendedModel
     recommended_skill: str | None = None
+    recommended_skills: list[str] = Field(default_factory=list)
     recommended_strategy: str | None = None
     validation: str
 
@@ -206,6 +207,8 @@ class SubtaskExecution(BaseModel):
     # Selección terminal del perfil `doc`. Se conserva estructurada para que
     # Atlas pueda construir el handoff sin intentar extraer rutas del transcript.
     context_paths: list[str] = Field(default_factory=list)
+    prepared_skills: list[str] = Field(default_factory=list)
+    used_skills: list[str] = Field(default_factory=list)
 
 
 class ValidationVerdict(BaseModel):

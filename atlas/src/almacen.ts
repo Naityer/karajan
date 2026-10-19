@@ -168,12 +168,13 @@ export class Almacen {
     const orden = (s: Set<string>) => [...s].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     return this.listarTareas().map((t) => {
       const c = t.classification as RegistroTarea['classification'] & { entry_agent?: string | null; classified_by?: string; complexity_level?: string; domain?: string[] };
-      const hechas = new Set((t.delegation?.executions ?? []).filter((e) => e.status === 'completed').map((e) => e.subtask_id));
-      const ejecutadas = new Set(t.delegation ? (c.subtasks ?? []).filter((s) => s.recommended_skill && hechas.has(s.id)).map((s) => s.recommended_skill!) : []);
+      const ejecutadas = new Set((t.delegation?.executions ?? []).flatMap((e) => e.used_skills ?? []));
+      const preparadas = new Set((t.delegation?.executions ?? []).flatMap((e) => e.prepared_skills ?? []));
       const recomendadas = new Set([...(c.recommended_skills ?? []), ...(c.subtasks ?? []).map((s) => s.recommended_skill).filter((s): s is string => !!s)]);
+      for (const s of c.subtasks ?? []) for (const skill of s.recommended_skills ?? []) recomendadas.add(skill);
       return {
         task_id: t.task_id, prompt: t.prompt, status: t.status, created_at: t.created_at, entry_agent: c.entry_agent ?? null, classified_by: c.classified_by ?? null,
-        nivel: c.complexity_level ?? null, dominios: [...(c.domain ?? [])], intencion: c.intent ?? null, recomendadas: orden(recomendadas), ejecutadas: orden(ejecutadas),
+        nivel: c.complexity_level ?? null, dominios: [...(c.domain ?? [])], intencion: c.intent ?? null, recomendadas: orden(recomendadas), preparadas: orden(preparadas), ejecutadas: orden(ejecutadas),
         runs: (t.delegation ? this.runs(t.task_id) : []).map((r) => ({
           provider_name: (r['provider_name'] ?? null) as string | null, status: String(r['status']), latency_ms: (r['latency_ms'] ?? null) as number | null,
           estimated_cost_usd: (r['estimated_cost_usd'] ?? null) as number | null, error: (r['error'] ?? null) as string | null,

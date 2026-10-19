@@ -11,7 +11,7 @@ import { formatear, redondear } from './redondeo';
 export interface RunAnalitica { provider_name?: string | null; status?: string; latency_ms?: number | null; estimated_cost_usd?: number | null; error?: string | null }
 export interface TareaAnalitica {
   task_id: string; prompt: string; status: string; created_at: string; entry_agent?: string | null; classified_by?: string | null; nivel?: string | null;
-  dominios?: string[]; intencion?: string | null; recomendadas?: string[]; ejecutadas?: string[]; runs?: RunAnalitica[]; decisiones?: string[];
+  dominios?: string[]; intencion?: string | null; recomendadas?: string[]; preparadas?: string[]; ejecutadas?: string[]; runs?: RunAnalitica[]; decisiones?: string[];
   revision?: Record<string, string[]>;
 }
 export interface SkillCatalogo { nombre: string; descripcion?: string; instalada?: boolean }
@@ -240,7 +240,7 @@ export function eficiencia(tareas: TareaAnalitica[], acierto: Record<string, Aci
   };
 }
 
-interface FilaMatriz { skill: string; categoria: string; instalada: boolean; usos: number; recomendada: number; celdas: Record<string, { usos: number; acierto: number }>; agentes: Record<string, number>; acierto: number | null; usada: boolean }
+interface FilaMatriz { skill: string; categoria: string; instalada: boolean; usos: number; recomendada: number; preparada: number; celdas: Record<string, { usos: number; acierto: number }>; agentes: Record<string, number>; acierto: number | null; usada: boolean }
 
 export function matrizSkills(tareas: TareaAnalitica[], acierto: Record<string, Acierto>, catalogo: SkillCatalogo[]) {
   const filas = new Map<string, FilaMatriz & { _a: number[]; _c: Record<string, number[]> }>();
@@ -249,7 +249,7 @@ export function matrizSkills(tareas: TareaAnalitica[], acierto: Record<string, A
     const k = plegar(nombre);
     if (!nombres.has(k)) nombres.set(k, nombre);
     const clave = nombres.get(k)!;
-    if (!filas.has(clave)) filas.set(clave, { skill: clave, categoria: categoriaSkill(clave, descripcion), instalada, usos: 0, recomendada: 0, celdas: {}, agentes: {}, acierto: null, usada: false, _a: [], _c: {} });
+    if (!filas.has(clave)) filas.set(clave, { skill: clave, categoria: categoriaSkill(clave, descripcion), instalada, usos: 0, recomendada: 0, preparada: 0, celdas: {}, agentes: {}, acierto: null, usada: false, _a: [], _c: {} });
     return filas.get(clave)!;
   };
   for (const s of catalogo) fila(String(s.nombre), String(s.descripcion ?? ''), Boolean(s.instalada));
@@ -262,6 +262,7 @@ export function matrizSkills(tareas: TareaAnalitica[], acierto: Record<string, A
     categorias.add(dominio);
     const score = acierto[t.task_id]!.score;
     for (const n of [...new Set(t.recomendadas ?? [])].sort(cmp)) fila(n).recomendada++;
+    for (const n of [...new Set(t.preparadas ?? [])].sort(cmp)) fila(n).preparada++;
     for (const n of skillsUsadas(t)) {
       const f = fila(n);
       f.usos++;
@@ -326,7 +327,7 @@ export function salud(tareas: TareaAnalitica[], sinNivel: string[] = []): Sugere
   const limite = tareas.filter((t) => decisiones(t).includes('limite_semanal:claude->codex')).length;
   if (limite) salida.push({ id: 'limite-claude', severidad: 'baja', texto: `${cuantas(limite, 'tarea pasó', 'tareas pasaron')} de Claude a Codex por el límite semanal de Claude.`, accion: null });
   const repuestas = [...new Set(tareas.flatMap((t) => decisiones(t).filter((d) => d.startsWith('skill:repuesta:')).map((d) => d.slice('skill:repuesta:'.length).split('->')[0]!)))].sort(cmp);
-  if (repuestas.length) salida.push({ id: 'skills-repuestas', severidad: 'baja', texto: `El rotador repuso ${cuantas(repuestas.length, 'skill', 'skills')} para delegaciones; las que se sigan usando pasarán a núcleo solas.`, accion: null, skills: repuestas.slice(0, 30) });
+  if (repuestas.length) salida.push({ id: 'skills-repuestas', severidad: 'baja', texto: `El rotador repuso ${cuantas(repuestas.length, 'skill', 'skills')} para delegaciones; solo un uso confirmado las hará pasar a núcleo.`, accion: null, skills: repuestas.slice(0, 30) });
   return salida;
 }
 
@@ -347,9 +348,12 @@ export function sugerencias(efic: Eficiencia, matriz: Matriz, o: { ultima: strin
       salida.push({ id: `retrabajo:${a.agente}`, severidad: 'media', texto: `El ${redondear(a.retrabajo * 100, 0)} % de las tareas de ${a.agente} se repiten: revisa su nivel máximo o el prompt de entrada.`, accion: null });
     }
   }
-  const nunca = matriz.filas.filter((f) => f.recomendada >= 3 && !f.usada).map((f) => f.skill);
-  for (const n of nunca.slice(0, 5)) {
-    salida.push({ id: `skill-sin-ejecutar:${n}`, severidad: 'media', texto: `${n} se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.`, accion: { tipo: 'asignar_skill', skill: n } });
+  const nunca = matriz.filas.filter((f) => f.recomendada >= 3 && !f.usada);
+  for (const f of nunca.slice(0, 5)) {
+    const preparada = f.preparada > 0;
+    salida.push({ id: `skill-sin-ejecutar:${f.skill}`, severidad: 'media',
+      texto: preparada ? `${f.skill} se preparó pero no tiene uso confirmado: revisa la traza del agente.` : `${f.skill} se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.`,
+      accion: preparada ? null : { tipo: 'asignar_skill', skill: f.skill } });
   }
   const sinUso = matriz.filas.filter((f) => f.instalada && !f.usada && !f.recomendada).map((f) => f.skill);
   if (sinUso.length) salida.push({ id: 'skills-sin-uso', severidad: 'baja', texto: `${sinUso.length} skills instaladas no se han usado en el periodo: candidatas a retirar.`, accion: null, skills: sinUso.slice(0, 30) });

@@ -82,6 +82,7 @@ def _record(*, delegated: bool = True, status: TaskStatus = TaskStatus.COMPLETED
                 estimated_cost_usd=0.004,
                 output="ok" if status == TaskStatus.COMPLETED else "",
                 error=None if status == TaskStatus.COMPLETED else "fallo",
+                used_skills=["repo-analyzer"],
             )],
             total_latency_ms=125,
             total_estimated_cost_usd=0.004,

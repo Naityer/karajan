@@ -27,6 +27,7 @@ from app.providers.registry import Resolution, fallback_resolutions, resolve_by_
 from app import limites_plan
 from app import routing_rules
 from app.resource_activation import build_resource_context
+from app.skill_matching import prepare_skills
 
 logger = get_logger("delegation")
 
@@ -149,12 +150,22 @@ def _run_fallback_chain(
     attempted: set[str],
     config: KarajanConfig,
     layout: RoutingLayout | None,
-) -> tuple[Resolution, Any, list[DecisionLogEntry]]:
+    selected_skills: list[str],
+) -> tuple[Resolution, Any, list[DecisionLogEntry], list[str], str]:
     """Walk the runtime fallback chain after a primary provider error, retrying
     each candidate until one succeeds or the chain is exhausted. Returns the
     final `(resolution, run)` plus the fallback/reassign decisions produced."""
     decisions: list[DecisionLogEntry] = []
+    prepared: list[str] = []
     for fallback in fallback_resolutions(subtask.recommended_model, config, attempted, layout):
+        if selected_skills and fallback.provider_name not in {"codex", "claude-cli"}:
+            continue
+        prepared = prepare_skills(selected_skills, fallback.provider_name)
+        if any(skill not in prepared for skill in selected_skills):
+            continue
+        fallback_instruction = instruction.split("\n\nSkills preparadas para este agente:", 1)[0]
+        if prepared:
+            fallback_instruction += "\n\nSkills preparadas para este agente: " + ", ".join(prepared)
         decisions.append(
             DecisionLogEntry(
                 task_id=classification.task_id,
@@ -184,12 +195,12 @@ def _run_fallback_chain(
             )
         )
         attempted.add(fallback.provider_name)
-        fallback_run = execution_helpers.run_with_retries(fallback, instruction, config)
+        fallback_run = execution_helpers.run_with_retries(fallback, fallback_instruction, config)
         resolution = fallback
         run = fallback_run
         if not run.error:
             break
-    return resolution, run, decisions
+    return resolution, run, decisions, prepared, fallback_instruction if attempted and len(attempted) > 1 else instruction
 
 
 def _persist_run(
@@ -308,6 +319,10 @@ def run_subtask(
     # resolution; an explicit force (`preresolved`) always wins over them.
     rule_match = None
     resolution = preresolved
+    # `recommended_skill` alone is legacy heuristic output; only the live
+    # inventory-backed sequence is safe to require at execution time.
+    selected_skills = list(subtask.recommended_skills)
+    skill_reroute = None
     if resolution is None:
         rule_match = routing_rules.match_for_layout(
             layout, domains=classification.domain, intent=classification.intent,
@@ -342,11 +357,27 @@ def run_subtask(
                 resolution = alternative
             else:
                 weekly_limit = None
+    if resolution is not None and resolution.provider_name == "ollama-qwen" and selected_skills:
+        if preresolved is None:
+            from app import catalog, credentials
+            for candidate in ("codex", "claude-cli"):
+                info = catalog.get_provider(candidate)
+                if info is not None and credentials.detect(info).ready:
+                    alternative = resolve_by_name(candidate, subtask.recommended_model)
+                    if alternative is not None:
+                        resolution = alternative
+                        skill_reroute = candidate
+                        break
+        if resolution.provider_name == "ollama-qwen":
+            return _skill_unavailable_execution(classification, subtask, config, selected_skills)
     if resolution is None:
         # `delegate()` gates on this up front, so reaching here means a caller
         # went straight to `run_subtask` (the scheduler, or a test). Fail loudly
         # with the real reason instead of inventing an execution.
         return _unresolved_execution(classification, subtask, config)
+    prepared_skills = prepare_skills(selected_skills, resolution.provider_name)
+    if resolution.provider_name in {"codex", "claude-cli"} and any(skill not in prepared_skills for skill in selected_skills):
+        return _skill_unavailable_execution(classification, subtask, config, selected_skills)
     resource_context = build_resource_context(classification)
     prompt_for_execution = (
         f"{classification.original_prompt}\n\n{resource_context}"
@@ -354,6 +385,10 @@ def run_subtask(
         else classification.original_prompt
     )
     instruction = f"{prompt_for_execution}\n\nSubtarea: {subtask.name}\nValidación: {subtask.validation}"
+    if prepared_skills:
+        skill_note = "\n\nSkills preparadas para este agente: " + ", ".join(prepared_skills)
+        instruction += skill_note
+        prompt_for_execution += skill_note
 
     # The tool loop replaces exactly this one call. Whatever it returns is an
     # ordinary `ProviderRun`, so the fallback chain, validator, cost math and
@@ -391,6 +426,13 @@ def run_subtask(
             reason=f"Role policy selected owner, validator and backup chain for '{subtask.name}'.",
         )
     ]
+    if skill_reroute is not None:
+        decisions.append(DecisionLogEntry(
+            task_id=classification.task_id, phase="reassign",
+            decision=f"{subtask.id}:skill-capable-> {skill_reroute}",
+            score=float(subtask.complexity), backend=resolution.backend,
+            reason="El proveedor local elegido no puede cargar skills; se eligió un agente compatible.",
+        ))
     if weekly_limit is not None:
         decisions.append(
             DecisionLogEntry(
@@ -430,9 +472,11 @@ def run_subtask(
     # that another agent performed the requested work. Automatic routing may
     # still use its configured fallback chain.
     if run.error and config.orchestration.enable_runtime_fallback and preresolved is None:
-        resolution, run, fallback_decisions = _run_fallback_chain(
-            classification, subtask, assignment, resolution, instruction, run, attempted, config, layout
+        resolution, run, fallback_decisions, fallback_prepared, instruction = _run_fallback_chain(
+            classification, subtask, assignment, resolution, instruction, run, attempted, config, layout, selected_skills
         )
+        if fallback_decisions:
+            prepared_skills = fallback_prepared
         decisions.extend(fallback_decisions)
 
     tier = subtask.recommended_model.value
@@ -452,6 +496,7 @@ def run_subtask(
         input_tokens=execution_helpers.estimate_tokens(instruction),
         output_tokens=execution_helpers.estimate_tokens(run.output or ""),
         context_paths=list(outcome.context_paths) if outcome is not None else [],
+        prepared_skills=prepared_skills,
     )
     decisions.append(
         DecisionLogEntry(
@@ -474,6 +519,10 @@ def run_subtask(
         subtask_execution, loop_decisions, resolution = _run_validator_loop(
             classification, subtask, assignment, resolution, instruction, run, config, index, layout
         )
+        subtask_execution = subtask_execution.model_copy(update={
+            "prepared_skills": prepare_skills(selected_skills, resolution.provider_name),
+            "context_paths": list(outcome.context_paths) if outcome is not None else [],
+        })
         decisions.extend(loop_decisions)
     else:
         decisions.append(
@@ -651,6 +700,20 @@ def _unresolved_execution(
         reason=error,
     )
     return execution, [decision]
+
+
+def _skill_unavailable_execution(
+    classification: ClassificationResult,
+    subtask: Subtask,
+    config: KarajanConfig,
+    skills: list[str],
+) -> tuple[SubtaskExecution, list[DecisionLogEntry]]:
+    execution, decisions = _unresolved_execution(classification, subtask, config)
+    error = f"No se pudieron preparar las skills requeridas: {', '.join(skills)}"
+    return (
+        execution.model_copy(update={"output": error, "error": error}),
+        [decisions[0].model_copy(update={"decision": f"{subtask.id}:skill-unavailable", "reason": error})],
+    )
 
 
 def _unresolved_tiers(classification: ClassificationResult, config: KarajanConfig) -> list[str]:

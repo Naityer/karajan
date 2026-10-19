@@ -144,10 +144,10 @@ def compute_observability(
                 owner.output_tokens += execution.output_tokens
                 owner.error_count += int(execution.status == TaskStatus.FAILED or bool(execution.error))
                 owner.last_activity = record.updated_at.isoformat()
-                if subtask and subtask.recommended_skill and subtask.recommended_skill not in owner.skills:
-                    owner.skills.append(subtask.recommended_skill)
-                if subtask and subtask.recommended_skill:
-                    owner.skill_usage[subtask.recommended_skill] = owner.skill_usage.get(subtask.recommended_skill, 0) + 1
+                for skill in execution.used_skills:
+                    if skill not in owner.skills:
+                        owner.skills.append(skill)
+                    owner.skill_usage[skill] = owner.skill_usage.get(skill, 0) + 1
 
                 key = execution.model_used
                 item = usage.setdefault(

@@ -10,6 +10,7 @@ from app.models import Backend, KarajanConfig, ResourceItem, ResourceKind
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
 from app.resource_activation import attach_resource_recommendations
+from app.skill_matching import AvailableSkill
 from app.resource_intelligence import ResourceRankingEngine
 from app.resource_library import ResourceStore
 from app.router import classify_prompt
@@ -85,6 +86,8 @@ def test_exact_parent_name_remains_recommended_alongside_indexed_children(tmp_pa
 
 
 def test_classify_delegate_resource_activation_and_skill_analytics(karajan_install, monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("app.resource_activation.discover_skills", lambda: [AvailableSkill("repo-analyzer", "Repository audit", frozenset({"codex"}), frozenset())])
+    monkeypatch.setattr("app.delegation.prepare_skills", lambda names, provider: [name for name in names if name == "repo-analyzer"])
     resource_store = ResourceStore(tmp_path / "resources.db")
     resource_store.upsert(_repo_analyzer())
     client = _client(karajan_install, monkeypatch, resource_store)
@@ -117,9 +120,9 @@ def test_classify_delegate_resource_activation_and_skill_analytics(karajan_insta
     after = client.get("/analytics/skills?days=0").json()
     repo_after = next(row for row in after["skills"] if row["name"] == "repo-analyzer")
     assert repo_after["recommended_tasks"] == 1
-    assert repo_after["executions"] == 1
-    assert repo_after["successes"] == 1
-    assert repo_after["agents"] == {"verified-agent": 1}
+    assert repo_after["preparations"] == 1
+    assert repo_after["executions"] == 0  # the fake provider supplied no usage trace
+    assert repo_after["agents"] == {}
 
 
 def test_agent_tools_path_receives_resource_context_without_persisting_prompt(karajan_install, monkeypatch, tmp_path: Path) -> None:

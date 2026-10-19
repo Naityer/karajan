@@ -18,11 +18,10 @@ _DESCRIPCION = re.compile(r"^description:\s*(.+)$", re.MULTILINE)
 
 def tarea_plana(record: TaskRecord, runs: list[dict], decisiones: list[str], revision: dict[str, list[str]] | None) -> dict[str, Any]:
     c = record.classification
-    ejecutadas: set[str] = set()
-    if record.delegation:
-        hechas = {e.subtask_id for e in record.delegation.executions if e.status.value == "completed"}
-        ejecutadas = {s.recommended_skill for s in c.subtasks if s.recommended_skill and s.id in hechas}
+    ejecutadas = {skill for e in (record.delegation.executions if record.delegation else []) for skill in e.used_skills}
+    preparadas = {skill for e in (record.delegation.executions if record.delegation else []) for skill in e.prepared_skills}
     recomendadas = set(c.recommended_skills) | {s.recommended_skill for s in c.subtasks if s.recommended_skill}
+    recomendadas.update(skill for s in c.subtasks for skill in s.recommended_skills)
     return {
         "task_id": record.task_id,
         "prompt": record.prompt,
@@ -34,6 +33,7 @@ def tarea_plana(record: TaskRecord, runs: list[dict], decisiones: list[str], rev
         "dominios": list(c.domain),
         "intencion": c.intent,
         "recomendadas": sorted(recomendadas),
+        "preparadas": sorted(preparadas),
         "ejecutadas": sorted(ejecutadas),
         "runs": [
             {k: r.get(k) for k in ("provider_name", "status", "latency_ms", "estimated_cost_usd", "error")}

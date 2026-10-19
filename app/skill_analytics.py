@@ -23,6 +23,7 @@ def build_skill_analytics(
     records: Iterable[TaskRecord],
     *,
     runs_by_task: Mapping[str, list[Mapping[str, Any]]] | None = None,
+    reviewed_skills_by_task: Mapping[str, list[str]] | None = None,
     known_skills: Iterable[str] = (),
     days: int = 30,
     now: datetime | None = None,
@@ -31,6 +32,7 @@ def build_skill_analytics(
     now_utc = _utc(now or datetime.now(timezone.utc))
     cutoff = None if days == 0 else now_utc - timedelta(days=days)
     runs_by_task = runs_by_task or {}
+    reviewed_skills_by_task = reviewed_skills_by_task or {}
     skill_rows: dict[str, dict[str, Any]] = {}
     agent_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     task_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -49,7 +51,9 @@ def build_skill_analytics(
             skill_rows[key] = {
                 "name": key,
                 "recommended_task_ids": set(),
+                "prepared_task_ids": set(),
                 "executed_task_ids": set(),
+                "preparations": 0,
                 "executions": 0,
                 "successes": 0,
                 "failures": 0,
@@ -72,6 +76,7 @@ def build_skill_analytics(
         if recommendation_in_period:
             recommendations = set(classification.recommended_skills)
             recommendations.update(s.recommended_skill for s in classification.subtasks if s.recommended_skill)
+            recommendations.update(skill for s in classification.subtasks for skill in s.recommended_skills)
             for skill in recommendations:
                 row_for(skill)["recommended_task_ids"].add(record.task_id)
                 recommended_task_ids.add(record.task_id)
@@ -82,26 +87,47 @@ def build_skill_analytics(
         if cutoff is not None and occurred < cutoff:
             continue
         runs = list(runs_by_task.get(record.task_id, ()))
-        subtasks = {subtask.id: subtask for subtask in classification.subtasks}
+        traced_skills: set[str] = set()
         for index, execution in enumerate(record.delegation.executions):
-            subtask = subtasks.get(execution.subtask_id)
-            skill = subtask.recommended_skill if subtask else None
-            if not skill:
-                continue
-            row = row_for(skill)
+            for skill in set(execution.prepared_skills):
+                prepared_row = row_for(skill)
+                prepared_row["prepared_task_ids"].add(record.task_id)
+                prepared_row["preparations"] += 1
             run = runs[index] if index < len(runs) else None
             agent = _agent_name(run, execution.model_used)
             success = execution.status == TaskStatus.COMPLETED
             day = occurred.date().isoformat()
+            for skill in set(execution.used_skills):
+                traced_skills.add(skill.casefold())
+                row = row_for(skill)
+                row["executed_task_ids"].add(record.task_id)
+                row["executions"] += 1
+                row["successes" if success else "failures"] += 1
+                row["latency_total_ms"] += max(0, execution.latency_ms)
+                row["cost_total_usd"] += max(0.0, execution.estimated_cost_usd)
+                row["agents"][agent] += 1
+                row["task_types"][task_type] += 1
+                row["last_used_at"] = max(filter(None, (row["last_used_at"], occurred)), default=occurred)
+                agent_counts[agent][skill] += 1
+                task_counts[task_type][skill] += 1
+                timeline[day]["executions"] += 1
+                timeline[day]["successes"] += int(success)
+                timeline[day]["skills"][row["name"]] += 1
+                executed_task_ids.add(record.task_id)
+
+        # Una revisión humana identifica uso real, aunque no atribuye la skill
+        # a una subtarea ni a un agente concreto. No dupliques trazas de ejecución.
+        for skill in set(reviewed_skills_by_task.get(record.task_id, ())):
+            if skill.casefold() in traced_skills:
+                continue
+            row = row_for(skill)
+            success = record.status == TaskStatus.COMPLETED
+            day = occurred.date().isoformat()
             row["executed_task_ids"].add(record.task_id)
             row["executions"] += 1
             row["successes" if success else "failures"] += 1
-            row["latency_total_ms"] += max(0, execution.latency_ms)
-            row["cost_total_usd"] += max(0.0, execution.estimated_cost_usd)
-            row["agents"][agent] += 1
             row["task_types"][task_type] += 1
             row["last_used_at"] = max(filter(None, (row["last_used_at"], occurred)), default=occurred)
-            agent_counts[agent][skill] += 1
             task_counts[task_type][skill] += 1
             timeline[day]["executions"] += 1
             timeline[day]["successes"] += int(success)
@@ -114,6 +140,8 @@ def build_skill_analytics(
         skills.append({
             "name": row["name"],
             "recommended_tasks": len(row["recommended_task_ids"]),
+            "prepared_tasks": len(row["prepared_task_ids"]),
+            "preparations": row["preparations"],
             "executed_tasks": len(row["executed_task_ids"]),
             "executions": executions,
             "successes": row["successes"],
@@ -141,6 +169,7 @@ def build_skill_analytics(
         "summary": {
             "catalog_skills": catalog_count,
             "recommended_tasks": len(recommended_task_ids),
+            "preparations": sum(row["preparations"] for row in skill_rows.values()),
             "executed_tasks": len(executed_task_ids),
             "executions": total_executions,
             "active_skills": active_count,
@@ -164,7 +193,7 @@ def build_skill_analytics(
         ],
         "definitions": {
             "recommended": "Skill sugerida por la clasificación o por una subtarea.",
-            "execution": "Subtarea ejecutada que declara explícitamente una skill.",
+            "execution": "Uso confirmado por traza estructurada o revisión humana; ejecutar una subtarea no basta.",
             "success_rate": "Ejecuciones completadas / ejecuciones de la skill.",
             "assignment_coverage": "Tareas con una skill ejecutada / tareas con skills recomendadas.",
         },

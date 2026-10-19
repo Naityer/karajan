@@ -16,7 +16,7 @@ export interface Criterios {
   ambiguity: number; context_required: number; reasoning_depth: number; autonomy_required: number; operational_risk: number; validation_difficulty: number;
 }
 export interface Subtarea {
-  id: string; name: string; complexity: number; recommended_model: ModeloLogico; recommended_skill: string | null; recommended_strategy: string | null; validation: string;
+  id: string; name: string; complexity: number; recommended_model: ModeloLogico; recommended_skill: string | null; recommended_skills?: string[]; recommended_strategy: string | null; validation: string;
 }
 export interface Clasificacion {
   task_id: string; original_prompt: string; domain: string[]; intent: string; criteria: Criterios; complexity_score: number; complexity_level: Nivel;

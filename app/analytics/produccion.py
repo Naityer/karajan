@@ -323,7 +323,7 @@ def matriz_skills(tareas: list[Mapping[str, Any]], acierto: Mapping[str, Mapping
     def fila(nombre: str, descripcion: str = "", instalada: bool = False) -> dict[str, Any]:
         clave = nombres.setdefault(nombre.casefold(), nombre)
         if clave not in filas:
-            filas[clave] = {"skill": clave, "categoria": categoria_skill(clave, descripcion), "instalada": instalada, "usos": 0, "recomendada": 0, "celdas": {}, "agentes": {}, "_acierto": []}
+            filas[clave] = {"skill": clave, "categoria": categoria_skill(clave, descripcion), "instalada": instalada, "usos": 0, "recomendada": 0, "preparada": 0, "celdas": {}, "agentes": {}, "_acierto": []}
         return filas[clave]
 
     for s in catalogo:
@@ -338,6 +338,8 @@ def matriz_skills(tareas: list[Mapping[str, Any]], acierto: Mapping[str, Mapping
         score = acierto[t["task_id"]]["score"]
         for nombre in sorted(set(t.get("recomendadas") or [])):
             fila(nombre)["recomendada"] += 1
+        for nombre in sorted(set(t.get("preparadas") or [])):
+            fila(nombre)["preparada"] += 1
         for nombre in _skills_usadas(t):
             f = fila(nombre)
             f["usos"] += 1
@@ -403,7 +405,7 @@ def salud(tareas: list[Mapping[str, Any]], *, sin_nivel: Iterable[str] = ()) -> 
         salida.append({"id": "limite-claude", "severidad": "baja", "texto": f"{_cuantas(limite, 'tarea pasó', 'tareas pasaron')} de Claude a Codex por el límite semanal de Claude.", "accion": None})
     repuestas = sorted({d[len("skill:repuesta:"):].split("->")[0] for t in tareas for d in decisiones(t) if d.startswith("skill:repuesta:")})
     if repuestas:
-        salida.append({"id": "skills-repuestas", "severidad": "baja", "texto": f"El rotador repuso {_cuantas(len(repuestas), 'skill', 'skills')} para delegaciones; las que se sigan usando pasarán a núcleo solas.", "accion": None, "skills": repuestas[:30]})
+        salida.append({"id": "skills-repuestas", "severidad": "baja", "texto": f"El rotador repuso {_cuantas(len(repuestas), 'skill', 'skills')} para delegaciones; solo un uso confirmado las hará pasar a núcleo.", "accion": None, "skills": repuestas[:30]})
     return salida
 
 
@@ -436,9 +438,13 @@ def sugerencias(
                 "texto": f"El {round(a['retrabajo'] * 100)} % de las tareas de {a['agente']} se repiten: revisa su nivel máximo o el prompt de entrada.",
                 "accion": None,
             })
-    nunca = [f["skill"] for f in matriz.get("filas", []) if f["recomendada"] >= 3 and not f["usada"]]
-    for nombre in nunca[:5]:
-        salida.append({"id": f"skill-sin-ejecutar:{nombre}", "severidad": "media", "texto": f"{nombre} se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.", "accion": {"tipo": "asignar_skill", "skill": nombre}})
+    nunca = [f for f in matriz.get("filas", []) if f["recomendada"] >= 3 and not f["usada"]]
+    for fila in nunca[:5]:
+        nombre = fila["skill"]
+        preparada = fila["preparada"] > 0
+        texto = (f"{nombre} se preparó pero no tiene uso confirmado: revisa la traza del agente."
+                 if preparada else f"{nombre} se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.")
+        salida.append({"id": f"skill-sin-ejecutar:{nombre}", "severidad": "media", "texto": texto, "accion": None if preparada else {"tipo": "asignar_skill", "skill": nombre}})
     sin_uso = [f["skill"] for f in matriz.get("filas", []) if f["instalada"] and not f["usada"] and not f["recomendada"]]
     if sin_uso:
         salida.append({"id": "skills-sin-uso", "severidad": "baja", "texto": f"{len(sin_uso)} skills instaladas no se han usado en el periodo: candidatas a retirar.", "accion": None, "skills": sin_uso[:30]})

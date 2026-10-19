@@ -60,9 +60,8 @@
     "repo-analyzer",
     "security-review"
    ],
-   "ejecutadas": [
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "claude-cli",
@@ -108,10 +107,8 @@
     "repo-analyzer",
     "security-review"
    ],
-   "ejecutadas": [
-    "repo-analyzer",
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "codex-cli",
@@ -150,6 +147,7 @@
     "repo-analyzer",
     "security-review"
    ],
+   "preparadas": [],
    "ejecutadas": [],
    "runs": [],
    "decisiones": [],
@@ -171,9 +169,8 @@
     "ponytail",
     "security-review"
    ],
-   "ejecutadas": [
-    "ponytail"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "claude-cli",
@@ -209,9 +206,8 @@
     "ponytail",
     "security-review"
    ],
-   "ejecutadas": [
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "codex-cli",
@@ -248,6 +244,7 @@
     "repo-analyzer",
     "security-review"
    ],
+   "preparadas": [],
    "ejecutadas": [],
    "runs": [],
    "decisiones": [],
@@ -270,10 +267,8 @@
     "repo-analyzer",
     "security-review"
    ],
-   "ejecutadas": [
-    "repo-analyzer",
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "claude-cli",
@@ -311,9 +306,8 @@
     "repo-analyzer",
     "security-review"
    ],
-   "ejecutadas": [
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "codex-cli",
@@ -349,6 +343,7 @@
     "ponytail",
     "security-review"
    ],
+   "preparadas": [],
    "ejecutadas": [],
    "runs": [],
    "decisiones": [],
@@ -370,10 +365,8 @@
     "ponytail",
     "security-review"
    ],
-   "ejecutadas": [
-    "ponytail",
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "claude-cli",
@@ -409,10 +402,8 @@
     "ponytail",
     "security-review"
    ],
-   "ejecutadas": [
-    "ponytail",
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "codex-cli",
@@ -448,6 +439,7 @@
     "ponytail",
     "security-review"
    ],
+   "preparadas": [],
    "ejecutadas": [],
    "runs": [],
    "decisiones": [],
@@ -470,9 +462,8 @@
     "ponytail",
     "security-review"
    ],
-   "ejecutadas": [
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "claude-cli",
@@ -512,10 +503,8 @@
     "repo-analyzer",
     "security-review"
    ],
-   "ejecutadas": [
-    "repo-analyzer",
-    "security-review"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "codex-cli",
@@ -552,6 +541,7 @@
     "repo-analyzer",
     "security-review"
    ],
+   "preparadas": [],
    "ejecutadas": [],
    "runs": [],
    "decisiones": [],
@@ -575,9 +565,8 @@
     "repo-analyzer",
     "security-review"
    ],
-   "ejecutadas": [
-    "repo-analyzer"
-   ],
+   "preparadas": [],
+   "ejecutadas": [],
    "runs": [
     {
      "provider_name": "claude-cli",
@@ -1504,92 +1493,12 @@
      ],
      "filas": [
       {
-       "skill": "Security-Review",
-       "categoria": "seguridad",
-       "instalada": false,
-       "usos": 8,
-       "recomendada": 16,
-       "celdas": {
-        "programming": {
-         "usos": 2,
-         "acierto": 1.0
-        },
-        "general": {
-         "usos": 3,
-         "acierto": 0.905
-        },
-        "devops": {
-         "usos": 1,
-         "acierto": 1.0
-        },
-        "security": {
-         "usos": 1,
-         "acierto": 0.714
-        },
-        "product": {
-         "usos": 1,
-         "acierto": 0.714
-        }
-       },
-       "agentes": {
-        "codex-cli": 5,
-        "claude-cli": 3
-       },
-       "acierto": 0.893,
-       "usada": true
-      },
-      {
-       "skill": "repo-analyzer",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 4,
-       "recomendada": 9,
-       "celdas": {
-        "programming": {
-         "usos": 2,
-         "acierto": 1.0
-        },
-        "devops": {
-         "usos": 1,
-         "acierto": 1.0
-        },
-        "data": {
-         "usos": 1,
-         "acierto": 0.714
-        }
-       },
-       "agentes": {
-        "codex-cli": 2,
-        "claude-cli": 2
-       },
-       "acierto": 0.928,
-       "usada": true
-      },
-      {
-       "skill": "ponytail",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 3,
-       "recomendada": 16,
-       "celdas": {
-        "general": {
-         "usos": 3,
-         "acierto": 0.905
-        }
-       },
-       "agentes": {
-        "claude-cli": 2,
-        "codex-cli": 1
-       },
-       "acierto": 0.905,
-       "usada": true
-      },
-      {
        "skill": "docx",
        "categoria": "documentos",
        "instalada": true,
        "usos": 1,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {
         "security": {
          "usos": 1,
@@ -1603,11 +1512,48 @@
        "usada": true
       },
       {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 16,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 16,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 9,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
        "skill": "frontend-builder",
        "categoria": "interfaz",
        "instalada": true,
        "usos": 0,
        "recomendada": 4,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -1619,6 +1565,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 3,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -1630,6 +1577,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -1641,6 +1589,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -1652,6 +1601,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -1663,90 +1613,16 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
-     "usadas": 4,
+     "usadas": 1,
      "total": 10,
      "serie": [
-      {
-       "semana": "2026-05-18",
-       "skill": "repo-analyzer",
-       "usos": 1
-      },
-      {
-       "semana": "2026-06-01",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-06-01",
-       "skill": "repo-analyzer",
-       "usos": 1
-      },
-      {
-       "semana": "2026-06-15",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-06-29",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-06-29",
-       "skill": "ponytail",
-       "usos": 1
-      },
-      {
-       "semana": "2026-07-06",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-07-06",
-       "skill": "ponytail",
-       "usos": 1
-      },
-      {
-       "semana": "2026-07-27",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-08-03",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-08-03",
-       "skill": "repo-analyzer",
-       "usos": 1
-      },
-      {
-       "semana": "2026-08-24",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-08-31",
-       "skill": "ponytail",
-       "usos": 1
-      },
-      {
-       "semana": "2026-09-21",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-09-21",
-       "skill": "repo-analyzer",
-       "usos": 1
-      },
       {
        "semana": "2026-09-28",
        "skill": "docx",
@@ -1762,9 +1638,36 @@
       "accion": null
      },
      {
+      "id": "skill-sin-ejecutar:ponytail",
+      "severidad": "media",
+      "texto": "ponytail se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "ponytail"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:Security-Review",
+      "severidad": "media",
+      "texto": "Security-Review se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "Security-Review"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:repo-analyzer",
+      "severidad": "media",
+      "texto": "repo-analyzer se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "repo-analyzer"
+      }
+     },
+     {
       "id": "skill-sin-ejecutar:frontend-builder",
       "severidad": "media",
-      "texto": "frontend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "texto": "frontend-builder se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
       "accion": {
        "tipo": "asignar_skill",
        "skill": "frontend-builder"
@@ -1773,7 +1676,7 @@
      {
       "id": "skill-sin-ejecutar:backend-builder",
       "severidad": "media",
-      "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "texto": "backend-builder se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
       "accion": {
        "tipo": "asignar_skill",
        "skill": "backend-builder"
@@ -1859,30 +1762,6 @@
      ],
      "top": [
       {
-       "skill": "Security-Review",
-       "categoria": "seguridad",
-       "instalada": false,
-       "usos": 8,
-       "recomendada": 16,
-       "acierto": 0.893
-      },
-      {
-       "skill": "repo-analyzer",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 4,
-       "recomendada": 9,
-       "acierto": 0.928
-      },
-      {
-       "skill": "ponytail",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 3,
-       "recomendada": 16,
-       "acierto": 0.905
-      },
-      {
        "skill": "docx",
        "categoria": "documentos",
        "instalada": true,
@@ -1893,28 +1772,28 @@
      ],
      "recomendadas_no_instaladas": [
       {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 16,
+       "acierto": null
+      },
+      {
        "skill": "Security-Review",
        "categoria": "seguridad",
        "instalada": false,
-       "usos": 8,
+       "usos": 0,
        "recomendada": 16,
-       "acierto": 0.893
+       "acierto": null
       },
       {
        "skill": "repo-analyzer",
        "categoria": "codigo",
        "instalada": false,
-       "usos": 4,
+       "usos": 0,
        "recomendada": 9,
-       "acierto": 0.928
-      },
-      {
-       "skill": "ponytail",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 3,
-       "recomendada": 16,
-       "acierto": 0.905
+       "acierto": null
       },
       {
        "skill": "backend-builder",
@@ -2304,47 +2183,12 @@
      ],
      "filas": [
       {
-       "skill": "repo-analyzer",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 1,
-       "recomendada": 3,
-       "celdas": {
-        "programming": {
-         "usos": 1,
-         "acierto": 1.0
-        }
-       },
-       "agentes": {
-        "codex-cli": 1
-       },
-       "acierto": 1.0,
-       "usada": true
-      },
-      {
-       "skill": "Security-Review",
-       "categoria": "seguridad",
-       "instalada": false,
-       "usos": 1,
-       "recomendada": 3,
-       "celdas": {
-        "programming": {
-         "usos": 1,
-         "acierto": 1.0
-        }
-       },
-       "agentes": {
-        "codex-cli": 1
-       },
-       "acierto": 1.0,
-       "usada": true
-      },
-      {
        "skill": "docx",
        "categoria": "documentos",
        "instalada": true,
        "usos": 1,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {
         "security": {
          "usos": 1,
@@ -2363,6 +2207,31 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 3,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -2374,6 +2243,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -2385,6 +2255,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -2396,6 +2267,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -2407,6 +2279,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -2418,6 +2291,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -2429,25 +2303,16 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
-     "usadas": 3,
+     "usadas": 1,
      "total": 10,
      "serie": [
-      {
-       "semana": "2026-09-21",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-09-21",
-       "skill": "repo-analyzer",
-       "usos": 1
-      },
       {
        "semana": "2026-09-28",
        "skill": "docx",
@@ -2459,10 +2324,28 @@
      {
       "id": "skill-sin-ejecutar:ponytail",
       "severidad": "media",
-      "texto": "ponytail se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "texto": "ponytail se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
       "accion": {
        "tipo": "asignar_skill",
        "skill": "ponytail"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:repo-analyzer",
+      "severidad": "media",
+      "texto": "repo-analyzer se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "repo-analyzer"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:Security-Review",
+      "severidad": "media",
+      "texto": "Security-Review se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "Security-Review"
       }
      },
      {
@@ -2539,22 +2422,6 @@
      ],
      "top": [
       {
-       "skill": "repo-analyzer",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 1,
-       "recomendada": 3,
-       "acierto": 1.0
-      },
-      {
-       "skill": "Security-Review",
-       "categoria": "seguridad",
-       "instalada": false,
-       "usos": 1,
-       "recomendada": 3,
-       "acierto": 1.0
-      },
-      {
        "skill": "docx",
        "categoria": "documentos",
        "instalada": true,
@@ -2565,24 +2432,24 @@
      ],
      "recomendadas_no_instaladas": [
       {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 3,
+       "acierto": null
+      },
+      {
        "skill": "repo-analyzer",
        "categoria": "codigo",
        "instalada": false,
-       "usos": 1,
+       "usos": 0,
        "recomendada": 3,
-       "acierto": 1.0
+       "acierto": null
       },
       {
        "skill": "Security-Review",
        "categoria": "seguridad",
-       "instalada": false,
-       "usos": 1,
-       "recomendada": 3,
-       "acierto": 1.0
-      },
-      {
-       "skill": "ponytail",
-       "categoria": "codigo",
        "instalada": false,
        "usos": 0,
        "recomendada": 3,
@@ -2936,77 +2803,12 @@
      ],
      "filas": [
       {
-       "skill": "Security-Review",
-       "categoria": "seguridad",
-       "instalada": false,
-       "usos": 3,
-       "recomendada": 11,
-       "celdas": {
-        "devops": {
-         "usos": 1,
-         "acierto": 1.0
-        },
-        "general": {
-         "usos": 1,
-         "acierto": 1.0
-        },
-        "product": {
-         "usos": 1,
-         "acierto": 0.714
-        }
-       },
-       "agentes": {
-        "claude-cli": 3
-       },
-       "acierto": 0.905,
-       "usada": true
-      },
-      {
-       "skill": "ponytail",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 2,
-       "recomendada": 11,
-       "celdas": {
-        "general": {
-         "usos": 2,
-         "acierto": 0.857
-        }
-       },
-       "agentes": {
-        "claude-cli": 2
-       },
-       "acierto": 0.857,
-       "usada": true
-      },
-      {
-       "skill": "repo-analyzer",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 2,
-       "recomendada": 6,
-       "celdas": {
-        "devops": {
-         "usos": 1,
-         "acierto": 1.0
-        },
-        "data": {
-         "usos": 1,
-         "acierto": 0.714
-        }
-       },
-       "agentes": {
-        "claude-cli": 2
-       },
-       "acierto": 0.857,
-       "usada": true
-      },
-      {
        "skill": "docx",
        "categoria": "documentos",
        "instalada": true,
        "usos": 1,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {
         "security": {
          "usos": 1,
@@ -3020,11 +2822,48 @@
        "usada": true
       },
       {
+       "skill": "ponytail",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 11,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 11,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
+       "skill": "repo-analyzer",
+       "categoria": "codigo",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 6,
+       "preparada": 0,
+       "celdas": {},
+       "agentes": {},
+       "acierto": null,
+       "usada": false
+      },
+      {
        "skill": "frontend-builder",
        "categoria": "interfaz",
        "instalada": true,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3036,6 +2875,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3047,6 +2887,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3058,6 +2899,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3069,6 +2911,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3080,50 +2923,16 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
        "usada": false
       }
      ],
-     "usadas": 4,
+     "usadas": 1,
      "total": 10,
      "serie": [
-      {
-       "semana": "2026-05-18",
-       "skill": "repo-analyzer",
-       "usos": 1
-      },
-      {
-       "semana": "2026-06-15",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-07-06",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-07-06",
-       "skill": "ponytail",
-       "usos": 1
-      },
-      {
-       "semana": "2026-08-03",
-       "skill": "Security-Review",
-       "usos": 1
-      },
-      {
-       "semana": "2026-08-03",
-       "skill": "repo-analyzer",
-       "usos": 1
-      },
-      {
-       "semana": "2026-08-31",
-       "skill": "ponytail",
-       "usos": 1
-      },
       {
        "semana": "2026-09-28",
        "skill": "docx",
@@ -3155,6 +2964,33 @@
       "severidad": "media",
       "texto": "codex-cli falló 2 de 6 ejecuciones: revisa su instalación, su sesión o su timeout.",
       "accion": null
+     },
+     {
+      "id": "skill-sin-ejecutar:ponytail",
+      "severidad": "media",
+      "texto": "ponytail se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "ponytail"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:Security-Review",
+      "severidad": "media",
+      "texto": "Security-Review se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "Security-Review"
+      }
+     },
+     {
+      "id": "skill-sin-ejecutar:repo-analyzer",
+      "severidad": "media",
+      "texto": "repo-analyzer se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
+      "accion": {
+       "tipo": "asignar_skill",
+       "skill": "repo-analyzer"
+      }
      },
      {
       "id": "solo-clasificadas",
@@ -3236,30 +3072,6 @@
      ],
      "top": [
       {
-       "skill": "Security-Review",
-       "categoria": "seguridad",
-       "instalada": false,
-       "usos": 3,
-       "recomendada": 11,
-       "acierto": 0.905
-      },
-      {
-       "skill": "ponytail",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 2,
-       "recomendada": 11,
-       "acierto": 0.857
-      },
-      {
-       "skill": "repo-analyzer",
-       "categoria": "codigo",
-       "instalada": false,
-       "usos": 2,
-       "recomendada": 6,
-       "acierto": 0.857
-      },
-      {
        "skill": "docx",
        "categoria": "documentos",
        "instalada": true,
@@ -3270,28 +3082,28 @@
      ],
      "recomendadas_no_instaladas": [
       {
-       "skill": "Security-Review",
-       "categoria": "seguridad",
-       "instalada": false,
-       "usos": 3,
-       "recomendada": 11,
-       "acierto": 0.905
-      },
-      {
        "skill": "ponytail",
        "categoria": "codigo",
        "instalada": false,
-       "usos": 2,
+       "usos": 0,
        "recomendada": 11,
-       "acierto": 0.857
+       "acierto": null
+      },
+      {
+       "skill": "Security-Review",
+       "categoria": "seguridad",
+       "instalada": false,
+       "usos": 0,
+       "recomendada": 11,
+       "acierto": null
       },
       {
        "skill": "repo-analyzer",
        "categoria": "codigo",
        "instalada": false,
-       "usos": 2,
+       "usos": 0,
        "recomendada": 6,
-       "acierto": 0.857
+       "acierto": null
       },
       {
        "skill": "promptfoo",
@@ -3603,6 +3415,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {
         "security": {
          "usos": 1,
@@ -3621,6 +3434,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3632,6 +3446,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3643,6 +3458,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3654,6 +3470,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3665,6 +3482,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3676,6 +3494,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3687,6 +3506,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3698,6 +3518,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -3709,6 +3530,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -4386,6 +4208,7 @@
        "instalada": true,
        "usos": 2,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 2,
@@ -4404,6 +4227,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 1,
@@ -4422,6 +4246,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "documents": {
          "usos": 1,
@@ -4440,6 +4265,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 3,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -4451,6 +4277,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -4462,6 +4289,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -4526,7 +4354,7 @@
      {
       "id": "skill-sin-ejecutar:backend-builder",
       "severidad": "media",
-      "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "texto": "backend-builder se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
       "accion": {
        "tipo": "asignar_skill",
        "skill": "backend-builder"
@@ -4547,7 +4375,7 @@
      {
       "id": "skills-repuestas",
       "severidad": "baja",
-      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "texto": "El rotador repuso 1 skill para delegaciones; solo un uso confirmado las hará pasar a núcleo.",
       "accion": null,
       "skills": [
        "docx"
@@ -5277,6 +5105,7 @@
        "instalada": true,
        "usos": 2,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 2,
@@ -5295,6 +5124,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 1,
@@ -5313,6 +5143,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "documents": {
          "usos": 1,
@@ -5331,6 +5162,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 3,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -5342,6 +5174,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -5353,6 +5186,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -5417,7 +5251,7 @@
      {
       "id": "skill-sin-ejecutar:backend-builder",
       "severidad": "media",
-      "texto": "backend-builder se recomienda a menudo pero nunca se ejecuta: asígnala a un agente del perfil.",
+      "texto": "backend-builder se recomienda a menudo sin llegar a prepararse: revisa su disponibilidad y asignación.",
       "accion": {
        "tipo": "asignar_skill",
        "skill": "backend-builder"
@@ -5438,7 +5272,7 @@
      {
       "id": "skills-repuestas",
       "severidad": "baja",
-      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "texto": "El rotador repuso 1 skill para delegaciones; solo un uso confirmado las hará pasar a núcleo.",
       "accion": null,
       "skills": [
        "docx"
@@ -6131,6 +5965,7 @@
        "instalada": true,
        "usos": 2,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 2,
@@ -6149,6 +5984,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 1,
@@ -6167,6 +6003,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "documents": {
          "usos": 1,
@@ -6185,6 +6022,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -6196,6 +6034,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -6207,6 +6046,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -6295,7 +6135,7 @@
      {
       "id": "skills-repuestas",
       "severidad": "baja",
-      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "texto": "El rotador repuso 1 skill para delegaciones; solo un uso confirmado las hará pasar a núcleo.",
       "accion": null,
       "skills": [
        "docx"
@@ -6979,6 +6819,7 @@
        "instalada": true,
        "usos": 2,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 2,
@@ -6997,6 +6838,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "frontend": {
          "usos": 1,
@@ -7015,6 +6857,7 @@
        "instalada": true,
        "usos": 1,
        "recomendada": 1,
+       "preparada": 0,
        "celdas": {
         "documents": {
          "usos": 1,
@@ -7033,6 +6876,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 2,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -7044,6 +6888,7 @@
        "instalada": true,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -7055,6 +6900,7 @@
        "instalada": false,
        "usos": 0,
        "recomendada": 0,
+       "preparada": 0,
        "celdas": {},
        "agentes": {},
        "acierto": null,
@@ -7143,7 +6989,7 @@
      {
       "id": "skills-repuestas",
       "severidad": "baja",
-      "texto": "El rotador repuso 1 skill para delegaciones; las que se sigan usando pasarán a núcleo solas.",
+      "texto": "El rotador repuso 1 skill para delegaciones; solo un uso confirmado las hará pasar a núcleo.",
       "accion": null,
       "skills": [
        "docx"

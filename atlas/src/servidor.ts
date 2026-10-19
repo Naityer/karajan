@@ -8,7 +8,7 @@ import { catalogoReal, listarSkills } from './catalogo';
 import { produccion } from './produccion';
 import { Rotador } from './rotador';
 import { Delegador } from './delegar';
-import { clasificar, configDesde } from './heuristica';
+import { configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles } from './perfiles';
 import { disponibilidad, PROVEEDORES } from './proveedores';
 
@@ -101,7 +101,8 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const dias = entero(req.query['days'], 30, 0, 3650);
     const registros = almacen.listarTareas();
     const runsPorTarea = Object.fromEntries(registros.filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)]));
-    return construirAnaliticaSkills(registros, { runsPorTarea, skillsConocidas: listarSkills().map((s) => s.name), dias });
+    const revisadas = Object.fromEntries(Object.entries(almacen.revisiones()).map(([id, campos]) => [id, campos['skills_usadas'] ?? []]));
+    return construirAnaliticaSkills(registros, { runsPorTarea, skillsRevisadasPorTarea: revisadas, skillsConocidas: listarSkills().map((s) => s.name), dias });
   });
 
   app.get('/tasks', (req) => almacen.listarTareas(entero(req.query['limit'], 50, 1, 500), entero(req.query['offset'], 0, 0, 1_000_000)).map((t) => ({
@@ -123,7 +124,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const prompt = typeof (req.body as { prompt?: unknown } | null)?.prompt === 'string' ? ((req.body as { prompt: string }).prompt).trim() : '';
     if (!prompt) throw falla(422, 'prompt cannot be blank');
     if (prompt.length > 20_000) throw falla(422, 'prompt demasiado largo (máx. 20000 caracteres)');
-    return clasificar(prompt, config());
+    return delegador.planificar(prompt).clasificacion;
   });
 
   // ── Perfiles y reglas (compartidos con el Karajan nativo) ─────────────────

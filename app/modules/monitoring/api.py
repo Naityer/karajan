@@ -78,9 +78,11 @@ def skills_analytics(days: int = Query(default=30, ge=0, le=3650)) -> dict:
         if record.delegation is not None
     }
     known_skills = [skill.name for skill in skills_catalog.list_skills()]
+    reviewed_skills = {task_id: fields.get("skills_usadas", []) for task_id, fields in runtime_module.current().tasks.list_reviews().items()}
     return skill_analytics_module.build_skill_analytics(
         records,
         runs_by_task=runs_by_task,
+        reviewed_skills_by_task=reviewed_skills,
         known_skills=known_skills,
         days=days,
     )

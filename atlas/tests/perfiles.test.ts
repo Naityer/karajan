@@ -77,7 +77,7 @@ describe('delegación real', () => {
   const llamadas: { proveedor: string; modelo: string; cwd: string }[] = [];
   const ejecutor: Ejecutor = async (p, modelo, _i, op) => { llamadas.push({ proveedor: p.nombre, modelo, cwd: op.cwd }); return { salida: `ok ${p.nombre}`, error: null, latenciaMs: 5, modelo }; };
   const todos = (p: Proveedor): Disponibilidad => ({ nombre: p.nombre, etiqueta: p.etiqueta, gratis: p.gratis, disponible: true, ruta: 'x', motivo: null, login: p.login });
-  const delegador = new Delegador({ almacen, perfiles, config: () => null as never, raiz: base, ejecutor, disponible: todos });
+  const delegador = new Delegador({ almacen, perfiles, config: () => null as never, raiz: base, ejecutor, disponible: todos, skillsDisponibles: () => [] });
 
   it('elige el agente por la regla, ejecuta y lo registra todo', async () => {
     const plan = delegador.delegar('Crea un endpoint REST en la API para listar usuarios');

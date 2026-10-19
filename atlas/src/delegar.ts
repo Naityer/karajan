@@ -8,6 +8,7 @@ import { claudeExcedido, leerLimites, umbralClaude, type Limites } from './limit
 import { elegirRegla, nivelRegla, type Entidad, type Regla } from './reglas';
 import { aislar, aislarActivo, cerrar, type Aislamiento } from './aislar-git';
 import { destinoDe, type Rotador } from './rotador';
+import { descubrirSkills, seleccionarSkills, type SkillDisponible } from './skills-seleccion';
 
 /**
  * Delegación real desde el paquete: clasifica el prompt (heurística), elige el agente de cada subtarea con el perfil POR DEFECTO
@@ -30,6 +31,7 @@ interface Opciones {
   limites?: () => Limites | null;
   /** Rotador de skills: repone la skill recomendada antes de ejecutar si estaba en el almacén. */
   rotador?: Rotador;
+  skillsDisponibles?: () => SkillDisponible[];
   /** Trabajar en un worktree con rama `agente/<task_id>` (por defecto, `KARAJAN_AISLAR_GIT=1`). */
   aislarGit?: boolean;
 }
@@ -60,6 +62,12 @@ export class Delegador {
   /** Qué agente haría cada subtarea, sin ejecutar nada (el probador del panel de perfiles). */
   planificar(prompt: string, forzarEntidad?: string | null): Plan {
     const c = clasificar(prompt, this.op.config());
+    const elegidas = seleccionarSkills(prompt, (this.op.skillsDisponibles ?? descubrirSkills)());
+    c.recommended_skills = elegidas;
+    c.subtasks.forEach((s, i) => {
+      s.recommended_skills = i === 0 ? elegidas : [];
+      s.recommended_skill = i === 0 ? (elegidas[0] ?? null) : null;
+    });
     return { task_id: c.task_id, status: 'classified', clasificacion: c, asignaciones: c.subtasks.map((st) => this.asignar(c, st, forzarEntidad ?? null)), bloqueada: null };
   }
 
@@ -90,7 +98,8 @@ export class Delegador {
     // Si el agente elegido no puede ejecutarse aquí, el primero disponible del respaldo (queda anotado en el motivo).
     if (!a || !this.disponible(proveedor(a.proveedor)!).disponible) {
       const motivo = a ? `${a.proveedor} no disponible (${this.disponible(proveedor(a.proveedor)!).motivo})` : 'ningún agente del perfil se puede ejecutar';
-      for (const nombre of RESPALDO) {
+      const respaldo = (st.recommended_skills?.length ?? 0) > 0 ? ['codex', 'claude-cli'] : RESPALDO;
+      for (const nombre of respaldo) {
         const p = proveedor(nombre)!;
         if (!this.disponible(p).disponible) continue;
         const e = perfil.entities.find((x) => x.provider === nombre);
@@ -98,6 +107,16 @@ export class Delegador {
       }
       if (a) return { ...a, motivo: `${motivo}; sin respaldo disponible` };
       return { ...base, entidad: null, entidad_nombre: null, proveedor: 'codex', modelo: 'default', regla: null, motivo };
+    }
+    if (a.proveedor === 'ollama-qwen' && (st.recommended_skills?.length ?? 0) > 0) {
+      for (const nombre of ['codex', 'claude-cli']) {
+        const p = proveedor(nombre)!;
+        if (!this.disponible(p).disponible) continue;
+        const e = perfil.entities.find((x) => x.provider === nombre);
+        return { ...base, entidad: e?.id ?? null, entidad_nombre: e?.name ?? nombre, proveedor: nombre,
+          modelo: modeloPara(p, tier), regla: a.regla, motivo: `${a.motivo}; ${nombre} admite skills` };
+      }
+      return { ...a, motivo: `${a.motivo}; ningún agente compatible con skills está disponible` };
     }
     // Claude por encima de su umbral semanal: lo suyo pasa a Codex (salvo que se fuerce a mano, arriba) y se avisa.
     if (a.proveedor === 'claude-cli') {
@@ -166,13 +185,21 @@ export class Delegador {
       let instruccion = `${c.original_prompt}\n\nSubtarea: ${st.name}\nValidación: ${st.validation}`;
       // Skill recomendada: se deja instalada para el agente que ejecuta (desde el almacén si hace falta) y se le pide usarla.
       const destino = destinoDe(p.nombre);
-      if (st.recommended_skill && destino && this.op.rotador) {
-        const s = this.op.rotador.asegurar(st.recommended_skill, destino);
-        if (s.disponible) instruccion += `\n\nUsa la skill «${st.recommended_skill}» si encaja con la tarea.`;
-        if (s.repuesta) almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:repuesta:${st.recommended_skill}->${destino}`, reason: s.motivo });
+      const preparadas: string[] = [];
+      if (destino && this.op.rotador) for (const nombre of st.recommended_skills ?? (st.recommended_skill ? [st.recommended_skill] : [])) {
+        const s = this.op.rotador.asegurar(nombre, destino);
+        if (s.disponible) preparadas.push(nombre);
+        almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:${s.disponible ? 'preparada' : 'no-disponible'}:${nombre}->${destino}`, reason: s.motivo });
+        if (s.repuesta) almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:repuesta:${nombre}->${destino}`, reason: s.motivo });
       }
+      if (preparadas.length) instruccion += `\n\nSkills preparadas para este agente, en orden: ${preparadas.join(', ')}. Consulta sus SKILL.md cuando correspondan.`;
       let r;
-      try { r = await this.ejecutor(p, a.modelo, instruccion, { cwd, timeoutMs: TIMEOUT_MS }); } finally { liberar(); }
+      const skillsRequeridas = st.recommended_skills ?? (st.recommended_skill ? [st.recommended_skill] : []);
+      try {
+        r = skillsRequeridas.some((nombre) => !preparadas.includes(nombre))
+          ? { salida: '', error: 'No se pudieron preparar todas las skills recomendadas para el agente seleccionado.', latenciaMs: 0, modelo: a.modelo }
+          : await this.ejecutor(p, a.modelo, instruccion, { cwd, timeoutMs: TIMEOUT_MS });
+      } finally { liberar(); }
       total += r.latenciaMs;
       const estado = r.error ? 'failed' : 'completed';
       const tokensEntrada = Math.ceil(instruccion.length / 4), tokensSalida = Math.ceil(r.salida.length / 4);
@@ -183,7 +210,7 @@ export class Delegador {
       almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `${st.id}:${st.recommended_model}->cli:${p.nombre}`, score: st.complexity, backend: 'cli', reason: r.error ?? `executed '${st.name}'` });
       ejecuciones.push({
         subtask_id: st.id, status: estado, backend: 'cli', model_used: r.modelo, latency_ms: r.latenciaMs, estimated_cost_usd: 0, output: r.salida || (r.error ?? ''), error: r.error,
-        input_tokens: tokensEntrada, output_tokens: tokensSalida, validation_iterations: 0, context_paths: [],
+        input_tokens: tokensEntrada, output_tokens: tokensSalida, validation_iterations: 0, context_paths: [], prepared_skills: preparadas, used_skills: [],
       });
     }
     const fallo = ejecuciones.some((e) => e['status'] === 'failed');

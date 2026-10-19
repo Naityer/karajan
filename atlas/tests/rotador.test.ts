@@ -52,9 +52,11 @@ describe('rotador de skills', () => {
     const r = rotador.asegurar('olvidada', 'claude');
     assert.deepEqual(r, { disponible: true, repuesta: true, motivo: 'repuesta desde el almacén' });
     assert.equal(existsSync(join(casa, '.claude', 'skills', 'olvidada', 'SKILL.md')), true);
-    // Recién usada: pasa a núcleo y ya no se retira.
-    assert.equal(rotador.inventario().find((f) => f.skill === 'olvidada')!.nivel, 'nucleo');
+    // Reponer no prueba uso: permanece instantánea hasta tener evidencia.
+    assert.equal(rotador.inventario().find((f) => f.skill === 'olvidada')!.nivel, 'instantanea');
     assert.equal(rotador.plan().retirar.some((x) => x.skill === 'olvidada' && x.destino === 'claude'), false);
+    rotador.registrarUso('olvidada');
+    assert.equal(rotador.inventario().find((f) => f.skill === 'olvidada')!.nivel, 'nucleo');
     assert.equal(rotador.asegurar('no-existe', 'claude').disponible, false);
   });
 

@@ -143,12 +143,11 @@ export class Rotador {
 
   /**
    * Antes de delegar: deja instalada la skill para el agente que va a ejecutar. Si está en el almacén se repone al momento (queda
-   * como «instantánea»); en cualquier caso se anota el uso. Devuelve si está disponible y de dónde salió.
+   * como «instantánea»). Preparar una skill no demuestra uso; solo una traza confirmada lo registra.
    */
   asegurar(skill: string, destino: Destino): { disponible: boolean; repuesta: boolean; motivo: string } {
     const e = this.leerEstado();
     const ahora = new Date(this.ahora()).toISOString();
-    e.usos[skill] = ahora;
     const instalada = existsSync(join(this.raiz(destino), skill, 'SKILL.md'));
     let repuesta = false;
     if (!instalada) {
@@ -165,5 +164,11 @@ export class Rotador {
     this.guardarEstado(e);
     const disponible = instalada || repuesta;
     return { disponible, repuesta, motivo: instalada ? 'ya instalada' : repuesta ? 'repuesta desde el almacén' : 'no está ni instalada ni en el almacén' };
+  }
+
+  registrarUso(skill: string) {
+    const e = this.leerEstado();
+    e.usos[skill] = new Date(this.ahora()).toISOString();
+    this.guardarEstado(e);
   }
 }
