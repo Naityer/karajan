@@ -48,6 +48,11 @@ Main components:
 
 ## GUI
 
+> **Congelada.** Karajan corre en producción como paquete de Atlas dev y se maneja desde la terminal con `kj`
+> (`node dist-atlas/kj.mjs`, ver [docs/CLI.md](docs/CLI.md#kj-karajan-en-producción-desde-la-terminal)). Esta consola web ya no
+> evoluciona y se retirará; laboratorio, gráficas y propuestas están en `kj` (ver [docs/laboratorio/componentes.md](docs/laboratorio/componentes.md)).
+> En producción (`data/modo.json`), sus mutaciones de configuración responden 423 sin una tarea aceptada de Atlas dev.
+
 The web console is served from FastAPI at `/` and has three main views:
 
 - **Monitor**: submit prompts, choose `Clasificar + Delegar` or `Solo clasificar`, inspect KPIs, task history, criteria, subtasks, recommended skills, and decision logs.

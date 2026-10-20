@@ -1,7 +1,30 @@
 # CLI de Karajan
 
+## `kj`: Karajan en producción desde la terminal
+
+Karajan corre en producción como paquete de Atlas dev. `kj` es su terminal y **sustituye a la interfaz**: el dashboard web queda
+congelado. Habla con el paquete a través de Atlas dev (`{ATLAS_DEV_API}/paquetes/karajan/api`, o `KARAJAN_API`) con el mismo
+token que `at` (`ATLAS_DEV_TOKEN`). Se construye con `node atlas/build.mjs` y se ejecuta con `node dist-atlas/kj.mjs`.
+
+| Comando | Qué hace |
+|---|---|
+| `kj componentes` | La pila de componentes por capas, con la responsabilidad de cada uno y el estado de su último laboratorio |
+| `kj lab ls` | Laboratorios y escenarios (o qué borrador trae el que falta) |
+| `kj lab run <componente\|todos> [--escenario x] [--sin-borradores]` | Ejecuta el laboratorio; los hallazgos `alta\|media` salen como borradores en Atlas dev |
+| `kj lab informe <componente>` | Última ejecución de cada escenario: muestra, métricas y hallazgos |
+| `kj lab historial <componente> <métrica>` | Evolución de una métrica (sparkline) |
+| `kj grafica acierto\|eficiencia\|flujo\|matriz-skills\|sugerencias [--dias N] [--perfil activo\|todos]` | Gráficas de texto de la analítica de producción |
+| `kj propuestas` | Borradores que ha abierto Karajan y en qué estado están |
+| `kj modo` | Producción o desarrollo (`<datos>/modo.json`; solo cambia editando el fichero) |
+
+Todos admiten `--json`. En producción nada cambia la configuración sin una tarea aceptada: el agente que la ejecute repite la
+petición con la cabecera `x-karajan-tarea: <id>`. Arquitectura y laboratorios: [laboratorio/componentes.md](laboratorio/componentes.md).
+
+## `karajan` (CLI del servidor nativo)
+
 Kit de comandos para manejar el harness KARAJAN desde terminal (o desde
 cualquier agente de IA con acceso a shell), sin pasar por el dashboard web.
+En producción sus mutaciones de configuración responden 423 igual que las del paquete.
 
 Funciona en dos modos:
 

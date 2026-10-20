@@ -12,8 +12,8 @@ const raiz = resolve(import.meta.dirname, '..');
 const salida = resolve(raiz, 'dist-atlas');
 rmSync(salida, { recursive: true, force: true });
 mkdirSync(salida, { recursive: true });
-await esbuild.build({
-  entryPoints: [resolve(raiz, 'atlas/src/servidor.ts')], outfile: resolve(salida, 'server.mjs'),
-  bundle: true, platform: 'node', format: 'esm', target: 'node22', legalComments: 'none', logLevel: 'warning',
-});
-console.log('dist-atlas listo: server.mjs');
+const comun = { bundle: true, platform: 'node', format: 'esm', target: 'node22', legalComments: 'none', logLevel: 'warning' };
+await esbuild.build({ ...comun, entryPoints: [resolve(raiz, 'atlas/src/servidor.ts')], outfile: resolve(salida, 'server.mjs') });
+// `kj`: Karajan desde la terminal (node dist-atlas/kj.mjs …).
+await esbuild.build({ ...comun, entryPoints: [resolve(raiz, 'atlas/src/cli.ts')], outfile: resolve(salida, 'kj.mjs'), banner: { js: '#!/usr/bin/env node' } });
+console.log('dist-atlas listo: server.mjs y kj.mjs');

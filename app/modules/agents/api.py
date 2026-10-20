@@ -22,6 +22,7 @@ from app import (
 )
 from app.atlas_auth import require_atlas_token
 from app.auth import require_token
+from app.modo import require_tarea_aceptada
 from app.models import (
     CredentialStatus,
     OpenClawChannelInfo,
@@ -119,7 +120,7 @@ def list_skills() -> list[SkillInfo]:
     ]
 
 
-@router.post("/skills/{name}/install", response_model=SkillInstallResult)
+@router.post("/skills/{name}/install", response_model=SkillInstallResult, dependencies=[Depends(require_tarea_aceptada)])
 def install_skill(name: str, _: None = Depends(require_token), __: dict | None = Depends(require_atlas_token)) -> SkillInstallResult:
     result = skills_catalog.install_skill(name)
     resource_library.seed_resource_library(runtime_module.current().resources)

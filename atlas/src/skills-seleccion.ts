@@ -46,24 +46,33 @@ export function descubrirSkills(casa = homedir()): SkillDisponible[] {
   return [...vistas.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function seleccionarSkills(prompt: string, catalogo: SkillDisponible[], limite = 3): string[] {
+/** Pesos del ponderador. El laboratorio del selector los calibra y, si mejora, los propone como borrador (no se cambian solos). */
+export interface PesosSelector { explicita: number; alias: number; porAlias: number; topeAlias: number; porNombre: number; porDescripcion: number; umbral: number }
+export const PESOS_SELECTOR: Readonly<PesosSelector> = Object.freeze({ explicita: 100, alias: 35, porAlias: 2, topeAlias: 10, porNombre: 11, porDescripcion: 2, umbral: 15 });
+
+/** Cada skill que pasa el umbral, con sus puntos, en el orden en que se eligen. */
+export function puntuarSkills(prompt: string, catalogo: SkillDisponible[], pesos: PesosSelector = PESOS_SELECTOR): { nombre: string; puntos: number }[] {
   const texto = normalizar(prompt), q = terminos(prompt);
   const filas: [number, number, number, string][] = [];
   for (const s of catalogo) {
     let puntos: number;
     const explicita = contiene(texto, s.name);
     let posicion = explicita ? texto.indexOf(normalizar(s.name)) : texto.length;
-    if (explicita) puntos = 100;
+    if (explicita) puntos = pesos.explicita;
     else {
       const alias = (ALIAS[s.name] ?? []).filter((a) => contiene(texto, a));
       for (const a of alias) posicion = Math.min(posicion, texto.indexOf(normalizar(a)));
       const nombres = [...terminos(s.name)].filter((t) => q.has(t));
       const descripcion = [...terminos(s.description.slice(0, 1000))].filter((t) => q.has(t));
-      puntos = (alias.length ? 35 + Math.min(10, alias.length * 2) : 0) + nombres.length * 11 + descripcion.length * 2;
+      puntos = (alias.length ? pesos.alias + Math.min(pesos.topeAlias, alias.length * pesos.porAlias) : 0) + nombres.length * pesos.porNombre + descripcion.length * pesos.porDescripcion;
       if (s.name.startsWith('source-command-') && !alias.length) puntos = 0;
     }
-    if (puntos >= 15) filas.push([s.name === 'repo-analyzer' ? 0 : s.name === 'security-review' ? 2 : 1, posicion, -puntos, s.name]);
+    if (puntos >= pesos.umbral) filas.push([s.name === 'repo-analyzer' ? 0 : s.name === 'security-review' ? 2 : 1, posicion, -puntos, s.name]);
   }
   filas.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || (a[3] < b[3] ? -1 : a[3] > b[3] ? 1 : 0));
-  return filas.slice(0, limite).map((x) => x[3]);
+  return filas.map((x) => ({ nombre: x[3], puntos: -x[2] }));
+}
+
+export function seleccionarSkills(prompt: string, catalogo: SkillDisponible[], limite = 3, pesos: PesosSelector = PESOS_SELECTOR): string[] {
+  return puntuarSkills(prompt, catalogo, pesos).slice(0, limite).map((x) => x.nombre);
 }

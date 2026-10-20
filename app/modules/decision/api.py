@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app import catalog, events, routing_rules, runtime as runtime_module
 from app.atlas_auth import require_atlas_token
 from app.auth import require_token
+from app.modo import require_tarea_aceptada
 from app.models import ComplexityLevel, RecommendedModel, RoutingEntity, RoutingLayout, RoutingProfile
 
 router = APIRouter(tags=["decision"])
@@ -33,7 +34,7 @@ def get_routing_layout() -> RoutingLayout:
     return runtime_module.current().routing.load()
 
 
-@router.put("/routing-layout", response_model=RoutingLayout)
+@router.put("/routing-layout", response_model=RoutingLayout, dependencies=[Depends(require_tarea_aceptada)])
 def update_routing_layout(
     layout: RoutingLayout,
     _: None = Depends(require_token),
@@ -44,7 +45,7 @@ def update_routing_layout(
     return saved
 
 
-@router.post("/routing-layout/presets/nivel", response_model=RoutingLayout)
+@router.post("/routing-layout/presets/nivel", response_model=RoutingLayout, dependencies=[Depends(require_tarea_aceptada)])
 def apply_level_preset(
     _: None = Depends(require_token),
     __: dict | None = Depends(require_atlas_token),
@@ -59,7 +60,7 @@ def apply_level_preset(
     return saved
 
 
-@router.post("/routing-layout/catalog/{provider_name}", response_model=RoutingLayout)
+@router.post("/routing-layout/catalog/{provider_name}", response_model=RoutingLayout, dependencies=[Depends(require_tarea_aceptada)])
 def add_catalog_provider_to_routing_layout(
     provider_name: str,
     _: None = Depends(require_token),
@@ -97,7 +98,7 @@ def add_catalog_provider_to_routing_layout(
     return saved
 
 
-@router.delete("/routing-layout/catalog/{provider_name}", response_model=RoutingLayout)
+@router.delete("/routing-layout/catalog/{provider_name}", response_model=RoutingLayout, dependencies=[Depends(require_tarea_aceptada)])
 def remove_catalog_provider_from_routing_layout(
     provider_name: str,
     _: None = Depends(require_token),

@@ -31,6 +31,27 @@ Rutas (las de la API de Karajan, para que lo que ya habla con ella funcione igua
 Atlas dev reenvía `/paquetes/karajan/api/*` a este servidor y su puente `/karajan/*` (widgets «Estadísticas» e «Inspection» del
 Home) se resuelve contra él cuando el paquete está instalado.
 
+## v0.7: componentes, laboratorio, modo producción y `kj`
+
+Ver `docs/laboratorio/componentes.md`. Es nuevo del paquete, no un puerto: en Python solo existe el modo (`app/modo.py`), que
+lee el mismo `modo.json`.
+
+| Pieza | Aquí |
+|---|---|
+| Registro de componentes (capa, responsabilidad única, módulos, laboratorio) | `src/componentes.ts` |
+| Motor del laboratorio (tareas de Atlas dev anonimizadas, Wilson, `laboratorio.db`) | `src/laboratorio.ts` |
+| Laboratorios del delegador, selector, clasificador y biblioteca | `src/lab/*.lab.ts` |
+| Modo producción: mutaciones con tarea aceptada o 423 + borrador | `src/modo.ts`, `src/atlas-dev.ts` |
+| Pasarela de borradores (hallazgo → tarea borrador idempotente en Atlas dev) | `src/pasarela-borradores.ts` |
+| Biblioteca de recursos en solo lectura (ficha, estrellas propias/heredadas, búsqueda) | `src/biblioteca.ts` |
+| `kj`, la terminal (`dist-atlas/kj.mjs`) | `src/cli.ts` |
+
+Rutas nuevas: `GET /laboratorio/componentes`, `/laboratorio/ejecuciones`, `/laboratorio/modo`, `/laboratorio/propuestas`,
+`/laboratorio/sugerencias-skills?prompt=&q=`; `POST /laboratorio/ejecutar` y `/laboratorio/calibracion`. En producción,
+`PUT /routing-layout`, los presets, `desde-texto` con `aplicar` y `skills/rotar` con `aplicar` necesitan la cabecera
+`x-karajan-tarea` con una tarea encolada o en marcha. `PESOS_SELECTOR` (`skills-seleccion.ts`) deja los pesos del ponderador a la
+vista para que el laboratorio los calibre, con el mismo comportamiento por defecto.
+
 ## Datos
 
 `<datos del paquete>/task_logs.db` y `active_config.json`. Si no existen y `ATLAS_KARAJAN_DATA` apunta a la carpeta `data/` de un

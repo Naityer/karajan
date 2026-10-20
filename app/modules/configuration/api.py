@@ -20,6 +20,7 @@ from app import (
 )
 from app.atlas_auth import require_atlas_token
 from app.auth import require_token
+from app.modo import require_tarea_aceptada
 from app.logging_config import log_event
 from app.models import (
     CredentialStatus,
@@ -47,7 +48,7 @@ def get_config() -> KarajanConfig:
     return runtime_module.current().config
 
 
-@router.put("/config", response_model=KarajanConfig)
+@router.put("/config", response_model=KarajanConfig, dependencies=[Depends(require_tarea_aceptada)])
 def update_config(new_config: KarajanConfig, _: None = Depends(require_token), __: dict | None = Depends(require_atlas_token)) -> KarajanConfig:
     saved = runtime_module.current().set_config(new_config)
     log_event(logger, logging.INFO, "config_updated", backend=new_config.backend.value, profile=new_config.profile.value)
@@ -55,7 +56,7 @@ def update_config(new_config: KarajanConfig, _: None = Depends(require_token), _
     return saved
 
 
-@router.post("/setup/apply-default", response_model=DefaultConfigApplyResult)
+@router.post("/setup/apply-default", response_model=DefaultConfigApplyResult, dependencies=[Depends(require_tarea_aceptada)])
 def apply_default_config(_: None = Depends(require_token), __: dict | None = Depends(require_atlas_token)) -> DefaultConfigApplyResult:
     """Restore the reference production hierarchy (Claude / ChatGPT / Qwen+DeepSeek local)
     from data/production_baseline/ and report what's still missing to run real tasks.
@@ -100,7 +101,7 @@ def apply_default_config(_: None = Depends(require_token), __: dict | None = Dep
     )
 
 
-@router.post("/setup/apply-queue-config", response_model=DefaultConfigApplyResult)
+@router.post("/setup/apply-queue-config", response_model=DefaultConfigApplyResult, dependencies=[Depends(require_tarea_aceptada)])
 def apply_queue_config(_: None = Depends(require_token), __: dict | None = Depends(require_atlas_token)) -> DefaultConfigApplyResult:
     """Turn on the availability-driven queue + validator loop and make sure every
     tier (raíz/L1/L2) of the pyramidal hierarchy is present in the routing graph.

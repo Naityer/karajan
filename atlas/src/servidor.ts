@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,8 +9,16 @@ import { produccion } from './produccion';
 import { Rotador } from './rotador';
 import { Delegador } from './delegar';
 import { configDesde } from './heuristica';
-import { ErrorPerfil, Perfiles } from './perfiles';
+import { ErrorPerfil, Perfiles, perfilPorDefecto } from './perfiles';
 import { disponibilidad, PROVEEDORES } from './proveedores';
+import { AtlasDev } from './atlas-dev';
+import { Pasarela } from './pasarela-borradores';
+import { Guardian } from './modo';
+import { Biblioteca } from './biblioteca';
+import { CAPAS, COMPONENTES, componente } from './componentes';
+import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
+import { clasificar } from './heuristica';
+import { descubrirSkills, puntuarSkills, type SkillDisponible } from './skills-seleccion';
 
 /**
  * Karajan como paquete de Atlas dev: su núcleo de lectura y clasificación, en TypeScript y dentro del proceso de Atlas dev.
@@ -33,11 +41,12 @@ import { disponibilidad, PROVEEDORES } from './proveedores';
 const NO_DISPONIBLE = 'No disponible en el paquete de Atlas dev: necesita proveedores o la biblioteca de recursos (ver PORTE.md).';
 
 interface Contexto { id: string; version: string; datos: string }
+type Cabeceras = Record<string, string | string[] | undefined>;
 interface AppMinima {
   get(ruta: string, fn: (req: { query: Record<string, string | undefined>; params: Record<string, string> }) => unknown): void;
-  post(ruta: string, fn: (req: { body: unknown; params: Record<string, string> }, reply: { code(n: number): unknown }) => unknown): void;
-  put(ruta: string, fn: (req: { body: unknown }) => unknown): void;
-  setErrorHandler(fn: (e: Error & { status?: number; statusCode?: number }, req: unknown, reply: { code(n: number): { send(b: unknown): unknown } }) => unknown): void;
+  post(ruta: string, fn: (req: { body: unknown; params: Record<string, string>; headers: Cabeceras }, reply: { code(n: number): unknown }) => unknown): void;
+  put(ruta: string, fn: (req: { body: unknown; headers: Cabeceras }) => unknown): void;
+  setErrorHandler(fn: (e: Error & { status?: number; statusCode?: number; extra?: Record<string, unknown> }, req: unknown, reply: { code(n: number): { send(b: unknown): unknown } }) => unknown): void;
 }
 
 function importarDatos(datos: string): boolean {
@@ -75,6 +84,8 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const importada = compartida ? false : importarDatos(ctx.datos);
   mkdirSync(ctx.datos, { recursive: true });
   const dirDatos = compartida ? nativo! : ctx.datos;
+  // El paquete ES la instalación en producción: lo deja escrito para que el Karajan nativo, que lee el mismo fichero, lo respete.
+  if (!existsSync(join(dirDatos, 'modo.json'))) writeFileSync(join(dirDatos, 'modo.json'), '{"modo":"produccion"}\n', 'utf8');
   const almacen = new Almacen(join(dirDatos, 'task_logs.db'));
   const config = () => {
     try { return configDesde(JSON.parse(readFileSync(join(dirDatos, 'active_config.json'), 'utf8'))); } catch { return configDesde(null); }
@@ -91,7 +102,15 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const rotador = new Rotador({ estado: join(ctx.datos, 'rotador.json'), usosKarajan });
   const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), rotador });
 
-  app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno' }));
+  // Producción: las mutaciones necesitan una tarea aceptada; lo demás se propone como borrador (ver modo.ts).
+  const dirLab = join(ctx.datos, 'laboratorio');
+  const atlasDev = new AtlasDev();
+  const pasarela = new Pasarela(atlasDev, join(dirLab, 'borradores.json'));
+  const guardian = new Guardian(dirDatos, atlasDev, pasarela);
+  const biblioteca = new Biblioteca(process.env['ATLAS_KARAJAN_RESOURCES'] ?? join(nativo ?? ctx.datos, 'resources.db'));
+  const registroLab = new RegistroLab(join(dirLab, 'laboratorio.db'));
+
+  app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno', ...(e.extra ?? {}) }));
 
   app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
   app.get('/metrics', () => almacen.metricas());
@@ -130,16 +149,17 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   // ── Perfiles y reglas (compartidos con el Karajan nativo) ─────────────────
   const conPerfil = <T,>(fn: () => T): T => { try { return fn(); } catch (e) { if (e instanceof ErrorPerfil) throw falla(422, e.message); throw e; } };
   app.get('/routing-layout', () => ({ ...perfiles.leer(), path: rutaLayout }));
-  app.put('/routing-layout', (req) => conPerfil(() => perfiles.guardar(req.body)));
-  app.post('/routing-layout/presets/dominios', (req) => conPerfil(() => perfiles.aplicarPresetDominio({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })));
-  app.post('/routing-layout/presets/nivel', (req) => conPerfil(() => perfiles.aplicarPresetNivel({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })));
-  // Configurar un perfil con una frase: sin `aplicar` solo devuelve la propuesta (perfil y cambios).
-  app.post('/routing-layout/desde-texto', (req) => conPerfil(() => {
+  app.put('/routing-layout', async (req) => { await guardian.exigir(req, 'PUT /routing-layout'); return conPerfil(() => perfiles.guardar(req.body)); });
+  app.post('/routing-layout/presets/dominios', async (req) => { await guardian.exigir(req, 'POST /routing-layout/presets/dominios'); return conPerfil(() => perfiles.aplicarPresetDominio({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })); });
+  app.post('/routing-layout/presets/nivel', async (req) => { await guardian.exigir(req, 'POST /routing-layout/presets/nivel'); return conPerfil(() => perfiles.aplicarPresetNivel({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })); });
+  // Configurar un perfil con una frase: sin `aplicar` solo devuelve la propuesta (perfil y cambios); aplicarla es una mutación.
+  app.post('/routing-layout/desde-texto', async (req) => {
     const b = (req.body ?? {}) as { texto?: unknown; perfil_id?: unknown; aplicar?: unknown };
     const texto = typeof b.texto === 'string' ? b.texto.trim().slice(0, 2000) : '';
     if (!texto) throw falla(422, 'Escribe cómo quieres el perfil');
-    return perfiles.desdeTexto(texto, { perfilId: typeof b.perfil_id === 'string' ? b.perfil_id : undefined, aplicar: b.aplicar === true });
-  }));
+    if (b.aplicar === true) await guardian.exigir(req, 'POST /routing-layout/desde-texto');
+    return conPerfil(() => perfiles.desdeTexto(texto, { perfilId: typeof b.perfil_id === 'string' ? b.perfil_id : undefined, aplicar: b.aplicar === true }));
+  });
 
   // ── Proveedores y delegación real ────────────────────────────────────────
   app.get('/providers', () => PROVEEDORES.map((p) => disponibilidad(p)));
@@ -194,8 +214,9 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     return { config: rotador.leerEstado().config, resumen: { nucleo: cuenta('nucleo'), frecuente: cuenta('frecuente'), instantanea: cuenta('instantanea'), inactivas_instaladas: cuenta('inactiva'), en_almacen: inventario.filter((f) => f.enAlmacen.length && !f.instaladaEn.length).length }, plan: rotador.plan(), inventario };
   });
   /** Sin `aplicar`, solo el plan (simulación). Con él, mueve las carpetas (instaladas ⇄ almacén). */
-  app.post('/skills/rotar', (req) => {
+  app.post('/skills/rotar', async (req) => {
     const aplicar = (req.body as { aplicar?: unknown } | null)?.aplicar === true;
+    if (aplicar) await guardian.exigir(req, 'POST /skills/rotar (aplicar)');
     const plan = rotador.plan();
     return { aplicado: aplicar, ...(aplicar ? rotador.aplicar(plan) : plan) };
   });
@@ -216,6 +237,89 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       guardadas++;
     }
     return { guardadas };
+  });
+
+  // ── Laboratorio: cada componente mide su función con tareas reales de Atlas dev, anonimizadas (ver laboratorio.ts) ──
+  const sal = salLocal(dirLab);
+  const skillsEquipo = (() => { let c: SkillDisponible[] | null = null; return () => (c ??= descubrirSkills()); })();
+  // El delegador del laboratorio solo planifica: todos los agentes «disponibles» (se mide el perfil, no este equipo) y sin límites.
+  const delegadorLab = new Delegador({
+    almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), skillsDisponibles: skillsEquipo, limites: () => null,
+    disponible: (p) => ({ nombre: p.nombre, etiqueta: p.nombre, gratis: false, disponible: true, ruta: null, motivo: null, login: '' }),
+    ejecutor: () => { throw new Error('El laboratorio no ejecuta agentes'); },
+  });
+  const contextoDe = (id: string) => {
+    let cache: Promise<TareaAnonima[]> | null = null;
+    const base: ContextoLab = {
+      tareas: () => (cache ??= atlasDev.tareas(1000).then((t) => anonimizar(t, sal))),
+      calibraciones: (c) => registroLab.calibraciones(c),
+    };
+    switch (id) {
+      case 'delegador': return { ...base, perfil: () => perfilPorDefecto(perfiles.leer()), planificar: (p: string) => delegadorLab.planificar(p) };
+      case 'selector': return { ...base, skills: skillsEquipo, revisadas: () => almacen.tareasPlanas().filter((t) => t.revision?.['skills_usadas']?.length).map((t) => ({ id: t.task_id, prompt: t.prompt, skills: t.revision!['skills_usadas']! })) };
+      case 'clasificador': return { ...base, clasificar: (p: string) => clasificar(p, config()) };
+      case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
+      default: return base;
+    }
+  };
+  const ultimas = (id: string) => {
+    const vistas = new Set<string>();
+    return registroLab.ejecuciones(id, 100).filter((e) => !vistas.has(e.escenario) && vistas.add(e.escenario))
+      .map((e) => ({ escenario: e.escenario, inicio: e.inicio, muestra: e.muestra, suficiente: e.suficiente, hallazgos: e.hallazgos.length, error: e.error, metricas: e.metricas }));
+  };
+
+  app.get('/laboratorio/componentes', () => ({
+    version: ctx.version, modo: guardian.modo(), capas: CAPAS,
+    componentes: COMPONENTES.map((c) => ({
+      id: c.id, capa: c.capa, responsabilidad: c.responsabilidad, modulos: c.modulos, pendiente: c.pendiente ?? null,
+      escenarios: c.laboratorio?.escenarios.map((e) => ({ id: e.id, tipo: e.tipo, descripcion: e.descripcion })) ?? [],
+      ultimas: c.laboratorio ? ultimas(c.id) : [],
+    })),
+  }));
+  app.get('/laboratorio/ejecuciones', (req) => registroLab.ejecuciones(req.query['componente'] || undefined, entero(req.query['limite'], 50, 1, 1000)));
+  app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));
+  app.get('/laboratorio/propuestas', () => pasarela.listar());
+  /** Ejecuta el laboratorio de un componente (o `todos`). Solo mide y propone: los hallazgos `alta|media` salen como borradores. */
+  app.post('/laboratorio/ejecutar', async (req) => {
+    const b = (req.body ?? {}) as { componente?: unknown; escenario?: unknown; proponer?: unknown };
+    const id = typeof b.componente === 'string' ? b.componente : '';
+    const elegidos = id === 'todos' ? COMPONENTES.filter((c) => c.laboratorio) : [componente(id)].filter((c) => c !== null);
+    if (!elegidos.length) throw falla(404, `No hay componente «${id}». Usa «todos» o uno de: ${COMPONENTES.filter((c) => c.laboratorio).map((c) => c.id).join(', ')}`);
+    const sinLab = elegidos.find((c) => !c.laboratorio);
+    if (sinLab) throw falla(409, `«${sinLab.id}» aún no tiene laboratorio: ${sinLab.pendiente}`);
+    const informes = [];
+    for (const c of elegidos) {
+      informes.push(await ejecutarLaboratorio({ id: c.id, version: ctx.version, laboratorio: c.laboratorio! }, contextoDe(c.id), registroLab,
+        { pasarela: b.proponer === false ? null : pasarela, escenario: typeof b.escenario === 'string' ? b.escenario : null }));
+    }
+    return { informes };
+  });
+
+  /** Para el panel sí/no de «Preparando»: sugerencias ponderadas para el prompt y búsqueda en la biblioteca, como tarjetas. */
+  app.get('/laboratorio/sugerencias-skills', (req) => {
+    const prompt = (req.query['prompt'] ?? '').slice(0, 20_000), q = (req.query['q'] ?? '').slice(0, 200);
+    const equipo = skillsEquipo();
+    const porNombre = new Map(equipo.map((s) => [s.name, s]));
+    const tarjeta = (nombre: string, puntos: number | null, descripcion = '') => {
+      const s = porNombre.get(nombre), f = biblioteca.fichaDe(nombre);
+      return { nombre, puntos, descripcion: s?.description || f?.descripcion || descripcion, estrellas: f?.estrellas ?? null, heredadas: f?.heredadas ?? false,
+        repo_url: f?.repo_url ?? null, grupo: f?.grupo ?? null, instalada: (s?.instaladaEn.length ?? 0) > 0, almacen: (s?.enAlmacen.length ?? 0) > 0 && !(s?.instaladaEn.length) };
+    };
+    const sugeridas = prompt ? puntuarSkills(prompt, equipo).slice(0, entero(req.query['limite'], 10, 1, 30)).map((x) => tarjeta(x.nombre, x.puntos)) : [];
+    const encontradas = q ? [
+      ...equipo.filter((s) => `${s.name} ${s.description}`.toLowerCase().includes(q.toLowerCase())).slice(0, 15).map((s) => tarjeta(s.name, null)),
+      ...biblioteca.buscar(q, 15).filter((f) => !porNombre.has(f.slug) && !porNombre.has(f.nombre)).map((f) => ({ ...tarjeta(f.nombre, null, f.descripcion), instalable: true })),
+    ] : [];
+    return { sugeridas, encontradas, biblioteca: biblioteca.disponible };
+  });
+  /** La respuesta de la persona al sí/no de las skills de una tarea (solo se guarda el hash de la tarea). */
+  app.post('/laboratorio/calibracion', (req) => {
+    const b = (req.body ?? {}) as { tarea?: unknown; componente?: unknown; propuesta?: unknown; respuesta?: unknown; correccion?: unknown };
+    const lista = (v: unknown) => (Array.isArray(v) ? v.slice(0, 20).map((x) => String(x).slice(0, 120)) : []);
+    if (typeof b.tarea !== 'string' || !/^[\w-]{1,40}$/.test(b.tarea)) throw falla(422, 'tarea: el id de la tarea de Atlas dev');
+    if (b.respuesta !== 'si' && b.respuesta !== 'no' && b.respuesta !== 'sin_revisar') throw falla(422, 'respuesta: si | no | sin_revisar');
+    registroLab.guardarCalibracion({ tarea_hash: hashTarea(sal, b.tarea), componente: typeof b.componente === 'string' ? b.componente.slice(0, 40) : 'selector', propuesta: lista(b.propuesta), respuesta: b.respuesta, correccion: lista(b.correccion), creada: new Date().toISOString() });
+    return { guardada: true };
   });
 
   for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/executions'], ['post', '/ingest']] as const) {
