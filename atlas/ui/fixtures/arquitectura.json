@@ -1,2045 +1,2416 @@
 {
- "version": "0.8.0",
- "modo": "desarrollo",
- "generado": "2026-10-24T08:31:00Z",
- "familias": [
-  {
-   "id": "interfaz",
-   "nombre": "Interfaz",
-   "orden": 1,
-   "componentes": [
-    "api",
-    "cli"
-   ]
-  },
-  {
-   "id": "modificadores",
-   "nombre": "Modificadores",
-   "orden": 2,
-   "componentes": [
-    "curador",
-    "comparador",
-    "eficiencia",
-    "metodo",
-    "prompts"
-   ]
-  },
-  {
-   "id": "observacion",
-   "nombre": "Observación",
-   "orden": 3,
-   "componentes": [
-    "analitica",
-    "produccion"
-   ]
-  },
-  {
-   "id": "ejecucion",
-   "nombre": "Ejecución",
-   "orden": 4,
-   "componentes": [
-    "proveedores",
-    "limites",
-    "aislamiento"
-   ]
-  },
-  {
-   "id": "decision",
-   "nombre": "Decisión",
-   "orden": 5,
-   "componentes": [
-    "clasificador",
-    "delegador",
-    "selector",
-    "rotador",
-    "etiquetas"
-   ]
-  },
-  {
-   "id": "base",
-   "nombre": "Base",
-   "orden": 6,
-   "componentes": [
-    "almacen",
-    "biblioteca",
-    "modo",
-    "pasarela",
-    "laboratorio"
-   ]
-  }
- ],
- "componentes": [
-  {
-   "id": "almacen",
-   "familia": "base",
-   "responsabilidad": "Guardar y leer el registro de tareas, decisiones, runs y revisiones",
-   "modulos": [
-    "almacen",
-    "redondeo"
-   ],
-   "pendiente": "cubierto por la paridad con Python; laboratorio en el borrador «Laboratorios de ejecución y observación»",
-   "ficha": {
-    "resumen": "Es el registro único (task_logs.db): todo lo que Karajan decide o ejecuta queda aquí para poder medirlo después.",
-    "como_funciona": {
-     "entradas": [
-      "Tarea clasificada",
-      "Decisión del delegador",
-      "Run de un agente",
-      "Revisión humana"
-     ],
-     "pasos": [
-      "Normaliza y redondea los valores",
-      "Escribe en SQLite con WAL",
-      "Indexa por tarea y fecha"
-     ],
-     "salidas": [
-      "task_logs.db",
-      "Lecturas para analítica y laboratorios"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "biblioteca",
-   "familia": "base",
-   "responsabilidad": "Dar la ficha de una skill (estrellas, repo, taxonomía) desde resources.db, en solo lectura",
-   "modulos": [
-    "biblioteca"
-   ],
-   "pendiente": null,
-   "ficha": {
-    "resumen": "Consulta resources.db y entrega la ficha de cada skill del equipo sin escribir nada.",
-    "como_funciona": {
-     "entradas": [
-      "Nombre de la skill",
-      "resources.db"
-     ],
-     "pasos": [
-      "Busca el recurso por nombre",
-      "Separa estrellas propias de heredadas",
-      "Añade el grupo de la taxonomía"
-     ],
-     "salidas": [
-      "Ficha de la skill",
-      "Cobertura del catálogo"
-     ]
-    }
-   },
-   "estado": "hallazgos",
-   "configuracion": {
-    "origen": "resources.db (solo lectura)",
-    "skills_del_equipo": 64
-   },
-   "escenarios": [
+  "version": "0.9.0",
+  "modo": "desarrollo",
+  "generado": "2026-10-24T08:31:00Z",
+  "familias": [
     {
-     "id": "cobertura",
-     "tipo": "contrato",
-     "descripcion": "Fichas, estrellas propias y taxonomía de las skills que hay en el equipo",
-     "umbrales": {
-      "estrellas_heredadas": "≤ 0.3",
-      "sin_ficha": "≤ 20 %"
-     }
-    }
-   ],
-   "ultimas": [
-    {
-     "escenario": "cobertura",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 64,
-     "suficiente": true,
-     "hallazgos": 1,
-     "error": null,
-     "metricas": {
-      "con_ficha": 0.92,
-      "estrellas_propias": 0.56,
-      "estrellas_heredadas": 0.44,
-      "sin_grupo": 0.07
-     },
-     "ms": 31
-    }
-   ],
-   "historial": {
-    "con_ficha": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.86,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.88,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.9,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.92,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.92,
-      "suficiente": true,
-      "escenario": "cobertura"
-     }
-    ],
-    "estrellas_propias": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.52,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.54,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.55,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.55,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.56,
-      "suficiente": true,
-      "escenario": "cobertura"
-     }
-    ],
-    "estrellas_heredadas": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.48,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.46,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.45,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.45,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.44,
-      "suficiente": true,
-      "escenario": "cobertura"
-     }
-    ],
-    "sin_grupo": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.1,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.09,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.08,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.08,
-      "suficiente": true,
-      "escenario": "cobertura"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.07,
-      "suficiente": true,
-      "escenario": "cobertura"
-     }
-    ]
-   },
-   "detalle": {},
-   "hallazgos": [
-    {
-     "clave": "estrellas-heredadas",
-     "severidad": "media",
-     "titulo": "El 44 % de las estrellas son de la colección, no de la skill",
-     "evidencia": "26 de 59 fichas heredan las estrellas del repo contenedor.",
-     "propuesta": "Marcar las estrellas heredadas y no usarlas para ordenar o comparar skills."
-    }
-   ],
-   "operacion": null
-  },
-  {
-   "id": "modo",
-   "familia": "base",
-   "responsabilidad": "Bloquear cualquier cambio de configuración sin una tarea aceptada de Atlas dev",
-   "modulos": [
-    "modo",
-    "atlas-dev"
-   ],
-   "pendiente": "cubierto por tests unitarios (atlas/tests/modo.test.ts)",
-   "ficha": {
-    "resumen": "Guardián de producción: sin tarea aceptada, cualquier mutación de configuración responde 423.",
-    "como_funciona": {
-     "entradas": [
-      "modo.json",
-      "Tarea en la petición"
-     ],
-     "pasos": [
-      "Lee el modo",
-      "Consulta la tarea en Atlas dev",
-      "Acepta si está encolada o ejecutando"
-     ],
-     "salidas": [
-      "Paso libre",
-      "423 + borrador pedido"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "pasarela",
-   "familia": "base",
-   "responsabilidad": "Convertir los hallazgos en tareas borrador de Atlas dev, sin duplicar ni reabrir lo descartado",
-   "modulos": [
-    "pasarela-borradores"
-   ],
-   "pendiente": "cubierto por tests unitarios (atlas/tests/pasarela.test.ts)",
-   "ficha": {
-    "resumen": "Única salida de Karajan para proponer un cambio: hallazgo alto o medio, tarea borrador idempotente.",
-    "como_funciona": {
-     "entradas": [
-      "Hallazgos del laboratorio"
-     ],
-     "pasos": [
-      "Calcula la clave Origen",
-      "Comprueba borradores.json",
-      "Crea o actualiza el borrador"
-     ],
-     "salidas": [
-      "Tarea borrador en Atlas dev"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "laboratorio",
-   "familia": "base",
-   "responsabilidad": "Ejecutar los laboratorios sobre tareas anonimizadas y guardar sus resultados",
-   "modulos": [
-    "laboratorio",
-    "componentes"
-   ],
-   "pendiente": "es el propio motor (atlas/tests/laboratorio.test.ts)",
-   "ficha": {
-    "resumen": "Motor común: anonimiza las tareas, ejecuta los escenarios de cada componente y guarda las métricas.",
-    "como_funciona": {
-     "entradas": [
-      "Tareas de Atlas dev",
-      "Escenarios del componente"
-     ],
-     "pasos": [
-      "Anonimiza (hash con sal local)",
-      "Ejecuta cada escenario",
-      "Guarda en laboratorio.db"
-     ],
-     "salidas": [
-      "Resultados y hallazgos"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "clasificador",
-   "familia": "decision",
-   "responsabilidad": "Dar nivel, dominio, intención y subtareas a un prompt",
-   "modulos": [
-    "heuristica"
-   ],
-   "pendiente": null,
-   "ficha": {
-    "resumen": "Heurística que estima la complejidad (N1 a N5), el dominio y las subtareas de un prompt.",
-    "como_funciona": {
-     "entradas": [
-      "Prompt de la tarea"
-     ],
-     "pasos": [
-      "Extrae señales léxicas",
-      "Puntúa complejidad y dominio",
-      "Detecta subtareas"
-     ],
-     "salidas": [
-      "Nivel, dominio, intención, subtareas"
-     ]
-    }
-   },
-   "estado": "sin_ejecutar",
-   "configuracion": {
-    "niveles": [
-     "N1",
-     "N2",
-     "N3",
-     "N4",
-     "N5"
-    ],
-    "dominios": 12
-   },
-   "escenarios": [
-    {
-     "id": "frente-a-la-persona",
-     "tipo": "replay",
-     "descripcion": "Nivel y dominio del clasificador frente a los que anotó la persona en la hoja",
-     "umbrales": {
-      "muestra": "≥ 30 tareas con nivel anotado",
-      "nivel_exacto": "IC95 superior ≥ 0.6"
-     }
-    }
-   ],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": {
-    "tareas": 61,
-    "runs": 61,
-    "latencia_p50_ms": 6,
-    "coste_total_usd": 0,
-    "tokens": 0,
-    "ultima_actividad": "2026-10-24T08:30:00Z"
-   }
-  },
-  {
-   "id": "delegador",
-   "familia": "decision",
-   "responsabilidad": "Elegir el agente de cada subtarea según el perfil y sus reglas",
-   "modulos": [
-    "delegar",
-    "perfiles",
-    "reglas",
-    "perfil-texto"
-   ],
-   "pendiente": null,
-   "ficha": {
-    "resumen": "Aplica las reglas del perfil activo a cada subtarea y devuelve el agente con la regla que lo decidió.",
-    "como_funciona": {
-     "entradas": [
-      "Subtareas clasificadas",
-      "Perfil activo",
-      "Límites y agentes disponibles"
-     ],
-     "pasos": [
-      "Evalúa las reglas en orden",
-      "Aplica el nivel por defecto si ninguna casa",
-      "Comprueba disponibilidad y límites",
-      "Registra la decisión con su regla"
-     ],
-     "salidas": [
-      "Plan: agente por subtarea",
-      "Decisión trazable"
-     ]
-    },
-    "reglas": [
-     "Cada decisión sale de una regla del perfil",
-     "Una regla tapada por otra anterior nunca se aplica",
-     "Todo nivel debe tener un agente"
-    ]
-   },
-   "estado": "hallazgos",
-   "configuracion": {
-    "perfil": "equilibrado",
-    "agentes_disponibles": [
-     "claude-cli",
-     "codex"
-    ],
-    "niveles": {
-     "N1": "codex",
-     "N2": "codex",
-     "N3": "claude-cli",
-     "N4": "claude-cli",
-     "N5": "claude-cli"
-    },
-    "umbrales": {
-     "muestraMinima": 20,
-     "segmentoMinimo": 10
-    },
-    "reglas": 14
-   },
-   "escenarios": [
-    {
-     "id": "fidelidad",
-     "tipo": "contrato",
-     "descripcion": "Cada decisión sale de una regla del perfil; sin reglas tapadas ni niveles sin agente",
-     "umbrales": {
-      "trazabilidad": "= 1",
-      "muestra": "≥ 20 tareas para valorar reglas sin uso"
-     }
+      "id": "interfaz",
+      "nombre": "Interfaz",
+      "orden": 1,
+      "componentes": [
+        "api",
+        "cli"
+      ]
     },
     {
-     "id": "concordancia",
-     "tipo": "replay",
-     "descripcion": "A ciegas: el agente que elegiría Karajan frente al que eligió la persona",
-     "umbrales": {
-      "concordancia": "≥ 0.7"
-     }
+      "id": "modificadores",
+      "nombre": "Modificadores",
+      "orden": 2,
+      "componentes": [
+        "curador",
+        "comparador",
+        "eficiencia",
+        "metodo",
+        "prompts"
+      ]
     },
     {
-     "id": "adecuacion",
-     "tipo": "replay",
-     "descripcion": "Segmentos dominio × nivel donde el perfil discrepa de la persona y la persona acierta",
-     "umbrales": {
-      "segmento": "n ≥ 10",
-      "discrepancia": "IC95 inferior > 0.3"
-     }
+      "id": "observacion",
+      "nombre": "Observación",
+      "orden": 3,
+      "componentes": [
+        "analitica",
+        "produccion"
+      ]
     },
     {
-     "id": "determinismo",
-     "tipo": "contrato",
-     "descripcion": "El mismo prompt produce el mismo plan; las tareas en auto repiten su elección",
-     "umbrales": {
-      "estabilidad": "= 1"
-     }
+      "id": "ejecucion",
+      "nombre": "Ejecución",
+      "orden": 4,
+      "componentes": [
+        "proveedores",
+        "limites",
+        "aislamiento"
+      ]
+    },
+    {
+      "id": "decision",
+      "nombre": "Decisión",
+      "orden": 5,
+      "componentes": [
+        "clasificador",
+        "delegador",
+        "selector",
+        "rotador",
+        "etiquetas"
+      ]
+    },
+    {
+      "id": "base",
+      "nombre": "Base",
+      "orden": 6,
+      "componentes": [
+        "almacen",
+        "biblioteca",
+        "modo",
+        "pasarela",
+        "laboratorio"
+      ]
     }
-   ],
-   "ultimas": [
+  ],
+  "componentes": [
     {
-     "escenario": "fidelidad",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 42,
-     "suficiente": true,
-     "hallazgos": 1,
-     "error": null,
-     "metricas": {
-      "decisiones": 42,
-      "trazabilidad": 1,
-      "reglas_activas": 14,
-      "reglas_tapadas": 1,
-      "reglas_sin_uso": 3,
-      "niveles_sin_agente": 0
-     },
-     "ms": 38
-    },
-    {
-     "escenario": "concordancia",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 31,
-     "suficiente": true,
-     "hallazgos": 0,
-     "error": null,
-     "metricas": {
-      "concordancia": 0.74,
-      "concordancia_ic_inf": 0.61,
-      "concordancia_ic_sup": 0.85
-     },
-     "ms": 210
-    },
-    {
-     "escenario": "adecuacion",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 31,
-     "suficiente": true,
-     "hallazgos": 0,
-     "error": null,
-     "metricas": {
-      "segmentos": 9,
-      "segmentos_evaluables": 5,
-      "segmentos_inadecuados": 1
-     },
-     "ms": 120
-    },
-    {
-     "escenario": "determinismo",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 42,
-     "suficiente": true,
-     "hallazgos": 0,
-     "error": null,
-     "metricas": {
-      "estabilidad": 1,
-      "auto_n": 12,
-      "auto_igual_que_entonces": 0.92
-     },
-     "ms": 64
-    }
-   ],
-   "historial": {
-    "trazabilidad": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     }
-    ],
-    "reglas_tapadas": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     }
-    ],
-    "reglas_sin_uso": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 5,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 4,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 4,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 3,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 3,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     }
-    ],
-    "decisiones": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 18,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 26,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 33,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 38,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 42,
-      "suficiente": true,
-      "escenario": "fidelidad"
-     }
-    ],
-    "concordancia": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.62,
-      "suficiente": false,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.66,
-      "suficiente": false,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.69,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.72,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.74,
-      "suficiente": true,
-      "escenario": "concordancia"
-     }
-    ],
-    "concordancia_ic_inf": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.41,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.46,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.52,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.58,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.61,
-      "suficiente": true,
-      "escenario": "concordancia"
-     }
-    ],
-    "segmentos_inadecuados": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     }
-    ],
-    "segmentos_evaluables": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 2,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 3,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 4,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 5,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 5,
-      "suficiente": true,
-      "escenario": "adecuacion"
-     }
-    ],
-    "estabilidad": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "determinismo"
-     }
-    ],
-    "auto_igual_que_entonces": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.8,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.85,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.9,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.92,
-      "suficiente": true,
-      "escenario": "determinismo"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.92,
-      "suficiente": true,
-      "escenario": "determinismo"
-     }
-    ]
-   },
-   "detalle": {
-    "fidelidad": {
-     "perfil": "equilibrado",
-     "reglas": [
-      {
-       "regla": "N5 → claude",
-       "casa": 9,
-       "elegida": 9
+      "id": "almacen",
+      "familia": "base",
+      "responsabilidad": "Guardar y leer el registro de tareas, decisiones, runs y revisiones",
+      "modulos": [
+        "almacen",
+        "redondeo"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Guarda y lee el registro de tareas, decisiones, runs y revisiones en task_logs.db (SQLite en WAL), con el mismo esquema que el Karajan nativo.",
+        "como_funciona": {
+          "entradas": [
+            "Tareas, decisiones y runs que escribe el delegador",
+            "Revisiones del baúl que envía Atlas dev"
+          ],
+          "pasos": [
+            "Crea las tablas vacías si no existen para que un paquete recién instalado responda (almacen.ts · constructor)",
+            "Lee tareas, runs y decisiones saltándose las filas dañadas, como Python (almacen.ts · listarTareas, aTarea)",
+            "Agrega métricas y rendimiento por agente en SQL (almacen.ts · metricas, rendimientoAgentes)",
+            "Aplana tareas con revisiones y decisiones para la analítica (almacen.ts · tareasPlanas)",
+            "Escribe tarea, decisiones y runs de una delegación (almacen.ts · guardarTarea, registrarDecision, registrarRun)"
+          ],
+          "salidas": [
+            "Registros de tareas, runs y decisiones",
+            "Agregados para /metrics y /agents/performance"
+          ]
+        },
+        "reglas": [
+          "Comparte el fichero con el Karajan nativo cuando existe (SQLite en WAL admite los dos procesos).",
+          "Los redondeos y fechas replican a Python (redondeo.ts, paridad.test.ts).",
+          "Su laboratorio comprueba la integridad del registro real en solo lectura y la ida y vuelta en un task_logs.db temporal."
+        ]
       },
-      {
-       "regla": "diseño → claude",
-       "casa": 11,
-       "elegida": 8
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "integridad",
+          "tipo": "contrato",
+          "descripcion": "Solo lectura: runs y decisiones huérfanos, estados válidos y fechas coherentes del registro real",
+          "umbrales": {}
+        },
+        {
+          "id": "ida-y-vuelta",
+          "tipo": "contrato",
+          "descripcion": "En un task_logs.db temporal: escribir y leer da lo mismo (tarea, decisión, run, revisión, agregados)",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "biblioteca",
+      "familia": "base",
+      "responsabilidad": "Dar la ficha de una skill (estrellas, repo, taxonomía) desde resources.db, en solo lectura",
+      "modulos": [
+        "biblioteca"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Da la ficha de una skill (descripción, estrellas, repo, grupo de la taxonomía) leyendo resources.db en solo lectura, y busca en ella por texto.",
+        "como_funciona": {
+          "entradas": [
+            "Nombre de la skill o texto de búsqueda",
+            "resources.db del Karajan nativo (ATLAS_KARAJAN_RESOURCES o <datos nativos>/resources.db)"
+          ],
+          "pasos": [
+            "Abre resources.db en solo lectura; sin el fichero, la biblioteca figura como no disponible (biblioteca.ts · constructor)",
+            "fichaDe: busca por slug, nombre o «…--nombre», prefiriendo la skill sobre la capacidad (biblioteca.ts · fichaDe)",
+            "Marca las estrellas como heredadas si la skill es hija de una colección (biblioteca.ts · ficha)",
+            "buscar: FTS5 por relevancia y, si no hay, LIKE sobre nombre y resumen (biblioteca.ts · buscar)"
+          ],
+          "salidas": [
+            "FichaRecurso: nombre, tipo, descripción, estrellas (y si son heredadas), repo, grupo y capacidades"
+          ]
+        },
+        "reglas": [
+          "Nunca escribe: la refrescan la ingesta y el refresco del Karajan nativo.",
+          "Las estrellas heredadas no dicen nada de la skill en concreto."
+        ]
       },
-      {
-       "regla": "infra → codex",
-       "casa": 7,
-       "elegida": 7
+      "estado": "hallazgos",
+      "configuracion": {
+        "origen": "resources.db (solo lectura)",
+        "skills_del_equipo": 64
       },
-      {
-       "regla": "N1–N2 → codex",
-       "casa": 14,
-       "elegida": 12
+      "escenarios": [
+        {
+          "id": "cobertura",
+          "tipo": "contrato",
+          "descripcion": "Fichas, estrellas propias y taxonomía de las skills que hay en el equipo",
+          "umbrales": {
+            "estrellas_heredadas": "≤ 0.3",
+            "sin_ficha": "≤ 20 %"
+          }
+        }
+      ],
+      "ultimas": [
+        {
+          "escenario": "cobertura",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 64,
+          "suficiente": true,
+          "hallazgos": 1,
+          "error": null,
+          "metricas": {
+            "con_ficha": 0.92,
+            "estrellas_propias": 0.56,
+            "estrellas_heredadas": 0.44,
+            "sin_grupo": 0.07
+          },
+          "ms": 31
+        }
+      ],
+      "historial": {
+        "con_ficha": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.86,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.88,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.9,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.92,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.92,
+            "suficiente": true,
+            "escenario": "cobertura"
+          }
+        ],
+        "estrellas_propias": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.52,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.54,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.55,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.55,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.56,
+            "suficiente": true,
+            "escenario": "cobertura"
+          }
+        ],
+        "estrellas_heredadas": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.48,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.46,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.45,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.45,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.44,
+            "suficiente": true,
+            "escenario": "cobertura"
+          }
+        ],
+        "sin_grupo": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.1,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.09,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.08,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.08,
+            "suficiente": true,
+            "escenario": "cobertura"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.07,
+            "suficiente": true,
+            "escenario": "cobertura"
+          }
+        ]
       },
-      {
-       "regla": "revisión → claude",
-       "casa": 6,
-       "elegida": 0
+      "detalle": {},
+      "hallazgos": [
+        {
+          "clave": "estrellas-heredadas",
+          "severidad": "media",
+          "titulo": "El 44 % de las estrellas son de la colección, no de la skill",
+          "evidencia": "26 de 59 fichas heredan las estrellas del repo contenedor.",
+          "propuesta": "Marcar las estrellas heredadas y no usarlas para ordenar o comparar skills."
+        }
+      ],
+      "operacion": null
+    },
+    {
+      "id": "modo",
+      "familia": "base",
+      "responsabilidad": "Bloquear cualquier cambio de configuración sin una tarea aceptada de Atlas dev",
+      "modulos": [
+        "modo",
+        "atlas-dev"
+      ],
+      "pendiente": "cubierto por tests unitarios (atlas/tests/modo.test.ts)",
+      "ficha": {
+        "resumen": "Bloquea cualquier cambio de configuración sin una tarea aceptada de Atlas dev: en producción responde 423 y deja el cambio pedido como borrador.",
+        "como_funciona": {
+          "entradas": [
+            "Petición de mutación (cabecera x-karajan-tarea o cuerpo.tarea)",
+            "<datos>/modo.json",
+            "Estado de esa tarea en Atlas dev"
+          ],
+          "pasos": [
+            "Lee el modo de modo.json; sin fichero o ilegible, producción (modo.ts · leerModo)",
+            "En desarrollo deja pasar (modo.ts · Guardian.exigir)",
+            "En producción busca el id de tarea en la cabecera o en el cuerpo (modo.ts · tareaDe)",
+            "Si la tarea está encolada o ejecutando, deja pasar; si no, abre un borrador con la petición y responde 423 (modo.ts · exigir)"
+          ],
+          "salidas": [
+            "Paso libre con la tarea que lo autoriza, o error 423 con el borrador abierto"
+          ]
+        },
+        "reglas": [
+          "El modo NO se cambia por API: solo editando modo.json.",
+          "Clasificar, planificar, delegar, el feedback y el laboratorio siguen libres."
+        ]
       },
-      {
-       "regla": "datos → codex",
-       "casa": 0,
-       "elegida": 0
+      "estado": "pendiente",
+      "configuracion": {},
+      "escenarios": [],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "pasarela",
+      "familia": "base",
+      "responsabilidad": "Convertir los hallazgos en tareas borrador de Atlas dev, sin duplicar ni reabrir lo descartado",
+      "modulos": [
+        "pasarela-borradores"
+      ],
+      "pendiente": "cubierto por tests unitarios (atlas/tests/pasarela.test.ts)",
+      "ficha": {
+        "resumen": "Convierte los hallazgos medios y altos en tareas BORRADOR de Atlas dev, sin duplicar lo ya abierto ni reabrir lo que la persona descartó.",
+        "como_funciona": {
+          "entradas": [
+            "Hallazgo (clave, severidad, título, evidencia, propuesta, criterios) de un laboratorio o del guardián de modo",
+            "borradores.json"
+          ],
+          "pasos": [
+            "Los hallazgos baja se quedan en el informe (pasarela-borradores.ts · proponer)",
+            "Busca la clave «<componente>:<clave>» en borradores.json (pasarela-borradores.ts · proponer)",
+            "Si la tarea sigue en borrador y cambió, la actualiza; si no cambió, no hace nada (pasarela-borradores.ts · proponer)",
+            "Si fue descartada no la reabre; si ya se aceptó no la toca; si no existe, crea un borrador nuevo (pasarela-borradores.ts · proponer)",
+            "El borrador lleva Evidencia, Propuesta, Criterios y «Origen: karajan:<componente>:<clave>» (pasarela-borradores.ts · especificacion)"
+          ],
+          "salidas": [
+            "Tarea borrador en la cola de Atlas dev",
+            "Registro clave → tarea en borradores.json"
+          ]
+        },
+        "reglas": [
+          "Es la única salida de Karajan en producción para proponer un cambio.",
+          "Idempotente por clave."
+        ]
+      },
+      "estado": "pendiente",
+      "configuracion": {},
+      "escenarios": [],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "laboratorio",
+      "familia": "base",
+      "responsabilidad": "Ejecutar los laboratorios sobre tareas anonimizadas y guardar sus resultados",
+      "modulos": [
+        "laboratorio",
+        "ab",
+        "componentes",
+        "arquitectura",
+        "fichas-componentes"
+      ],
+      "pendiente": "es el propio motor (atlas/tests/laboratorio.test.ts)",
+      "ficha": {
+        "resumen": "Es el motor que ejecuta los laboratorios de cada componente sobre tareas anonimizadas, guarda sus resultados en laboratorio.db y propone los hallazgos por la pasarela.",
+        "como_funciona": {
+          "entradas": [
+            "Laboratorio del componente (escenarios contrato, replay o feedback)",
+            "Tareas de Atlas dev anonimizadas (hash con sal local; el prompt solo en memoria)",
+            "Calibraciones humanas (sí/no de «Preparando»)"
+          ],
+          "pasos": [
+            "Anonimiza las tareas: hash con sal local, sin título, repo ni hoja, y sin las propuestas del propio Karajan (laboratorio.ts · anonimizar)",
+            "Ejecuta cada escenario midiendo el tiempo y capturando el error (laboratorio.ts · ejecutarLaboratorio)",
+            "Guarda muestra, suficiencia, métricas, hallazgos y detalle en lab_ejecuciones (laboratorio.ts · RegistroLab.guardar)",
+            "Propone por la pasarela los hallazgos alta y media (laboratorio.ts · ejecutarLaboratorio)"
+          ],
+          "salidas": [
+            "Informe por escenario",
+            "Historial en laboratorio.db",
+            "Borradores en Atlas dev"
+          ]
+        },
+        "reglas": [
+          "No muta producción: los escenarios reciben el contexto en solo lectura.",
+          "Con muestra insuficiente da métricas pero no saca hallazgos.",
+          "Los resultados van a laboratorio.db, separada de task_logs.db."
+        ]
+      },
+      "estado": "pendiente",
+      "configuracion": {},
+      "escenarios": [],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "clasificador",
+      "familia": "decision",
+      "responsabilidad": "Dar nivel, dominio, intención y subtareas a un prompt",
+      "modulos": [
+        "heuristica"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Clasifica un prompt sin LLM: detecta dominio e intención por palabras, puntúa seis criterios, pondera la complejidad y de ahí saca el nivel (N1–N5), el modelo lógico, las skills sugeridas, las subtareas y si hace falta revisión humana.",
+        "como_funciona": {
+          "entradas": [
+            "Texto del prompt",
+            "Configuración activa (pesos de criterios, umbrales de nivel, nivel→modelo, política de revisión) de active_config.json"
+          ],
+          "pasos": [
+            "Normaliza a minúsculas y cuenta palabras (heuristica.ts · clasificar)",
+            "Detecta dominios por palabras clave: security, devops, programming, data, documents, product; «general» si ninguno (heuristica.ts · detectarDominios)",
+            "Detecta la intención: diagnose_and_fix, implement_feature, analyze_or_review, transform_or_extract o classify_and_plan (heuristica.ts · detectarIntencion)",
+            "Puntúa seis criterios de 0 a 5: ambigüedad, contexto, razonamiento, autonomía, riesgo operativo y dificultad de validación (heuristica.ts · ambiguedad … validacion)",
+            "Complejidad = suma ponderada de los criterios con criteria_weights, redondeada a 2 decimales (heuristica.ts · calcularComplejidad)",
+            "Nivel por umbrales [1.5, 2.5, 3.5, 4.3] y modelo lógico por level_to_model (heuristica.ts · nivelPara, modeloPara)",
+            "Propone skills por dominio (+ repo-analyzer si diagnostica o revisa, + security-review en N5, + ponytail) y reparte 2–4 subtareas según nivel e intención (heuristica.ts · skillsRecomendadas, subtareas)",
+            "Decide la revisión humana: nivel ≥ mínimo, riesgo ≥ umbral, dominio sensible o intención crítica (heuristica.ts · requiereRevision)"
+          ],
+          "salidas": [
+            "Clasificacion: task_id, dominios, intención, criterios, complejidad, nivel, modelo recomendado, estrategia, skills, subtareas, requires_human_review, razón y plan de validación"
+          ]
+        },
+        "reglas": [
+          "Es determinista: el mismo prompt da la misma clasificación (salvo task_id y fecha).",
+          "No guarda nada: persistir la tarea es del delegador.",
+          "Paridad con el original Python comprobada contra salidas grabadas (tests/paridad.test.ts)."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {
+        "niveles": [
+          "N1",
+          "N2",
+          "N3",
+          "N4",
+          "N5"
+        ],
+        "dominios": 12
+      },
+      "escenarios": [
+        {
+          "id": "frente-a-la-persona",
+          "tipo": "replay",
+          "descripcion": "Nivel y dominio del clasificador frente a los que anotó la persona en la hoja",
+          "umbrales": {
+            "muestra": "≥ 30 tareas con nivel anotado",
+            "nivel_exacto": "IC95 superior ≥ 0.6"
+          }
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": {
+        "tareas": 61,
+        "runs": 61,
+        "latencia_p50_ms": 6,
+        "coste_total_usd": 0,
+        "tokens": 0,
+        "ultima_actividad": "2026-10-24T08:30:00Z"
       }
-     ]
     },
-    "concordancia": {
-     "matriz_humano_vs_karajan": {
-      "claude-cli": {
-       "claude-cli": 14,
-       "codex": 4
+    {
+      "id": "delegador",
+      "familia": "decision",
+      "responsabilidad": "Elegir el agente de cada subtarea según el perfil y sus reglas",
+      "modulos": [
+        "delegar",
+        "perfiles",
+        "reglas",
+        "perfil-texto"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Elige qué agente (Claude Code, Codex o Qwen) hace cada subtarea con el perfil por defecto —primero sus reglas por dominio, luego sus niveles—, aplica el respaldo y el límite semanal de Claude, y puede ejecutarlo registrándolo todo.",
+        "como_funciona": {
+          "entradas": [
+            "Prompt (clasificado por el clasificador y con las skills del selector)",
+            "Perfil por defecto de routing_layout.json (entidades y reglas)",
+            "Disponibilidad de los agentes en este equipo",
+            "Límites del plan (limites-plan.json)"
+          ],
+          "pasos": [
+            "Clasifica el prompt y pide las skills al selector, que quedan en la primera subtarea (delegar.ts · planificar)",
+            "Por subtarea, si se forzó una entidad la usa; si no, toma la PRIMERA regla activa que case por dominio (o área frontend/backend/oficina del texto), intención y nivel (reglas.ts · elegirRegla)",
+            "Sin regla, la primera entidad cuyo nivel incluya el de la subtarea (delegar.ts · asignar)",
+            "Si el agente no está disponible, respaldo en orden codex → claude-cli → ollama-qwen (con skills solo codex o claude-cli) (delegar.ts · asignar)",
+            "Si Claude pasó su umbral semanal, lo suyo se va a Codex y se anota (delegar.ts · asignar, limites.ts · claudeExcedido)",
+            "Delegar: guarda la tarea y las decisiones classify/validate/assign/fallback; una tarea con revisión humana queda bloqueada hasta aprobarla (delegar.ts · delegar)",
+            "En segundo plano, por subtarea: espera turno según max_concurrent, trabaja en su worktree si está activo, repone la skill con el rotador y lanza el agente con 15 min de tiempo (delegar.ts · ejecutar)",
+            "Registra cada run, cierra la rama git y deja la tarea como completed o failed (delegar.ts · ejecutar)"
+          ],
+          "salidas": [
+            "Plan: una asignación por subtarea (entidad, proveedor, modelo, regla o nivel que decidió, motivo)",
+            "Con delegar: tarea, decisiones y runs en task_logs.db"
+          ]
+        },
+        "reglas": [
+          "Cada decisión sale de una regla o de un nivel del perfil y queda explicada en el motivo.",
+          "Se ejecuta el perfil por defecto (default_profile_id), no el que se esté editando.",
+          "Qwen no recibe skills: si la subtarea las lleva, pasa a Codex o Claude.",
+          "Planificar no ejecuta nada ni escribe en el registro."
+        ]
       },
-      "codex": {
-       "claude-cli": 4,
-       "codex": 9
+      "estado": "hallazgos",
+      "configuracion": {
+        "perfil": "equilibrado",
+        "agentes_disponibles": [
+          "claude-cli",
+          "codex"
+        ],
+        "niveles": {
+          "N1": "codex",
+          "N2": "codex",
+          "N3": "claude-cli",
+          "N4": "claude-cli",
+          "N5": "claude-cli"
+        },
+        "umbrales": {
+          "muestraMinima": 20,
+          "segmentoMinimo": 10
+        },
+        "reglas": 14
+      },
+      "escenarios": [
+        {
+          "id": "fidelidad",
+          "tipo": "contrato",
+          "descripcion": "Cada decisión sale de una regla del perfil; sin reglas tapadas ni niveles sin agente",
+          "umbrales": {
+            "trazabilidad": "= 1",
+            "muestra": "≥ 20 tareas para valorar reglas sin uso"
+          }
+        },
+        {
+          "id": "concordancia",
+          "tipo": "replay",
+          "descripcion": "A ciegas: el agente que elegiría Karajan frente al que eligió la persona",
+          "umbrales": {
+            "concordancia": "≥ 0.7"
+          }
+        },
+        {
+          "id": "adecuacion",
+          "tipo": "replay",
+          "descripcion": "Segmentos dominio × nivel donde el perfil discrepa de la persona y la persona acierta",
+          "umbrales": {
+            "segmento": "n ≥ 10",
+            "discrepancia": "IC95 inferior > 0.3"
+          }
+        },
+        {
+          "id": "determinismo",
+          "tipo": "contrato",
+          "descripcion": "El mismo prompt produce el mismo plan; las tareas en auto repiten su elección",
+          "umbrales": {
+            "estabilidad": "= 1"
+          }
+        }
+      ],
+      "ultimas": [
+        {
+          "escenario": "fidelidad",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 42,
+          "suficiente": true,
+          "hallazgos": 1,
+          "error": null,
+          "metricas": {
+            "decisiones": 42,
+            "trazabilidad": 1,
+            "reglas_activas": 14,
+            "reglas_tapadas": 1,
+            "reglas_sin_uso": 3,
+            "niveles_sin_agente": 0
+          },
+          "ms": 38
+        },
+        {
+          "escenario": "concordancia",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 31,
+          "suficiente": true,
+          "hallazgos": 0,
+          "error": null,
+          "metricas": {
+            "concordancia": 0.74,
+            "concordancia_ic_inf": 0.61,
+            "concordancia_ic_sup": 0.85
+          },
+          "ms": 210
+        },
+        {
+          "escenario": "adecuacion",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 31,
+          "suficiente": true,
+          "hallazgos": 0,
+          "error": null,
+          "metricas": {
+            "segmentos": 9,
+            "segmentos_evaluables": 5,
+            "segmentos_inadecuados": 1
+          },
+          "ms": 120
+        },
+        {
+          "escenario": "determinismo",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 42,
+          "suficiente": true,
+          "hallazgos": 0,
+          "error": null,
+          "metricas": {
+            "estabilidad": 1,
+            "auto_n": 12,
+            "auto_igual_que_entonces": 0.92
+          },
+          "ms": 64
+        }
+      ],
+      "historial": {
+        "trazabilidad": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          }
+        ],
+        "reglas_tapadas": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          }
+        ],
+        "reglas_sin_uso": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 5,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 4,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 4,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 3,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 3,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          }
+        ],
+        "decisiones": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 18,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 26,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 33,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 38,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 42,
+            "suficiente": true,
+            "escenario": "fidelidad"
+          }
+        ],
+        "concordancia": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.62,
+            "suficiente": false,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.66,
+            "suficiente": false,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.69,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.72,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.74,
+            "suficiente": true,
+            "escenario": "concordancia"
+          }
+        ],
+        "concordancia_ic_inf": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.41,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.46,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.52,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.58,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.61,
+            "suficiente": true,
+            "escenario": "concordancia"
+          }
+        ],
+        "segmentos_inadecuados": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          }
+        ],
+        "segmentos_evaluables": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 2,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 3,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 4,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 5,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 5,
+            "suficiente": true,
+            "escenario": "adecuacion"
+          }
+        ],
+        "estabilidad": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "determinismo"
+          }
+        ],
+        "auto_igual_que_entonces": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.8,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.85,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.9,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.92,
+            "suficiente": true,
+            "escenario": "determinismo"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.92,
+            "suficiente": true,
+            "escenario": "determinismo"
+          }
+        ]
+      },
+      "detalle": {
+        "fidelidad": {
+          "perfil": "equilibrado",
+          "reglas": [
+            {
+              "regla": "N5 → claude",
+              "casa": 9,
+              "elegida": 9
+            },
+            {
+              "regla": "diseño → claude",
+              "casa": 11,
+              "elegida": 8
+            },
+            {
+              "regla": "infra → codex",
+              "casa": 7,
+              "elegida": 7
+            },
+            {
+              "regla": "N1–N2 → codex",
+              "casa": 14,
+              "elegida": 12
+            },
+            {
+              "regla": "revisión → claude",
+              "casa": 6,
+              "elegida": 0
+            },
+            {
+              "regla": "datos → codex",
+              "casa": 0,
+              "elegida": 0
+            }
+          ]
+        },
+        "concordancia": {
+          "matriz_humano_vs_karajan": {
+            "claude-cli": {
+              "claude-cli": 14,
+              "codex": 4
+            },
+            "codex": {
+              "claude-cli": 4,
+              "codex": 9
+            }
+          },
+          "por_segmento": {
+            "backend×N3": {
+              "n": 8,
+              "iguales": 7,
+              "concordancia": 0.875
+            },
+            "frontend×N3": {
+              "n": 6,
+              "iguales": 3,
+              "concordancia": 0.5
+            },
+            "infra×N2": {
+              "n": 7,
+              "iguales": 6,
+              "concordancia": 0.857
+            },
+            "docs×N1": {
+              "n": 5,
+              "iguales": 4,
+              "concordancia": 0.8
+            },
+            "datos×N4": {
+              "n": 5,
+              "iguales": 3,
+              "concordancia": 0.6
+            }
+          }
+        },
+        "adecuacion": {
+          "segmentos": {
+            "frontend×N3": {
+              "n": 6,
+              "discrepa": 3,
+              "discrepa_y_acierta_persona": 3
+            }
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "clave": "regla-tapada:revision",
+          "severidad": "media",
+          "titulo": "La regla «revisión → claude» está tapada por «N5 → claude»",
+          "evidencia": "Casa 6 veces y no se elige nunca: otra regla anterior decide antes.",
+          "propuesta": "Mover la regla de revisión antes de la de N5 o fusionarlas en el perfil «equilibrado».",
+          "borrador": "Perfil equilibrado v2\n  - revisión → claude (prioridad 2)\n  - N5 → claude (prioridad 3)"
+        }
+      ],
+      "operacion": {
+        "tareas": 42,
+        "runs": 61,
+        "latencia_p50_ms": 38,
+        "coste_total_usd": 0,
+        "tokens": 0,
+        "ultima_actividad": "2026-10-24T08:30:00Z"
       }
-     },
-     "por_segmento": {
-      "backend×N3": {
-       "n": 8,
-       "iguales": 7,
-       "concordancia": 0.875
+    },
+    {
+      "id": "selector",
+      "familia": "decision",
+      "responsabilidad": "Elegir las skills que necesita un prompt",
+      "modulos": [
+        "skills-seleccion"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Elige hasta tres skills para un prompt puntuándolas contra las que hay en el equipo: nombre citado, alias, palabras del nombre y de la descripción, con un umbral mínimo.",
+        "como_funciona": {
+          "entradas": [
+            "Texto del prompt",
+            "Skills del equipo: carpetas con SKILL.md instaladas (~/.claude, ~/.codex, ~/.agents) o en el almacén del rotador (nombre y descripción)"
+          ],
+          "pasos": [
+            "Descubre las skills y lee su descripción de la cabecera de SKILL.md (skills-seleccion.ts · descubrirSkills)",
+            "Si el prompt nombra la skill, 100 puntos; si no, suma alias (35 + 2 por alias, tope 10), 11 por palabra del nombre y 2 por palabra de la descripción (skills-seleccion.ts · puntuarSkills)",
+            "Descarta las que no llegan al umbral (15 puntos) y las source-command-* sin alias (skills-seleccion.ts · puntuarSkills)",
+            "Ordena: repo-analyzer primero, security-review al final, el resto por posición en el prompt y puntos (skills-seleccion.ts · puntuarSkills)",
+            "Se queda con las tres primeras (skills-seleccion.ts · seleccionarSkills)"
+          ],
+          "salidas": [
+            "Lista de nombres de skill (con sus puntos si se pide el detalle)"
+          ]
+        },
+        "reglas": [
+          "Toda skill instalada debe salir si se nombra en el prompt (lo comprueba el escenario «explicitas»).",
+          "Los pesos no se cambian solos: el laboratorio solo propone otros si mejoran el F1 en datos no vistos."
+        ]
       },
-      "frontend×N3": {
-       "n": 6,
-       "iguales": 3,
-       "concordancia": 0.5
+      "estado": "ok",
+      "configuracion": {
+        "top": 3,
+        "pesos": {
+          "nombre": 3,
+          "descripcion": 1.5,
+          "palabras": 1,
+          "uso_previo": 0.5
+        },
+        "skills_en_catalogo": 64
       },
-      "infra×N2": {
-       "n": 7,
-       "iguales": 6,
-       "concordancia": 0.857
+      "escenarios": [
+        {
+          "id": "explicitas",
+          "tipo": "contrato",
+          "descripcion": "Toda skill instalada sale si se nombra en el prompt",
+          "umbrales": {
+            "no_seleccionables": "= 0"
+          }
+        },
+        {
+          "id": "concordancia",
+          "tipo": "replay",
+          "descripcion": "A ciegas: las skills que elegiría Karajan frente a las que la persona dio por buenas",
+          "umbrales": {
+            "muestra": "≥ 30 casos con verdad humana",
+            "f1": "≥ 0.5"
+          }
+        },
+        {
+          "id": "calibracion",
+          "tipo": "feedback",
+          "descripcion": "Busca pesos mejores con validación cruzada; solo los propone si mejoran en datos no vistos",
+          "umbrales": {
+            "mejora_f1": "≥ 0.05"
+          }
+        }
+      ],
+      "ultimas": [
+        {
+          "escenario": "explicitas",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 64,
+          "suficiente": true,
+          "hallazgos": 0,
+          "error": null,
+          "metricas": {
+            "skills": 64,
+            "no_seleccionables": 0,
+            "sin_descripcion": 3
+          },
+          "ms": 44
+        },
+        {
+          "escenario": "concordancia",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 47,
+          "suficiente": true,
+          "hallazgos": 0,
+          "error": null,
+          "metricas": {
+            "hit1": 0.62,
+            "precision3": 0.48,
+            "recall3": 0.64,
+            "f1": 0.55,
+            "falsos_positivos": 0.25
+          },
+          "ms": 520
+        },
+        {
+          "escenario": "calibracion",
+          "inicio": "2026-10-24T08:30:00Z",
+          "muestra": 47,
+          "suficiente": true,
+          "hallazgos": 0,
+          "error": null,
+          "metricas": {
+            "f1_actual": 0.55,
+            "f1_calibrado": 0.6,
+            "hit1_actual": 0.62,
+            "hit1_calibrado": 0.64,
+            "mejora_f1": 0.05
+          },
+          "ms": 3100
+        }
+      ],
+      "historial": {
+        "skills": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 58,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 60,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 62,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 64,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 64,
+            "suficiente": true,
+            "escenario": "explicitas"
+          }
+        ],
+        "no_seleccionables": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 1,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0,
+            "suficiente": true,
+            "escenario": "explicitas"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0,
+            "suficiente": true,
+            "escenario": "explicitas"
+          }
+        ],
+        "hit1": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.52,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.55,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.58,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.6,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.62,
+            "suficiente": true,
+            "escenario": "concordancia"
+          }
+        ],
+        "precision3": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.41,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.44,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.45,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.47,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.48,
+            "suficiente": true,
+            "escenario": "concordancia"
+          }
+        ],
+        "recall3": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.55,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.58,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.6,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.63,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.64,
+            "suficiente": true,
+            "escenario": "concordancia"
+          }
+        ],
+        "f1": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.47,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.5,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.51,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.54,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.55,
+            "suficiente": true,
+            "escenario": "concordancia"
+          }
+        ],
+        "falsos_positivos": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.31,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.29,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.27,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.26,
+            "suficiente": true,
+            "escenario": "concordancia"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.25,
+            "suficiente": true,
+            "escenario": "concordancia"
+          }
+        ],
+        "f1_actual": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.47,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.5,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.51,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.54,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.55,
+            "suficiente": true,
+            "escenario": "calibracion"
+          }
+        ],
+        "f1_calibrado": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.5,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.53,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.54,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.58,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.6,
+            "suficiente": true,
+            "escenario": "calibracion"
+          }
+        ],
+        "mejora_f1": [
+          {
+            "inicio": "2026-10-20T09:12:00Z",
+            "valor": 0.03,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-21T16:40:00Z",
+            "valor": 0.03,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-22T10:05:00Z",
+            "valor": 0.03,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-23T18:22:00Z",
+            "valor": 0.04,
+            "suficiente": true,
+            "escenario": "calibracion"
+          },
+          {
+            "inicio": "2026-10-24T08:30:00Z",
+            "valor": 0.05,
+            "suficiente": true,
+            "escenario": "calibracion"
+          }
+        ]
       },
-      "docs×N1": {
-       "n": 5,
-       "iguales": 4,
-       "concordancia": 0.8
+      "detalle": {
+        "concordancia": {
+          "fuentes": {
+            "calibracion": 11,
+            "revision": 14,
+            "hoja": 22
+          }
+        }
       },
-      "datos×N4": {
-       "n": 5,
-       "iguales": 3,
-       "concordancia": 0.6
+      "hallazgos": [],
+      "operacion": {
+        "tareas": 47,
+        "runs": 47,
+        "latencia_p50_ms": 12,
+        "coste_total_usd": 0,
+        "tokens": 0,
+        "ultima_actividad": "2026-10-24T08:30:00Z"
       }
-     }
     },
-    "adecuacion": {
-     "segmentos": {
-      "frontend×N3": {
-       "n": 6,
-       "discrepa": 3,
-       "discrepa_y_acierta_persona": 3
+    {
+      "id": "rotador",
+      "familia": "decision",
+      "responsabilidad": "Dejar instaladas solo las skills que se usan y guardar el resto en el almacén",
+      "modulos": [
+        "rotador"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Deja instaladas solo las skills que se usan: las demás se MUEVEN a un almacén local (nada se borra) y vuelven al instante cuando una delegación las necesita.",
+        "como_funciona": {
+          "entradas": [
+            "Carpetas de skills instaladas y del almacén (~/.karajan/skills-almacen)",
+            "Último uso de cada skill: skills-uso.json de Atlas dev, ejecuciones de Karajan y reposiciones propias",
+            "rotador.json (días y skills protegidas)"
+          ],
+          "pasos": [
+            "Recoge el último uso de cada skill de las tres fuentes (rotador.ts · ultimosUsos)",
+            "Clasifica: núcleo si se usó en 14 días, frecuente en 45, instantánea si se repuso hace ≤ 3 días, inactiva el resto (rotador.ts · nivel)",
+            "Plan: retirar las inactivas no protegidas; reponer las del almacén que vuelven a usarse (rotador.ts · plan)",
+            "Aplicar mueve carpetas instaladas ⇄ almacén, solo con tarea aceptada en producción (rotador.ts · aplicar, servidor.ts · /skills/rotar)",
+            "Antes de ejecutar una subtarea, el delegador pide asegurar la skill: si no está instalada, la repone (rotador.ts · asegurar)",
+            "Laboratorio · contrato: días coherentes, protegidas fuera del plan, nada duplicado instalada/almacén y plan idempotente aplicado en una casa ficticia (lab/rotador.lab.ts · contrato)",
+            "Laboratorio · historial: reúne los usos por día de Atlas dev y de las ejecuciones de Karajan (rotador.ts · historial) y los reproduce día a día en un sandbox con ahora simulado (lab/rotador.lab.ts · reproducirEnSandbox)",
+            "Laboratorio · rejilla: simula (núcleo, frecuente) sobre el mismo historial y propone otros días solo si mejoran fallos o skills instaladas de forma clara (rotador.ts · simularRotacion, lab/rotador.lab.ts · mejoraClara)"
+          ],
+          "salidas": [
+            "Inventario con nivel por skill",
+            "Plan de rotación (retirar / reponer)",
+            "Skills instaladas y almacén actualizados al aplicar",
+            "Informe del laboratorio: fallos, skills instaladas de media y movimientos por configuración"
+          ]
+        },
+        "reglas": [
+          "Las protegidas (router, latex-template y las que se añadan) nunca se retiran.",
+          "Retirar es mover, no borrar.",
+          "Solo frecuenteDias decide qué se retira; el núcleo y la instantánea son niveles (el laboratorio lo respeta y lo avisa).",
+          "El laboratorio nunca toca las carpetas reales: reproduce en un directorio temporal y no propone sin ≥ 90 días de historial y ≥ 40 usos."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "Días coherentes, protegidas fuera del plan, nada instalado y en el almacén a la vez, plan idempotente (en casa ficticia)",
+          "umbrales": {}
+        },
+        {
+          "id": "historial",
+          "tipo": "replay",
+          "descripcion": "Reproduce el historial de usos día a día en un sandbox para ajustar los días de núcleo y frecuente",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "etiquetas",
+      "familia": "decision",
+      "responsabilidad": "Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente",
+      "modulos": [],
+      "pendiente": "vive en atlas-dev (server/src/tareas/formato.ts): borrador «Componente etiquetas»",
+      "ficha": {
+        "resumen": "Pondrá la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente. Hoy vive en atlas-dev (server/src/tareas/formato.ts).",
+        "como_funciona": {
+          "entradas": [
+            "Tarea de Atlas dev"
+          ],
+          "pasos": [
+            "Aún sin código: lo trae el borrador «Componente etiquetas» (docs/laboratorio/componentes.md §7)"
+          ],
+          "salidas": [
+            "Cabecera y glosario en el prompt del agente"
+          ]
+        }
+      },
+      "estado": "pendiente",
+      "configuracion": {},
+      "escenarios": [],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "proveedores",
+      "familia": "ejecucion",
+      "responsabilidad": "Lanzar Claude Code, Codex o Qwen y devolver su salida",
+      "modulos": [
+        "proveedores"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Lanza el CLI del agente elegido (Claude Code, Codex o Qwen por Ollama) con el modelo que corresponde al nivel y devuelve su salida, el error y la latencia.",
+        "como_funciona": {
+          "entradas": [
+            "Proveedor y modelo elegidos por el delegador",
+            "Instrucción (prompt + subtarea + skills preparadas)",
+            "Carpeta de trabajo y tiempo máximo"
+          ],
+          "pasos": [
+            "Comprueba la disponibilidad: el binario en el PATH y, para Qwen, que Ollama responda y tenga el modelo (proveedores.ts · disponibilidad)",
+            "Traduce el nivel lógico al modelo del proveedor (proveedores.ts · modeloPara)",
+            "Lanza el CLI con sus argumentos y la instrucción, con tiempo máximo (proveedores.ts · ejecutarProveedor)",
+            "Si falla, resume el motivo (proveedores.ts · motivoFallo)"
+          ],
+          "salidas": [
+            "Salida del agente, error si lo hubo, latencia y modelo usado"
+          ]
+        },
+        "reglas": [
+          "Qwen no admite skills.",
+          "Los proveedores solo se ejecutan desde la delegación real, nunca desde el laboratorio.",
+          "Su laboratorio busca los binarios sin ejecutarlos y mide la tasa de fallo por proveedor (Wilson, ≥ 10 runs) sobre los runs registrados."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "Cada proveedor está completo y su binario se encuentra en el PATH (sin ejecutarlo)",
+          "umbrales": {}
+        },
+        {
+          "id": "fallos",
+          "tipo": "replay",
+          "descripcion": "Sobre los runs registrados: tasa de fallo por proveedor (Wilson) y motivos agrupados",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": {
+        "tareas": 61,
+        "runs": 74,
+        "latencia_p50_ms": 41200,
+        "coste_total_usd": 12.84,
+        "tokens": 2380000,
+        "ultima_actividad": "2026-10-24T08:30:00Z"
       }
-     }
-    }
-   },
-   "hallazgos": [
-    {
-     "clave": "regla-tapada:revision",
-     "severidad": "media",
-     "titulo": "La regla «revisión → claude» está tapada por «N5 → claude»",
-     "evidencia": "Casa 6 veces y no se elige nunca: otra regla anterior decide antes.",
-     "propuesta": "Mover la regla de revisión antes de la de N5 o fusionarlas en el perfil «equilibrado».",
-     "borrador": "Perfil equilibrado v2\n  - revisión → claude (prioridad 2)\n  - N5 → claude (prioridad 3)"
-    }
-   ],
-   "operacion": {
-    "tareas": 42,
-    "runs": 61,
-    "latencia_p50_ms": 38,
-    "coste_total_usd": 0,
-    "tokens": 0,
-    "ultima_actividad": "2026-10-24T08:30:00Z"
-   }
-  },
-  {
-   "id": "selector",
-   "familia": "decision",
-   "responsabilidad": "Elegir las skills que necesita un prompt",
-   "modulos": [
-    "skills-seleccion"
-   ],
-   "pendiente": null,
-   "ficha": {
-    "resumen": "Puntúa cada skill del catálogo frente al prompt y se queda con las mejores; las nombradas salen siempre.",
-    "como_funciona": {
-     "entradas": [
-      "Prompt",
-      "Catálogo de skills instaladas"
-     ],
-     "pasos": [
-      "Detecta skills nombradas",
-      "Puntúa con pesos (nombre, descripción, palabras)",
-      "Ordena y corta en el top 3"
-     ],
-     "salidas": [
-      "Skills recomendadas"
-     ]
-    }
-   },
-   "estado": "ok",
-   "configuracion": {
-    "top": 3,
-    "pesos": {
-     "nombre": 3,
-     "descripcion": 1.5,
-     "palabras": 1,
-     "uso_previo": 0.5
-    },
-    "skills_en_catalogo": 64
-   },
-   "escenarios": [
-    {
-     "id": "explicitas",
-     "tipo": "contrato",
-     "descripcion": "Toda skill instalada sale si se nombra en el prompt",
-     "umbrales": {
-      "no_seleccionables": "= 0"
-     }
     },
     {
-     "id": "concordancia",
-     "tipo": "replay",
-     "descripcion": "A ciegas: las skills que elegiría Karajan frente a las que la persona dio por buenas",
-     "umbrales": {
-      "muestra": "≥ 30 casos con verdad humana",
-      "f1": "≥ 0.5"
-     }
+      "id": "limites",
+      "familia": "ejecucion",
+      "responsabilidad": "Decir si Claude ha pasado su umbral de uso semanal",
+      "modulos": [
+        "limites"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Dice si Claude ha pasado su umbral de uso semanal; si es así, el delegador manda lo suyo a Codex.",
+        "como_funciona": {
+          "entradas": [
+            "limites-plan.json (lo escribe Atlas dev leyendo las CLIs)",
+            "KARAJAN_LIMITE_CLAUDE (50 % por defecto)"
+          ],
+          "pasos": [
+            "Lee el fichero y descarta el dato si tiene más de dos horas (limites.ts · leerLimites)",
+            "Compara el % semanal de Claude con el umbral (limites.ts · claudeExcedido)",
+            "El umbral sale de KARAJAN_LIMITE_CLAUDE y, si no es un número, vale 50 (limites.ts · umbralClaude)",
+            "Solo se pasa del umbral si el % semanal es ESTRICTAMENTE mayor; sin dato reciente no se limita (limites.ts · claudeExcedido)"
+          ],
+          "salidas": [
+            "El % semanal si supera el umbral, o null"
+          ]
+        },
+        "reglas": [
+          "Sin dato reciente no se limita nada.",
+          "Su laboratorio lee el fichero sin tocarlo: existe, es fresco, el umbral está en (0, 100] y «excedido» es estrictamente «% semanal > umbral»."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "fichero",
+          "tipo": "contrato",
+          "descripcion": "El fichero de límites existe, es fresco y el umbral de Claude está en rango (solo lectura)",
+          "umbrales": {}
+        },
+        {
+          "id": "decision",
+          "tipo": "contrato",
+          "descripcion": "«Claude excedido» coincide con «% semanal > umbral», también en los bordes",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
     },
     {
-     "id": "calibracion",
-     "tipo": "feedback",
-     "descripcion": "Busca pesos mejores con validación cruzada; solo los propone si mejoran en datos no vistos",
-     "umbrales": {
-      "mejora_f1": "≥ 0.05"
-     }
-    }
-   ],
-   "ultimas": [
-    {
-     "escenario": "explicitas",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 64,
-     "suficiente": true,
-     "hallazgos": 0,
-     "error": null,
-     "metricas": {
-      "skills": 64,
-      "no_seleccionables": 0,
-      "sin_descripcion": 3
-     },
-     "ms": 44
+      "id": "aislamiento",
+      "familia": "ejecucion",
+      "responsabilidad": "Trabajar cada tarea en su worktree y rama agente/<id>",
+      "modulos": [
+        "aislar-git"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Hace trabajar cada tarea en su propio worktree y rama agente/<id>; main solo cambia con la integración nocturna.",
+        "como_funciona": {
+          "entradas": [
+            "Carpeta de trabajo de la tarea",
+            "Id de la tarea",
+            "KARAJAN_AISLAR_GIT=1"
+          ],
+          "pasos": [
+            "Localiza el repo y excluye /.trabajo/ de su seguimiento (aislar-git.ts · aislar)",
+            "Crea <repo>/.trabajo/<id> con la rama agente/<id> desde origin/main (o HEAD sin remoto) (aislar-git.ts · aislar)",
+            "El agente trabaja ahí; al acabar se commitea con los trailers Equipo y Karajan-Tarea y se sube la rama (aislar-git.ts · cerrar)",
+            "Se quita el worktree y la rama se queda (aislar-git.ts · cerrar)"
+          ],
+          "salidas": [
+            "Rama agente/<id> con el trabajo",
+            "Decisiones git:* en el registro"
+          ]
+        },
+        "reglas": [
+          "main no se toca nunca.",
+          "Fuera de un repo git no aísla nada.",
+          "Su laboratorio recorre el ciclo completo en un repo git temporal y, en solo lectura, avisa de worktrees sin carpeta y ramas del agente ya integradas."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "ciclo",
+          "tipo": "contrato",
+          "descripcion": "En un repo temporal: worktree + rama agente/<id>, trabajo commiteado con trailers, cierre y limpieza sin mover main",
+          "umbrales": {}
+        },
+        {
+          "id": "huerfanos",
+          "tipo": "contrato",
+          "descripcion": "Solo lectura: worktrees sin carpeta y ramas agente/* ya integradas en los repos del Workspace",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
     },
     {
-     "escenario": "concordancia",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 47,
-     "suficiente": true,
-     "hallazgos": 0,
-     "error": null,
-     "metricas": {
-      "hit1": 0.62,
-      "precision3": 0.48,
-      "recall3": 0.64,
-      "f1": 0.55,
-      "falsos_positivos": 0.25
-     },
-     "ms": 520
+      "id": "analitica",
+      "familia": "observacion",
+      "responsabilidad": "Contar skills recomendadas, preparadas y usadas",
+      "modulos": [
+        "analitica",
+        "catalogo"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Cuenta las skills recomendadas, preparadas y usadas, sin deducir un uso de una recomendación.",
+        "como_funciona": {
+          "entradas": [
+            "Tareas y runs del registro",
+            "Skills revisadas por la persona",
+            "Catálogo de skills conocidas",
+            "Ventana en días (30 por defecto)"
+          ],
+          "pasos": [
+            "Por tarea reúne las skills recomendadas por la clasificación o por una subtarea (analitica.ts · construirAnaliticaSkills)",
+            "Separa las preparadas y las usadas confirmadas en la ejecución, con las revisadas a mano mandando (analitica.ts · construirAnaliticaSkills)",
+            "Agrega por skill: ejecuciones, éxitos, fallos, latencia, coste, agentes y última vez (analitica.ts · construirAnaliticaSkills)",
+            "Resume el periodo: skills del catálogo, activas, sin uso, tasa de éxito y cobertura de asignación; y arma la línea de tiempo (analitica.ts · construirAnaliticaSkills)"
+          ],
+          "salidas": [
+            "Analítica por skill servida en /analytics/skills"
+          ]
+        },
+        "reglas": [
+          "Recomendada no es usada: solo cuenta como uso lo confirmado.",
+          "Port fiel de skill_analytics.py (tests/paridad.test.ts).",
+          "Su laboratorio comprueba en solo lectura que usadas ≤ preparadas y que los totales cuadran con el almacén."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "coherencia",
+          "tipo": "contrato",
+          "descripcion": "Solo lectura: recomendadas / preparadas / usadas por skill y totales que cuadran con el almacén",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
     },
     {
-     "escenario": "calibracion",
-     "inicio": "2026-10-24T08:30:00Z",
-     "muestra": 47,
-     "suficiente": true,
-     "hallazgos": 0,
-     "error": null,
-     "metricas": {
-      "f1_actual": 0.55,
-      "f1_calibrado": 0.6,
-      "hit1_actual": 0.62,
-      "hit1_calibrado": 0.64,
-      "mejora_f1": 0.05
-     },
-     "ms": 3100
+      "id": "produccion",
+      "familia": "observacion",
+      "responsabilidad": "Medir acierto, re-trabajo, eficiencia y «qué mejorar»",
+      "modulos": [
+        "produccion"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Mide cómo va Karajan en producción: acierto, re-trabajo, flujo, eficiencia por agente, matriz de skills y la lista de «qué mejorar».",
+        "como_funciona": {
+          "entradas": [
+            "Tareas aplanadas del registro (runs, decisiones, revisiones)",
+            "Catálogo de skills",
+            "Perfil por defecto (para filtrar agentes)"
+          ],
+          "pasos": [
+            "Acierto por tarea = media ponderada de re-trabajo, completada, validación y revisión (produccion.ts · calcularAcierto)",
+            "Re-trabajo: una tarea posterior en 24 h cita el prompt, vuelve sobre los mismos ficheros o pide corregir lo mismo (produccion.ts · motivoRetrabajo)",
+            "Calcula flujo, eficiencia por agente y matriz de skills (produccion.ts · flujo, eficiencia, matrizSkills)",
+            "Genera sugerencias y la salud del registro: agentes que fallan, revisiones pendientes, agentes sin niveles… (produccion.ts · sugerencias, salud)"
+          ],
+          "salidas": [
+            "KPI (tareas, acierto, re-trabajo), flujo, eficiencia, matriz y sugerencias en /analytics/*"
+          ]
+        },
+        "reglas": [
+          "Port de produccion.py con paridad comprobada contra salidas grabadas.",
+          "El re-trabajo mira el siguiente prompt aunque sea de otro agente o fuera del periodo.",
+          "Su laboratorio contrasta acierto y re-trabajo con el estado final y la revisión de la persona en Atlas dev (Wilson, ≥ 30 tareas)."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "concordancia",
+          "tipo": "replay",
+          "descripcion": "El acierto y el re-trabajo de produccion.ts frente al estado final y la revisión de la persona en Atlas dev",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "curador",
+      "familia": "modificadores",
+      "responsabilidad": "Proponer qué skills sobran en la biblioteca con reglas inequívocas",
+      "modulos": [
+        "curador"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Propone qué skills del equipo sobran con cuatro reglas inequívocas y evidencia comprobable. Solo propone: no borra, no mueve ni desinstala; cada propuesta sale como borrador de Atlas dev.",
+        "como_funciona": {
+          "entradas": [
+            "Skills del equipo (instaladas y almacén, con su descripción)",
+            "Fichas de la biblioteca (estrellas, si son heredadas, grupo)",
+            "Último uso (rotador, skills-uso.json de Atlas dev, ejecuciones y revisiones) y recomendaciones del selector en el registro",
+            "Skills protegidas del rotador"
+          ],
+          "pasos": [
+            "Descarta las protegidas y comprueba que el registro abarca la ventana de días sin uso (curador.ts · curar)",
+            "sin-uso-ni-recomendacion: ni usada ni recomendada en la ventana, con registro suficiente → retirar (curador.ts · curar)",
+            "duplicada: instalada y también en el almacén del mismo destino → revisar (curador.ts · curar)",
+            "sin-descripcion: SKILL.md sin description → revisar (curador.ts · curar)",
+            "superada-por-grupo: estrellas PROPIAS bajo el mínimo y otra instalada del mismo grupo, usada y con ≥ 10× estrellas propias → retirar (curador.ts · curar)",
+            "Cada propuesta se convierte en un hallazgo con clave <regla>:<skill>, idempotente en la pasarela (curador.ts · aHallazgo, servidor.ts · /laboratorio/curador/proponer)"
+          ],
+          "salidas": [
+            "Propuestas {skill, regla, evidencia, accion}",
+            "Borradores en Atlas dev al pedirlo (POST /laboratorio/curador/proponer, kj curador --proponer)"
+          ]
+        },
+        "reglas": [
+          "Las protegidas del rotador (incluidas las del router) nunca se proponen.",
+          "Las estrellas heredadas de una colección nunca cuentan como evidencia.",
+          "Determinista: la misma entrada da las mismas propuestas.",
+          "Solo propone: retirar es del rotador y en producción todo cambio va como borrador."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "invariantes",
+          "tipo": "contrato",
+          "descripcion": "Determinista, sin protegidas, con regla y evidencia en cada propuesta y sin apoyarse en estrellas heredadas",
+          "umbrales": {}
+        },
+        {
+          "id": "precision",
+          "tipo": "feedback",
+          "descripcion": "Precisión del curador: borradores aceptados frente a descartados por la persona",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "comparador",
+      "familia": "modificadores",
+      "responsabilidad": "Comparar cada skill (y Karajan) con las mejores de su grupo",
+      "modulos": [
+        "comparador"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Compara cada skill del equipo, y a Karajan, con las mejores de su grupo de la taxonomía usando SOLO estrellas propias: su posición (percentil), los mejores pares y las funcionalidades que ofrecen y no tiene. Detecta en los pares pruebas de ejecución real con feedback humano (evals, benchmarks, A/B, preferencia…) que los laboratorios de Karajan no tienen.",
+        "como_funciona": {
+          "entradas": [
+            "Nombre de una skill del equipo o «karajan»",
+            "Fichas de la biblioteca: estrellas propias, grupo, etiquetas, capacidades y casos de uso",
+            "Componentes y tipos de escenario de Karajan (componentes.ts)"
+          ],
+          "pasos": [
+            "Busca la ficha y su grupo; sin ficha, sin grupo o sin estrellas propias figura «sin dato» y no se puntúa (comparador.ts · comparar)",
+            "Reúne los recursos del grupo con estrellas propias, de más a menos (comparador.ts · paresConDato)",
+            "Con menos de 5 recursos con estrellas propias el grupo es «corto»: no hay percentil ni funcionalidades (comparador.ts · comparar)",
+            "Calcula posición y percentil frente al grupo (comparador.ts · comparar)",
+            "Lista las palabras clave declaradas por ≥ 2 de los 5 mejores pares que la skill no ofrece (comparador.ts · funcionalidadesQueFaltan)",
+            "Karajan se compara con «Orquestación y contexto» usando las palabras clave de sus componentes (comparador.ts · compararKarajan, CLAVES_KARAJAN)",
+            "Busca en los pares evals, benchmarks, A/B, feedback humano, preferencia y regresión de prompts, y descarta lo que Karajan ya cubre con sus escenarios replay/feedback (comparador.ts · pruebasEnGrupos, pruebasCubiertas)"
+          ],
+          "salidas": [
+            "Comparación por skill (estado, percentil, mejores pares, funcionalidades que faltan)",
+            "Hallazgos del laboratorio: una prueba a añadir por cada práctica que declaran los pares y Karajan no tiene, como borrador"
+          ]
+        },
+        "reglas": [
+          "Nunca usa estrellas heredadas de la colección que recoge a la skill.",
+          "Una funcionalidad es una palabra clave declarada en la ficha, no una inferencia ni una lectura del código.",
+          "Solo lee la biblioteca: no escribe ni cambia nada."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "estrellas-propias",
+          "tipo": "contrato",
+          "descripcion": "Solo estrellas propias, grupos con muestra mínima y cuánto del equipo se puede comparar",
+          "umbrales": {}
+        },
+        {
+          "id": "pruebas-y-funcionalidades",
+          "tipo": "contrato",
+          "descripcion": "Pruebas con feedback humano y funcionalidades que tienen los mejores pares y Karajan no",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "eficiencia",
+      "familia": "modificadores",
+      "responsabilidad": "Aplicar ponytail (mínimo código suficiente) a lo que se delega",
+      "modulos": [
+        "eficiencia"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Modificador ponytail (mínimo código suficiente): añade a la instrucción que se delega un bloque con el criterio de la solución mínima y segura. Desactivado en producción y aún sin conectar al delegador.",
+        "como_funciona": {
+          "entradas": [
+            "Instrucción que se delega",
+            "Modo (producción | desarrollo)",
+            "Nivel e intención de la tarea (del clasificador)"
+          ],
+          "pasos": [
+            "Decide si aplica: solo en desarrollo, niveles 1 a 3 y intención de implementar o corregir (eficiencia.ts · aplica)",
+            "Si no aplica, o la instrucción ya lleva la marca, la devuelve intacta (eficiencia.ts · aplicar)",
+            "Si aplica, añade al final la marca y el bloque de eficiencia, sin tocar el texto original (eficiencia.ts · aplicar)",
+            "El laboratorio comprueba el contrato y compara tareas con y sin ponytail en su hoja (lab/eficiencia.lab.ts · laboratorioModificador en ab.ts)"
+          ],
+          "salidas": [
+            "Instrucción modificada (en desarrollo) o la misma (en producción)"
+          ]
+        },
+        "reglas": [
+          "En producción devuelve la instrucción intacta; no está conectado a delegar.ts. El enlace eficiencia → delegador sigue «previsto» hasta que un borrador lo conecte solo en desarrollo.",
+          "Idempotente, conserva el texto original y añade como máximo el sobrecoste acotado.",
+          "El A/B es observacional, no aleatorizado: solo concluye con ambos brazos ≥ 20 tareas y los IC95 de Wilson sin solaparse; un hallazgo propone activar o retirar como borrador, nunca lo aplica."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "El transformador de eficiencia es idempotente, conserva el texto, acota su sobrecoste y no hace nada en producción",
+          "umbrales": {}
+        },
+        {
+          "id": "replay-ab",
+          "tipo": "replay",
+          "descripcion": "A/B observacional: tareas cuya hoja llevaba ponytail frente al resto comparable (no aleatorizado)",
+          "umbrales": {}
+        },
+        {
+          "id": "feedback",
+          "tipo": "feedback",
+          "descripcion": "Si la persona da por buena la aplicación de eficiencia cuando se le propone (calibración)",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "metodo",
+      "familia": "modificadores",
+      "responsabilidad": "Aplicar el método de superpowers (TDD, planes, worktrees)",
+      "modulos": [
+        "metodo"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Modificador de método (superpowers): añade a la instrucción un bloque de plan, TDD, ejecución en la rama o worktree de la tarea y verificación. Desactivado en producción y aún sin conectar al delegador.",
+        "como_funciona": {
+          "entradas": [
+            "Instrucción que se delega",
+            "Modo (producción | desarrollo)",
+            "Nivel e intención de la tarea (del clasificador)"
+          ],
+          "pasos": [
+            "Decide si aplica: solo en desarrollo, niveles 3 a 5 y intención de implementar o corregir (metodo.ts · aplica)",
+            "Si no aplica, o la instrucción ya lleva la marca, la devuelve intacta (metodo.ts · aplicar)",
+            "Si aplica, añade al final la marca y el bloque de método, sin tocar el texto original (metodo.ts · aplicar)",
+            "El laboratorio comprueba el contrato y compara tareas con y sin las skills de superpowers en su hoja (lab/metodo.lab.ts · laboratorioModificador en ab.ts)"
+          ],
+          "salidas": [
+            "Instrucción modificada (en desarrollo) o la misma (en producción)"
+          ]
+        },
+        "reglas": [
+          "En producción devuelve la instrucción intacta; no está conectado a delegar.ts. El enlace metodo → delegador sigue «previsto» hasta que un borrador lo conecte solo en desarrollo.",
+          "Idempotente, conserva el texto original y añade como máximo el sobrecoste acotado.",
+          "El A/B es observacional, no aleatorizado: solo concluye con ambos brazos ≥ 20 tareas y los IC95 de Wilson sin solaparse; un hallazgo propone activar o retirar como borrador, nunca lo aplica."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "El transformador de método es idempotente, conserva el texto, acota su sobrecoste y no hace nada en producción",
+          "umbrales": {}
+        },
+        {
+          "id": "replay-ab",
+          "tipo": "replay",
+          "descripcion": "A/B observacional: tareas cuya hoja llevaba superpowers/test-driven-development/writing-plans/using-git-worktrees frente al resto comparable (no aleatorizado)",
+          "umbrales": {}
+        },
+        {
+          "id": "feedback",
+          "tipo": "feedback",
+          "descripcion": "Si la persona da por buena la aplicación de método cuando se le propone (calibración)",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "prompts",
+      "familia": "modificadores",
+      "responsabilidad": "Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)",
+      "modulos": [
+        "prompts"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Modificador de prompts (karpathy-skills, dspy, promptfoo): añade a la instrucción criterios de éxito comprobables y la petición de explicitar suposiciones. Desactivado en producción y aún sin conectar al delegador.",
+        "como_funciona": {
+          "entradas": [
+            "Instrucción que se delega",
+            "Modo (producción | desarrollo)",
+            "Nivel de la tarea (del clasificador)"
+          ],
+          "pasos": [
+            "Decide si aplica: solo en desarrollo y a partir del nivel 2 (prompts.ts · aplica)",
+            "Si no aplica, o la instrucción ya lleva la marca, la devuelve intacta (prompts.ts · aplicar)",
+            "Si aplica, añade al final la marca y el bloque de criterios, sin tocar el texto original (prompts.ts · aplicar)",
+            "El laboratorio comprueba el contrato y compara tareas con y sin karpathy-skills, dspy o promptfoo en su hoja (lab/prompts.lab.ts · laboratorioModificador en ab.ts)"
+          ],
+          "salidas": [
+            "Instrucción modificada (en desarrollo) o la misma (en producción)"
+          ]
+        },
+        "reglas": [
+          "En producción devuelve la instrucción intacta; no está conectado a delegar.ts. El enlace prompts → delegador sigue «previsto» hasta que un borrador lo conecte solo en desarrollo.",
+          "Idempotente, conserva el texto original y añade como máximo el sobrecoste acotado.",
+          "El A/B es observacional, no aleatorizado: solo concluye con ambos brazos ≥ 20 tareas y los IC95 de Wilson sin solaparse; un hallazgo propone activar o retirar como borrador, nunca lo aplica."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "El transformador de prompts es idempotente, conserva el texto, acota su sobrecoste y no hace nada en producción",
+          "umbrales": {}
+        },
+        {
+          "id": "replay-ab",
+          "tipo": "replay",
+          "descripcion": "A/B observacional: tareas cuya hoja llevaba karpathy-skills/dspy/promptfoo frente al resto comparable (no aleatorizado)",
+          "umbrales": {}
+        },
+        {
+          "id": "feedback",
+          "tipo": "feedback",
+          "descripcion": "Si la persona da por buena la aplicación de prompts cuando se le propone (calibración)",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "api",
+      "familia": "interfaz",
+      "responsabilidad": "Exponer Karajan a Atlas dev (rutas del paquete)",
+      "modulos": [
+        "servidor"
+      ],
+      "pendiente": "cubierto por los laboratorios de cada componente",
+      "ficha": {
+        "resumen": "Expone Karajan a Atlas dev: las rutas del paquete, con las formas de respuesta de la API de Karajan, más las del laboratorio y esta arquitectura.",
+        "como_funciona": {
+          "entradas": [
+            "Peticiones de Atlas dev reenviadas desde /paquetes/karajan/api/* (sin ese prefijo)"
+          ],
+          "pasos": [
+            "registrar() abre el registro, los perfiles, el rotador, el delegador y el laboratorio con la carpeta de datos (servidor.ts · registrar)",
+            "Lecturas: /health, /metrics, /tasks, /analytics/*, /skills/rotacion, /providers, /laboratorio/* (servidor.ts)",
+            "Mutaciones de configuración pasan por el guardián de modo (servidor.ts · guardian.exigir)",
+            "/laboratorio/ejecutar mide y propone; /delegate-task ejecuta de verdad (servidor.ts)"
+          ],
+          "salidas": [
+            "JSON con las formas de la API de Karajan"
+          ]
+        },
+        "reglas": [
+          "Lo que no está portado responde 501.",
+          "Las lecturas no escriben."
+        ]
+      },
+      "estado": "pendiente",
+      "configuracion": {},
+      "escenarios": [],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "cli",
+      "familia": "interfaz",
+      "responsabilidad": "Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas",
+      "modulos": [
+        "cli"
+      ],
+      "pendiente": "cubierto por atlas/tests/cli.test.ts",
+      "ficha": {
+        "resumen": "Maneja Karajan desde la terminal (kj): componentes, laboratorios, gráficas de texto, propuestas y modo.",
+        "como_funciona": {
+          "entradas": [
+            "Argumentos de kj",
+            "KARAJAN_API o ATLAS_DEV_API, y ATLAS_DEV_TOKEN"
+          ],
+          "pasos": [
+            "Pide a la API del paquete lo que corresponde al comando (cli.ts · pedir)",
+            "Pinta tablas, barras y sparklines, o el JSON tal cual con --json (cli.ts · ejecutar)"
+          ],
+          "salidas": [
+            "Texto en terminal o JSON"
+          ]
+        },
+        "reglas": [
+          "Sin dependencias."
+        ]
+      },
+      "estado": "pendiente",
+      "configuracion": {},
+      "escenarios": [],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
     }
-   ],
-   "historial": {
-    "skills": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 58,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 60,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 62,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 64,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 64,
-      "suficiente": true,
-      "escenario": "explicitas"
-     }
-    ],
-    "no_seleccionables": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 1,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0,
-      "suficiente": true,
-      "escenario": "explicitas"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0,
-      "suficiente": true,
-      "escenario": "explicitas"
-     }
-    ],
-    "hit1": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.52,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.55,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.58,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.6,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.62,
-      "suficiente": true,
-      "escenario": "concordancia"
-     }
-    ],
-    "precision3": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.41,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.44,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.45,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.47,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.48,
-      "suficiente": true,
-      "escenario": "concordancia"
-     }
-    ],
-    "recall3": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.55,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.58,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.6,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.63,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.64,
-      "suficiente": true,
-      "escenario": "concordancia"
-     }
-    ],
-    "f1": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.47,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.5,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.51,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.54,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.55,
-      "suficiente": true,
-      "escenario": "concordancia"
-     }
-    ],
-    "falsos_positivos": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.31,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.29,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.27,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.26,
-      "suficiente": true,
-      "escenario": "concordancia"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.25,
-      "suficiente": true,
-      "escenario": "concordancia"
-     }
-    ],
-    "f1_actual": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.47,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.5,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.51,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.54,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.55,
-      "suficiente": true,
-      "escenario": "calibracion"
-     }
-    ],
-    "f1_calibrado": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.5,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.53,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.54,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.58,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.6,
-      "suficiente": true,
-      "escenario": "calibracion"
-     }
-    ],
-    "mejora_f1": [
-     {
-      "inicio": "2026-10-20T09:12:00Z",
-      "valor": 0.03,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-21T16:40:00Z",
-      "valor": 0.03,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-22T10:05:00Z",
-      "valor": 0.03,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-23T18:22:00Z",
-      "valor": 0.04,
-      "suficiente": true,
-      "escenario": "calibracion"
-     },
-     {
-      "inicio": "2026-10-24T08:30:00Z",
-      "valor": 0.05,
-      "suficiente": true,
-      "escenario": "calibracion"
-     }
-    ]
-   },
-   "detalle": {
-    "concordancia": {
-     "fuentes": {
-      "calibracion": 11,
-      "revision": 14,
-      "hoja": 22
-     }
+  ],
+  "enlaces": [
+    {
+      "de": "clasificador",
+      "a": "delegador",
+      "etiqueta": "nivel, dominio, intención y subtareas"
+    },
+    {
+      "de": "selector",
+      "a": "delegador",
+      "etiqueta": "skills recomendadas"
+    },
+    {
+      "de": "delegador",
+      "a": "proveedores",
+      "etiqueta": "agente y modelo de cada subtarea"
+    },
+    {
+      "de": "delegador",
+      "a": "limites",
+      "etiqueta": "¿Claude pasó su umbral semanal?"
+    },
+    {
+      "de": "delegador",
+      "a": "rotador",
+      "etiqueta": "repone la skill elegida"
+    },
+    {
+      "de": "delegador",
+      "a": "aislamiento",
+      "etiqueta": "worktree y rama de la tarea"
+    },
+    {
+      "de": "aislamiento",
+      "a": "proveedores",
+      "etiqueta": "carpeta donde trabaja el agente"
+    },
+    {
+      "de": "delegador",
+      "a": "almacen",
+      "etiqueta": "tarea, decisiones y runs"
+    },
+    {
+      "de": "almacen",
+      "a": "rotador",
+      "etiqueta": "último uso de cada skill"
+    },
+    {
+      "de": "almacen",
+      "a": "analitica",
+      "etiqueta": "skills recomendadas, preparadas y usadas"
+    },
+    {
+      "de": "almacen",
+      "a": "produccion",
+      "etiqueta": "tareas, runs y revisiones"
+    },
+    {
+      "de": "modo",
+      "a": "pasarela",
+      "etiqueta": "cambio bloqueado → borrador"
+    },
+    {
+      "de": "laboratorio",
+      "a": "pasarela",
+      "etiqueta": "hallazgos → borradores"
+    },
+    {
+      "de": "cli",
+      "a": "api",
+      "etiqueta": "peticiones HTTP"
+    },
+    {
+      "de": "api",
+      "a": "modo",
+      "etiqueta": "guardián de las mutaciones"
+    },
+    {
+      "de": "api",
+      "a": "delegador",
+      "etiqueta": "planificar y delegar"
+    },
+    {
+      "de": "api",
+      "a": "laboratorio",
+      "etiqueta": "ejecutar laboratorios"
+    },
+    {
+      "de": "biblioteca",
+      "a": "curador",
+      "etiqueta": "datos de las skills"
+    },
+    {
+      "de": "biblioteca",
+      "a": "comparador",
+      "etiqueta": "datos de las skills"
+    },
+    {
+      "de": "eficiencia",
+      "a": "delegador",
+      "etiqueta": "modifica lo que se delega"
+    },
+    {
+      "de": "metodo",
+      "a": "delegador",
+      "etiqueta": "modifica lo que se delega"
+    },
+    {
+      "de": "prompts",
+      "a": "delegador",
+      "etiqueta": "modifica lo que se delega"
     }
-   },
-   "hallazgos": [],
-   "operacion": {
-    "tareas": 47,
-    "runs": 47,
-    "latencia_p50_ms": 12,
-    "coste_total_usd": 0,
-    "tokens": 0,
-    "ultima_actividad": "2026-10-24T08:30:00Z"
-   }
-  },
-  {
-   "id": "rotador",
-   "familia": "decision",
-   "responsabilidad": "Dejar instaladas solo las skills que se usan y guardar el resto en el almacén",
-   "modulos": [
-    "rotador"
-   ],
-   "pendiente": "borrador «Laboratorio del rotador»",
-   "ficha": {
-    "resumen": "Mantiene tres niveles: núcleo (siempre), frecuente e instantánea (bajo demanda).",
-    "como_funciona": {
-     "entradas": [
-      "Uso de skills",
-      "Espacio disponible"
-     ],
-     "pasos": [
-      "Calcula el uso reciente",
-      "Clasifica en núcleo, frecuente, instantánea",
-      "Mueve las que sobran al almacén"
-     ],
-     "salidas": [
-      "Skills instaladas",
-      "Skills guardadas"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "etiquetas",
-   "familia": "decision",
-   "responsabilidad": "Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente",
-   "modulos": [],
-   "pendiente": "vive en atlas-dev (server/src/tareas/formato.ts): borrador «Componente etiquetas»",
-   "ficha": {
-    "resumen": "Prepara el encabezado del prompt para que el agente sepa a qué tarea pertenece.",
-    "como_funciona": {
-     "entradas": [
-      "Tarea de Atlas dev"
-     ],
-     "pasos": [
-      "Compone la cabecera",
-      "Añade el glosario"
-     ],
-     "salidas": [
-      "Prompt con cabecera"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "proveedores",
-   "familia": "ejecucion",
-   "responsabilidad": "Lanzar Claude Code, Codex o Qwen y devolver su salida",
-   "modulos": [
-    "proveedores"
-   ],
-   "pendiente": "borrador «Laboratorios de ejecución y observación»",
-   "ficha": {
-    "resumen": "Adaptadores de cada agente de línea de comandos.",
-    "como_funciona": {
-     "entradas": [
-      "Plan con el agente elegido",
-      "Prompt final"
-     ],
-     "pasos": [
-      "Construye el comando",
-      "Lanza el proceso",
-      "Captura salida y código"
-     ],
-     "salidas": [
-      "Salida del agente",
-      "Run registrado"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": {
-    "tareas": 61,
-    "runs": 74,
-    "latencia_p50_ms": 41200,
-    "coste_total_usd": 12.84,
-    "tokens": 2380000,
-    "ultima_actividad": "2026-10-24T08:30:00Z"
-   }
-  },
-  {
-   "id": "limites",
-   "familia": "ejecucion",
-   "responsabilidad": "Decir si Claude ha pasado su umbral de uso semanal",
-   "modulos": [
-    "limites"
-   ],
-   "pendiente": "borrador «Laboratorios de ejecución y observación»",
-   "ficha": {
-    "resumen": "Lee el consumo semanal y avisa al delegador cuando Claude está cerca del límite.",
-    "como_funciona": {
-     "entradas": [
-      "Uso semanal"
-     ],
-     "pasos": [
-      "Compara con el umbral"
-     ],
-     "salidas": [
-      "Disponible o no disponible"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "aislamiento",
-   "familia": "ejecucion",
-   "responsabilidad": "Trabajar cada tarea en su worktree y rama agente/<id>",
-   "modulos": [
-    "aislar-git"
-   ],
-   "pendiente": "borrador «Laboratorios de ejecución y observación»",
-   "ficha": {
-    "resumen": "Cada tarea corre en un worktree aparte, para no pisar el repositorio principal.",
-    "como_funciona": {
-     "entradas": [
-      "Repositorio",
-      "Id de la tarea"
-     ],
-     "pasos": [
-      "Crea la rama agente/<id>",
-      "Crea el worktree"
-     ],
-     "salidas": [
-      "Ruta aislada"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "analitica",
-   "familia": "observacion",
-   "responsabilidad": "Contar skills recomendadas, preparadas y usadas",
-   "modulos": [
-    "analitica",
-    "catalogo"
-   ],
-   "pendiente": "borrador «Laboratorios de ejecución y observación»",
-   "ficha": {
-    "resumen": "Cruza lo recomendado con lo preparado y lo usado de verdad.",
-    "como_funciona": {
-     "entradas": [
-      "Decisiones",
-      "Runs",
-      "Catálogo"
-     ],
-     "pasos": [
-      "Agrega por skill",
-      "Calcula uso y aciertos"
-     ],
-     "salidas": [
-      "Estadísticas de skills"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "produccion",
-   "familia": "observacion",
-   "responsabilidad": "Medir acierto, re-trabajo, eficiencia y «qué mejorar»",
-   "modulos": [
-    "produccion"
-   ],
-   "pendiente": "borrador «Laboratorios de ejecución y observación»",
-   "ficha": {
-    "resumen": "Convierte tareas terminadas en métricas de acierto, re-trabajo y eficiencia.",
-    "como_funciona": {
-     "entradas": [
-      "Tareas terminadas",
-      "Revisiones"
-     ],
-     "pasos": [
-      "Detecta re-trabajo",
-      "Agrega por agente"
-     ],
-     "salidas": [
-      "Acierto y eficiencia",
-      "Qué mejorar"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "curador",
-   "familia": "modificadores",
-   "responsabilidad": "Proponer qué skills sobran en la biblioteca con reglas inequívocas",
-   "modulos": [],
-   "pendiente": "borrador «Componente curador»",
-   "ficha": {
-    "resumen": "Propondrá retirar skills duplicadas o sin uso con reglas explícitas.",
-    "como_funciona": {
-     "entradas": [
-      "Biblioteca",
-      "Analítica"
-     ],
-     "pasos": [
-      "Aplica reglas inequívocas"
-     ],
-     "salidas": [
-      "Propuestas de retirada"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "comparador",
-   "familia": "modificadores",
-   "responsabilidad": "Comparar cada skill (y Karajan) con las mejores de su grupo",
-   "modulos": [],
-   "pendiente": "borrador «Componente comparador»",
-   "ficha": {
-    "resumen": "Comparará cada skill con sus pares de la taxonomía.",
-    "como_funciona": {
-     "entradas": [
-      "Biblioteca"
-     ],
-     "pasos": [
-      "Agrupa por taxonomía",
-      "Compara"
-     ],
-     "salidas": [
-      "Ranking por grupo"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "eficiencia",
-   "familia": "modificadores",
-   "responsabilidad": "Aplicar ponytail (mínimo código suficiente) a lo que se delega",
-   "modulos": [],
-   "pendiente": "borrador «Familia de modificadores»",
-   "ficha": {
-    "resumen": "Modificador del prompt: pide la solución mínima y suficiente.",
-    "como_funciona": {
-     "entradas": [
-      "Prompt"
-     ],
-     "pasos": [
-      "Añade la instrucción"
-     ],
-     "salidas": [
-      "Prompt modificado"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "metodo",
-   "familia": "modificadores",
-   "responsabilidad": "Aplicar el método de superpowers (TDD, planes, worktrees)",
-   "modulos": [],
-   "pendiente": "borrador «Familia de modificadores»",
-   "ficha": {
-    "resumen": "Modificador de método para tareas N3 a N5.",
-    "como_funciona": {
-     "entradas": [
-      "Prompt",
-      "Nivel"
-     ],
-     "pasos": [
-      "Selecciona el método"
-     ],
-     "salidas": [
-      "Prompt con método"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "prompts",
-   "familia": "modificadores",
-   "responsabilidad": "Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)",
-   "modulos": [],
-   "pendiente": "borrador «Familia de modificadores»",
-   "ficha": {
-    "resumen": "Optimización programática del prompt con evaluación.",
-    "como_funciona": {
-     "entradas": [
-      "Prompt"
-     ],
-     "pasos": [
-      "Optimiza",
-      "Evalúa"
-     ],
-     "salidas": [
-      "Prompt optimizado"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "api",
-   "familia": "interfaz",
-   "responsabilidad": "Exponer Karajan a Atlas dev (rutas del paquete)",
-   "modulos": [
-    "servidor"
-   ],
-   "pendiente": "cubierto por los laboratorios de cada componente",
-   "ficha": {
-    "resumen": "Rutas HTTP del paquete dentro de Atlas dev.",
-    "como_funciona": {
-     "entradas": [
-      "Peticiones de Atlas dev"
-     ],
-     "pasos": [
-      "Valida la petición",
-      "Llama al componente"
-     ],
-     "salidas": [
-      "Respuesta JSON"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  },
-  {
-   "id": "cli",
-   "familia": "interfaz",
-   "responsabilidad": "Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas",
-   "modulos": [
-    "cli"
-   ],
-   "pendiente": "cubierto por atlas/tests/cli.test.ts",
-   "ficha": {
-    "resumen": "kj: componentes, laboratorios, historial y gráficas.",
-    "como_funciona": {
-     "entradas": [
-      "Comando kj"
-     ],
-     "pasos": [
-      "Interpreta el comando",
-      "Ejecuta"
-     ],
-     "salidas": [
-      "Texto o JSON"
-     ]
-    }
-   },
-   "estado": "pendiente",
-   "configuracion": {},
-   "escenarios": [],
-   "ultimas": [],
-   "historial": {},
-   "detalle": {},
-   "hallazgos": [],
-   "operacion": null
-  }
- ],
- "enlaces": [
-  {
-   "de": "api",
-   "a": "clasificador"
-  },
-  {
-   "de": "api",
-   "a": "laboratorio"
-  },
-  {
-   "de": "cli",
-   "a": "laboratorio"
-  },
-  {
-   "de": "clasificador",
-   "a": "delegador",
-   "etiqueta": "subtareas"
-  },
-  {
-   "de": "clasificador",
-   "a": "selector"
-  },
-  {
-   "de": "delegador",
-   "a": "proveedores",
-   "etiqueta": "plan"
-  },
-  {
-   "de": "delegador",
-   "a": "aislamiento"
-  },
-  {
-   "de": "limites",
-   "a": "delegador"
-  },
-  {
-   "de": "selector",
-   "a": "rotador"
-  },
-  {
-   "de": "biblioteca",
-   "a": "selector"
-  },
-  {
-   "de": "etiquetas",
-   "a": "proveedores"
-  },
-  {
-   "de": "proveedores",
-   "a": "produccion",
-   "etiqueta": "runs"
-  },
-  {
-   "de": "produccion",
-   "a": "analitica"
-  },
-  {
-   "de": "almacen",
-   "a": "produccion"
-  },
-  {
-   "de": "laboratorio",
-   "a": "pasarela",
-   "etiqueta": "hallazgos"
-  },
-  {
-   "de": "modo",
-   "a": "pasarela"
-  },
-  {
-   "de": "prompts",
-   "a": "delegador"
-  },
-  {
-   "de": "eficiencia",
-   "a": "delegador"
-  },
-  {
-   "de": "curador",
-   "a": "biblioteca"
-  },
-  {
-   "de": "comparador",
-   "a": "biblioteca"
-  }
- ]
+  ]
 }

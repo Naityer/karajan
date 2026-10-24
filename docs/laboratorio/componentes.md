@@ -129,16 +129,22 @@ Estrellas: «propias» si la ficha es del repo; «heredadas» si la skill está 
 
 ## 7. Lo que queda (borradores en Atlas dev)
 
+Hecho en 0.9.0 (tarea j0co): laboratorios del rotador, curador, comparador, modificadores (eficiencia, método, prompts) y de
+ejecución y observación (almacén, proveedores, límites, aislamiento, analítica, producción); `kj curador`, `kj comparar`,
+`kj grafica … --svg/--html`, y el panel sí/no de skills montable (`window.AtlasPaquetes.karajan.panelSkills`, ver
+[preparado-si-no.md](preparado-si-no.md)). Lo que sigue va como borrador en la cola de Atlas dev, nunca como cambio directo:
+
 | Borrador | Repo |
 |---|---|
-| Pausa en «Preparando» con panel sí/no de skills (tiempo límite, sugerencias ponderadas, buscador, tarjetas con enlace a GitHub) que consume `/laboratorio/sugerencias-skills` y `/laboratorio/calibracion` | atlas-dev |
+| Montar el panel sí/no de skills en la fase «preparado» (`PanelPreparado`, `detalle-fases.tsx`) según [preparado-si-no.md](preparado-si-no.md) | atlas-dev |
 | Claude no recibe las skills de la hoja (`contenidoClaude` ignora `envio.skills`) | atlas-dev |
 | Componente etiquetas (cabecera «Atlas dev · tarea <id>» y glosario) bajo el contrato, alineado con «Planificador como componente de karajan» | atlas-dev |
-| Componente curador (limpieza de la biblioteca con reglas inequívocas) | karajan |
-| Componente comparador (cada skill y Karajan frente a los mejores de su grupo; funcionalidades que nos faltan) | karajan |
-| Familia de modificadores (eficiencia, método y prompts), cada uno con su laboratorio A/B y feedback humano | karajan |
-| Laboratorios de ejecución y observación (almacén, proveedores, límites, aislamiento, analítica, producción) | karajan |
-| Retirar el dashboard Python y exportar gráficas a SVG/HTML desde `kj` | karajan |
+| Paquete de trabajo completo: skills que encajan como piezas de componentes (especificación, ver §6) | karajan |
+| Conectar los modificadores al delegador, solo en desarrollo (los enlaces `eficiencia/metodo/prompts → delegador` siguen «previstos») | karajan |
+| Registrar cada reposición del rotador con fecha (para calibrar `instantaneaDias`; hoy solo `frecuenteDias` decide qué se retira) | karajan |
+| Fechas relativas en `TareaAnonima` para que el laboratorio de producción recalcule el acierto con `calcularAcierto` | karajan |
+| Resolver el repo de origen y las estrellas propias de las skills anidadas y re-ingerir las 251 skills sin ficha (sin eso el comparador solo puntúa 2 de 441) | karajan |
+| Retirar el dashboard Python (las gráficas ya se exportan desde `kj`) | karajan |
 
 ## 8. Ventana de Atlas dev
 
