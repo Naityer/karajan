@@ -1,7 +1,11 @@
 import { join } from 'node:path';
 
+import { UMBRALES_AB } from './ab';
 import { aislarActivo, equipo } from './aislar-git';
 import { UMBRALES_CURADOR } from './curador';
+import { MAX_SOBRECOSTE_EFICIENCIA, SKILLS_EFICIENCIA } from './eficiencia';
+import { MAX_SOBRECOSTE_METODO, SKILLS_METODO } from './metodo';
+import { MAX_SOBRECOSTE_PROMPTS, SKILLS_PROMPTS } from './prompts';
 import type { Configuracion } from './heuristica';
 import { rutaLimites, umbralClaude, type Limites } from './limites';
 import { ESTADOS_ACEPTADA, type Modo } from './modo';
@@ -389,9 +393,66 @@ export const FICHAS: Record<string, FichaComponente> = {
     configuracion: () => ({ dias_sin_uso: UMBRALES_CURADOR.diasSinUso, estrellas_minimas: UMBRALES_CURADOR.estrellasMinimas, factor_estrellas: UMBRALES_CURADOR.factorEstrellas }),
   },
   comparador: borrador('Componente comparador', 'Comparará cada skill (y Karajan) con las mejores de su grupo de la taxonomía y señalará las funcionalidades que faltan.', ['Fichas y taxonomía de la biblioteca'], ['Informe comparativo por grupo']),
-  eficiencia: borrador('Familia de modificadores', 'Aplicará ponytail (mínimo código suficiente) a lo que se delega, con un A/B sobre tareas reproducidas.', ['Instrucción que recibe el agente'], ['Instrucción modificada']),
-  metodo: borrador('Familia de modificadores', 'Aplicará el método de superpowers (plan, TDD, worktrees) como modificador de las tareas N3–N5.', ['Instrucción que recibe el agente'], ['Instrucción modificada']),
-  prompts: borrador('Familia de modificadores', 'Optimizará el prompt que recibe el agente (karpathy-skills, dspy, promptfoo).', ['Prompt de la tarea'], ['Prompt optimizado']),
+  eficiencia: {
+    especificado: true,
+    resumen: 'Modificador ponytail (mínimo código suficiente): añade a la instrucción que se delega un bloque con el criterio de la solución mínima y segura. Desactivado en producción y aún sin conectar al delegador.',
+    como_funciona: {
+      entradas: ['Instrucción que se delega', 'Modo (producción | desarrollo)', 'Nivel e intención de la tarea (del clasificador)'],
+      pasos: [
+        'Decide si aplica: solo en desarrollo, niveles 1 a 3 y intención de implementar o corregir (eficiencia.ts · aplica)',
+        'Si no aplica, o la instrucción ya lleva la marca, la devuelve intacta (eficiencia.ts · aplicar)',
+        'Si aplica, añade al final la marca y el bloque de eficiencia, sin tocar el texto original (eficiencia.ts · aplicar)',
+        'El laboratorio comprueba el contrato y compara tareas con y sin ponytail en su hoja (lab/eficiencia.lab.ts · laboratorioModificador en ab.ts)',
+      ],
+      salidas: ['Instrucción modificada (en desarrollo) o la misma (en producción)'],
+    },
+    reglas: [
+      'En producción devuelve la instrucción intacta; no está conectado a delegar.ts. El enlace eficiencia → delegador sigue «previsto» hasta que un borrador lo conecte solo en desarrollo.',
+      'Idempotente, conserva el texto original y añade como máximo el sobrecoste acotado.',
+      'El A/B es observacional, no aleatorizado: solo concluye con ambos brazos ≥ 20 tareas y los IC95 de Wilson sin solaparse; un hallazgo propone activar o retirar como borrador, nunca lo aplica.',
+    ],
+    configuracion: (c) => ({ activo: c.modo === 'desarrollo', skills_brazo_a: SKILLS_EFICIENCIA, sobrecoste_max_caracteres: MAX_SOBRECOSTE_EFICIENCIA, niveles: 'N1–N3', muestra_minima_por_brazo: UMBRALES_AB.muestraMinima }),
+  },
+  metodo: {
+    especificado: true,
+    resumen: 'Modificador de método (superpowers): añade a la instrucción un bloque de plan, TDD, ejecución en la rama o worktree de la tarea y verificación. Desactivado en producción y aún sin conectar al delegador.',
+    como_funciona: {
+      entradas: ['Instrucción que se delega', 'Modo (producción | desarrollo)', 'Nivel e intención de la tarea (del clasificador)'],
+      pasos: [
+        'Decide si aplica: solo en desarrollo, niveles 3 a 5 y intención de implementar o corregir (metodo.ts · aplica)',
+        'Si no aplica, o la instrucción ya lleva la marca, la devuelve intacta (metodo.ts · aplicar)',
+        'Si aplica, añade al final la marca y el bloque de método, sin tocar el texto original (metodo.ts · aplicar)',
+        'El laboratorio comprueba el contrato y compara tareas con y sin las skills de superpowers en su hoja (lab/metodo.lab.ts · laboratorioModificador en ab.ts)',
+      ],
+      salidas: ['Instrucción modificada (en desarrollo) o la misma (en producción)'],
+    },
+    reglas: [
+      'En producción devuelve la instrucción intacta; no está conectado a delegar.ts. El enlace metodo → delegador sigue «previsto» hasta que un borrador lo conecte solo en desarrollo.',
+      'Idempotente, conserva el texto original y añade como máximo el sobrecoste acotado.',
+      'El A/B es observacional, no aleatorizado: solo concluye con ambos brazos ≥ 20 tareas y los IC95 de Wilson sin solaparse; un hallazgo propone activar o retirar como borrador, nunca lo aplica.',
+    ],
+    configuracion: (c) => ({ activo: c.modo === 'desarrollo', skills_brazo_a: SKILLS_METODO, sobrecoste_max_caracteres: MAX_SOBRECOSTE_METODO, niveles: 'N3–N5', muestra_minima_por_brazo: UMBRALES_AB.muestraMinima }),
+  },
+  prompts: {
+    especificado: true,
+    resumen: 'Modificador de prompts (karpathy-skills, dspy, promptfoo): añade a la instrucción criterios de éxito comprobables y la petición de explicitar suposiciones. Desactivado en producción y aún sin conectar al delegador.',
+    como_funciona: {
+      entradas: ['Instrucción que se delega', 'Modo (producción | desarrollo)', 'Nivel de la tarea (del clasificador)'],
+      pasos: [
+        'Decide si aplica: solo en desarrollo y a partir del nivel 2 (prompts.ts · aplica)',
+        'Si no aplica, o la instrucción ya lleva la marca, la devuelve intacta (prompts.ts · aplicar)',
+        'Si aplica, añade al final la marca y el bloque de criterios, sin tocar el texto original (prompts.ts · aplicar)',
+        'El laboratorio comprueba el contrato y compara tareas con y sin karpathy-skills, dspy o promptfoo en su hoja (lab/prompts.lab.ts · laboratorioModificador en ab.ts)',
+      ],
+      salidas: ['Instrucción modificada (en desarrollo) o la misma (en producción)'],
+    },
+    reglas: [
+      'En producción devuelve la instrucción intacta; no está conectado a delegar.ts. El enlace prompts → delegador sigue «previsto» hasta que un borrador lo conecte solo en desarrollo.',
+      'Idempotente, conserva el texto original y añade como máximo el sobrecoste acotado.',
+      'El A/B es observacional, no aleatorizado: solo concluye con ambos brazos ≥ 20 tareas y los IC95 de Wilson sin solaparse; un hallazgo propone activar o retirar como borrador, nunca lo aplica.',
+    ],
+    configuracion: (c) => ({ activo: c.modo === 'desarrollo', skills_brazo_a: SKILLS_PROMPTS, sobrecoste_max_caracteres: MAX_SOBRECOSTE_PROMPTS, niveles: 'N2–N5', muestra_minima_por_brazo: UMBRALES_AB.muestraMinima }),
+  },
 };
 
 export const ficha = (id: string): FichaComponente | null => FICHAS[id] ?? null;

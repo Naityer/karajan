@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { barras, ejecutar, sparkline } from '../src/cli';
+import { barras, ejecutar, graficaHtml, graficaSvg, sparkline } from '../src/cli';
 
 const servidor = (rutas: Record<string, unknown>) => {
   const pedidas: { url: string; metodo: string; cuerpo: unknown }[] = [];
@@ -18,8 +18,9 @@ const servidor = (rutas: Record<string, unknown>) => {
 const correr = async (args: string[], rutas: Record<string, unknown>) => {
   const s = servidor(rutas);
   let texto = '';
-  const codigo = await ejecutar(args, { fetch: s.fetch, escribir: (x) => { texto += `${x}\n`; }, api: 'http://k' });
-  return { codigo, texto, pedidas: s.pedidas };
+  const ficheros = new Map<string, string>();
+  const codigo = await ejecutar(args, { fetch: s.fetch, escribir: (x) => { texto += `${x}\n`; }, api: 'http://k', guardar: (ruta, contenido) => { ficheros.set(ruta, contenido); } });
+  return { codigo, texto, pedidas: s.pedidas, ficheros };
 };
 
 describe('kj (terminal)', () => {
@@ -50,5 +51,37 @@ describe('kj (terminal)', () => {
   it('gráfica de acierto por agente', async () => {
     const r = await correr(['grafica', 'acierto'], { '/analytics/eficiencia': { kpis: { tareas: 3, acierto: 0.8, retrabajo: 0.1 }, agentes: [{ agente: 'codex', tareas: 2, acierto: 0.9, retrabajo: 0, p50: 1000, coste_total: 0 }] } });
     assert.match(r.texto, /Acierto por agente \(global 80 %, re-trabajo 10 %, 3 tareas\)\ncodex █+ 90 % {2}2 tareas/);
+  });
+
+  it('exporta la gráfica a SVG y HTML autocontenidos por el entorno, sin escribir ficheros reales', async () => {
+    const rutas = { '/analytics/eficiencia': { kpis: { tareas: 3, acierto: 0.8, retrabajo: 0.1 }, agentes: [{ agente: 'codex<x>', tareas: 2, acierto: 0.9, retrabajo: 0, p50: 1000, coste_total: 0 }, { agente: 'claude', tareas: 1, acierto: 0.5, retrabajo: 0, p50: null, coste_total: 0 }] } };
+    const r = await correr(['grafica', 'acierto', '--svg', 'a.svg', '--html', 'a.html'], rutas);
+    assert.equal(r.codigo, 0);
+    assert.match(r.texto, /Gráfica guardada en a\.svg y a\.html/);
+    const svg = r.ficheros.get('a.svg')!, html = r.ficheros.get('a.html')!;
+    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+    assert.match(svg, /prefers-color-scheme:dark/);
+    assert.match(svg, /codex&lt;x&gt;/);
+    assert.doesNotMatch(svg, /<x>/);
+    assert.match(html, /^<!doctype html>/);
+    assert.match(html, /<svg /);
+    assert.match(html, /<table>.*<th scope="row">claude<\/th>/s);
+    assert.match(html, /<title>Acierto por agente/);
+    assert.doesNotMatch(html, /https?:\/\/(?!www\.w3\.org)/);
+  });
+
+  it('--svg sin fichero, sin entorno de escritura o en sugerencias da error de uso', async () => {
+    const rutas = { '/analytics/eficiencia': { kpis: { tareas: 0, acierto: 0, retrabajo: 0 }, agentes: [] }, '/analytics/sugerencias': { sugerencias: [] } };
+    assert.equal((await correr(['grafica', 'acierto', '--svg'], rutas)).codigo, 2);
+    assert.equal((await correr(['grafica', 'sugerencias', '--svg', 'x.svg'], rutas)).codigo, 2);
+    let texto = '';
+    const sinGuardar = await ejecutar(['grafica', 'acierto', '--svg', 'x.svg'], { fetch: servidor(rutas).fetch, escribir: (x) => { texto += x; }, api: 'http://k' });
+    assert.equal(sinGuardar, 2);
+    assert.match(texto, /uso:/);
+  });
+
+  it('graficaSvg y graficaHtml aguantan filas vacías y valores nulos', () => {
+    assert.match(graficaSvg('t', []), /\(sin datos\)/);
+    assert.match(graficaHtml('t', [{ etiqueta: 'a', valor: null }]), /<td>—<\/td>/);
   });
 });

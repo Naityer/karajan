@@ -282,6 +282,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'clasificador': return { ...base, clasificar: (p: string) => clasificar(p, config()) };
       case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
       case 'curador': return { ...base, entrada: entradaCurador, borradores: () => pasarela.listar().then((l) => l.map((b) => ({ clave: b.clave, estado: b.estado }))).catch(() => []) };
+      case 'eficiencia': case 'metodo': case 'prompts': return { ...base, clasificar: (p: string) => { const k = clasificar(p, config()); return { nivel: Number(/[1-5]/.exec(k.complexity_level)?.[0] ?? 1), dominio: k.domain[0] ?? 'general', intencion: k.intent }; } };
       default: return base;
     }
   };

@@ -3,6 +3,9 @@ import { laboratorioBiblioteca } from './lab/biblioteca.lab';
 import { laboratorioClasificador } from './lab/clasificador.lab';
 import { laboratorioCurador } from './lab/curador.lab';
 import { laboratorioDelegador } from './lab/delegador.lab';
+import { laboratorioEficiencia } from './lab/eficiencia.lab';
+import { laboratorioMetodo } from './lab/metodo.lab';
+import { laboratorioPrompts } from './lab/prompts.lab';
 import { laboratorioSelector } from './lab/selector.lab';
 
 /**
@@ -39,7 +42,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'biblioteca', capa: 'base', responsabilidad: 'Dar la ficha de una skill (estrellas, repo, taxonomía) desde resources.db, en solo lectura', modulos: ['biblioteca'], laboratorio: laboratorioBiblioteca },
   { id: 'modo', capa: 'base', responsabilidad: 'Bloquear cualquier cambio de configuración sin una tarea aceptada de Atlas dev', modulos: ['modo', 'atlas-dev'], pendiente: 'cubierto por tests unitarios (atlas/tests/modo.test.ts)' },
   { id: 'pasarela', capa: 'base', responsabilidad: 'Convertir los hallazgos en tareas borrador de Atlas dev, sin duplicar ni reabrir lo descartado', modulos: ['pasarela-borradores'], pendiente: 'cubierto por tests unitarios (atlas/tests/pasarela.test.ts)' },
-  { id: 'laboratorio', capa: 'base', responsabilidad: 'Ejecutar los laboratorios sobre tareas anonimizadas y guardar sus resultados', modulos: ['laboratorio', 'componentes', 'arquitectura', 'fichas-componentes'], pendiente: 'es el propio motor (atlas/tests/laboratorio.test.ts)' },
+  { id: 'laboratorio', capa: 'base', responsabilidad: 'Ejecutar los laboratorios sobre tareas anonimizadas y guardar sus resultados', modulos: ['laboratorio', 'ab', 'componentes', 'arquitectura', 'fichas-componentes'], pendiente: 'es el propio motor (atlas/tests/laboratorio.test.ts)' },
   // ── Decisión ──
   { id: 'clasificador', capa: 'decision', responsabilidad: 'Dar nivel, dominio, intención y subtareas a un prompt', modulos: ['heuristica'], laboratorio: laboratorioClasificador },
   { id: 'delegador', capa: 'decision', responsabilidad: 'Elegir el agente de cada subtarea según el perfil y sus reglas', modulos: ['delegar', 'perfiles', 'reglas', 'perfil-texto'], laboratorio: laboratorioDelegador },
@@ -56,9 +59,9 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   // ── Modificadores (familia ampliable) ──
   { id: 'curador', capa: 'modificadores', responsabilidad: 'Proponer qué skills sobran en la biblioteca con reglas inequívocas', modulos: ['curador'], laboratorio: laboratorioCurador },
   { id: 'comparador', capa: 'modificadores', responsabilidad: 'Comparar cada skill (y Karajan) con las mejores de su grupo', modulos: [], pendiente: 'borrador «Componente comparador»' },
-  { id: 'eficiencia', capa: 'modificadores', responsabilidad: 'Aplicar ponytail (mínimo código suficiente) a lo que se delega', modulos: [], pendiente: 'borrador «Familia de modificadores»' },
-  { id: 'metodo', capa: 'modificadores', responsabilidad: 'Aplicar el método de superpowers (TDD, planes, worktrees)', modulos: [], pendiente: 'borrador «Familia de modificadores»' },
-  { id: 'prompts', capa: 'modificadores', responsabilidad: 'Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)', modulos: [], pendiente: 'borrador «Familia de modificadores»' },
+  { id: 'eficiencia', capa: 'modificadores', responsabilidad: 'Aplicar ponytail (mínimo código suficiente) a lo que se delega', modulos: ['eficiencia'], laboratorio: laboratorioEficiencia },
+  { id: 'metodo', capa: 'modificadores', responsabilidad: 'Aplicar el método de superpowers (TDD, planes, worktrees)', modulos: ['metodo'], laboratorio: laboratorioMetodo },
+  { id: 'prompts', capa: 'modificadores', responsabilidad: 'Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)', modulos: ['prompts'], laboratorio: laboratorioPrompts },
   // ── Interfaz ──
   { id: 'api', capa: 'interfaz', responsabilidad: 'Exponer Karajan a Atlas dev (rutas del paquete)', modulos: ['servidor'], pendiente: 'cubierto por los laboratorios de cada componente' },
   { id: 'cli', capa: 'interfaz', responsabilidad: 'Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas', modulos: ['cli'], pendiente: 'cubierto por atlas/tests/cli.test.ts' },
