@@ -10,14 +10,14 @@ import { Rotador } from './rotador';
 import { Delegador } from './delegar';
 import { configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles, perfilPorDefecto } from './perfiles';
-import { disponibilidad, PROVEEDORES } from './proveedores';
+import { buscarBinario, disponibilidad, PROVEEDORES } from './proveedores';
 import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
 import { Guardian } from './modo';
 import { Biblioteca } from './biblioteca';
 import { aHallazgo, curar, REGLAS_CURADOR, UMBRALES_CURADOR, type EntradaCurador } from './curador';
 import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
-import { leerLimites } from './limites';
+import { leerLimites, rutaLimites } from './limites';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
@@ -283,6 +283,13 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
       case 'curador': return { ...base, entrada: entradaCurador, borradores: () => pasarela.listar().then((l) => l.map((b) => ({ clave: b.clave, estado: b.estado }))).catch(() => []) };
       case 'eficiencia': case 'metodo': case 'prompts': return { ...base, clasificar: (p: string) => { const k = clasificar(p, config()); return { nivel: Number(/[1-5]/.exec(k.complexity_level)?.[0] ?? 1), dominio: k.domain[0] ?? 'general', intencion: k.intent }; } };
+      // Ejecución y observación: leen el registro y el equipo en solo lectura; lo que reproducen lo hacen en temporales.
+      case 'almacen': return { ...base, almacen };
+      case 'proveedores': return { ...base, runs: () => almacen.tareasPlanas().flatMap((t) => t.runs ?? []), buscar: (b: string) => buscarBinario(b) };
+      case 'limites': return { ...base, ruta: rutaLimites(), ahora: () => Date.now() };
+      case 'aislamiento': return { ...base, workspace: process.env['ATLAS_WORKSPACE'] ?? null };
+      case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
+      case 'produccion': return base;
       default: return base;
     }
   };

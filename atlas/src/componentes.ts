@@ -1,4 +1,7 @@
 import type { Laboratorio } from './laboratorio';
+import { laboratorioAlmacen } from './lab/almacen.lab';
+import { laboratorioAislamiento } from './lab/aislamiento.lab';
+import { laboratorioAnalitica } from './lab/analitica.lab';
 import { laboratorioBiblioteca } from './lab/biblioteca.lab';
 import { laboratorioClasificador } from './lab/clasificador.lab';
 import { laboratorioCurador } from './lab/curador.lab';
@@ -6,6 +9,9 @@ import { laboratorioDelegador } from './lab/delegador.lab';
 import { laboratorioEficiencia } from './lab/eficiencia.lab';
 import { laboratorioMetodo } from './lab/metodo.lab';
 import { laboratorioPrompts } from './lab/prompts.lab';
+import { laboratorioLimites } from './lab/limites.lab';
+import { laboratorioProduccion } from './lab/produccion.lab';
+import { laboratorioProveedores } from './lab/proveedores.lab';
 import { laboratorioSelector } from './lab/selector.lab';
 
 /**
@@ -38,7 +44,7 @@ export interface Componente {
 
 const DEFINICION: Omit<Componente, 'familia'>[] = [
   // ── Base ──
-  { id: 'almacen', capa: 'base', responsabilidad: 'Guardar y leer el registro de tareas, decisiones, runs y revisiones', modulos: ['almacen', 'redondeo'], pendiente: 'cubierto por la paridad con Python; laboratorio en el borrador «Laboratorios de ejecución y observación»' },
+  { id: 'almacen', capa: 'base', responsabilidad: 'Guardar y leer el registro de tareas, decisiones, runs y revisiones', modulos: ['almacen', 'redondeo'], laboratorio: laboratorioAlmacen },
   { id: 'biblioteca', capa: 'base', responsabilidad: 'Dar la ficha de una skill (estrellas, repo, taxonomía) desde resources.db, en solo lectura', modulos: ['biblioteca'], laboratorio: laboratorioBiblioteca },
   { id: 'modo', capa: 'base', responsabilidad: 'Bloquear cualquier cambio de configuración sin una tarea aceptada de Atlas dev', modulos: ['modo', 'atlas-dev'], pendiente: 'cubierto por tests unitarios (atlas/tests/modo.test.ts)' },
   { id: 'pasarela', capa: 'base', responsabilidad: 'Convertir los hallazgos en tareas borrador de Atlas dev, sin duplicar ni reabrir lo descartado', modulos: ['pasarela-borradores'], pendiente: 'cubierto por tests unitarios (atlas/tests/pasarela.test.ts)' },
@@ -50,12 +56,12 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'rotador', capa: 'decision', responsabilidad: 'Dejar instaladas solo las skills que se usan y guardar el resto en el almacén', modulos: ['rotador'], pendiente: 'borrador «Laboratorio del rotador»' },
   { id: 'etiquetas', capa: 'decision', responsabilidad: 'Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente', modulos: [], pendiente: 'vive en atlas-dev (server/src/tareas/formato.ts): borrador «Componente etiquetas»' },
   // ── Ejecución ──
-  { id: 'proveedores', capa: 'ejecucion', responsabilidad: 'Lanzar Claude Code, Codex o Qwen y devolver su salida', modulos: ['proveedores'], pendiente: 'borrador «Laboratorios de ejecución y observación»' },
-  { id: 'limites', capa: 'ejecucion', responsabilidad: 'Decir si Claude ha pasado su umbral de uso semanal', modulos: ['limites'], pendiente: 'borrador «Laboratorios de ejecución y observación»' },
-  { id: 'aislamiento', capa: 'ejecucion', responsabilidad: 'Trabajar cada tarea en su worktree y rama agente/<id>', modulos: ['aislar-git'], pendiente: 'borrador «Laboratorios de ejecución y observación»' },
+  { id: 'proveedores', capa: 'ejecucion', responsabilidad: 'Lanzar Claude Code, Codex o Qwen y devolver su salida', modulos: ['proveedores'], laboratorio: laboratorioProveedores },
+  { id: 'limites', capa: 'ejecucion', responsabilidad: 'Decir si Claude ha pasado su umbral de uso semanal', modulos: ['limites'], laboratorio: laboratorioLimites },
+  { id: 'aislamiento', capa: 'ejecucion', responsabilidad: 'Trabajar cada tarea en su worktree y rama agente/<id>', modulos: ['aislar-git'], laboratorio: laboratorioAislamiento },
   // ── Observación ──
-  { id: 'analitica', capa: 'observacion', responsabilidad: 'Contar skills recomendadas, preparadas y usadas', modulos: ['analitica', 'catalogo'], pendiente: 'borrador «Laboratorios de ejecución y observación»' },
-  { id: 'produccion', capa: 'observacion', responsabilidad: 'Medir acierto, re-trabajo, eficiencia y «qué mejorar»', modulos: ['produccion'], pendiente: 'borrador «Laboratorios de ejecución y observación»' },
+  { id: 'analitica', capa: 'observacion', responsabilidad: 'Contar skills recomendadas, preparadas y usadas', modulos: ['analitica', 'catalogo'], laboratorio: laboratorioAnalitica },
+  { id: 'produccion', capa: 'observacion', responsabilidad: 'Medir acierto, re-trabajo, eficiencia y «qué mejorar»', modulos: ['produccion'], laboratorio: laboratorioProduccion },
   // ── Modificadores (familia ampliable) ──
   { id: 'curador', capa: 'modificadores', responsabilidad: 'Proponer qué skills sobran en la biblioteca con reglas inequívocas', modulos: ['curador'], laboratorio: laboratorioCurador },
   { id: 'comparador', capa: 'modificadores', responsabilidad: 'Comparar cada skill (y Karajan) con las mejores de su grupo', modulos: [], pendiente: 'borrador «Componente comparador»' },
