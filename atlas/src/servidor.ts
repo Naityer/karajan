@@ -262,6 +262,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'selector': return { ...base, skills: skillsEquipo, revisadas: () => almacen.tareasPlanas().filter((t) => t.revision?.['skills_usadas']?.length).map((t) => ({ id: t.task_id, prompt: t.prompt, skills: t.revision!['skills_usadas']! })) };
       case 'clasificador': return { ...base, clasificar: (p: string) => clasificar(p, config()) };
       case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
+      case 'eficiencia': case 'metodo': case 'prompts': return { ...base, clasificar: (p: string) => { const k = clasificar(p, config()); return { nivel: Number(/[1-5]/.exec(k.complexity_level)?.[0] ?? 1), dominio: k.domain[0] ?? 'general', intencion: k.intent }; } };
       default: return base;
     }
   };

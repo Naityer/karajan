@@ -150,7 +150,8 @@ describe('arquitectura: contrato de datos', () => {
       assert.ok(f.como_funciona.pasos.length >= 4 && f.como_funciona.entradas.length && f.como_funciona.salidas.length && f.reglas.length, id);
       assert.ok(f.como_funciona.pasos.every((p) => /\.ts/.test(p)), `${id}: cada paso nombra el fichero que lo implementa`);
     }
-    for (const id of ['curador', 'comparador', 'eficiencia', 'metodo', 'prompts', 'etiquetas']) assert.equal(porId(a, id).ficha.especificado, false, id);
+    for (const id of ['curador', 'comparador', 'etiquetas']) assert.equal(porId(a, id).ficha.especificado, false, id);
+    for (const id of ['eficiencia', 'metodo', 'prompts']) assert.equal(porId(a, id).ficha.especificado, true, id);
   });
 
   it('operación: nula donde no hay fuente y con datos donde sí', () => {
