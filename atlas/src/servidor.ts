@@ -101,7 +101,8 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     for (const t of almacen.tareasPlanas()) for (const s of t.ejecutadas ?? []) if (!r[s] || t.created_at > r[s]!) r[s] = t.created_at;
     return r;
   };
-  const rotador = new Rotador({ estado: join(ctx.datos, 'rotador.json'), usosKarajan });
+  const historiaKarajan = () => almacen.tareasPlanas().flatMap((t) => (t.ejecutadas ?? []).map((skill) => ({ skill, cuando: t.created_at })));
+  const rotador = new Rotador({ estado: join(ctx.datos, 'rotador.json'), usosKarajan, historiaKarajan });
   const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), rotador });
 
   // Producción: las mutaciones necesitan una tarea aceptada; lo demás se propone como borrador (ver modo.ts).
@@ -262,6 +263,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'selector': return { ...base, skills: skillsEquipo, revisadas: () => almacen.tareasPlanas().filter((t) => t.revision?.['skills_usadas']?.length).map((t) => ({ id: t.task_id, prompt: t.prompt, skills: t.revision!['skills_usadas']! })) };
       case 'clasificador': return { ...base, clasificar: (p: string) => clasificar(p, config()) };
       case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
+      case 'rotador': return { ...base, rotador, historial: () => rotador.historial(), ahora: () => Date.now() };
       default: return base;
     }
   };

@@ -95,7 +95,8 @@ describe('arquitectura: contrato de datos', () => {
     assert.equal(porId(a, 'delegador').estado, 'hallazgos');
     assert.equal(porId(a, 'selector').estado, 'error');
     assert.equal(porId(a, 'biblioteca').estado, 'sin_ejecutar');
-    for (const id of ['rotador', 'etiquetas', 'curador', 'api', 'almacen']) assert.equal(porId(a, id).estado, 'pendiente', id);
+    assert.equal(porId(a, 'rotador').estado, 'sin_ejecutar');
+    for (const id of ['etiquetas', 'curador', 'api', 'almacen']) assert.equal(porId(a, id).estado, 'pendiente', id);
     assert.equal(porId(a, 'delegador').muestra_corta, true);
     assert.equal(porId(a, 'clasificador').muestra_corta, false);
   });
@@ -107,7 +108,7 @@ describe('arquitectura: contrato de datos', () => {
     assert.deepEqual(c.escenarios[0]!.umbrales, { muestra: '≥ 20' });
     assert.deepEqual(porId(a, 'delegador').escenarios.map((e) => e.id), ['fidelidad', 'concordancia', 'adecuacion', 'determinismo']);
     assert.equal(porId(a, 'delegador').escenarios[0]!.umbrales, null);
-    assert.deepEqual(porId(a, 'rotador').escenarios, []);
+    assert.deepEqual(porId(a, 'rotador').escenarios.map((e) => e.id), ['contrato', 'historial']);
   });
 
   it('últimas, detalle y hallazgos con el estado de su borrador', () => {
@@ -306,7 +307,7 @@ describe('GET /laboratorio/arquitectura', () => {
     assert.equal(v.modo, 'produccion');
     assert.equal(v.componentes.length, 22);
     assert.equal(porId(v, 'delegador').estado, 'sin_ejecutar');
-    assert.equal(porId(v, 'rotador').estado, 'pendiente');
+    assert.equal(porId(v, 'rotador').estado, 'sin_ejecutar');
     assert.ok(Object.keys(porId(v, 'delegador').configuracion!).length);
     assert.equal(v.enlaces.length, ENLACES.length);
   });
