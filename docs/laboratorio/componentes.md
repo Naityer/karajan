@@ -61,6 +61,7 @@ Cada escenario devuelve la muestra, si es **suficiente**, sus métricas, los umb
 | selector | `explicitas` (contrato), `concordancia` (replay), `calibracion` (feedback) | Verdad humana, por orden de fiabilidad: sí/no de Preparando, `skills_usadas` revisadas, skills de la hoja en tareas no `auto`. Mide Hit@1, precisión@3, recall@3 y falsos positivos. Con n ≥ 30 busca pesos (`PESOS_SELECTOR`) con validación cruzada de 5 pliegues y solo los propone si el F1 **en datos no vistos** sube ≥ 5 pp sin bajar Hit@1. |
 | clasificador | `frente-a-la-persona` (replay) | Nivel y dominio frente a los que la persona anota en la hoja (`clasificacion.nivel_tarea`, `dominio`). |
 | biblioteca | `cobertura` (contrato) | Cuántas skills del equipo tienen ficha, estrellas propias (no heredadas) y grupo. Es la base de datos sobre la que decidirán el curador y el comparador. |
+| comparador | `estrellas-propias` (contrato), `pruebas-y-funcionalidades` (contrato) | Compara cada skill y a Karajan con los 5 mejores de su grupo **solo con estrellas propias** y un grupo con ≥ 5 recursos con estrellas propias (si no, «sin dato»). Un hallazgo `media` por cada prueba de ejecución real con feedback humano (evals, benchmarks, A/B, feedback humano, preferencia, regresión de prompts) que declara algún par top y Karajan no tiene en sus laboratorios (`replay` y `feedback` ya cubren preferencia y feedback humano); otro `media` por las funcionalidades (palabras clave declaradas, no comunes a la biblioteca) que ofrecen ≥ 3 de los 5 pares top; con 2 pares, `baja`. |
 
 ## 3. Modo producción
 
