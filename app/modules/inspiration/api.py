@@ -19,6 +19,7 @@ from datetime import (
     timezone,
 )
 from io import BytesIO
+from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import (
@@ -28,6 +29,7 @@ from fastapi import (
     Query,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from app import events
 from app import runtime as runtime_module
@@ -510,6 +512,38 @@ def resource_refresh_run_status(run_id: str) -> dict:
     if result is None:
         raise HTTPException(status_code=404, detail="resource refresh run not found")
     return result
+
+
+class IngestUrlRequest(BaseModel):
+    """Single-step alta: analiza una URL y la persiste sin ticket intermedio.
+
+    Pensado para agentes externos que solo tienen una URL a mano y no pueden
+    encadenar analyze -> create manualmente.
+    """
+
+    url: str = Field(min_length=1, max_length=500)
+    collection: Literal["catalog", "radar"] = "catalog"
+
+
+@router.post("/resources/ingest-url", response_model=ResourceItem)
+def ingest_resource_url(
+    request: IngestUrlRequest,
+    _: None = Depends(require_token),
+) -> ResourceItem:
+    """Analiza `request.url` y guarda el recurso resultante en una sola llamada.
+
+    Reutiliza `analyze_resource`/`create_resource` tal cual (misma
+    clasificación GitHub/web, mismo manejo de rate-limit y sub-recursos
+    anidados) para no duplicar esa lógica.
+    """
+    analysis = analyze_resource(AnalyzeRequest(repo_url=request.url))
+    if not analysis.valid or analysis.preview is None:
+        raise HTTPException(status_code=422, detail="; ".join(analysis.warnings) or "no se pudo analizar la URL")
+    create_request = analysis.preview.model_copy(update={
+        "analysis_token": analysis.analysis_token,
+        "metadata": {**analysis.preview.metadata, "inspiration_collection": request.collection},
+    })
+    return create_resource(create_request)
 
 
 @router.post("/resources/analyze", response_model=AnalyzeResult)

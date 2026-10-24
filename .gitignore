@@ -29,3 +29,11 @@ tests/artifacts/
 dist-atlas/
 dist-paquete/
 atlas/node_modules/
+
+# Higiene: generados y copias
+__pycache__/
+.tmp/
+.tmp_*/
+*.bak*
+.ua/
+.env.bak

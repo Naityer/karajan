@@ -35,7 +35,7 @@ Una regla casa cuando **todos** sus filtros casan; una lista vacía o un límite
 
 | Campo | Casa si… |
 |---|---|
-| `domains` | alguno coincide con los dominios del clasificador (`programming`, `data`, `documents`, `devops`, `security`, `product`, `general`) **o** con las áreas detectadas en el prompt (`frontend`, `backend`, `oficina`, ver `app/routing_rules.py::AREA_KEYWORDS`) |
+| `domains` | alguno coincide con los dominios del clasificador (`programming`, `data`, `documents`, `devops`, `security`, `product`, `general`) **o** con las áreas detectadas en el prompt (`frontend`, `backend`, `oficina`, ver `app/routing/routing_rules.py::AREA_KEYWORDS`) |
 | `intents` | la intención es una de ellas (`implement_feature`, `diagnose_and_fix`, `analyze_or_review`, `transform_or_extract`, `classify_and_plan`) |
 | `level_min` / `level_max` | el nivel (1–5) está en el rango. El nivel que ve una regla es el **de la tarea**, o el de la subtarea si es mayor (`rule_level`) |
 | `enabled` | no está desactivada |

@@ -1,4 +1,4 @@
-"""The tool catalog, as data — the same shape `app/catalog.py` uses for providers.
+"""The tool catalog, as data — the same shape `app/providers/catalog.py` uses for providers.
 
 Frozen module-level tuple plus accessors, no side effects at import. That is
 what lets the catalog be rendered in the dashboard, diffed in review, and tested
@@ -176,7 +176,7 @@ _CATALOG: tuple[ToolSpec, ...] = (
         risk=RiskTier.CONTROL,
         terminal=True,
         failure_modes=("not_found: alguna ruta propuesta no existe en el workspace",),
-        example='<karajan:tool name="propose_context">\n<param name="paths">\napp/main.py\napp/delegation.py\n</param>\n<param name="rationale">Son el punto de entrada y el motor.</param>\n</karajan:tool>',
+        example='<karajan:tool name="propose_context">\n<param name="paths">\napp/main.py\napp/execution/delegation.py\n</param>\n<param name="rationale">Son el punto de entrada y el motor.</param>\n</karajan:tool>',
     ),
 )
 

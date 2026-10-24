@@ -20,7 +20,7 @@ Protocol:
 `record_run`/`open_run`/`close_run`/`record_run_event`/`record_artifact` NO
 están en el `TaskRepository` Protocol (que solo describe lo que
 `app/modules/*/api.py` consume) pero SÍ los llaman directamente
-`app/delegation.py`, `app/agent_tools/trace.py` y `app/handoff/store.py` sobre
+`app/execution/delegation.py`, `app/agent_tools/trace.py` y `app/handoff/store.py` sobre
 el store concreto — se implementan aquí con la misma firma que `TaskStore`
 para que el runtime SaaS funcione con esos módulos sin cambiarlos. Ensanchar
 el Protocol para reflejar esto es trabajo pendiente, no un descuido de esta

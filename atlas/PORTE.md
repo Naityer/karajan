@@ -11,16 +11,16 @@ comprueba contra él (ver «Paridad»).
 
 | Pieza | Origen en Python | Aquí |
 |---|---|---|
-| Clasificador heurístico (dominios, intención, 6 criterios, nivel, modelo, skills, subtareas, revisión humana, razón) | `app/router.py`, parte determinista de `app/classifier.py` | `src/heuristica.ts` |
+| Clasificador heurístico (dominios, intención, 6 criterios, nivel, modelo, skills, subtareas, revisión humana, razón) | `app/routing/router.py`, parte determinista de `app/routing/classifier.py` | `src/heuristica.ts` |
 | Redondeo y formato como Python (`round`, `:.1f`, `sum()` compensado de 3.12) | — | `src/redondeo.ts`, `sumaPython` |
 | Registro de tareas: lectura, runs, decisiones, `/metrics`, `/agents/performance` | `app/database.py` (`TaskStore`) | `src/almacen.ts` (`node:sqlite`) |
-| Analítica de skills (recomendada ≠ ejecutada) | `app/skill_analytics.py` | `src/analitica.ts` |
-| Catálogo de skills con su estado de instalación | `app/skills_catalog.py` (lectura) | `src/catalogo.ts` |
+| Analítica de skills (recomendada ≠ ejecutada) | `app/resources/skill_analytics.py` | `src/analitica.ts` |
+| Catálogo de skills con su estado de instalación | `app/resources/skills_catalog.py` (lectura) | `src/catalogo.ts` |
 | Servidor | `app/modules/monitoring/api.py` y rutas de tareas | `src/servidor.ts` (`registrar(app, ctx)` de Fastify) |
-| Perfiles de enrutado (lectura y escritura, compartidos) | `app/routing_layout.py`, `RoutingLayout` de `app/models.py` | `src/perfiles.ts` |
-| Reglas por dominio y preset «Claude · Codex · Qwen» | `app/routing_rules.py` | `src/reglas.ts` |
-| Proveedores CLI (Claude Code, Codex, Qwen/ollama) | `app/catalog.py`, `app/providers/cli.py` | `src/proveedores.ts` |
-| Delegación real (clasificar, elegir agente, ejecutar, registrar) | `app/delegation.py` (camino síncrono, sin validador ni bucle de herramientas) | `src/delegar.ts` |
+| Perfiles de enrutado (lectura y escritura, compartidos) | `app/routing/routing_layout.py`, `RoutingLayout` de `app/models.py` | `src/perfiles.ts` |
+| Reglas por dominio y preset «Claude · Codex · Qwen» | `app/routing/routing_rules.py` | `src/reglas.ts` |
+| Proveedores CLI (Claude Code, Codex, Qwen/ollama) | `app/providers/catalog.py`, `app/providers/cli.py` | `src/proveedores.ts` |
+| Delegación real (clasificar, elegir agente, ejecutar, registrar) | `app/execution/delegation.py` (camino síncrono, sin validador ni bucle de herramientas) | `src/delegar.ts` |
 
 Rutas (las de la API de Karajan, para que lo que ya habla con ella funcione igual): `GET /health`, `/metrics`,
 `/agents/performance`, `/analytics/skills?days=`, `/tasks`, `/tasks/:id`, `/tasks/:id/runs`, `/tasks/:id/decisions`,
@@ -67,7 +67,7 @@ Los **perfiles** sí se comparten con el Karajan nativo: `ATLAS_KARAJAN_LAYOUT`,
 - **`/executions` e `/ingest`**, y en `/delegate-task` lo que va más allá del camino síncrono: el bucle de herramientas con shell,
   los reintentos, el validador, el modo cola (scheduler) y la doble escritura `tasks`/`tasks_v2`. Proveedores: solo los tres CLI
   del perfil por dominio (Claude Code, Codex y Qwen con ollama); ni APIs ni el resto de modelos locales.
-- **Clasificación con LLM** (`app/classifier.py::_llm_classify`) y `reconcile` de `/ingest`.
+- **Clasificación con LLM** (`app/routing/classifier.py::_llm_classify`) y `reconcile` de `/ingest`.
 - **Biblioteca de recursos «Inspiration»** y el **recomendador** (`resource_library`, `resource_intelligence`, ~1900 líneas más
   `resources.db` de 18 MB con heurísticas y datos propios): `/resources/*`. El widget Inspection lo muestra como error del servicio.
 - **Scheduler, refresco de recursos, SSE (`/events`), observabilidad con historial, analítica DuckDB/ML** y la **instalación** de

@@ -509,6 +509,14 @@
   },
   {
     "kind": "route",
+    "path": "/resources/ingest-url",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "ResourceItem"
+  },
+  {
+    "kind": "route",
     "path": "/resources/inventory",
     "methods": [
       "POST"

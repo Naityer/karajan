@@ -105,13 +105,13 @@ echo   "%PYTHON_EXE%"
 echo   %KARAJAN_URL%
 echo.
 
-start "KARAJAN API" /min "%PYTHON_EXE%" -m uvicorn app.main:app --host %KARAJAN_HOST% --port %KARAJAN_PORT% --log-level info
+start "KARAJAN API" /min "%PYTHON_EXE%" -m uvicorn app.main:app --host %KARAJAN_HOST% --port %KARAJAN_PORT% --log-level info <nul
 
 echo Waiting for KARAJAN API...
 for /l %%I in (1,1,45) do (
   "%PYTHON_EXE%" -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('%KARAJAN_URL%health', timeout=1).status == 200 else 1)" >nul 2>nul
   if not errorlevel 1 goto open_browser
-  timeout /t 1 /nobreak >nul
+  timeout /t 1 /nobreak >nul 2>&1
 )
 
 goto launch_error

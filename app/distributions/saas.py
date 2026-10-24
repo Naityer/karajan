@@ -5,7 +5,7 @@ A diferencia de standalone/add-on (un `KarajanRuntime` fijo, construido una
 vez al arrancar), aquí el runtime activo depende de QUIÉN llama: cada petición
 autentica con `SaaSIdentityProvider`, resuelve su `WorkspaceContext` y activa
 —vía `runtime.set_current()`, que ahora es un `ContextVar` seguro para
-peticiones concurrentes (`app/runtime.py`)— el `KarajanRuntime` de ESE
+peticiones concurrentes (`app/application/runtime.py`)— el `KarajanRuntime` de ESE
 workspace, nunca el de otro que esté en vuelo a la vez.
 
 `_WorkspaceRuntimeCache` mantiene un runtime por workspace vivo en memoria

@@ -85,7 +85,7 @@ app.add_middleware(
 logger = get_logger("api")
 
 # La instalación entera —almacenes, planificador, analizadores, configuración—
-# la construye ahora `app/runtime.py`, no este módulo al importarse. Los nombres
+# la construye ahora `app/application/runtime.py`, no este módulo al importarse. Los nombres
 # que siguen son **vistas** de ese runtime: se conservan mientras los endpoints
 # vivan aquí (los tests sustituyen `main.store`, `main.layout_store` y
 # `main.active_config`) y van desapareciendo según cada grupo de endpoints se

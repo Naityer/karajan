@@ -188,7 +188,7 @@ export const state = {
   inspirationSidebarOpen: localStorage.getItem("karajan-inspiration-sidebar-open") !== "false",
   resizingInspirationSidebar: false,
   inspirationSubview: "catalogo",
-  activeView: "human",
+  activeView: "control",
 };
 
 export const ROLE_DEFS = {

@@ -42,9 +42,10 @@
       <button id="helpTutorialBtn" class="icon-btn" type="button" title="Tutorial de navegación" aria-label="Tutorial de navegación">?</button>
 
       <nav class="views" id="viewNav">
-        <button class="view-tab active" data-view="human">Control humano</button>
+        <button class="view-tab active" data-view="control">Control</button>
+        <button class="view-tab" data-view="human" hidden aria-hidden="true" tabindex="-1">Control humano</button>
         <button class="view-tab" data-view="monitor">Estadísticas</button>
-        <button class="view-tab" data-view="decision">Decisión</button>
+        <button class="view-tab" data-view="decision" hidden aria-hidden="true" tabindex="-1">Decisión</button>
         <button class="view-tab" data-view="resources">Inspiration</button>
         <button class="view-tab" data-view="agents">Agentes</button>
         <button class="view-tab" data-view="flow">Configuración</button>
@@ -85,13 +86,22 @@
       </div>
     </header>
 
-    <main class="stage">
+    <main class="stage control-hub-active" data-control-layout="both">
+      <section class="view active control-selector-view" id="view-control" aria-label="Vistas de control">
+
+      </section>
+
+      <!-- Ventana minimizada del otro diagrama: un clic la intercambia con el principal -->
+      <button type="button" class="control-swap" id="controlSwap" aria-label="Cambiar de diagrama">
+        <span class="control-swap-label"><span id="controlSwapName">Decisión</span><span aria-hidden="true" class="control-swap-icon">⤢</span></span>
+      </button>
+
       <!-- VIEW 1 · HUMAN CONTROL HOME -->
-      <section class="view active" id="view-human">
+      <section class="control-pane active" id="view-human" aria-label="Control humano">
         <div class="human-iso-fullscreen">
           <canvas id="iso-cvs"></canvas>
-          <div class="iso-legend" id="iso-legend"></div>
-          <div class="iso-hint">haz clic en una torre · arrastra para desplazar el mapa · rueda para zoom</div>
+          <div class="iso-legend" id="iso-legend" hidden></div>
+          <div class="iso-hint" hidden>haz clic en una torre · arrastra para desplazar el mapa · rueda para zoom</div>
           <!-- hidden elements kept for JS compatibility -->
           <div hidden id="humanHomeGrid"></div>
           <div hidden id="humanDecisionCount"></div>
@@ -150,7 +160,7 @@
       </section>
 
       <!-- VIEW 3 · DECISION DIAGRAM (parent + submodels) -->
-      <section class="view" id="view-decision">
+      <section class="control-pane active" id="view-decision" aria-label="Decisión">
         <div class="decision-workbench">
           <div class="diagram" id="diagram">
             <div class="diagram-layer" id="diagramLayer">

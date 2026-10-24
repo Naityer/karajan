@@ -67,7 +67,7 @@ class TaskRepository(Protocol):
     def list_run_events(self, run_id: str, limit: int = 500, offset: int = 0) -> list[dict]: ...
     def list_artifacts(self, task_id: str) -> list[dict]: ...
 
-    # --- escritura de runs (usada por app/delegation.py, app/agent_tools/trace.py
+    # --- escritura de runs (usada por app/execution/delegation.py, app/agent_tools/trace.py
     # y app/handoff/store.py directamente contra el store, no vía la API) ---
     # `*args`/`**kwargs`, igual que `save_classification`/`save_delegation`
     # arriba: las firmas reales varían más entre implementaciones (SQLite guarda
