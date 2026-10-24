@@ -12,6 +12,7 @@ import { laboratorioPrompts } from './lab/prompts.lab';
 import { laboratorioLimites } from './lab/limites.lab';
 import { laboratorioProduccion } from './lab/produccion.lab';
 import { laboratorioProveedores } from './lab/proveedores.lab';
+import { laboratorioRotador } from './lab/rotador.lab';
 import { laboratorioSelector } from './lab/selector.lab';
 
 /**
@@ -53,7 +54,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'clasificador', capa: 'decision', responsabilidad: 'Dar nivel, dominio, intención y subtareas a un prompt', modulos: ['heuristica'], laboratorio: laboratorioClasificador },
   { id: 'delegador', capa: 'decision', responsabilidad: 'Elegir el agente de cada subtarea según el perfil y sus reglas', modulos: ['delegar', 'perfiles', 'reglas', 'perfil-texto'], laboratorio: laboratorioDelegador },
   { id: 'selector', capa: 'decision', responsabilidad: 'Elegir las skills que necesita un prompt', modulos: ['skills-seleccion'], laboratorio: laboratorioSelector },
-  { id: 'rotador', capa: 'decision', responsabilidad: 'Dejar instaladas solo las skills que se usan y guardar el resto en el almacén', modulos: ['rotador'], pendiente: 'borrador «Laboratorio del rotador»' },
+  { id: 'rotador', capa: 'decision', responsabilidad: 'Dejar instaladas solo las skills que se usan y guardar el resto en el almacén', modulos: ['rotador'], laboratorio: laboratorioRotador },
   { id: 'etiquetas', capa: 'decision', responsabilidad: 'Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente', modulos: [], pendiente: 'vive en atlas-dev (server/src/tareas/formato.ts): borrador «Componente etiquetas»' },
   // ── Ejecución ──
   { id: 'proveedores', capa: 'ejecucion', responsabilidad: 'Lanzar Claude Code, Codex o Qwen y devolver su salida', modulos: ['proveedores'], laboratorio: laboratorioProveedores },

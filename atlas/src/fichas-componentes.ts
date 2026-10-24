@@ -161,10 +161,13 @@ export const FICHAS: Record<string, FichaComponente> = {
         'Plan: retirar las inactivas no protegidas; reponer las del almacén que vuelven a usarse (rotador.ts · plan)',
         'Aplicar mueve carpetas instaladas ⇄ almacén, solo con tarea aceptada en producción (rotador.ts · aplicar, servidor.ts · /skills/rotar)',
         'Antes de ejecutar una subtarea, el delegador pide asegurar la skill: si no está instalada, la repone (rotador.ts · asegurar)',
+        'Laboratorio · contrato: días coherentes, protegidas fuera del plan, nada duplicado instalada/almacén y plan idempotente aplicado en una casa ficticia (lab/rotador.lab.ts · contrato)',
+        'Laboratorio · historial: reúne los usos por día de Atlas dev y de las ejecuciones de Karajan (rotador.ts · historial) y los reproduce día a día en un sandbox con ahora simulado (lab/rotador.lab.ts · reproducirEnSandbox)',
+        'Laboratorio · rejilla: simula (núcleo, frecuente) sobre el mismo historial y propone otros días solo si mejoran fallos o skills instaladas de forma clara (rotador.ts · simularRotacion, lab/rotador.lab.ts · mejoraClara)',
       ],
-      salidas: ['Inventario con nivel por skill', 'Plan de rotación (retirar / reponer)', 'Skills instaladas y almacén actualizados al aplicar'],
+      salidas: ['Inventario con nivel por skill', 'Plan de rotación (retirar / reponer)', 'Skills instaladas y almacén actualizados al aplicar', 'Informe del laboratorio: fallos, skills instaladas de media y movimientos por configuración'],
     },
-    reglas: ['Las protegidas (router, latex-template y las que se añadan) nunca se retiran.', 'Retirar es mover, no borrar.'],
+    reglas: ['Las protegidas (router, latex-template y las que se añadan) nunca se retiran.', 'Retirar es mover, no borrar.', 'Solo frecuenteDias decide qué se retira; el núcleo y la instantánea son niveles (el laboratorio lo respeta y lo avisa).', 'El laboratorio nunca toca las carpetas reales: reproduce en un directorio temporal y no propone sin ≥ 90 días de historial y ≥ 40 usos.'],
     configuracion: (c) => {
       const e = c.rotador.leerEstado();
       return { dias_nucleo: e.config.nucleoDias, dias_frecuente: e.config.frecuenteDias, dias_instantanea: e.config.instantaneaDias, protegidas: e.config.protegidas, repuestas_recientes: Object.keys(e.repuestas).length };

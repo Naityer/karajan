@@ -22,6 +22,15 @@ export interface FilaRotador { skill: string; nivel: NivelSkill; ultimoUso: stri
 export interface PlanRotacion { retirar: { skill: string; destino: Destino; motivo: string }[]; reponer: { skill: string; destino: Destino; motivo: string }[] }
 
 const DIA = 86_400_000;
+/** Usos por skill y día (`AAAA-MM-DD`). */
+export type HistorialUso = Record<string, Record<string, number>>;
+/** Nivel de una skill según los días sin uso y, si se repuso, los días desde la reposición. */
+export function nivelPorDias(diasSinUso: number, diasDesdeReposicion: number | null, c: Pick<ConfigRotador, 'nucleoDias' | 'frecuenteDias' | 'instantaneaDias'>): NivelSkill {
+  if (diasSinUso <= c.nucleoDias) return 'nucleo';
+  if (diasSinUso <= c.frecuenteDias) return 'frecuente';
+  if (diasDesdeReposicion !== null && diasDesdeReposicion <= c.instantaneaDias) return 'instantanea';
+  return 'inactiva';
+}
 export const PROTEGIDAS_BASE = [
   'atlas', 'atlas-scan', 'atlas-task', 'ateneo', 'ateneo-destilar', 'ateneo-fuentes', 'karajan', 'task-router',
   'repo-analyzer', 'frontend-builder', 'backend-builder', 'security-review', 'cti-analyst', 'ponytail', 'impeccable', 'skill-creator',
@@ -39,6 +48,8 @@ export interface OpcionesRotador {
   usoAtlas?: string;
   /** Últimos usos que vienen de las ejecuciones de Karajan. */
   usosKarajan?: () => Record<string, string>;
+  /** Historia de esas mismas ejecuciones (una entrada por skill y ejecución), para reproducir el uso día a día. */
+  historiaKarajan?: () => { skill: string; cuando: string }[];
   ahora?: () => number;
 }
 
@@ -89,12 +100,27 @@ export class Rotador {
   }
 
   nivel(skill: string, ultimo: string | null, e: EstadoRotador): NivelSkill {
-    const dias = ultimo ? (this.ahora() - Date.parse(ultimo)) / DIA : Infinity;
     const repuesta = e.repuestas[skill];
-    if (dias <= e.config.nucleoDias) return 'nucleo';
-    if (dias <= e.config.frecuenteDias) return 'frecuente';
-    if (repuesta && (this.ahora() - Date.parse(repuesta)) / DIA <= e.config.instantaneaDias) return 'instantanea';
-    return 'inactiva';
+    return nivelPorDias(ultimo ? (this.ahora() - Date.parse(ultimo)) / DIA : Infinity, repuesta ? (this.ahora() - Date.parse(repuesta)) / DIA : null, e.config);
+  }
+
+  /** Uso de cada skill día a día (`{ skill: { 'AAAA-MM-DD': usos } }`): `dias` de Atlas dev, ejecuciones de Karajan y último uso registrado a mano. */
+  historial(): HistorialUso {
+    const h: HistorialUso = {};
+    const anotar = (nombre: string, dia: string | null | undefined, n = 1) => {
+      if (!dia || !/^\d{4}-\d{2}-\d{2}/.test(dia)) return;
+      const s = nombre.includes(':') ? nombre.slice(nombre.lastIndexOf(':') + 1) : nombre;
+      const fila = (h[s] ??= {});
+      fila[dia.slice(0, 10)] = (fila[dia.slice(0, 10)] ?? 0) + n;
+    };
+    const ruta = this.op.usoAtlas ?? join(process.env['ATLAS_DEV_DATA'] ?? join(this.casa, '.atlas-dev'), 'skills-uso.json');
+    try {
+      const d = JSON.parse(readFileSync(ruta, 'utf8')) as Record<string, { skills?: Record<string, { dias?: Record<string, number> }> }>;
+      for (const f of Object.values(d)) for (const [n, u] of Object.entries(f.skills ?? {})) for (const [dia, c] of Object.entries(u.dias ?? {})) anotar(n, dia, c);
+    } catch { /* sin datos de Atlas dev */ }
+    for (const x of this.op.historiaKarajan?.() ?? []) anotar(x.skill, x.cuando);
+    for (const [n, c] of Object.entries(this.leerEstado().usos)) anotar(n, c);
+    return h;
   }
 
   /** Todas las skills que hay (instaladas o en el almacén) con su nivel. */
@@ -171,4 +197,40 @@ export class Rotador {
     e.usos[skill] = new Date(this.ahora()).toISOString();
     this.guardarEstado(e);
   }
+}
+
+export interface ResultadoSimulacion { dias: number; usos: number; fallos: number; instaladasMedia: number; movimientos: number }
+const diaNum = (fecha: string) => Math.floor(Date.parse(`${fecha.slice(0, 10)}T00:00:00Z`) / DIA);
+
+/**
+ * Simulación pura de la rotación sobre un historial: cada mañana se aplica el plan con los usos de días anteriores y luego se usan
+ * las skills del día; una que esté en el almacén es un fallo (reposición evitable). Empieza con todo instalado y no puntúa los
+ * primeros `calentamiento` días, para que el estado inicial no pese. Mismas reglas que `Rotador` (`nivelPorDias`); las protegidas no entran.
+ */
+export function simularRotacion(historial: HistorialUso, config: Pick<ConfigRotador, 'nucleoDias' | 'frecuenteDias' | 'instantaneaDias'>, calentamiento: number): ResultadoSimulacion {
+  const skills = Object.keys(historial);
+  const dias = skills.flatMap((s) => Object.keys(historial[s]!).map(diaNum));
+  const r: ResultadoSimulacion = { dias: 0, usos: 0, fallos: 0, instaladasMedia: 0, movimientos: 0 };
+  if (!dias.length) return r;
+  const ini = Math.min(...dias), fin = Math.max(...dias);
+  const usosDe = new Map(skills.map((s) => [s, new Set(Object.keys(historial[s]!).map(diaNum))]));
+  const instalada = new Set(skills), ultimo = new Map<string, number>(), repuesta = new Map<string, number>();
+  let suma = 0;
+  for (let d = ini; d <= fin; d++) {
+    const puntua = d - ini >= calentamiento;
+    for (const s of skills) {
+      const n = nivelPorDias(ultimo.has(s) ? d - ultimo.get(s)! : Infinity, repuesta.has(s) ? d - repuesta.get(s)! : null, config);
+      if (n === 'inactiva' && instalada.has(s)) { instalada.delete(s); if (puntua) r.movimientos++; }
+      else if ((n === 'nucleo' || n === 'frecuente') && !instalada.has(s)) { instalada.add(s); if (puntua) r.movimientos++; }
+    }
+    for (const s of skills) {
+      if (!usosDe.get(s)!.has(d)) continue;
+      if (puntua) r.usos++;
+      if (!instalada.has(s)) { instalada.add(s); repuesta.set(s, d); if (puntua) { r.fallos++; r.movimientos++; } }
+      ultimo.set(s, d);
+    }
+    if (puntua) { r.dias++; suma += instalada.size; }
+  }
+  r.instaladasMedia = r.dias ? Math.round((suma / r.dias) * 100) / 100 : 0;
+  return r;
 }
