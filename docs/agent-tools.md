@@ -42,7 +42,7 @@ acaba operando sobre el propio código de KARAJAN en vez del proyecto del usuari
 ## El catálogo
 
 Es dato, no código: una tupla congelada en `app/agent_tools/catalog.py`, con la
-misma forma que `app/catalog.py` usa para proveedores. Consultable en
+misma forma que `app/providers/catalog.py` usa para proveedores. Consultable en
 `GET /agent-tools` y `GET /agent-tools/profiles`.
 
 | Herramienta | Riesgo | Qué hace |

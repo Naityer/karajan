@@ -9,11 +9,11 @@ resource.
 
 ## Suites
 
-- `tests/test_resource_recommendation_eval.py`: bilingual gold cases,
+- `tests/resources/test_resource_recommendation_eval.py`: bilingual gold cases,
   paraphrases, typos, hard negatives, nested resources, FTS5 and SQL fallback.
-- `tests/test_resource_recommendation_benchmark.py`: 10,000 resources, 20
+- `tests/resources/test_resource_recommendation_benchmark.py`: 10,000 resources, 20
   warmups and 200 measured queries.
-- `tests/test_resource_api.py`: compatible response fields plus v2 decision,
+- `tests/api/test_resource_api.py`: compatible response fields plus v2 decision,
   confidence, coverage, evidence, parent context and explicit reindexing.
 
 ## Release gates

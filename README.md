@@ -31,13 +31,13 @@ User prompt
 Main components:
 
 - `app/main.py`: FastAPI app, static GUI mount, and API/config/provider routes.
-- `app/classifier.py`: classification heuristics, score calculation, levels, model policy, skills, and subtasks.
-- `app/delegation.py`: delegated execution flow using the active configuration.
-- `app/config.py`: default configuration loading for profiles, thresholds, orchestration, cost, and latency.
-- `app/catalog.py`: provider catalog for CLI and API-backed models.
+- `app/routing/classifier.py`: classification heuristics, score calculation, levels, model policy, skills, and subtasks.
+- `app/execution/delegation.py`: delegated execution flow using the active configuration.
+- `app/configuration/config.py`: default configuration loading for profiles, thresholds, orchestration, cost, and latency.
+- `app/providers/catalog.py`: provider catalog for CLI and API-backed models.
 - `app/agent_tools/`: the agent tool layer (catalog, workspace confinement, budgets, loop). See `docs/agent-tools.md`.
-- `app/credentials.py`: provider readiness and setup guidance.
-- `app/monitoring.py`: decision log entries for classification and delegation.
+- `app/providers/credentials.py`: provider readiness and setup guidance.
+- `app/execution/monitoring.py`: decision log entries for classification and delegation.
 - `app/models.py`: Pydantic contracts for requests, classifications, delegations, records, and metrics.
 - `app/database.py`: SQLite persistence and metrics aggregation.
 - `dashboard/static`: browser GUI served by FastAPI.
@@ -123,6 +123,29 @@ when needed, installs `requirements.txt`, starts FastAPI on
 `http://127.0.0.1:8001/`, and opens that URL in your default browser. The
 browser launcher does not require `pywebview`; the native-window mode remains
 available by running `desktop_app.py` manually.
+
+## Run As A Persistent Public API (Docker)
+
+Use this mode when you want the skill recommender and the Inspiration library
+reachable by any agent at any time, without opening the desktop app or a
+terminal. It runs the same FastAPI backend headless, in a container that
+survives reboots.
+
+```powershell
+# .env (not committed) must set a real token — required, the container refuses
+# to start without it so /resources/ingest-url is never left unprotected:
+echo "KARAJAN_TOKEN=<a-long-random-value>" > .env
+
+docker compose up -d --build
+```
+
+This exposes `http://localhost:8001` persistently (`restart: unless-stopped`)
+with `data/resources.db` bind-mounted to `./data` so the catalog survives
+container restarts. `POST /resources/recommend` stays open (read-only);
+`POST /resources/ingest-url` and every other mutation require the
+`X-KARAJAN-Token` header. See [`docker-compose.yml`](docker-compose.yml) for
+notes on reaching the container from outside this machine (port-forward,
+Tailscale, or a reverse proxy — none of that is automated here).
 
 ## Run Routing Trials
 
@@ -255,6 +278,33 @@ Detects provider readiness for configured local/API providers.
 
 Returns setup guidance for one provider.
 
+### `POST /resources/recommend`
+
+Scores the Inspiration skill library against a task prompt and returns an
+explainable primary/complementary decision. No token required (read-only).
+
+```bash
+curl http://localhost:8001/resources/recommend \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"prompt": "necesito generar gráficos de datos científicos", "limit": 5}'
+```
+
+### `POST /resources/ingest-url`
+
+Analyzes a GitHub repo or web reference URL and saves it to the Inspiration
+library in a single call — no need to chain `/resources/analyze` and
+`POST /resources` manually. Requires `X-KARAJAN-Token` when `KARAJAN_TOKEN` is
+set.
+
+```bash
+curl http://localhost:8001/resources/ingest-url \
+  -X POST -H "Content-Type: application/json" -H "X-KARAJAN-Token: <token>" \
+  -d '{"url": "https://github.com/<owner>/<repo>"}'
+```
+
+`collection` (optional, `"catalog"` or `"radar"`, default `"catalog"`) controls
+which Inspiration view the new resource shows up in.
+
 ## Production Controls
 
 These guardrails are evaluated by the harness, not by the operator's good intentions.
@@ -352,9 +402,9 @@ The harness defaults to free local CLI providers so it can be validated without 
 
 To add a real provider:
 
-1. Add or update a provider entry in `app/catalog.py`.
-2. Add readiness/setup checks in `app/credentials.py`.
-3. Extend delegation execution in `app/delegation.py`.
+1. Add or update a provider entry in `app/providers/catalog.py`.
+2. Add readiness/setup checks in `app/providers/credentials.py`.
+3. Extend delegation execution in `app/execution/delegation.py`.
 4. Read credentials from environment variables or verified local CLI state.
 5. Store backend, model name, latency, cost, output, and errors in the existing delegation models.
 6. Add tests using mocked model responses or mocked CLI probes.

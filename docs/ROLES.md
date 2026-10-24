@@ -180,8 +180,8 @@ RoutingEntity.effective_tier() = min(prio de sus memberships)  si tiene alguna
                                = entity.tier (legacy)          si no pertenece a ningún grupo
 ```
 
-`effective_tier()` es lo que consume el scheduler real (`app/scheduler.py`,
-`app/providers/registry.py`, `app/delegation.py`), de modo que unir una entidad a
+`effective_tier()` es lo que consume el scheduler real (`app/routing/scheduler.py`,
+`app/providers/registry.py`, `app/execution/delegation.py`), de modo que unir una entidad a
 un grupo con `prio` bajo la hace preferente en la escalada de despacho. La raíz
 sigue siendo implícita: una entidad sin pertenencias mantiene su `tier` heredado
 (0 para parent/backup por defecto), sin control de UI dedicado.

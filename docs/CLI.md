@@ -222,7 +222,7 @@ de Claude Code** (la terminal del propio Claude), no en una terminal aparte.
   `/karajan` — depende del juicio del modelo sobre si la tarea encaja
   (`description` de la skill), no es una intercepción forzada de cada mensaje.
 
-Instalación (copia `skills/karajan/` y `commands/karajan.md` a `~/.claude/`,
+Instalación (copia `skills/karajan/` a `~/.claude/skills/` y `.claude/commands/karajan.md` a `~/.claude/commands/`,
 sin red, vía el mismo endpoint que usa el botón "Instalar" del dashboard):
 
 ```powershell
