@@ -77,7 +77,8 @@ describe('delegación real', () => {
   const llamadas: { proveedor: string; modelo: string; cwd: string }[] = [];
   const ejecutor: Ejecutor = async (p, modelo, _i, op) => { llamadas.push({ proveedor: p.nombre, modelo, cwd: op.cwd }); return { salida: `ok ${p.nombre}`, error: null, latenciaMs: 5, modelo }; };
   const todos = (p: Proveedor): Disponibilidad => ({ nombre: p.nombre, etiqueta: p.etiqueta, gratis: p.gratis, disponible: true, ruta: 'x', motivo: null, login: p.login });
-  const delegador = new Delegador({ almacen, perfiles, config: () => null as never, raiz: base, ejecutor, disponible: todos, skillsDisponibles: () => [] });
+  // Sin límites: el umbral semanal real de este equipo no debe cambiar el plan del test.
+  const delegador = new Delegador({ almacen, perfiles, config: () => null as never, raiz: base, ejecutor, disponible: todos, skillsDisponibles: () => [], limites: () => null });
 
   it('elige el agente por la regla, ejecuta y lo registra todo', async () => {
     const plan = delegador.delegar('Crea un endpoint REST en la API para listar usuarios');
@@ -94,7 +95,7 @@ describe('delegación real', () => {
   it('interfaces a Claude y lo trivial a Qwen; un agente no disponible pasa al respaldo', async () => {
     assert.ok(delegador.planificar('Diseña la interfaz del dashboard con componentes React y animaciones').asignaciones.every((a) => a.proveedor === 'claude-cli'));
     assert.ok(delegador.planificar('Renombra una variable').asignaciones.every((a) => a.proveedor === 'ollama-qwen'));
-    const sinOllama = new Delegador({ almacen, perfiles, config: () => null as never, raiz: base, ejecutor, disponible: (p) => ({ ...todos(p), disponible: p.nombre !== 'ollama-qwen', motivo: 'falta el modelo' }) });
+    const sinOllama = new Delegador({ almacen, perfiles, config: () => null as never, raiz: base, ejecutor, limites: () => null, disponible: (p) => ({ ...todos(p), disponible: p.nombre !== 'ollama-qwen', motivo: 'falta el modelo' }) });
     const a = sinOllama.planificar('Renombra una variable').asignaciones[0]!;
     assert.equal(a.proveedor, 'codex');
     assert.match(a.motivo, /respaldo codex/);
