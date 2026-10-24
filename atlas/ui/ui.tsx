@@ -1,4 +1,5 @@
 import './atlas.css';
+import { PanelSkills } from './panel-skills';
 import { crearVentana } from './ventana';
 
 /**
@@ -9,4 +10,6 @@ declare global {
   interface Window { AtlasPaquetes?: Record<string, unknown> }
 }
 window.AtlasPaquetes ??= {};
-window.AtlasPaquetes['karajan'] = { ventana: crearVentana() };
+// `ventana`: icono + panel + página. `panelSkills`: componente suelto que Atlas dev monta en la fase «Preparando» de una tarea
+// con `<PanelSkills api={'/paquetes/karajan/api'} tarea prompt propuestas alConfirmar />` (ver docs/laboratorio/preparado-si-no.md).
+window.AtlasPaquetes['karajan'] = { ventana: crearVentana(), panelSkills: PanelSkills };

@@ -371,8 +371,20 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const lista = (v: unknown) => (Array.isArray(v) ? v.slice(0, 20).map((x) => String(x).slice(0, 120)) : []);
     if (typeof b.tarea !== 'string' || !/^[\w-]{1,40}$/.test(b.tarea)) throw falla(422, 'tarea: el id de la tarea de Atlas dev');
     if (b.respuesta !== 'si' && b.respuesta !== 'no' && b.respuesta !== 'sin_revisar') throw falla(422, 'respuesta: si | no | sin_revisar');
-    registroLab.guardarCalibracion({ tarea_hash: hashTarea(sal, b.tarea), componente: typeof b.componente === 'string' ? b.componente.slice(0, 40) : 'selector', propuesta: lista(b.propuesta), respuesta: b.respuesta, correccion: lista(b.correccion), creada: new Date().toISOString() });
-    return { guardada: true };
+    // Solo entrena el selector lo que existe: las skills desconocidas (ni del equipo ni de la biblioteca) se descartan y se devuelven.
+    const equipo = new Set(skillsEquipo().map((s) => s.name));
+    const conocida = (n: string) => equipo.has(n) || biblioteca.fichaDe(n) !== null;
+    const correccion = lista(b.correccion).filter(conocida);
+    registroLab.guardarCalibracion({ tarea_hash: hashTarea(sal, b.tarea), componente: typeof b.componente === 'string' ? b.componente.slice(0, 40) : 'selector', propuesta: lista(b.propuesta), respuesta: b.respuesta, correccion, creada: new Date().toISOString() });
+    return { guardada: true, descartadas: lista(b.correccion).filter((n) => !conocida(n)) };
+  });
+  /** Lo último que respondió la persona para una tarea (para no volver a preguntar y precargar el panel); solo se compara por hash. */
+  app.get('/laboratorio/calibracion', (req) => {
+    const tarea = req.query['tarea'] ?? '';
+    if (!/^[\w-]{1,40}$/.test(tarea)) throw falla(422, 'tarea: el id de la tarea de Atlas dev');
+    const hash = hashTarea(sal, tarea);
+    const c = registroLab.calibraciones(req.query['componente'] || 'selector').filter((x) => x.tarea_hash === hash).at(-1);
+    return c ? { calibrada: true, respuesta: c.respuesta, propuesta: c.propuesta, correccion: c.correccion, creada: c.creada } : { calibrada: false };
   });
 
   for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/executions'], ['post', '/ingest']] as const) {

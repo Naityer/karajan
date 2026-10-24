@@ -1,0 +1,90 @@
+{
+  "tarea": "tsk_demo",
+  "prompt": "Añade un endpoint de exportación a PDF y prueba la interfaz con Playwright. Revisa que no se filtren credenciales.",
+  "propuestas": [
+    "repo-analyzer",
+    "backend-builder",
+    "security-review"
+  ],
+  "catalogo": [
+    {
+      "nombre": "repo-analyzer",
+      "puntos": 40,
+      "descripcion": "Analiza un repositorio, su estructura, símbolos y dependencias antes de cambiar código.",
+      "estrellas": 1240,
+      "heredadas": false,
+      "repo_url": "https://github.com/ejemplo/repo-analyzer",
+      "grupo": "Código",
+      "instalada": true,
+      "almacen": false
+    },
+    {
+      "nombre": "backend-builder",
+      "puntos": 28,
+      "descripcion": "Diseña APIs, endpoints, servicios, workers, autenticación y bases de datos.",
+      "estrellas": 310,
+      "heredadas": true,
+      "repo_url": "https://github.com/ejemplo/skills-pack",
+      "grupo": "Código",
+      "instalada": true,
+      "almacen": false
+    },
+    {
+      "nombre": "security-review",
+      "puntos": 24,
+      "descripcion": "Revisa secretos, permisos, datos personales y acciones irreversibles antes de desplegar.",
+      "estrellas": null,
+      "heredadas": false,
+      "repo_url": null,
+      "grupo": "Seguridad",
+      "instalada": true,
+      "almacen": false
+    },
+    {
+      "nombre": "pdf",
+      "puntos": 31,
+      "descripcion": "Leer, combinar, dividir y crear PDF; extraer texto y tablas; rellenar formularios.",
+      "estrellas": 15600,
+      "heredadas": true,
+      "repo_url": "https://github.com/ejemplo/documentos",
+      "grupo": "Documentos",
+      "instalada": false,
+      "almacen": true
+    },
+    {
+      "nombre": "webapp-testing",
+      "puntos": 22,
+      "descripcion": "Prueba aplicaciones web locales con Playwright: verifica la interfaz, captura pantallas y lee los registros del navegador.",
+      "estrellas": 2100000,
+      "heredadas": false,
+      "repo_url": "https://github.com/ejemplo/webapp-testing",
+      "grupo": "Pruebas",
+      "instalada": true,
+      "almacen": false
+    },
+    {
+      "nombre": "xlsx",
+      "puntos": null,
+      "descripcion": "Crear, leer y editar hojas de cálculo.",
+      "estrellas": 830,
+      "heredadas": true,
+      "repo_url": "https://github.com/ejemplo/documentos",
+      "grupo": "Documentos",
+      "instalada": false,
+      "almacen": false,
+      "instalable": true
+    },
+    {
+      "nombre": "playwright-trace",
+      "puntos": null,
+      "descripcion": "Analiza trazas de Playwright para depurar pruebas inestables.",
+      "estrellas": 95,
+      "heredadas": false,
+      "repo_url": "http://no-es-github.example/x",
+      "grupo": null,
+      "instalada": false,
+      "almacen": false,
+      "instalable": true
+    }
+  ]
+}
