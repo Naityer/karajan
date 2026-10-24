@@ -95,7 +95,7 @@ describe('arquitectura: contrato de datos', () => {
     assert.equal(porId(a, 'delegador').estado, 'hallazgos');
     assert.equal(porId(a, 'selector').estado, 'error');
     assert.equal(porId(a, 'biblioteca').estado, 'sin_ejecutar');
-    for (const id of ['rotador', 'etiquetas', 'curador', 'api', 'almacen']) assert.equal(porId(a, id).estado, 'pendiente', id);
+    for (const id of ['rotador', 'etiquetas', 'api', 'almacen']) assert.equal(porId(a, id).estado, 'pendiente', id);
     assert.equal(porId(a, 'delegador').muestra_corta, true);
     assert.equal(porId(a, 'clasificador').muestra_corta, false);
   });
@@ -150,7 +150,7 @@ describe('arquitectura: contrato de datos', () => {
       assert.ok(f.como_funciona.pasos.length >= 4 && f.como_funciona.entradas.length && f.como_funciona.salidas.length && f.reglas.length, id);
       assert.ok(f.como_funciona.pasos.every((p) => /\.ts/.test(p)), `${id}: cada paso nombra el fichero que lo implementa`);
     }
-    for (const id of ['curador', 'comparador', 'eficiencia', 'metodo', 'prompts', 'etiquetas']) assert.equal(porId(a, id).ficha.especificado, false, id);
+    for (const id of ['comparador', 'eficiencia', 'metodo', 'prompts', 'etiquetas']) assert.equal(porId(a, id).ficha.especificado, false, id);
   });
 
   it('operación: nula donde no hay fuente y con datos donde sí', () => {

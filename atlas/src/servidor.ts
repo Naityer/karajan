@@ -15,6 +15,7 @@ import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
 import { Guardian } from './modo';
 import { Biblioteca } from './biblioteca';
+import { aHallazgo, curar, REGLAS_CURADOR, UMBRALES_CURADOR, type EntradaCurador } from './curador';
 import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
 import { leerLimites } from './limites';
 import { CAPAS, COMPONENTES, componente } from './componentes';
@@ -251,6 +252,24 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     disponible: (p) => ({ nombre: p.nombre, etiqueta: p.nombre, gratis: false, disponible: true, ruta: null, motivo: null, login: '' }),
     ejecutor: () => { throw new Error('El laboratorio no ejecuta agentes'); },
   });
+  /** Lo que el curador necesita, leído ahora y en solo lectura: skills, fichas, usos, recomendaciones y protegidas. */
+  const entradaCurador = (): EntradaCurador => {
+    const skills = skillsEquipo(), tareas = almacen.tareasPlanas(), ultimos = rotador.ultimosUsos();
+    const usos: EntradaCurador['usos'] = {}, recomendadas: EntradaCurador['recomendadas'] = {};
+    const anotar = (r: Record<string, { ultimo?: string | null; ultima?: string | null; n: number }>, nombre: string, cuando: string, campo: 'ultimo' | 'ultima') => {
+      const f = (r[nombre] ??= { n: 0 }); f.n++;
+      if (!f[campo] || cuando > f[campo]!) f[campo] = cuando;
+    };
+    for (const t of tareas) {
+      for (const n of new Set([...t.ejecutadas, ...(t.revision?.['skills_usadas'] ?? [])])) anotar(usos, n, t.created_at, 'ultimo');
+      for (const n of t.recomendadas) anotar(recomendadas, n, t.created_at, 'ultima');
+    }
+    for (const [n, c] of Object.entries(ultimos)) { const f = (usos[n] ??= { ultimo: null, n: 0 }); if (!f.ultimo || c > f.ultimo) f.ultimo = c; }
+    return {
+      ahora: Date.now(), skills, fichas: Object.fromEntries(skills.map((x) => [x.name, biblioteca.fichaDe(x.name)])), usos, recomendadas,
+      registroDesde: tareas.reduce<string | null>((m, t) => (!m || t.created_at < m ? t.created_at : m), null), protegidas: rotador.leerEstado().config.protegidas,
+    };
+  };
   const contextoDe = (id: string) => {
     let cache: Promise<TareaAnonima[]> | null = null;
     const base: ContextoLab = {
@@ -262,6 +281,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'selector': return { ...base, skills: skillsEquipo, revisadas: () => almacen.tareasPlanas().filter((t) => t.revision?.['skills_usadas']?.length).map((t) => ({ id: t.task_id, prompt: t.prompt, skills: t.revision!['skills_usadas']! })) };
       case 'clasificador': return { ...base, clasificar: (p: string) => clasificar(p, config()) };
       case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
+      case 'curador': return { ...base, entrada: entradaCurador, borradores: () => pasarela.listar().then((l) => l.map((b) => ({ clave: b.clave, estado: b.estado }))).catch(() => []) };
       default: return base;
     }
   };
@@ -296,6 +316,14 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.get('/laboratorio/ejecuciones', (req) => registroLab.ejecuciones(req.query['componente'] || undefined, entero(req.query['limite'], 50, 1, 1000)));
   app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));
   app.get('/laboratorio/propuestas', () => pasarela.listar());
+  // Curador: qué skills sobran. GET solo lee; POST manda cada propuesta como borrador (idempotente por `curador:<regla>:<skill>`), nunca retira nada.
+  app.get('/laboratorio/curador', () => ({ generado: new Date().toISOString(), umbrales: UMBRALES_CURADOR, reglas: REGLAS_CURADOR.map((r) => ({ id: r.id, accion: r.accion, umbral: r.umbral(UMBRALES_CURADOR), descripcion: r.descripcion })), propuestas: curar(entradaCurador()) }));
+  app.post('/laboratorio/curador/proponer', async () => {
+    const propuestas = curar(entradaCurador());
+    const borradores = [];
+    for (const p of propuestas) borradores.push({ ...p, borrador: await pasarela.proponer('curador', aHallazgo(p)) });
+    return { propuestas: borradores };
+  });
   /** Ejecuta el laboratorio de un componente (o `todos`). Solo mide y propone: los hallazgos `alta|media` salen como borradores. */
   app.post('/laboratorio/ejecutar', async (req) => {
     const b = (req.body ?? {}) as { componente?: unknown; escenario?: unknown; proponer?: unknown };

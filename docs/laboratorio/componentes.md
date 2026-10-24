@@ -61,6 +61,7 @@ Cada escenario devuelve la muestra, si es **suficiente**, sus métricas, los umb
 | selector | `explicitas` (contrato), `concordancia` (replay), `calibracion` (feedback) | Verdad humana, por orden de fiabilidad: sí/no de Preparando, `skills_usadas` revisadas, skills de la hoja en tareas no `auto`. Mide Hit@1, precisión@3, recall@3 y falsos positivos. Con n ≥ 30 busca pesos (`PESOS_SELECTOR`) con validación cruzada de 5 pliegues y solo los propone si el F1 **en datos no vistos** sube ≥ 5 pp sin bajar Hit@1. |
 | clasificador | `frente-a-la-persona` (replay) | Nivel y dominio frente a los que la persona anota en la hoja (`clasificacion.nivel_tarea`, `dominio`). |
 | biblioteca | `cobertura` (contrato) | Cuántas skills del equipo tienen ficha, estrellas propias (no heredadas) y grupo. Es la base de datos sobre la que decidirán el curador y el comparador. |
+| curador | `invariantes` (contrato), `precision` (feedback) | Propone qué skills sobran con 4 reglas (`sin-uso-ni-recomendacion` 90 d con registro suficiente, `duplicada`, `sin-descripcion`, `superada-por-grupo` con estrellas propias < 100 y rival usado ≥ 10×); nunca protegidas ni estrellas heredadas. `invariantes`: determinismo, ninguna protegida, regla y evidencia en cada propuesta. `precision`: borradores aceptados frente a descartados, Wilson, n ≥ 20 (≥ 10 por regla para el hallazgo). `GET /laboratorio/curador`, `POST /laboratorio/curador/proponer`, `kj curador`. |
 
 ## 3. Modo producción
 

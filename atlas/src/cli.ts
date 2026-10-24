@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
  *   kj lab informe <componente>             la última ejecución de cada escenario
  *   kj lab historial <componente> <métrica> evolución de una métrica (sparkline)
  *   kj grafica acierto|eficiencia|flujo|matriz-skills|sugerencias [--dias N] [--perfil todos]
+ *   kj curador [--proponer]                 skills que sobran, por regla; --proponer las abre como borradores
  *   kj propuestas                           borradores abiertos por Karajan y su estado
  *   kj modo                                 producción o desarrollo
  */
@@ -150,13 +151,27 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       e.escribir('uso: kj grafica acierto|eficiencia|flujo|matriz-skills|sugerencias [--dias N] [--perfil activo|todos] [--json]');
       return 2;
     }
+    case 'curador': {
+      interface PropuestaCurador { skill: string; regla: string; evidencia: string; accion: string; borrador?: { tarea: string | null; accion: string } }
+      const proponer = bandera(args, 'proponer');
+      const d = proponer ? (await pedir(e, '/laboratorio/curador/proponer', 'POST', {})) as { propuestas: PropuestaCurador[] } : (await pedir(e, '/laboratorio/curador')) as { propuestas: PropuestaCurador[] };
+      salida(d, () => {
+        const reglas = [...new Set(d.propuestas.map((p) => p.regla))];
+        if (!reglas.length) return 'El curador no propone nada: no sobra ninguna skill.';
+        return reglas.map((r) => {
+          const ps = d.propuestas.filter((p) => p.regla === r);
+          return `${r} (${ps[0]!.accion}) · ${ps.length}\n${ps.map((p) => `  ${p.skill}  ${p.evidencia}${p.borrador?.tarea ? `  → borrador ${p.borrador.tarea} (${p.borrador.accion})` : ''}`).join('\n')}`;
+        }).join('\n\n');
+      });
+      return 0;
+    }
     case 'propuestas': {
       const d = (await pedir(e, '/laboratorio/propuestas')) as { clave: string; tarea: string; estado: string; titulo: string | null }[];
       salida(d, () => d.map((p) => `${p.tarea}  ${p.estado.padEnd(11)} ${p.titulo ?? p.clave}`).join('\n') || 'Karajan no ha propuesto nada todavía.');
       return 0;
     }
     default:
-      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | propuestas | modo   (--json en todos)');
+      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | propuestas | modo   (--json en todos)');
       return cmd ? 2 : 0;
   }
 }

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { aislarActivo, equipo } from './aislar-git';
+import { UMBRALES_CURADOR } from './curador';
 import type { Configuracion } from './heuristica';
 import { rutaLimites, umbralClaude, type Limites } from './limites';
 import { ESTADOS_ACEPTADA, type Modo } from './modo';
@@ -369,7 +370,24 @@ export const FICHAS: Record<string, FichaComponente> = {
   },
 
   // ── Modificadores (aún sin código) ──
-  curador: borrador('Componente curador', 'Propondrá qué skills sobran en la biblioteca con reglas inequívocas, apoyándose en las fichas de la biblioteca.', ['Fichas de la biblioteca', 'Uso real de cada skill'], ['Lista de skills que sobran, como borrador']),
+  curador: {
+    especificado: true,
+    resumen: 'Propone qué skills del equipo sobran con cuatro reglas inequívocas y evidencia comprobable. Solo propone: no borra, no mueve ni desinstala; cada propuesta sale como borrador de Atlas dev.',
+    como_funciona: {
+      entradas: ['Skills del equipo (instaladas y almacén, con su descripción)', 'Fichas de la biblioteca (estrellas, si son heredadas, grupo)', 'Último uso (rotador, skills-uso.json de Atlas dev, ejecuciones y revisiones) y recomendaciones del selector en el registro', 'Skills protegidas del rotador'],
+      pasos: [
+        'Descarta las protegidas y comprueba que el registro abarca la ventana de días sin uso (curador.ts · curar)',
+        'sin-uso-ni-recomendacion: ni usada ni recomendada en la ventana, con registro suficiente → retirar (curador.ts · curar)',
+        'duplicada: instalada y también en el almacén del mismo destino → revisar (curador.ts · curar)',
+        'sin-descripcion: SKILL.md sin description → revisar (curador.ts · curar)',
+        'superada-por-grupo: estrellas PROPIAS bajo el mínimo y otra instalada del mismo grupo, usada y con ≥ 10× estrellas propias → retirar (curador.ts · curar)',
+        'Cada propuesta se convierte en un hallazgo con clave <regla>:<skill>, idempotente en la pasarela (curador.ts · aHallazgo, servidor.ts · /laboratorio/curador/proponer)',
+      ],
+      salidas: ['Propuestas {skill, regla, evidencia, accion}', 'Borradores en Atlas dev al pedirlo (POST /laboratorio/curador/proponer, kj curador --proponer)'],
+    },
+    reglas: ['Las protegidas del rotador (incluidas las del router) nunca se proponen.', 'Las estrellas heredadas de una colección nunca cuentan como evidencia.', 'Determinista: la misma entrada da las mismas propuestas.', 'Solo propone: retirar es del rotador y en producción todo cambio va como borrador.'],
+    configuracion: () => ({ dias_sin_uso: UMBRALES_CURADOR.diasSinUso, estrellas_minimas: UMBRALES_CURADOR.estrellasMinimas, factor_estrellas: UMBRALES_CURADOR.factorEstrellas }),
+  },
   comparador: borrador('Componente comparador', 'Comparará cada skill (y Karajan) con las mejores de su grupo de la taxonomía y señalará las funcionalidades que faltan.', ['Fichas y taxonomía de la biblioteca'], ['Informe comparativo por grupo']),
   eficiencia: borrador('Familia de modificadores', 'Aplicará ponytail (mínimo código suficiente) a lo que se delega, con un A/B sobre tareas reproducidas.', ['Instrucción que recibe el agente'], ['Instrucción modificada']),
   metodo: borrador('Familia de modificadores', 'Aplicará el método de superpowers (plan, TDD, worktrees) como modificador de las tareas N3–N5.', ['Instrucción que recibe el agente'], ['Instrucción modificada']),
