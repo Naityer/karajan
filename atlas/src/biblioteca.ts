@@ -11,7 +11,12 @@ import { DatabaseSync } from 'node:sqlite';
 export interface FichaRecurso {
   nombre: string; slug: string; tipo: string; descripcion: string; estrellas: number | null; heredadas: boolean;
   repo_url: string | null; grupo: string | null; capacidades: string[];
+  /** Etiquetas declaradas (`tags_json`) y casos de uso del análisis de la ingesta: palabras clave, no una evaluación. */
+  etiquetas: string[]; usos: string[];
 }
+
+/** Las estrellas del propio recurso: null si no hay dato o si son las de la colección que lo recoge. */
+export const estrellasPropias = (f: Pick<FichaRecurso, 'estrellas' | 'heredadas'>): number | null => (f.estrellas !== null && !f.heredadas ? f.estrellas : null);
 
 type Fila = Record<string, unknown>;
 const json = <T,>(v: unknown, defecto: T): T => { try { return typeof v === 'string' ? (JSON.parse(v) as T) : defecto; } catch { return defecto; } };
@@ -34,7 +39,7 @@ export class Biblioteca {
   private ficha(f: Fila): FichaRecurso {
     const meta = json<Record<string, unknown>>(f['metadata_json'], {});
     const tax = meta['decision_taxonomy'] as { group_id?: string } | undefined;
-    const intel = meta['intelligence'] as { capabilities?: string[] } | undefined;
+    const intel = meta['intelligence'] as { capabilities?: string[]; use_cases?: string[] } | undefined;
     const heredadas = f['parent_resource_id'] !== null && f['parent_resource_id'] !== undefined;
     const estrellas = typeof meta['github_stars'] === 'number' ? (meta['github_stars'] as number) : null;
     const repo = (f['repo_url'] as string | null) ?? (f['source_url'] as string | null) ?? (f['padre_repo'] as string | null) ?? (typeof meta['html_url'] === 'string' ? (meta['html_url'] as string) : null);
@@ -43,6 +48,7 @@ export class Biblioteca {
       descripcion: String(f['summary'] ?? '').replace(/^﻿/, '').replace(/^---[\s\S]*?description:\s*/, '').replace(/\s*---\s*$/, '').slice(0, 400),
       estrellas, heredadas: heredadas && estrellas !== null, repo_url: repo, grupo: tax?.group_id ?? null,
       capacidades: [...new Set([...(intel?.capabilities ?? []), ...json<string[]>(f['capabilities_json'], [])])].slice(0, 30),
+      etiquetas: json<string[]>(f['tags_json'], []).slice(0, 60), usos: (intel?.use_cases ?? []).filter((u) => typeof u === 'string').slice(0, 20),
     };
   }
 
@@ -67,5 +73,23 @@ export class Biblioteca {
         ...terminos.flatMap((t) => [`%${t}%`, `%${t}%`]), limite * 3);
     const orden = new Map(fts.map((f, i) => [String(f['id']), i]));
     return filas.sort((a, b) => (orden.get(String(a['id'])) ?? 0) - (orden.get(String(b['id'])) ?? 0)).slice(0, limite).map((f) => this.ficha(f));
+  }
+
+  /** Skills y capacidades activas de un grupo de la taxonomía (`decision_taxonomy.group_id`), con sus estrellas y si son propias o heredadas. */
+  listarGrupo(grupo: string): FichaRecurso[] {
+    return this.todas(`${Biblioteca.SELECT} WHERE r.kind != 'reference' AND r.index_status = 'active' AND json_extract(r.metadata_json, '$.decision_taxonomy.group_id') = ?`, grupo).map((f) => this.ficha(f));
+  }
+
+  /** Nombre legible de un grupo (`resource_groups`); el propio id si la tabla no está. */
+  nombreGrupo(grupo: string): string {
+    return String(this.todas('SELECT name FROM resource_groups WHERE id = ?', grupo)[0]?.['name'] ?? grupo);
+  }
+
+  /** Qué fracción de las fichas activas declara cada etiqueta o capacidad: las de la ingesta que casi todas comparten («testing», «deployment») no distinguen nada. */
+  frecuenciasTerminos(): Map<string, number> {
+    const filas = this.todas(`SELECT tags_json, capabilities_json FROM resources WHERE kind != 'reference' AND index_status = 'active'`);
+    const veces = new Map<string, number>();
+    for (const f of filas) for (const t of new Set([...json<string[]>(f['tags_json'], []), ...json<string[]>(f['capabilities_json'], [])].map((x) => String(x).trim().toLowerCase()))) veces.set(t, (veces.get(t) ?? 0) + 1);
+    return new Map([...veces].map(([t, n]) => [t, n / (filas.length || 1)]));
   }
 }

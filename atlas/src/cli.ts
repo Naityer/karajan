@@ -13,6 +13,7 @@ import { pathToFileURL } from 'node:url';
  *   kj lab historial <componente> <métrica> evolución de una métrica (sparkline)
  *   kj grafica acierto|eficiencia|flujo|matriz-skills|sugerencias [--dias N] [--perfil todos]
  *   kj curador [--proponer]                 skills que sobran, por regla; --proponer las abre como borradores
+ *   kj comparar [<skill>|karajan] [--grupo g]  cada skill (o Karajan) frente a las mejores de su grupo, con estrellas propias
  *   kj propuestas                           borradores abiertos por Karajan y su estado
  *   kj modo                                 producción o desarrollo
  */
@@ -80,6 +81,18 @@ function estadoDe(c: ComponenteVista): string {
   if (c.ultimas.some((u) => u.error)) return 'error';
   const h = c.ultimas.reduce((s, u) => s + u.hallazgos, 0);
   return `${h ? `${h} hallazgo${h === 1 ? '' : 's'}` : 'ok'}${c.ultimas.some((u) => !u.suficiente) ? ' (muestra corta)' : ''}`;
+}
+
+interface Comparada { sujeto: string; estado: string; motivo: string; grupoNombre: string | null; estrellas: number | null; posicion: number | null; percentil: number | null; conDato: number; mejores: { nombre: string; estrellas: number }[]; faltan: { funcionalidad: string; pares: string[] }[] }
+interface PruebaVista { nombre: string; pares: { par: string; estrellas: number }[] }
+
+function pintarComparada(c: Comparada): string {
+  const puesto = c.percentil !== null ? ` · puesto ${c.posicion} (p${c.percentil}, ${c.estrellas}★ propias)` : ' · sin dato: no se puntúa';
+  const lineas = [`${c.sujeto} · ${c.grupoNombre ?? 'sin grupo'} · ${c.estado}${puesto}`];
+  if (c.motivo) lineas.push(`  ${c.motivo}`);
+  if (c.mejores.length) lineas.push(`Mejores del grupo (${c.conDato} con estrellas propias)`, barras(c.mejores.map((m) => ({ etiqueta: m.nombre, valor: m.estrellas }))));
+  if (c.faltan.length) lineas.push('Funcionalidades declaradas por los pares y no por ella', ...c.faltan.map((f) => `  • ${f.funcionalidad}  (${f.pares.join(', ')})`));
+  return lineas.join('\n');
 }
 
 function pintarEjecucion(x: Ejecucion): string {
@@ -211,8 +224,23 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       salida(d, () => d.map((p) => `${p.tarea}  ${p.estado.padEnd(11)} ${p.titulo ?? p.clave}`).join('\n') || 'Karajan no ha propuesto nada todavía.');
       return 0;
     }
+    case 'comparar': {
+      const nombre = args.slice(1).find((a, i, v) => !a.startsWith('--') && v[i - 1] !== '--grupo') ?? '';
+      const grupo = opcion(args, 'grupo');
+      const d = (await pedir(e, `/laboratorio/comparar?skill=${encodeURIComponent(nombre)}&grupo=${encodeURIComponent(grupo ?? '')}`)) as { karajan?: Comparada; pruebas?: PruebaVista[]; skills?: Comparada[] } & Partial<Comparada>;
+      salida(d, () => {
+        if (d.karajan) return [pintarComparada(d.karajan), ...(d.pruebas?.length ? ['', 'Pruebas con feedback humano en los pares:', ...d.pruebas.map((p) => `  • ${p.nombre}: ${p.pares.map((x) => `${x.par} (${x.estrellas}★)`).join(', ')}`)] : [])].join('\n');
+        if (d.skills) {
+          const con = d.skills.filter((c) => c.percentil !== null).sort((a, b) => b.percentil! - a.percentil!);
+          const sin = d.skills.filter((c) => c.percentil === null);
+          return [`Percentil por estrellas propias dentro de su grupo (${con.length} de ${d.skills.length} skills comparables)`, barras(con.map((c) => ({ etiqueta: c.sujeto, valor: c.percentil, nota: `${c.grupoNombre} · puesto ${c.posicion}` })), { formato: (x) => `p${x}` }), '', `Sin dato (${sin.length}): ${sin.map((c) => `${c.sujeto} [${c.estado}]`).join(', ') || '—'}`].join('\n');
+        }
+        return pintarComparada(d as Comparada);
+      });
+      return 0;
+    }
     default:
-      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | propuestas | modo   (--json en todos)');
+      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | comparar [<skill>|karajan] [--grupo g] | propuestas | modo   (--json en todos)');
       return cmd ? 2 : 0;
   }
 }

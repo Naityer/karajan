@@ -14,6 +14,7 @@ import { buscarBinario, PROVEEDORES } from './proveedores';
 import type { Perfil } from './reglas';
 import type { EstadoRotador } from './rotador';
 import { PESOS_SELECTOR } from './skills-seleccion';
+import { GRUPO_KARAJAN, MIN_PARES_FUNCIONALIDAD, MUESTRA_MINIMA_GRUPO, TOP_PARES } from './comparador';
 
 /**
  * La ficha de cada componente para la ventana de Atlas dev: qué hace, cómo (entradas → pasos → salidas, con el fichero que
@@ -398,7 +399,25 @@ export const FICHAS: Record<string, FichaComponente> = {
     reglas: ['Las protegidas del rotador (incluidas las del router) nunca se proponen.', 'Las estrellas heredadas de una colección nunca cuentan como evidencia.', 'Determinista: la misma entrada da las mismas propuestas.', 'Solo propone: retirar es del rotador y en producción todo cambio va como borrador.'],
     configuracion: () => ({ dias_sin_uso: UMBRALES_CURADOR.diasSinUso, estrellas_minimas: UMBRALES_CURADOR.estrellasMinimas, factor_estrellas: UMBRALES_CURADOR.factorEstrellas }),
   },
-  comparador: borrador('Componente comparador', 'Comparará cada skill (y Karajan) con las mejores de su grupo de la taxonomía y señalará las funcionalidades que faltan.', ['Fichas y taxonomía de la biblioteca'], ['Informe comparativo por grupo']),
+  comparador: {
+    especificado: true,
+    resumen: 'Compara cada skill del equipo, y a Karajan, con las mejores de su grupo de la taxonomía usando SOLO estrellas propias: su posición (percentil), los mejores pares y las funcionalidades que ofrecen y no tiene. Detecta en los pares pruebas de ejecución real con feedback humano (evals, benchmarks, A/B, preferencia…) que los laboratorios de Karajan no tienen.',
+    como_funciona: {
+      entradas: ['Nombre de una skill del equipo o «karajan»', 'Fichas de la biblioteca: estrellas propias, grupo, etiquetas, capacidades y casos de uso', 'Componentes y tipos de escenario de Karajan (componentes.ts)'],
+      pasos: [
+        'Busca la ficha y su grupo; sin ficha, sin grupo o sin estrellas propias figura «sin dato» y no se puntúa (comparador.ts · comparar)',
+        'Reúne los recursos del grupo con estrellas propias, de más a menos (comparador.ts · paresConDato)',
+        `Con menos de ${MUESTRA_MINIMA_GRUPO} recursos con estrellas propias el grupo es «corto»: no hay percentil ni funcionalidades (comparador.ts · comparar)`,
+        'Calcula posición y percentil frente al grupo (comparador.ts · comparar)',
+        `Lista las palabras clave declaradas por ≥ ${MIN_PARES_FUNCIONALIDAD} de los ${TOP_PARES} mejores pares que la skill no ofrece (comparador.ts · funcionalidadesQueFaltan)`,
+        'Karajan se compara con «Orquestación y contexto» usando las palabras clave de sus componentes (comparador.ts · compararKarajan, CLAVES_KARAJAN)',
+        'Busca en los pares evals, benchmarks, A/B, feedback humano, preferencia y regresión de prompts, y descarta lo que Karajan ya cubre con sus escenarios replay/feedback (comparador.ts · pruebasEnGrupos, pruebasCubiertas)',
+      ],
+      salidas: ['Comparación por skill (estado, percentil, mejores pares, funcionalidades que faltan)', 'Hallazgos del laboratorio: una prueba a añadir por cada práctica que declaran los pares y Karajan no tiene, como borrador'],
+    },
+    reglas: ['Nunca usa estrellas heredadas de la colección que recoge a la skill.', 'Una funcionalidad es una palabra clave declarada en la ficha, no una inferencia ni una lectura del código.', 'Solo lee la biblioteca: no escribe ni cambia nada.'],
+    configuracion: (c) => ({ disponible: c.biblioteca.disponible, muestra_minima_grupo: MUESTRA_MINIMA_GRUPO, pares_top: TOP_PARES, grupo_karajan: GRUPO_KARAJAN }),
+  },
   eficiencia: {
     especificado: true,
     resumen: 'Modificador ponytail (mínimo código suficiente): añade a la instrucción que se delega un bloque con el criterio de la solución mínima y segura. Desactivado en producción y aún sin conectar al delegador.',

@@ -16,6 +16,7 @@ token que `at` (`ATLAS_DEV_TOKEN`). Se construye con `node atlas/build.mjs` y se
 | `kj grafica acierto\|eficiencia\|flujo\|matriz-skills\|sugerencias [--dias N] [--perfil activo\|todos]` | Gráficas de texto de la analítica de producción |
 | `kj curador [--proponer]` | Skills que sobran, agrupadas por regla y con su evidencia; con `--proponer` cada una se abre como borrador en Atlas dev (idempotente). Solo propone: no retira nada |
 | `kj grafica acierto\|eficiencia\|flujo\|matriz-skills --svg <fichero> [--html <fichero>]` | Exporta la misma gráfica como SVG autocontenido (barras horizontales, sin dependencias) y/o HTML autocontenido (título, el SVG y una tabla accesible con los datos). Colores por variables CSS y modo oscuro (`prefers-color-scheme`). `sugerencias` no se exporta |
+| `kj comparar [<skill>\|karajan] [--grupo g]` | Cada skill del equipo (o Karajan) frente a las mejores de su grupo de la taxonomía, solo con estrellas propias: puesto, percentil, mejores pares y funcionalidades declaradas por ellos que le faltan; con `karajan`, además las pruebas con feedback humano que declaran los pares. «Sin dato» si no hay estrellas propias o el grupo tiene menos de 5 recursos con ellas |
 | `kj propuestas` | Borradores que ha abierto Karajan y en qué estado están |
 | `kj modo` | Producción o desarrollo (`<datos>/modo.json`; solo cambia editando el fichero) |
 

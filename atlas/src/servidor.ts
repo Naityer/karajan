@@ -21,6 +21,7 @@ import { leerLimites, rutaLimites } from './limites';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
+import { compararEquipo, compararKarajan, compararSkill, pruebasEnGrupos, GRUPO_KARAJAN, type CapacidadKarajan } from './comparador';
 import { descubrirSkills, puntuarSkills, type SkillDisponible } from './skills-seleccion';
 
 /**
@@ -271,6 +272,8 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       registroDesde: tareas.reduce<string | null>((m, t) => (!m || t.created_at < m ? t.created_at : m), null), protegidas: rotador.leerEstado().config.protegidas,
     };
   };
+  /** Lo que Karajan sabe de sí mismo para el comparador: sus componentes y los tipos de escenario de cada laboratorio. */
+  const capacidadesKarajan = (): CapacidadKarajan[] => COMPONENTES.map((c) => ({ id: c.id, responsabilidad: c.responsabilidad, pruebas: c.laboratorio?.escenarios.map((e) => e.tipo) ?? [] }));
   const contextoDe = (id: string) => {
     let cache: Promise<TareaAnonima[]> | null = null;
     const base: ContextoLab = {
@@ -292,6 +295,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
       case 'produccion': return base;
       case 'rotador': return { ...base, rotador, historial: () => rotador.historial(), ahora: () => Date.now() };
+      case 'comparador': return { ...base, biblioteca, skills: skillsEquipo, capacidades: capacidadesKarajan };
       default: return base;
     }
   };
@@ -322,6 +326,15 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const c = await construirArquitectura(contextoArquitectura(), { id: req.params['id']! });
     if (!c) throw falla(404, `No hay componente «${req.params['id']}»`);
     return c;
+  });
+  /** Solo lectura: `?skill=<nombre>` una skill del equipo, `?skill=karajan` Karajan con las pruebas de sus pares, sin `skill` todo el equipo (`?grupo=` filtra por grupo). */
+  app.get('/laboratorio/comparar', (req) => {
+    const skill = req.query['skill'] || '', grupo = req.query['grupo'] || '';
+    if (!biblioteca.disponible) throw falla(409, 'El comparador necesita resources.db (ATLAS_KARAJAN_RESOURCES).');
+    if (skill === 'karajan') { const k = compararKarajan(biblioteca, capacidadesKarajan()); return { karajan: k, pruebas: pruebasEnGrupos(biblioteca, [GRUPO_KARAJAN]) }; }
+    if (skill) return compararSkill(biblioteca, skillsEquipo().find((s) => s.name === skill) ?? { name: skill });
+    const g = (x: string | null) => !grupo || (x ?? '') === grupo || (x ?? '').endsWith(`_${grupo}`);
+    return { skills: compararEquipo(biblioteca, skillsEquipo()).filter((c) => g(c.grupo)) };
   });
   app.get('/laboratorio/ejecuciones', (req) => registroLab.ejecuciones(req.query['componente'] || undefined, entero(req.query['limite'], 50, 1, 1000)));
   app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));

@@ -3,6 +3,7 @@ import { laboratorioAlmacen } from './lab/almacen.lab';
 import { laboratorioAislamiento } from './lab/aislamiento.lab';
 import { laboratorioAnalitica } from './lab/analitica.lab';
 import { laboratorioBiblioteca } from './lab/biblioteca.lab';
+import { laboratorioComparador } from './lab/comparador.lab';
 import { laboratorioClasificador } from './lab/clasificador.lab';
 import { laboratorioCurador } from './lab/curador.lab';
 import { laboratorioDelegador } from './lab/delegador.lab';
@@ -65,7 +66,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'produccion', capa: 'observacion', responsabilidad: 'Medir acierto, re-trabajo, eficiencia y «qué mejorar»', modulos: ['produccion'], laboratorio: laboratorioProduccion },
   // ── Modificadores (familia ampliable) ──
   { id: 'curador', capa: 'modificadores', responsabilidad: 'Proponer qué skills sobran en la biblioteca con reglas inequívocas', modulos: ['curador'], laboratorio: laboratorioCurador },
-  { id: 'comparador', capa: 'modificadores', responsabilidad: 'Comparar cada skill (y Karajan) con las mejores de su grupo', modulos: [], pendiente: 'borrador «Componente comparador»' },
+  { id: 'comparador', capa: 'modificadores', responsabilidad: 'Comparar cada skill (y Karajan) con las mejores de su grupo', modulos: ['comparador'], laboratorio: laboratorioComparador },
   { id: 'eficiencia', capa: 'modificadores', responsabilidad: 'Aplicar ponytail (mínimo código suficiente) a lo que se delega', modulos: ['eficiencia'], laboratorio: laboratorioEficiencia },
   { id: 'metodo', capa: 'modificadores', responsabilidad: 'Aplicar el método de superpowers (TDD, planes, worktrees)', modulos: ['metodo'], laboratorio: laboratorioMetodo },
   { id: 'prompts', capa: 'modificadores', responsabilidad: 'Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)', modulos: ['prompts'], laboratorio: laboratorioPrompts },
@@ -102,7 +103,7 @@ export const ENLACES: Enlace[] = [
   { de: 'api', a: 'laboratorio', etiqueta: 'ejecutar laboratorios' },
   { de: 'biblioteca', a: 'curador', etiqueta: 'datos de las skills' },
   // Previstos (borradores en Atlas dev, ver docs/laboratorio/componentes.md §6-7).
-  { de: 'biblioteca', a: 'comparador', etiqueta: 'datos de las skills', previsto: true },
+  { de: 'biblioteca', a: 'comparador', etiqueta: 'datos de las skills' },
   { de: 'eficiencia', a: 'delegador', etiqueta: 'modifica lo que se delega', previsto: true },
   { de: 'metodo', a: 'delegador', etiqueta: 'modifica lo que se delega', previsto: true },
   { de: 'prompts', a: 'delegador', etiqueta: 'modifica lo que se delega', previsto: true },
