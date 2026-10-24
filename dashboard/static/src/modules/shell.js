@@ -27,7 +27,53 @@ function applyTheme(theme) {
 }
 
 // ---- view switching --------------------------------------------------------
+// Control humano y Decisión viven siempre a la vez: uno a pantalla completa (el principal) y el otro minimizado, en vivo, en la
+// esquina inferior derecha. Un clic en la ventana minimizada los intercambia. `controlPanels` sigue siendo el conjunto de
+// diagramas montados (siempre los dos); `controlMain` es el que ocupa la pantalla.
+const CONTROL_VIEW_KEY = "karajan-control-main-view";
+const CONTROL_NAMES = { human: "Control humano", decision: "Decisión" };
+const controlPanels = new Set(["human", "decision"]);
+let controlMain = "human";
+
+function setControlPanels(values, { persist = true } = {}) {
+  const wanted = [...values].find((value) => value === "human" || value === "decision");
+  const main = wanted || controlMain;
+  const changed = main !== controlMain;
+  controlMain = main;
+  const other = main === "human" ? "decision" : "human";
+  const stage = $(".stage");
+  stage.dataset.controlLayout = main;
+  stage.classList.toggle("control-hub-active", state.activeView === "control");
+  $("#view-human")?.classList.add("active");
+  $("#view-decision")?.classList.add("active");
+  const swap = $("#controlSwap");
+  if (swap) {
+    swap.setAttribute("aria-label", `Mostrar ${CONTROL_NAMES[other]} a pantalla completa`);
+    swap.title = `Mostrar ${CONTROL_NAMES[other]} a pantalla completa`;
+    const name = $("#controlSwapName");
+    if (name) name.textContent = CONTROL_NAMES[other];
+  }
+  if (persist) localStorage.setItem(CONTROL_VIEW_KEY, main);
+  if (changed && state.activeView === "control") {
+    // El diagrama que pasa a ser principal se recoloca una vez aplicado el nuevo tamaño.
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+      if (main === "decision") { scheduleDrawWires(); centerDiagramOnContent(); }
+    });
+  }
+}
+
+function initControlViewSelector() {
+  try {
+    const saved = localStorage.getItem(CONTROL_VIEW_KEY);
+    if (saved === "human" || saved === "decision") controlMain = saved;
+  } catch { /* se abre en Control humano */ }
+  setControlPanels([controlMain], { persist: false });
+  $("#controlSwap")?.addEventListener("click", () => setControlPanels([controlMain === "human" ? "decision" : "human"]));
+}
+
 function initViews() {
+  initControlViewSelector();
   $("#viewNav").addEventListener("click", (event) => {
     const tab = event.target.closest(".view-tab");
     if (!tab) return;
@@ -48,11 +94,17 @@ function initViews() {
 }
 
 function activateView(view) {
-  const tab = $(`.view-tab[data-view="${view}"]`);
+  const legacyControlView = view === "human" || view === "decision";
+  const selectedPanel = legacyControlView ? view : null;
+  if (legacyControlView) view = "control";
+  const tab = $(`.view-tab[data-view="${view}"]:not([hidden])`);
   if (!tab) return;
   $$(".view-tab").forEach((t) => t.classList.toggle("active", t === tab));
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
   state.activeView = view;
+  $(".stage")?.classList.toggle("control-hub-active", view === "control");
+  if (selectedPanel) setControlPanels([selectedPanel]);
+  else if (view === "control") setControlPanels([controlMain], { persist: false });
   // La URL refleja la vista activa, así que recargar o compartir el enlace
   // devuelve a donde estabas.
   const url = new URL(location.href);
@@ -69,6 +121,16 @@ function activateView(view) {
 const AUTO_REFRESH_INTERVAL_MS = 20000;
 
 function enterView(view) {
+  if (view === "control") {
+    if (controlPanels.has("decision")) {
+      renderDiagram();
+      renderModels();
+      requestAnimationFrame(() => centerDiagramOnContent());
+    }
+    if (controlPanels.has("human") && window.karajanCanvas) {
+      try { window.karajanCanvas.bootstrap(); } catch (_) {}
+    }
+  }
   if (view === "decision") {
     renderDiagram();
     renderModels();
@@ -103,10 +165,10 @@ function enterView(view) {
     renderAnalyticsSection().catch(() => {});
     renderPredictionsPanel().catch(() => {});
   }
-  if (view === "human") refreshHuman().catch((error) => toast(error.message));
+  if (view === "human" || (view === "control" && controlPanels.has("human"))) refreshHuman().catch((error) => toast(error.message));
   // Human view canvas: on (re)entry, start the real-task-or-demo animation if
   // nothing is playing yet. Guarded internally (bootstrap runs at most once).
-  if (view === "human" && window.karajanCanvas) {
+  if ((view === "human" || (view === "control" && controlPanels.has("human"))) && window.karajanCanvas) {
     try { window.karajanCanvas.bootstrap(); } catch (_) {}
   }
 }
@@ -126,8 +188,10 @@ async function refreshHuman() {
 function initAutoRefresh() {
   setInterval(() => {
     const view = state.activeView || "human";
+    const humanVisible = view === "human" || (view === "control" && controlPanels.has("human"));
+    const decisionVisible = view === "decision" || (view === "control" && controlPanels.has("decision"));
     if (view === "monitor") refreshMonitor().catch(() => {});
-    if (view === "human") refreshHuman().catch(() => {});
+    if (humanVisible) refreshHuman().catch(() => {});
     if (view === "agents") refreshProvidersAndAgents().catch(() => {});
     if (view === "resources") {
       refreshResources({ preserveSelection: true }).catch(() => {});
@@ -138,7 +202,7 @@ function initAutoRefresh() {
     // would fight the user. This keeps "Arquitectura activa" live (which
     // providers are ready) as models get installed/authenticated. The
     // flow/config view is edit-only.
-    if (view === "decision") renderModels().catch(() => {});
+    if (decisionVisible) renderModels().catch(() => {});
   }, AUTO_REFRESH_INTERVAL_MS);
 }
 
@@ -158,26 +222,28 @@ function initLiveEvents() {
     let ev;
     try { ev = JSON.parse(event.data); } catch (_) { return; }
     const view = state.activeView || "human";
+    const humanVisible = view === "human" || (view === "control" && controlPanels.has("human"));
+    const decisionVisible = view === "decision" || (view === "control" && controlPanels.has("decision"));
     // A real delegation lifecycle: task classified/delegated (task_changed) or a
     // run started/finished (run_started/run_completed, Fase 1). This is the single
     // dispatcher — Monitor and the human canvas both react here, no private polls.
     if (ev.type === "task_changed" || ev.type === "run_started" || ev.type === "run_completed") {
       if (view === "monitor") refreshMonitor().catch(() => {});
-      else if (view === "human") refreshHuman().catch(() => {});
+      else if (humanVisible) refreshHuman().catch(() => {});
       // Drive the human-view isometric canvas from the real task/run lifecycle,
       // and refresh its per-agent metrics (nodeData) — replacing its old 5s poll.
-      if (view === "human" && window.karajanCanvas) {
+      if (humanVisible && window.karajanCanvas) {
         try {
           window.karajanCanvas.onTaskChanged(ev.task_id);
           if (window.karajanCanvas.refreshNodes) window.karajanCanvas.refreshNodes();
         } catch (_) {}
       }
     } else if (ev.type === "config_changed") {
-      if (view === "decision") renderModels().catch(() => {});
+      if (decisionVisible) renderModels().catch(() => {});
       else if (view === "agents") refreshProvidersAndAgents().catch(() => {});
       else if (view === "flow") loadConfig().then(renderFlow).catch(() => {});
     } else if (ev.type === "layout_changed") {
-      if (view === "decision") renderModels().catch(() => {});
+      if (decisionVisible) renderModels().catch(() => {});
       // Phase 4: keep Control Humano's dynamic roster (zones/figures) in sync with
       // routing-layout edits made ANYWHERE — another browser tab's Decisión edit,
       // or a Phase-3 drag-drop in another window — regardless of which view this
@@ -738,6 +804,11 @@ function init() {
       renderCanvasProfileControls();
       applyDrawerState();
       applyDiagramZoom();
+      if (state.activeView === "control" && controlPanels.has("decision")) {
+        renderDiagram();
+        renderModels().catch((error) => toast(error.message));
+        requestAnimationFrame(() => centerDiagramOnContent());
+      }
       // Control Humano roster is derived from state.entities/state.groups; rebuild
       // now that the routing layout has loaded so its figures reflect real data.
       if (window.karajanCanvas && window.karajanCanvas.rebuildRoster) {

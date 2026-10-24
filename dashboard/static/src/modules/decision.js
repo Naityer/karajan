@@ -662,6 +662,10 @@ function bindDiagramLinkFocus() {
     node.addEventListener("mouseleave", () => clearDiagramLinkFocus(focus));
     node.addEventListener("focusin", () => setDiagramLinkFocus(focus));
     node.addEventListener("focusout", () => clearDiagramLinkFocus(focus));
+    node.addEventListener("click", (event) => {
+      if (event.target.closest("button, input, select, label, summary, details, .node-x, .level-chip")) return;
+      window.karajanCanvas?.selectEntity?.(node.dataset.entity);
+    });
   });
   $$("#diagramNodes .node.group").forEach((node) => {
     const focus = { type: "group", id: node.dataset.group };
@@ -1177,6 +1181,16 @@ export function centerDiagramOnContent() {
   diagram.scrollTop = Math.max(0, (bounds.top + bounds.bottom - diagram.clientHeight) / 2);
   state.diagramCentered = true;
   scheduleDrawWires();
+}
+
+export function focusEntityOnDiagram(entityId) {
+  if (!entityId) {
+    const current = state.focusedDiagramLink;
+    if (current?.type === "entity") clearDiagramLinkFocus(current);
+    return;
+  }
+  if (!findEntity(entityId)) return;
+  setDiagramLinkFocus({ type: "entity", id: entityId });
 }
 
 function bindCanvasDropTarget() {

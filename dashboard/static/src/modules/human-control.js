@@ -4,7 +4,7 @@
 // código, mismo comportamiento — solo cambia de dónde vienen sus nombres
 // compartidos (antes globals de un único archivo, ahora imports explícitos).
 
-import { activeArchitectureProviderNames, addEntityToGroup, removeEntityFromGroup, roleDef } from "./decision.js";
+import { activeArchitectureProviderNames, addEntityToGroup, focusEntityOnDiagram, removeEntityFromGroup, roleDef } from "./decision.js";
 import { apiUrl, escapeHtml, state } from "./shared.js";
 
 // ── ISO VIEW MODULE ───────────────────────────────────────────────────────────
@@ -65,7 +65,9 @@ var agentModes={};
 var agentPos={};      // {id:{x,y,tx,ty,timer,phase}}
 var effTarget=0,effCur=0,effHistory=[];
 var demoRunning=false,demoTimers=[];
-var LW=262;           // left panel width
+// Vista mínima: solo el esquema central (sin panel de métricas, leyenda, botones ni cabecera). Ponerlo en false devuelve el HUD completo.
+var MINIMAL_UI=true;
+var LW=MINIMAL_UI?0:262;           // left panel width (0 sin panel)
 var panelStates={metrics:'open',spec:'open'}; // 'open'|'mini'|'closed'
 // Manual pan offset (drag-to-scroll), added on top of the auto-centered
 // origin — clamped so the tower cluster can't be dragged fully off-screen.
@@ -261,6 +263,7 @@ function pickHubId(){
 function rebuildRoster(){
   layoutZones();
   AGENTS=buildAgents();
+  if(selectedId&&!AGENTS.some(function(agent){return agent.id===selectedId;}))selectedId=null;
   hubId=pickHubId();
   populateLegend();
   initWander();
@@ -380,7 +383,8 @@ function wrap(txt,maxW,maxL){
 // ── RESIZE ───────────────────────────────────────────────────────────────────
 function resize(){
   if(!cvs)return;
-  var rect=cvs.parentElement.getBoundingClientRect();
+  // Tamano de layout (no el de pantalla): el diagrama puede verse minimizado con un transform scale().
+  var rect={width:cvs.parentElement.clientWidth,height:cvs.parentElement.clientHeight};
   W=Math.max(400,rect.width||800);H=Math.max(300,rect.height||600);
   TWbase=Math.min(42,Math.max(22,W*0.030));TW=TWbase*mapZoom;TH=TW*0.5;
   // Center the actual bounding box of the agent towers (not a fixed formula)
@@ -1150,6 +1154,7 @@ function drawInfoPanel(){
 }
 
 function drawHUD(){
+  if(MINIMAL_UI){if(selectedId)drawInfoPanel();drawDecisions();return;}
   // beacon (BTNS[] already cleared at frame start)
   var bp=0.55+0.45*Math.abs(Math.sin(tick*0.05));
   ctx2.fillStyle='rgba(80,140,220,'+bp+')';ctx2.beginPath();ctx2.arc(W/2,17,7,0,Math.PI*2);ctx2.fill();
@@ -1366,7 +1371,7 @@ function bootstrapCanvas(){
 // Expose the hooks the outer app scope needs (SSE + view switching). refreshNodes
 // lets the shared initLiveEvents() dispatcher refresh the left-panel per-agent
 // metrics (nodeData) on run events, replacing this module's old private 5s poll.
-window.karajanCanvas={onTaskChanged:onTaskChangedReal,bootstrap:bootstrapCanvas,playTaskRecord:playTaskRecord,refreshNodes:poll,rebuildRoster:rebuildRoster};
+window.karajanCanvas={onTaskChanged:onTaskChangedReal,bootstrap:bootstrapCanvas,playTaskRecord:playTaskRecord,refreshNodes:poll,rebuildRoster:rebuildRoster,selectEntity:function(id){selectedId=AGENTS.some(function(agent){return agent.dataId===id;})?id:null;}};
 window.__isoTest={ // TEMP test-only hook (removed after verification)
   zoom:function(){return mapZoom;},
   cvs:function(){var r=cvs.getBoundingClientRect();return {left:r.left,top:r.top,width:r.width,height:r.height,W:W,H:H};},
@@ -1444,7 +1449,7 @@ function frame(){
     for(var i=0;i<sorted.length;i++){try{drawAgent(sorted[i]);}catch(ae){lastErr=sorted[i].id+':'+ae.message;}}
     drawDragGhost();
     drawDataStacks();drawLinks();drawSparkles();ctx2.globalAlpha=1;
-    drawTaskCards();drawLeftPanel();drawHUD();
+    drawTaskCards();if(!MINIMAL_UI)drawLeftPanel();drawHUD();
     AGENTS.forEach(function(ag){var nd=nodeData.find(function(n){return n.id===ag.dataId;});if(nd&&(nd.task_count||0)>0&&Math.random()<0.014)spawnSpark(ag);});
     lastErr='';
   }catch(e){lastErr='FRAME:'+e.message;ctx2.globalAlpha=1;ctx2.fillStyle='rgba(180,20,20,0.8)';ctx2.font='12px monospace';ctx2.textAlign='left';ctx2.textBaseline='top';ctx2.fillText('Err:'+e.message,LW+6,6);}
@@ -1601,7 +1606,7 @@ function handleClick(e){
   for(var bi=0;bi<BTNS.length;bi++){
     var btn=BTNS[bi];
     if(mx>=btn.x&&mx<=btn.x+btn.w&&my>=btn.y&&my<=btn.y+btn.h){
-      if(btn.action==='close_panel'){selectedId=null;panelStates.spec='open';return;}
+      if(btn.action==='close_panel'){selectedId=null;focusEntityOnDiagram(null);panelStates.spec='open';return;}
       if(btn.action==='mini_spec'){panelStates.spec='mini';return;}
       if(btn.action==='open_spec'){panelStates.spec='open';return;}
       if(btn.action==='close_metrics'){panelStates.metrics='closed';return;}
@@ -1617,8 +1622,13 @@ function handleClick(e){
   for(var ai=0;ai<AGENTS.length;ai++){
     var ag3=AGENTS[ai];var p=agentFloatPoint(ag3,8*mapZoom);
     var dxx=mx-p.x,dyy=my-p.y;
-    if(dxx*dxx+dyy*dyy<(TW*1.4)*(TW*1.4)){selectedId=(selectedId===ag3.id)?null:ag3.id;return;}
+    if(dxx*dxx+dyy*dyy<(TW*1.4)*(TW*1.4)){
+      selectedId=(selectedId===ag3.id)?null:ag3.id;
+      focusEntityOnDiagram(selectedId?ag3.dataId:null);
+      return;
+    }
   }
+  focusEntityOnDiagram(null);
   selectedId=null;
 }
 
