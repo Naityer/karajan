@@ -95,7 +95,7 @@ describe('arquitectura: contrato de datos', () => {
     assert.equal(porId(a, 'delegador').estado, 'hallazgos');
     assert.equal(porId(a, 'selector').estado, 'error');
     assert.equal(porId(a, 'biblioteca').estado, 'sin_ejecutar');
-    for (const id of ['rotador', 'etiquetas', 'curador', 'api', 'almacen']) assert.equal(porId(a, id).estado, 'pendiente', id);
+    for (const id of ['rotador', 'etiquetas', 'curador', 'api']) assert.equal(porId(a, id).estado, 'pendiente', id);
     assert.equal(porId(a, 'delegador').muestra_corta, true);
     assert.equal(porId(a, 'clasificador').muestra_corta, false);
   });

@@ -10,13 +10,13 @@ import { Rotador } from './rotador';
 import { Delegador } from './delegar';
 import { configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles, perfilPorDefecto } from './perfiles';
-import { disponibilidad, PROVEEDORES } from './proveedores';
+import { buscarBinario, disponibilidad, PROVEEDORES } from './proveedores';
 import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
 import { Guardian } from './modo';
 import { Biblioteca } from './biblioteca';
 import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
-import { leerLimites } from './limites';
+import { leerLimites, rutaLimites } from './limites';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
@@ -262,6 +262,13 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'selector': return { ...base, skills: skillsEquipo, revisadas: () => almacen.tareasPlanas().filter((t) => t.revision?.['skills_usadas']?.length).map((t) => ({ id: t.task_id, prompt: t.prompt, skills: t.revision!['skills_usadas']! })) };
       case 'clasificador': return { ...base, clasificar: (p: string) => clasificar(p, config()) };
       case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
+      // Ejecución y observación: leen el registro y el equipo en solo lectura; lo que reproducen lo hacen en temporales.
+      case 'almacen': return { ...base, almacen };
+      case 'proveedores': return { ...base, runs: () => almacen.tareasPlanas().flatMap((t) => t.runs ?? []), buscar: (b: string) => buscarBinario(b) };
+      case 'limites': return { ...base, ruta: rutaLimites(), ahora: () => Date.now() };
+      case 'aislamiento': return { ...base, workspace: process.env['ATLAS_WORKSPACE'] ?? null };
+      case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
+      case 'produccion': return base;
       default: return base;
     }
   };

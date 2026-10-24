@@ -182,7 +182,7 @@ export const FICHAS: Record<string, FichaComponente> = {
       ],
       salidas: ['Registros de tareas, runs y decisiones', 'Agregados para /metrics y /agents/performance'],
     },
-    reglas: ['Comparte el fichero con el Karajan nativo cuando existe (SQLite en WAL admite los dos procesos).', 'Los redondeos y fechas replican a Python (redondeo.ts, paridad.test.ts).'],
+    reglas: ['Comparte el fichero con el Karajan nativo cuando existe (SQLite en WAL admite los dos procesos).', 'Los redondeos y fechas replican a Python (redondeo.ts, paridad.test.ts).', 'Su laboratorio comprueba la integridad del registro real en solo lectura y la ida y vuelta en un task_logs.db temporal.'],
     configuracion: (c) => ({ fichero: join(c.dirDatos, 'task_logs.db') }),
   },
   biblioteca: {
@@ -265,7 +265,7 @@ export const FICHAS: Record<string, FichaComponente> = {
       ],
       salidas: ['Salida del agente, error si lo hubo, latencia y modelo usado'],
     },
-    reglas: ['Qwen no admite skills.', 'Los proveedores solo se ejecutan desde la delegación real, nunca desde el laboratorio.'],
+    reglas: ['Qwen no admite skills.', 'Los proveedores solo se ejecutan desde la delegación real, nunca desde el laboratorio.', 'Su laboratorio busca los binarios sin ejecutarlos y mide la tasa de fallo por proveedor (Wilson, ≥ 10 runs) sobre los runs registrados.'],
     configuracion: () => ({
       proveedores: PROVEEDORES.map((p) => `${p.nombre} (${p.binario}${p.gratis ? ', gratis' : ''})`),
       binarios_en_path: PROVEEDORES.filter((p) => buscarBinario(p.binario) !== null).map((p) => p.nombre),
@@ -280,10 +280,12 @@ export const FICHAS: Record<string, FichaComponente> = {
       pasos: [
         'Lee el fichero y descarta el dato si tiene más de dos horas (limites.ts · leerLimites)',
         'Compara el % semanal de Claude con el umbral (limites.ts · claudeExcedido)',
+        'El umbral sale de KARAJAN_LIMITE_CLAUDE y, si no es un número, vale 50 (limites.ts · umbralClaude)',
+        'Solo se pasa del umbral si el % semanal es ESTRICTAMENTE mayor; sin dato reciente no se limita (limites.ts · claudeExcedido)',
       ],
       salidas: ['El % semanal si supera el umbral, o null'],
     },
-    reglas: ['Sin dato reciente no se limita nada.'],
+    reglas: ['Sin dato reciente no se limita nada.', 'Su laboratorio lee el fichero sin tocarlo: existe, es fresco, el umbral está en (0, 100] y «excedido» es estrictamente «% semanal > umbral».'],
     configuracion: (c) => {
       const l = c.limites();
       return { umbral_claude_semanal: umbralClaude(), edad_maxima_horas: 2, fichero: rutaLimites(), dato_reciente: l !== null, ...(l?.claude?.semanal !== undefined && l.claude.semanal !== null ? { claude_semanal: l.claude.semanal } : {}) };
@@ -302,7 +304,7 @@ export const FICHAS: Record<string, FichaComponente> = {
       ],
       salidas: ['Rama agente/<id> con el trabajo', 'Decisiones git:* en el registro'],
     },
-    reglas: ['main no se toca nunca.', 'Fuera de un repo git no aísla nada.'],
+    reglas: ['main no se toca nunca.', 'Fuera de un repo git no aísla nada.', 'Su laboratorio recorre el ciclo completo en un repo git temporal y, en solo lectura, avisa de worktrees sin carpeta y ramas del agente ya integradas.'],
     configuracion: () => ({ activo: aislarActivo(), equipo: equipo(), rama: 'agente/<id de la tarea>', carpeta: '<repo>/.trabajo/<id>' }),
   },
 
@@ -316,10 +318,11 @@ export const FICHAS: Record<string, FichaComponente> = {
         'Por tarea reúne las skills recomendadas por la clasificación o por una subtarea (analitica.ts · construirAnaliticaSkills)',
         'Separa las preparadas y las usadas confirmadas en la ejecución, con las revisadas a mano mandando (analitica.ts · construirAnaliticaSkills)',
         'Agrega por skill: ejecuciones, éxitos, fallos, latencia, coste, agentes y última vez (analitica.ts · construirAnaliticaSkills)',
+        'Resume el periodo: skills del catálogo, activas, sin uso, tasa de éxito y cobertura de asignación; y arma la línea de tiempo (analitica.ts · construirAnaliticaSkills)',
       ],
       salidas: ['Analítica por skill servida en /analytics/skills'],
     },
-    reglas: ['Recomendada no es usada: solo cuenta como uso lo confirmado.', 'Port fiel de skill_analytics.py (tests/paridad.test.ts).'],
+    reglas: ['Recomendada no es usada: solo cuenta como uso lo confirmado.', 'Port fiel de skill_analytics.py (tests/paridad.test.ts).', 'Su laboratorio comprueba en solo lectura que usadas ≤ preparadas y que los totales cuadran con el almacén.'],
     configuracion: () => ({ dias_por_defecto: 30 }),
   },
   produccion: {
@@ -335,7 +338,7 @@ export const FICHAS: Record<string, FichaComponente> = {
       ],
       salidas: ['KPI (tareas, acierto, re-trabajo), flujo, eficiencia, matriz y sugerencias en /analytics/*'],
     },
-    reglas: ['Port de produccion.py con paridad comprobada contra salidas grabadas.', 'El re-trabajo mira el siguiente prompt aunque sea de otro agente o fuera del periodo.'],
+    reglas: ['Port de produccion.py con paridad comprobada contra salidas grabadas.', 'El re-trabajo mira el siguiente prompt aunque sea de otro agente o fuera del periodo.', 'Su laboratorio contrasta acierto y re-trabajo con el estado final y la revisión de la persona en Atlas dev (Wilson, ≥ 30 tareas).'],
     configuracion: () => ({ peso_retrabajo: PESOS_ACIERTO['retrabajo']!, peso_completada: PESOS_ACIERTO['completada']!, peso_validacion: PESOS_ACIERTO['validacion']!, peso_revision: PESOS_ACIERTO['revision']!, ventana_retrabajo_horas: VENTANA_MS / 3_600_000, dias_por_defecto: 0 }),
   },
 

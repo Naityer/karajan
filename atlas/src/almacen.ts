@@ -185,6 +185,33 @@ export class Almacen {
     };
   }
 
+  /**
+   * Comprobaciones de integridad del registro, solo lectura y solo cuentas (el laboratorio del almacén las juzga): filas huérfanas,
+   * estados fuera del conjunto válido, fechas ilegibles o en orden inverso, runs con el mismo índice y filas que la lectura se salta.
+   */
+  integridad() {
+    const n = (v: unknown) => Number(v ?? 0);
+    const cuenta = (sql: string, ...p: (string | number)[]) => n(this.todas(sql, ...p)[0]?.['c']);
+    const estados = [...ESTADOS];
+    const marcas = estados.map(() => '?').join(',');
+    const invertida = (filas: Fila[], a: string, b: string) => filas.filter((f) => {
+      const x = Date.parse(String(f[a])), y = f[b] === null || f[b] === undefined ? Number.NaN : Date.parse(String(f[b]));
+      return Number.isNaN(x) || (f[b] !== null && f[b] !== undefined && (Number.isNaN(y) || y < x));
+    }).length;
+    const tareas = cuenta('SELECT COUNT(*) AS c FROM tasks');
+    return {
+      tareas, runs: cuenta('SELECT COUNT(*) AS c FROM runs'), decisiones: cuenta('SELECT COUNT(*) AS c FROM decisions'),
+      decisiones_huerfanas: cuenta('SELECT COUNT(*) AS c FROM decisions WHERE task_id NOT IN (SELECT task_id FROM tasks)'),
+      runs_huerfanos: cuenta('SELECT COUNT(*) AS c FROM runs WHERE task_id NOT IN (SELECT task_id FROM tasks)'),
+      tareas_estado_invalido: cuenta(`SELECT COUNT(*) AS c FROM tasks WHERE status NOT IN (${marcas})`, ...estados),
+      runs_estado_invalido: cuenta(`SELECT COUNT(*) AS c FROM runs WHERE status NOT IN (${marcas})`, ...estados),
+      tareas_fecha_incoherente: invertida(this.todas('SELECT created_at, updated_at FROM tasks'), 'created_at', 'updated_at'),
+      runs_fecha_incoherente: invertida(this.todas('SELECT started_at, completed_at FROM runs WHERE started_at IS NOT NULL'), 'started_at', 'completed_at'),
+      runs_indice_repetido: cuenta('SELECT COUNT(*) AS c FROM (SELECT 1 FROM runs GROUP BY task_id, run_index HAVING COUNT(*) > 1)'),
+      tareas_que_la_lectura_salta: tareas - this.listarTareas().length,
+    };
+  }
+
   /** La entrada de `produccion.ts`, igual que `produccion_datos.tareas_planas` en Python. */
   tareasPlanas(): TareaAnalitica[] {
     const revisiones = this.revisiones();
