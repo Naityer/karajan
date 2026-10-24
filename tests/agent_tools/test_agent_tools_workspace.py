@@ -170,7 +170,7 @@ def test_open_refuses_the_home_directory() -> None:
 
 
 def test_open_refuses_karajans_own_repo_unless_asked() -> None:
-    karajan_root = Path(__file__).resolve().parent.parent
+    karajan_root = Path(__file__).resolve().parents[2]
     with pytest.raises(ToolDenied):
         Workspace.open(karajan_root)
     allowed = Workspace.open(karajan_root, allow_self=True)
@@ -178,7 +178,7 @@ def test_open_refuses_karajans_own_repo_unless_asked() -> None:
 
 
 def test_self_workspace_protects_the_harness_from_the_agent() -> None:
-    karajan_root = Path(__file__).resolve().parent.parent
+    karajan_root = Path(__file__).resolve().parents[2]
     workspace = Workspace.open(karajan_root, allow_self=True)
     for path in ("app/main.py", "data/active_config.json", "dashboard/static/app.js"):
         # Documentation packs may read the harness, but agent tools may never

@@ -1,4 +1,4 @@
-"""app/production_setup.py: the additive, idempotent hierarchy-merge helper
+"""app/configuration/production_setup.py: the additive, idempotent hierarchy-merge helper
 used by POST /setup/apply-queue-config."""
 
 from app.models import RoutingEntity, RoutingLayout

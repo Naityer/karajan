@@ -60,7 +60,7 @@ def apply_default_config(_: None = Depends(require_token), __: dict | None = Dep
     """Restore the reference production hierarchy (Claude / ChatGPT / Qwen+DeepSeek local)
     from data/production_baseline/ and report what's still missing to run real tasks.
 
-    Backed by `app/production_setup.py`, the same module `scripts/setup_production.py`
+    Backed by `app/configuration/production_setup.py`, the same module `scripts/setup_production.py`
     uses from the command line — this is its "apply from the GUI" entry point.
     """
     backups = production_setup.reset_config()

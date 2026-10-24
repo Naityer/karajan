@@ -92,15 +92,15 @@ def test_second_process_owner_is_rejected(tmp_path: Path) -> None:
 
 
 def test_application_layer_has_no_transport_imports() -> None:
-    root = Path(__file__).parents[1] / "app"
+    root = Path(__file__).resolve().parents[2] / "app"
     banned = {"fastapi", "httpx", "uvicorn", "typer", "mcp", "karajan_cli"}
     files = [
-        root / "application.py",
-        root / "application_contracts.py",
-        root / "application_dto.py",
-        root / "application_errors.py",
-        root / "application_services.py",
-        root / "management.py",
+        root / "application" / "service.py",
+        root / "application" / "contracts.py",
+        root / "application" / "dto.py",
+        root / "application" / "errors.py",
+        root / "application" / "services.py",
+        root / "application" / "management.py",
     ]
     for path in files:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

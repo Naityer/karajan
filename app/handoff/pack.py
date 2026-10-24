@@ -24,7 +24,7 @@ from pathlib import Path
 
 from app.agent_tools.workspace import Workspace
 
-# Roughly 4 chars per token (same estimate `app/execution.py` uses); 120k chars
+# Roughly 4 chars per token (same estimate `app/execution/execution.py` uses); 120k chars
 # keeps a pack inside a normal web-chat context with room for the answer.
 DEFAULT_MAX_CHARS = 120_000
 MAX_FILE_CHARS = 30_000

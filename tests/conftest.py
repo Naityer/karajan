@@ -17,7 +17,7 @@ Two autouse guards, both opt-out-able:
   the full `subtask_timeout_s`. Mark a test `@pytest.mark.real_provider_methods`
   to test those methods directly.
 
-`tests/test_delegation.py::_patch_resolve` stays as the local convention for
+`tests/execution/test_delegation.py::_patch_resolve` stays as the local convention for
 tests that need a *specific* provider behavior (failing, flaky).
 """
 
@@ -105,7 +105,7 @@ def stub_providers(monkeypatch: pytest.MonkeyPatch) -> type[StubProvider]:
 # del operador (`data/`) quedaba a un descuido de distancia.
 #
 # `karajan_install` construye una instalación entera y desechable —el
-# `KarajanRuntime` de `app/runtime.py`— y la activa mientras dura el test. Los
+# `KarajanRuntime` de `app/application/runtime.py`— y la activa mientras dura el test. Los
 # módulos ya extraídos de `main.py` la ven a través de `runtime.current()`; los
 # endpoints que todavía viven en `main.py` la ven a través de las vistas de
 # módulo, que la fixture rebindea y restaura.

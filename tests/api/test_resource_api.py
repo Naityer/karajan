@@ -143,6 +143,37 @@ def test_github_resource_requires_matching_analysis_ticket(karajan_install, monk
     assert response.status_code == 409
 
 
+def test_ingest_url_analyzes_and_creates_in_one_call(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
+    response = client.post("/resources/ingest-url", json={"url": "https://github.com/acme/demo"})
+    assert response.status_code == 200
+    created = response.json()
+    assert created["slug"] == "demo"
+    assert created["kind"] == "skill"
+    assert created["metadata"]["inspiration_collection"] == "catalog"
+    # It is immediately visible through the regular catalog endpoints.
+    assert client.get("/resources", params={"q": "README"}).json()[0]["id"] == created["id"]
+
+
+def test_ingest_url_rejects_invalid_url(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
+    response = client.post("/resources/ingest-url", json={"url": "https://user:pass@example.com"})
+    assert response.status_code == 422
+
+
+def test_ingest_url_requires_token_when_configured(karajan_install, monkeypatch, tmp_path) -> None:
+    client = _client(karajan_install, monkeypatch, tmp_path)
+    monkeypatch.setenv("KARAJAN_TOKEN", "secret-token")
+    response = client.post("/resources/ingest-url", json={"url": "https://github.com/acme/demo"})
+    assert response.status_code == 401
+    response = client.post(
+        "/resources/ingest-url",
+        json={"url": "https://github.com/acme/demo"},
+        headers={"X-KARAJAN-Token": "secret-token"},
+    )
+    assert response.status_code == 200
+
+
 def test_recommend_resources_returns_explainable_primary_and_complementary(karajan_install, monkeypatch, tmp_path) -> None:
     client = _client(karajan_install, monkeypatch, tmp_path)
     client.post("/resources", json={

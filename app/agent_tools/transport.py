@@ -2,7 +2,7 @@
 
 `CompletionTransport` is the universal floor: it wraps **any** existing
 `ModelProvider` by flattening the conversation into one prompt and calling
-`provider.run(...)`. That is what gives every provider in `app/catalog.py` tool
+`provider.run(...)`. That is what gives every provider in `app/providers/catalog.py` tool
 use on day one without touching a single provider file — the native
 tool-calling transports (Ollama `/api/chat`, provider `tools=` arrays) are an
 optimization layered on later, not a prerequisite.

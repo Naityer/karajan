@@ -26,7 +26,7 @@ NOW = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
 # `dashboard/static/src/modules/*.js`; estos tests comprueban comportamiento
 # del dashboard, no la ubicación de un fichero concreto, así que leen el
 # conjunto de módulos concatenado como si fuera el `app.js` monolítico de antes.
-_STATIC_DIR = Path(__file__).parents[1] / "dashboard" / "static"
+_STATIC_DIR = Path(__file__).resolve().parents[2] / "dashboard" / "static"
 
 
 def _frontend_js() -> str:
@@ -159,7 +159,7 @@ def test_period_uses_execution_date_even_for_an_old_task() -> None:
 
 
 def test_monitor_ui_exposes_statistics_and_skills_tab() -> None:
-    html = (Path(__file__).parents[1] / "dashboard" / "static" / "index.html").read_text(encoding="utf-8")
+    html = (Path(__file__).resolve().parents[2] / "dashboard" / "static" / "index.html").read_text(encoding="utf-8")
     js = _frontend_js()
     assert 'data-view="monitor">Estadísticas<' in html
     assert 'data-subview="skills"' in html

@@ -4,7 +4,7 @@ Two design rules the rest of the package depends on:
 
 1. **Tools are data.** A `ToolSpec` is a frozen record with everything needed to
    describe the tool to a model, validate a call against it, render it in the
-   dashboard, and test it — the same shape `app/catalog.py` uses for providers.
+   dashboard, and test it — the same shape `app/providers/catalog.py` uses for providers.
    Nothing here executes anything.
 2. **Errors are observations, not exceptions.** A failed tool returns
    `ToolResult(ok=False, ...)` carrying a message the model can act on. Only

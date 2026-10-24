@@ -36,8 +36,8 @@ pytest.importorskip("playwright.sync_api", reason="Playwright no está instalado
 from playwright.sync_api import Error as PlaywrightError  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ARTIFACTS = Path(__file__).parent / "artifacts" / "dashboard"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ARTIFACTS = Path(__file__).resolve().parents[1] / "artifacts" / "dashboard"
 
 # `data-view` del `index.html` → id de la sección que debe quedar activa.
 VIEWS = [

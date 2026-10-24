@@ -12,7 +12,7 @@ from app.resource_intelligence import ResourceRankingEngine
 from app.resource_library import ResourceStore
 
 
-FIXTURES = Path(__file__).parent / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 def _resource(slug: str, *, name: str, summary: str, capabilities: list[str], tags: list[str] | None = None) -> ResourceItem:

@@ -1,7 +1,7 @@
 """Los tres modos de ejecución de Karajan (nota "Plan de mejora", §4-§5, §14).
 
 Standalone, add-on de Atlas y SaaS no son tres aplicaciones — son tres formas
-de construir el mismo `KarajanRuntime` (`app/runtime.py`) y pasárselo a la
+de construir el mismo `KarajanRuntime` (`app/application/runtime.py`) y pasárselo a la
 misma factoría de API (`app/api/factory.py::create_app`). Cada módulo de aquí
 es la configuración concreta de un modo, no una reimplementación.
 """

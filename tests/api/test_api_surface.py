@@ -13,7 +13,7 @@ con el diff exacto.
 Cuando el cambio es intencionado (endpoint nuevo, retirada deliberada), se
 regenera la instantánea:
 
-    KARAJAN_UPDATE_API_SURFACE=1 pytest tests/test_api_surface.py
+    KARAJAN_UPDATE_API_SURFACE=1 pytest tests/api/test_api_surface.py
 
 y el diff queda revisable en el commit, que es justo lo que se quiere.
 """
@@ -30,7 +30,7 @@ from starlette.routing import Mount, Route
 
 from app.main import app
 
-FIXTURE = Path(__file__).parent / "fixtures" / "api_surface.json"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "api_surface.json"
 
 # `HEAD`/`OPTIONS` los añade Starlette sola; incluirlos solo añadiría ruido.
 IMPLICIT_METHODS = {"HEAD", "OPTIONS"}
@@ -102,7 +102,7 @@ def test_api_surface_is_unchanged() -> None:
 
     assert FIXTURE.exists(), (
         "falta la instantánea de la API; genérala con "
-        "KARAJAN_UPDATE_API_SURFACE=1 pytest tests/test_api_surface.py"
+        "KARAJAN_UPDATE_API_SURFACE=1 pytest tests/api/test_api_surface.py"
     )
     expected = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
