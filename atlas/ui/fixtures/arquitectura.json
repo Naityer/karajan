@@ -1,0 +1,2045 @@
+{
+ "version": "0.8.0",
+ "modo": "desarrollo",
+ "generado": "2026-10-24T08:31:00Z",
+ "familias": [
+  {
+   "id": "interfaz",
+   "nombre": "Interfaz",
+   "orden": 1,
+   "componentes": [
+    "api",
+    "cli"
+   ]
+  },
+  {
+   "id": "modificadores",
+   "nombre": "Modificadores",
+   "orden": 2,
+   "componentes": [
+    "curador",
+    "comparador",
+    "eficiencia",
+    "metodo",
+    "prompts"
+   ]
+  },
+  {
+   "id": "observacion",
+   "nombre": "Observación",
+   "orden": 3,
+   "componentes": [
+    "analitica",
+    "produccion"
+   ]
+  },
+  {
+   "id": "ejecucion",
+   "nombre": "Ejecución",
+   "orden": 4,
+   "componentes": [
+    "proveedores",
+    "limites",
+    "aislamiento"
+   ]
+  },
+  {
+   "id": "decision",
+   "nombre": "Decisión",
+   "orden": 5,
+   "componentes": [
+    "clasificador",
+    "delegador",
+    "selector",
+    "rotador",
+    "etiquetas"
+   ]
+  },
+  {
+   "id": "base",
+   "nombre": "Base",
+   "orden": 6,
+   "componentes": [
+    "almacen",
+    "biblioteca",
+    "modo",
+    "pasarela",
+    "laboratorio"
+   ]
+  }
+ ],
+ "componentes": [
+  {
+   "id": "almacen",
+   "familia": "base",
+   "responsabilidad": "Guardar y leer el registro de tareas, decisiones, runs y revisiones",
+   "modulos": [
+    "almacen",
+    "redondeo"
+   ],
+   "pendiente": "cubierto por la paridad con Python; laboratorio en el borrador «Laboratorios de ejecución y observación»",
+   "ficha": {
+    "resumen": "Es el registro único (task_logs.db): todo lo que Karajan decide o ejecuta queda aquí para poder medirlo después.",
+    "como_funciona": {
+     "entradas": [
+      "Tarea clasificada",
+      "Decisión del delegador",
+      "Run de un agente",
+      "Revisión humana"
+     ],
+     "pasos": [
+      "Normaliza y redondea los valores",
+      "Escribe en SQLite con WAL",
+      "Indexa por tarea y fecha"
+     ],
+     "salidas": [
+      "task_logs.db",
+      "Lecturas para analítica y laboratorios"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "biblioteca",
+   "familia": "base",
+   "responsabilidad": "Dar la ficha de una skill (estrellas, repo, taxonomía) desde resources.db, en solo lectura",
+   "modulos": [
+    "biblioteca"
+   ],
+   "pendiente": null,
+   "ficha": {
+    "resumen": "Consulta resources.db y entrega la ficha de cada skill del equipo sin escribir nada.",
+    "como_funciona": {
+     "entradas": [
+      "Nombre de la skill",
+      "resources.db"
+     ],
+     "pasos": [
+      "Busca el recurso por nombre",
+      "Separa estrellas propias de heredadas",
+      "Añade el grupo de la taxonomía"
+     ],
+     "salidas": [
+      "Ficha de la skill",
+      "Cobertura del catálogo"
+     ]
+    }
+   },
+   "estado": "hallazgos",
+   "configuracion": {
+    "origen": "resources.db (solo lectura)",
+    "skills_del_equipo": 64
+   },
+   "escenarios": [
+    {
+     "id": "cobertura",
+     "tipo": "contrato",
+     "descripcion": "Fichas, estrellas propias y taxonomía de las skills que hay en el equipo",
+     "umbrales": {
+      "estrellas_heredadas": "≤ 0.3",
+      "sin_ficha": "≤ 20 %"
+     }
+    }
+   ],
+   "ultimas": [
+    {
+     "escenario": "cobertura",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 64,
+     "suficiente": true,
+     "hallazgos": 1,
+     "error": null,
+     "metricas": {
+      "con_ficha": 0.92,
+      "estrellas_propias": 0.56,
+      "estrellas_heredadas": 0.44,
+      "sin_grupo": 0.07
+     },
+     "ms": 31
+    }
+   ],
+   "historial": {
+    "con_ficha": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.86,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.88,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.9,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.92,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.92,
+      "suficiente": true,
+      "escenario": "cobertura"
+     }
+    ],
+    "estrellas_propias": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.52,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.54,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.55,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.55,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.56,
+      "suficiente": true,
+      "escenario": "cobertura"
+     }
+    ],
+    "estrellas_heredadas": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.48,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.46,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.45,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.45,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.44,
+      "suficiente": true,
+      "escenario": "cobertura"
+     }
+    ],
+    "sin_grupo": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.1,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.09,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.08,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.08,
+      "suficiente": true,
+      "escenario": "cobertura"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.07,
+      "suficiente": true,
+      "escenario": "cobertura"
+     }
+    ]
+   },
+   "detalle": {},
+   "hallazgos": [
+    {
+     "clave": "estrellas-heredadas",
+     "severidad": "media",
+     "titulo": "El 44 % de las estrellas son de la colección, no de la skill",
+     "evidencia": "26 de 59 fichas heredan las estrellas del repo contenedor.",
+     "propuesta": "Marcar las estrellas heredadas y no usarlas para ordenar o comparar skills."
+    }
+   ],
+   "operacion": null
+  },
+  {
+   "id": "modo",
+   "familia": "base",
+   "responsabilidad": "Bloquear cualquier cambio de configuración sin una tarea aceptada de Atlas dev",
+   "modulos": [
+    "modo",
+    "atlas-dev"
+   ],
+   "pendiente": "cubierto por tests unitarios (atlas/tests/modo.test.ts)",
+   "ficha": {
+    "resumen": "Guardián de producción: sin tarea aceptada, cualquier mutación de configuración responde 423.",
+    "como_funciona": {
+     "entradas": [
+      "modo.json",
+      "Tarea en la petición"
+     ],
+     "pasos": [
+      "Lee el modo",
+      "Consulta la tarea en Atlas dev",
+      "Acepta si está encolada o ejecutando"
+     ],
+     "salidas": [
+      "Paso libre",
+      "423 + borrador pedido"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "pasarela",
+   "familia": "base",
+   "responsabilidad": "Convertir los hallazgos en tareas borrador de Atlas dev, sin duplicar ni reabrir lo descartado",
+   "modulos": [
+    "pasarela-borradores"
+   ],
+   "pendiente": "cubierto por tests unitarios (atlas/tests/pasarela.test.ts)",
+   "ficha": {
+    "resumen": "Única salida de Karajan para proponer un cambio: hallazgo alto o medio, tarea borrador idempotente.",
+    "como_funciona": {
+     "entradas": [
+      "Hallazgos del laboratorio"
+     ],
+     "pasos": [
+      "Calcula la clave Origen",
+      "Comprueba borradores.json",
+      "Crea o actualiza el borrador"
+     ],
+     "salidas": [
+      "Tarea borrador en Atlas dev"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "laboratorio",
+   "familia": "base",
+   "responsabilidad": "Ejecutar los laboratorios sobre tareas anonimizadas y guardar sus resultados",
+   "modulos": [
+    "laboratorio",
+    "componentes"
+   ],
+   "pendiente": "es el propio motor (atlas/tests/laboratorio.test.ts)",
+   "ficha": {
+    "resumen": "Motor común: anonimiza las tareas, ejecuta los escenarios de cada componente y guarda las métricas.",
+    "como_funciona": {
+     "entradas": [
+      "Tareas de Atlas dev",
+      "Escenarios del componente"
+     ],
+     "pasos": [
+      "Anonimiza (hash con sal local)",
+      "Ejecuta cada escenario",
+      "Guarda en laboratorio.db"
+     ],
+     "salidas": [
+      "Resultados y hallazgos"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "clasificador",
+   "familia": "decision",
+   "responsabilidad": "Dar nivel, dominio, intención y subtareas a un prompt",
+   "modulos": [
+    "heuristica"
+   ],
+   "pendiente": null,
+   "ficha": {
+    "resumen": "Heurística que estima la complejidad (N1 a N5), el dominio y las subtareas de un prompt.",
+    "como_funciona": {
+     "entradas": [
+      "Prompt de la tarea"
+     ],
+     "pasos": [
+      "Extrae señales léxicas",
+      "Puntúa complejidad y dominio",
+      "Detecta subtareas"
+     ],
+     "salidas": [
+      "Nivel, dominio, intención, subtareas"
+     ]
+    }
+   },
+   "estado": "sin_ejecutar",
+   "configuracion": {
+    "niveles": [
+     "N1",
+     "N2",
+     "N3",
+     "N4",
+     "N5"
+    ],
+    "dominios": 12
+   },
+   "escenarios": [
+    {
+     "id": "frente-a-la-persona",
+     "tipo": "replay",
+     "descripcion": "Nivel y dominio del clasificador frente a los que anotó la persona en la hoja",
+     "umbrales": {
+      "muestra": "≥ 30 tareas con nivel anotado",
+      "nivel_exacto": "IC95 superior ≥ 0.6"
+     }
+    }
+   ],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": {
+    "tareas": 61,
+    "runs": 61,
+    "latencia_p50_ms": 6,
+    "coste_total_usd": 0,
+    "tokens": 0,
+    "ultima_actividad": "2026-10-24T08:30:00Z"
+   }
+  },
+  {
+   "id": "delegador",
+   "familia": "decision",
+   "responsabilidad": "Elegir el agente de cada subtarea según el perfil y sus reglas",
+   "modulos": [
+    "delegar",
+    "perfiles",
+    "reglas",
+    "perfil-texto"
+   ],
+   "pendiente": null,
+   "ficha": {
+    "resumen": "Aplica las reglas del perfil activo a cada subtarea y devuelve el agente con la regla que lo decidió.",
+    "como_funciona": {
+     "entradas": [
+      "Subtareas clasificadas",
+      "Perfil activo",
+      "Límites y agentes disponibles"
+     ],
+     "pasos": [
+      "Evalúa las reglas en orden",
+      "Aplica el nivel por defecto si ninguna casa",
+      "Comprueba disponibilidad y límites",
+      "Registra la decisión con su regla"
+     ],
+     "salidas": [
+      "Plan: agente por subtarea",
+      "Decisión trazable"
+     ]
+    },
+    "reglas": [
+     "Cada decisión sale de una regla del perfil",
+     "Una regla tapada por otra anterior nunca se aplica",
+     "Todo nivel debe tener un agente"
+    ]
+   },
+   "estado": "hallazgos",
+   "configuracion": {
+    "perfil": "equilibrado",
+    "agentes_disponibles": [
+     "claude-cli",
+     "codex"
+    ],
+    "niveles": {
+     "N1": "codex",
+     "N2": "codex",
+     "N3": "claude-cli",
+     "N4": "claude-cli",
+     "N5": "claude-cli"
+    },
+    "umbrales": {
+     "muestraMinima": 20,
+     "segmentoMinimo": 10
+    },
+    "reglas": 14
+   },
+   "escenarios": [
+    {
+     "id": "fidelidad",
+     "tipo": "contrato",
+     "descripcion": "Cada decisión sale de una regla del perfil; sin reglas tapadas ni niveles sin agente",
+     "umbrales": {
+      "trazabilidad": "= 1",
+      "muestra": "≥ 20 tareas para valorar reglas sin uso"
+     }
+    },
+    {
+     "id": "concordancia",
+     "tipo": "replay",
+     "descripcion": "A ciegas: el agente que elegiría Karajan frente al que eligió la persona",
+     "umbrales": {
+      "concordancia": "≥ 0.7"
+     }
+    },
+    {
+     "id": "adecuacion",
+     "tipo": "replay",
+     "descripcion": "Segmentos dominio × nivel donde el perfil discrepa de la persona y la persona acierta",
+     "umbrales": {
+      "segmento": "n ≥ 10",
+      "discrepancia": "IC95 inferior > 0.3"
+     }
+    },
+    {
+     "id": "determinismo",
+     "tipo": "contrato",
+     "descripcion": "El mismo prompt produce el mismo plan; las tareas en auto repiten su elección",
+     "umbrales": {
+      "estabilidad": "= 1"
+     }
+    }
+   ],
+   "ultimas": [
+    {
+     "escenario": "fidelidad",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 42,
+     "suficiente": true,
+     "hallazgos": 1,
+     "error": null,
+     "metricas": {
+      "decisiones": 42,
+      "trazabilidad": 1,
+      "reglas_activas": 14,
+      "reglas_tapadas": 1,
+      "reglas_sin_uso": 3,
+      "niveles_sin_agente": 0
+     },
+     "ms": 38
+    },
+    {
+     "escenario": "concordancia",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 31,
+     "suficiente": true,
+     "hallazgos": 0,
+     "error": null,
+     "metricas": {
+      "concordancia": 0.74,
+      "concordancia_ic_inf": 0.61,
+      "concordancia_ic_sup": 0.85
+     },
+     "ms": 210
+    },
+    {
+     "escenario": "adecuacion",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 31,
+     "suficiente": true,
+     "hallazgos": 0,
+     "error": null,
+     "metricas": {
+      "segmentos": 9,
+      "segmentos_evaluables": 5,
+      "segmentos_inadecuados": 1
+     },
+     "ms": 120
+    },
+    {
+     "escenario": "determinismo",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 42,
+     "suficiente": true,
+     "hallazgos": 0,
+     "error": null,
+     "metricas": {
+      "estabilidad": 1,
+      "auto_n": 12,
+      "auto_igual_que_entonces": 0.92
+     },
+     "ms": 64
+    }
+   ],
+   "historial": {
+    "trazabilidad": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     }
+    ],
+    "reglas_tapadas": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     }
+    ],
+    "reglas_sin_uso": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 5,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 4,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 4,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 3,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 3,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     }
+    ],
+    "decisiones": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 18,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 26,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 33,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 38,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 42,
+      "suficiente": true,
+      "escenario": "fidelidad"
+     }
+    ],
+    "concordancia": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.62,
+      "suficiente": false,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.66,
+      "suficiente": false,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.69,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.72,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.74,
+      "suficiente": true,
+      "escenario": "concordancia"
+     }
+    ],
+    "concordancia_ic_inf": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.41,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.46,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.52,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.58,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.61,
+      "suficiente": true,
+      "escenario": "concordancia"
+     }
+    ],
+    "segmentos_inadecuados": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     }
+    ],
+    "segmentos_evaluables": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 2,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 3,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 4,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 5,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 5,
+      "suficiente": true,
+      "escenario": "adecuacion"
+     }
+    ],
+    "estabilidad": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "determinismo"
+     }
+    ],
+    "auto_igual_que_entonces": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.8,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.85,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.9,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.92,
+      "suficiente": true,
+      "escenario": "determinismo"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.92,
+      "suficiente": true,
+      "escenario": "determinismo"
+     }
+    ]
+   },
+   "detalle": {
+    "fidelidad": {
+     "perfil": "equilibrado",
+     "reglas": [
+      {
+       "regla": "N5 → claude",
+       "casa": 9,
+       "elegida": 9
+      },
+      {
+       "regla": "diseño → claude",
+       "casa": 11,
+       "elegida": 8
+      },
+      {
+       "regla": "infra → codex",
+       "casa": 7,
+       "elegida": 7
+      },
+      {
+       "regla": "N1–N2 → codex",
+       "casa": 14,
+       "elegida": 12
+      },
+      {
+       "regla": "revisión → claude",
+       "casa": 6,
+       "elegida": 0
+      },
+      {
+       "regla": "datos → codex",
+       "casa": 0,
+       "elegida": 0
+      }
+     ]
+    },
+    "concordancia": {
+     "matriz_humano_vs_karajan": {
+      "claude-cli": {
+       "claude-cli": 14,
+       "codex": 4
+      },
+      "codex": {
+       "claude-cli": 4,
+       "codex": 9
+      }
+     },
+     "por_segmento": {
+      "backend×N3": {
+       "n": 8,
+       "iguales": 7,
+       "concordancia": 0.875
+      },
+      "frontend×N3": {
+       "n": 6,
+       "iguales": 3,
+       "concordancia": 0.5
+      },
+      "infra×N2": {
+       "n": 7,
+       "iguales": 6,
+       "concordancia": 0.857
+      },
+      "docs×N1": {
+       "n": 5,
+       "iguales": 4,
+       "concordancia": 0.8
+      },
+      "datos×N4": {
+       "n": 5,
+       "iguales": 3,
+       "concordancia": 0.6
+      }
+     }
+    },
+    "adecuacion": {
+     "segmentos": {
+      "frontend×N3": {
+       "n": 6,
+       "discrepa": 3,
+       "discrepa_y_acierta_persona": 3
+      }
+     }
+    }
+   },
+   "hallazgos": [
+    {
+     "clave": "regla-tapada:revision",
+     "severidad": "media",
+     "titulo": "La regla «revisión → claude» está tapada por «N5 → claude»",
+     "evidencia": "Casa 6 veces y no se elige nunca: otra regla anterior decide antes.",
+     "propuesta": "Mover la regla de revisión antes de la de N5 o fusionarlas en el perfil «equilibrado».",
+     "borrador": "Perfil equilibrado v2\n  - revisión → claude (prioridad 2)\n  - N5 → claude (prioridad 3)"
+    }
+   ],
+   "operacion": {
+    "tareas": 42,
+    "runs": 61,
+    "latencia_p50_ms": 38,
+    "coste_total_usd": 0,
+    "tokens": 0,
+    "ultima_actividad": "2026-10-24T08:30:00Z"
+   }
+  },
+  {
+   "id": "selector",
+   "familia": "decision",
+   "responsabilidad": "Elegir las skills que necesita un prompt",
+   "modulos": [
+    "skills-seleccion"
+   ],
+   "pendiente": null,
+   "ficha": {
+    "resumen": "Puntúa cada skill del catálogo frente al prompt y se queda con las mejores; las nombradas salen siempre.",
+    "como_funciona": {
+     "entradas": [
+      "Prompt",
+      "Catálogo de skills instaladas"
+     ],
+     "pasos": [
+      "Detecta skills nombradas",
+      "Puntúa con pesos (nombre, descripción, palabras)",
+      "Ordena y corta en el top 3"
+     ],
+     "salidas": [
+      "Skills recomendadas"
+     ]
+    }
+   },
+   "estado": "ok",
+   "configuracion": {
+    "top": 3,
+    "pesos": {
+     "nombre": 3,
+     "descripcion": 1.5,
+     "palabras": 1,
+     "uso_previo": 0.5
+    },
+    "skills_en_catalogo": 64
+   },
+   "escenarios": [
+    {
+     "id": "explicitas",
+     "tipo": "contrato",
+     "descripcion": "Toda skill instalada sale si se nombra en el prompt",
+     "umbrales": {
+      "no_seleccionables": "= 0"
+     }
+    },
+    {
+     "id": "concordancia",
+     "tipo": "replay",
+     "descripcion": "A ciegas: las skills que elegiría Karajan frente a las que la persona dio por buenas",
+     "umbrales": {
+      "muestra": "≥ 30 casos con verdad humana",
+      "f1": "≥ 0.5"
+     }
+    },
+    {
+     "id": "calibracion",
+     "tipo": "feedback",
+     "descripcion": "Busca pesos mejores con validación cruzada; solo los propone si mejoran en datos no vistos",
+     "umbrales": {
+      "mejora_f1": "≥ 0.05"
+     }
+    }
+   ],
+   "ultimas": [
+    {
+     "escenario": "explicitas",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 64,
+     "suficiente": true,
+     "hallazgos": 0,
+     "error": null,
+     "metricas": {
+      "skills": 64,
+      "no_seleccionables": 0,
+      "sin_descripcion": 3
+     },
+     "ms": 44
+    },
+    {
+     "escenario": "concordancia",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 47,
+     "suficiente": true,
+     "hallazgos": 0,
+     "error": null,
+     "metricas": {
+      "hit1": 0.62,
+      "precision3": 0.48,
+      "recall3": 0.64,
+      "f1": 0.55,
+      "falsos_positivos": 0.25
+     },
+     "ms": 520
+    },
+    {
+     "escenario": "calibracion",
+     "inicio": "2026-10-24T08:30:00Z",
+     "muestra": 47,
+     "suficiente": true,
+     "hallazgos": 0,
+     "error": null,
+     "metricas": {
+      "f1_actual": 0.55,
+      "f1_calibrado": 0.6,
+      "hit1_actual": 0.62,
+      "hit1_calibrado": 0.64,
+      "mejora_f1": 0.05
+     },
+     "ms": 3100
+    }
+   ],
+   "historial": {
+    "skills": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 58,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 60,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 62,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 64,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 64,
+      "suficiente": true,
+      "escenario": "explicitas"
+     }
+    ],
+    "no_seleccionables": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 1,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0,
+      "suficiente": true,
+      "escenario": "explicitas"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0,
+      "suficiente": true,
+      "escenario": "explicitas"
+     }
+    ],
+    "hit1": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.52,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.55,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.58,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.6,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.62,
+      "suficiente": true,
+      "escenario": "concordancia"
+     }
+    ],
+    "precision3": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.41,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.44,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.45,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.47,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.48,
+      "suficiente": true,
+      "escenario": "concordancia"
+     }
+    ],
+    "recall3": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.55,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.58,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.6,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.63,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.64,
+      "suficiente": true,
+      "escenario": "concordancia"
+     }
+    ],
+    "f1": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.47,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.5,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.51,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.54,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.55,
+      "suficiente": true,
+      "escenario": "concordancia"
+     }
+    ],
+    "falsos_positivos": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.31,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.29,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.27,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.26,
+      "suficiente": true,
+      "escenario": "concordancia"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.25,
+      "suficiente": true,
+      "escenario": "concordancia"
+     }
+    ],
+    "f1_actual": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.47,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.5,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.51,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.54,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.55,
+      "suficiente": true,
+      "escenario": "calibracion"
+     }
+    ],
+    "f1_calibrado": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.5,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.53,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.54,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.58,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.6,
+      "suficiente": true,
+      "escenario": "calibracion"
+     }
+    ],
+    "mejora_f1": [
+     {
+      "inicio": "2026-10-20T09:12:00Z",
+      "valor": 0.03,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-21T16:40:00Z",
+      "valor": 0.03,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-22T10:05:00Z",
+      "valor": 0.03,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-23T18:22:00Z",
+      "valor": 0.04,
+      "suficiente": true,
+      "escenario": "calibracion"
+     },
+     {
+      "inicio": "2026-10-24T08:30:00Z",
+      "valor": 0.05,
+      "suficiente": true,
+      "escenario": "calibracion"
+     }
+    ]
+   },
+   "detalle": {
+    "concordancia": {
+     "fuentes": {
+      "calibracion": 11,
+      "revision": 14,
+      "hoja": 22
+     }
+    }
+   },
+   "hallazgos": [],
+   "operacion": {
+    "tareas": 47,
+    "runs": 47,
+    "latencia_p50_ms": 12,
+    "coste_total_usd": 0,
+    "tokens": 0,
+    "ultima_actividad": "2026-10-24T08:30:00Z"
+   }
+  },
+  {
+   "id": "rotador",
+   "familia": "decision",
+   "responsabilidad": "Dejar instaladas solo las skills que se usan y guardar el resto en el almacén",
+   "modulos": [
+    "rotador"
+   ],
+   "pendiente": "borrador «Laboratorio del rotador»",
+   "ficha": {
+    "resumen": "Mantiene tres niveles: núcleo (siempre), frecuente e instantánea (bajo demanda).",
+    "como_funciona": {
+     "entradas": [
+      "Uso de skills",
+      "Espacio disponible"
+     ],
+     "pasos": [
+      "Calcula el uso reciente",
+      "Clasifica en núcleo, frecuente, instantánea",
+      "Mueve las que sobran al almacén"
+     ],
+     "salidas": [
+      "Skills instaladas",
+      "Skills guardadas"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "etiquetas",
+   "familia": "decision",
+   "responsabilidad": "Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente",
+   "modulos": [],
+   "pendiente": "vive en atlas-dev (server/src/tareas/formato.ts): borrador «Componente etiquetas»",
+   "ficha": {
+    "resumen": "Prepara el encabezado del prompt para que el agente sepa a qué tarea pertenece.",
+    "como_funciona": {
+     "entradas": [
+      "Tarea de Atlas dev"
+     ],
+     "pasos": [
+      "Compone la cabecera",
+      "Añade el glosario"
+     ],
+     "salidas": [
+      "Prompt con cabecera"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "proveedores",
+   "familia": "ejecucion",
+   "responsabilidad": "Lanzar Claude Code, Codex o Qwen y devolver su salida",
+   "modulos": [
+    "proveedores"
+   ],
+   "pendiente": "borrador «Laboratorios de ejecución y observación»",
+   "ficha": {
+    "resumen": "Adaptadores de cada agente de línea de comandos.",
+    "como_funciona": {
+     "entradas": [
+      "Plan con el agente elegido",
+      "Prompt final"
+     ],
+     "pasos": [
+      "Construye el comando",
+      "Lanza el proceso",
+      "Captura salida y código"
+     ],
+     "salidas": [
+      "Salida del agente",
+      "Run registrado"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": {
+    "tareas": 61,
+    "runs": 74,
+    "latencia_p50_ms": 41200,
+    "coste_total_usd": 12.84,
+    "tokens": 2380000,
+    "ultima_actividad": "2026-10-24T08:30:00Z"
+   }
+  },
+  {
+   "id": "limites",
+   "familia": "ejecucion",
+   "responsabilidad": "Decir si Claude ha pasado su umbral de uso semanal",
+   "modulos": [
+    "limites"
+   ],
+   "pendiente": "borrador «Laboratorios de ejecución y observación»",
+   "ficha": {
+    "resumen": "Lee el consumo semanal y avisa al delegador cuando Claude está cerca del límite.",
+    "como_funciona": {
+     "entradas": [
+      "Uso semanal"
+     ],
+     "pasos": [
+      "Compara con el umbral"
+     ],
+     "salidas": [
+      "Disponible o no disponible"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "aislamiento",
+   "familia": "ejecucion",
+   "responsabilidad": "Trabajar cada tarea en su worktree y rama agente/<id>",
+   "modulos": [
+    "aislar-git"
+   ],
+   "pendiente": "borrador «Laboratorios de ejecución y observación»",
+   "ficha": {
+    "resumen": "Cada tarea corre en un worktree aparte, para no pisar el repositorio principal.",
+    "como_funciona": {
+     "entradas": [
+      "Repositorio",
+      "Id de la tarea"
+     ],
+     "pasos": [
+      "Crea la rama agente/<id>",
+      "Crea el worktree"
+     ],
+     "salidas": [
+      "Ruta aislada"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "analitica",
+   "familia": "observacion",
+   "responsabilidad": "Contar skills recomendadas, preparadas y usadas",
+   "modulos": [
+    "analitica",
+    "catalogo"
+   ],
+   "pendiente": "borrador «Laboratorios de ejecución y observación»",
+   "ficha": {
+    "resumen": "Cruza lo recomendado con lo preparado y lo usado de verdad.",
+    "como_funciona": {
+     "entradas": [
+      "Decisiones",
+      "Runs",
+      "Catálogo"
+     ],
+     "pasos": [
+      "Agrega por skill",
+      "Calcula uso y aciertos"
+     ],
+     "salidas": [
+      "Estadísticas de skills"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "produccion",
+   "familia": "observacion",
+   "responsabilidad": "Medir acierto, re-trabajo, eficiencia y «qué mejorar»",
+   "modulos": [
+    "produccion"
+   ],
+   "pendiente": "borrador «Laboratorios de ejecución y observación»",
+   "ficha": {
+    "resumen": "Convierte tareas terminadas en métricas de acierto, re-trabajo y eficiencia.",
+    "como_funciona": {
+     "entradas": [
+      "Tareas terminadas",
+      "Revisiones"
+     ],
+     "pasos": [
+      "Detecta re-trabajo",
+      "Agrega por agente"
+     ],
+     "salidas": [
+      "Acierto y eficiencia",
+      "Qué mejorar"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "curador",
+   "familia": "modificadores",
+   "responsabilidad": "Proponer qué skills sobran en la biblioteca con reglas inequívocas",
+   "modulos": [],
+   "pendiente": "borrador «Componente curador»",
+   "ficha": {
+    "resumen": "Propondrá retirar skills duplicadas o sin uso con reglas explícitas.",
+    "como_funciona": {
+     "entradas": [
+      "Biblioteca",
+      "Analítica"
+     ],
+     "pasos": [
+      "Aplica reglas inequívocas"
+     ],
+     "salidas": [
+      "Propuestas de retirada"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "comparador",
+   "familia": "modificadores",
+   "responsabilidad": "Comparar cada skill (y Karajan) con las mejores de su grupo",
+   "modulos": [],
+   "pendiente": "borrador «Componente comparador»",
+   "ficha": {
+    "resumen": "Comparará cada skill con sus pares de la taxonomía.",
+    "como_funciona": {
+     "entradas": [
+      "Biblioteca"
+     ],
+     "pasos": [
+      "Agrupa por taxonomía",
+      "Compara"
+     ],
+     "salidas": [
+      "Ranking por grupo"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "eficiencia",
+   "familia": "modificadores",
+   "responsabilidad": "Aplicar ponytail (mínimo código suficiente) a lo que se delega",
+   "modulos": [],
+   "pendiente": "borrador «Familia de modificadores»",
+   "ficha": {
+    "resumen": "Modificador del prompt: pide la solución mínima y suficiente.",
+    "como_funciona": {
+     "entradas": [
+      "Prompt"
+     ],
+     "pasos": [
+      "Añade la instrucción"
+     ],
+     "salidas": [
+      "Prompt modificado"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "metodo",
+   "familia": "modificadores",
+   "responsabilidad": "Aplicar el método de superpowers (TDD, planes, worktrees)",
+   "modulos": [],
+   "pendiente": "borrador «Familia de modificadores»",
+   "ficha": {
+    "resumen": "Modificador de método para tareas N3 a N5.",
+    "como_funciona": {
+     "entradas": [
+      "Prompt",
+      "Nivel"
+     ],
+     "pasos": [
+      "Selecciona el método"
+     ],
+     "salidas": [
+      "Prompt con método"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "prompts",
+   "familia": "modificadores",
+   "responsabilidad": "Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)",
+   "modulos": [],
+   "pendiente": "borrador «Familia de modificadores»",
+   "ficha": {
+    "resumen": "Optimización programática del prompt con evaluación.",
+    "como_funciona": {
+     "entradas": [
+      "Prompt"
+     ],
+     "pasos": [
+      "Optimiza",
+      "Evalúa"
+     ],
+     "salidas": [
+      "Prompt optimizado"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "api",
+   "familia": "interfaz",
+   "responsabilidad": "Exponer Karajan a Atlas dev (rutas del paquete)",
+   "modulos": [
+    "servidor"
+   ],
+   "pendiente": "cubierto por los laboratorios de cada componente",
+   "ficha": {
+    "resumen": "Rutas HTTP del paquete dentro de Atlas dev.",
+    "como_funciona": {
+     "entradas": [
+      "Peticiones de Atlas dev"
+     ],
+     "pasos": [
+      "Valida la petición",
+      "Llama al componente"
+     ],
+     "salidas": [
+      "Respuesta JSON"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  },
+  {
+   "id": "cli",
+   "familia": "interfaz",
+   "responsabilidad": "Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas",
+   "modulos": [
+    "cli"
+   ],
+   "pendiente": "cubierto por atlas/tests/cli.test.ts",
+   "ficha": {
+    "resumen": "kj: componentes, laboratorios, historial y gráficas.",
+    "como_funciona": {
+     "entradas": [
+      "Comando kj"
+     ],
+     "pasos": [
+      "Interpreta el comando",
+      "Ejecuta"
+     ],
+     "salidas": [
+      "Texto o JSON"
+     ]
+    }
+   },
+   "estado": "pendiente",
+   "configuracion": {},
+   "escenarios": [],
+   "ultimas": [],
+   "historial": {},
+   "detalle": {},
+   "hallazgos": [],
+   "operacion": null
+  }
+ ],
+ "enlaces": [
+  {
+   "de": "api",
+   "a": "clasificador"
+  },
+  {
+   "de": "api",
+   "a": "laboratorio"
+  },
+  {
+   "de": "cli",
+   "a": "laboratorio"
+  },
+  {
+   "de": "clasificador",
+   "a": "delegador",
+   "etiqueta": "subtareas"
+  },
+  {
+   "de": "clasificador",
+   "a": "selector"
+  },
+  {
+   "de": "delegador",
+   "a": "proveedores",
+   "etiqueta": "plan"
+  },
+  {
+   "de": "delegador",
+   "a": "aislamiento"
+  },
+  {
+   "de": "limites",
+   "a": "delegador"
+  },
+  {
+   "de": "selector",
+   "a": "rotador"
+  },
+  {
+   "de": "biblioteca",
+   "a": "selector"
+  },
+  {
+   "de": "etiquetas",
+   "a": "proveedores"
+  },
+  {
+   "de": "proveedores",
+   "a": "produccion",
+   "etiqueta": "runs"
+  },
+  {
+   "de": "produccion",
+   "a": "analitica"
+  },
+  {
+   "de": "almacen",
+   "a": "produccion"
+  },
+  {
+   "de": "laboratorio",
+   "a": "pasarela",
+   "etiqueta": "hallazgos"
+  },
+  {
+   "de": "modo",
+   "a": "pasarela"
+  },
+  {
+   "de": "prompts",
+   "a": "delegador"
+  },
+  {
+   "de": "eficiencia",
+   "a": "delegador"
+  },
+  {
+   "de": "curador",
+   "a": "biblioteca"
+  },
+  {
+   "de": "comparador",
+   "a": "biblioteca"
+  }
+ ]
+}

@@ -21,7 +21,9 @@ Funciona como un procesador por capas. Cada componente tiene **una sola responsa
 └ Base ───────────── almacén · biblioteca · modo · pasarela · laboratorio
 ```
 
-- La declaración vive en `atlas/src/componentes.ts`: id, capa, responsabilidad, módulos y laboratorio, o `pendiente` si aún no lo tiene. `kj componentes` la pinta con el estado del último laboratorio de cada uno.
+- La declaración vive en `atlas/src/componentes.ts`: id, capa (= `familia`, con su `orden` de pintado), responsabilidad, módulos y laboratorio, o `pendiente` si aún no lo tiene. `kj componentes` la pinta con el estado del último laboratorio de cada uno.
+- `ENLACES` (mismo fichero) declara el flujo de datos entre componentes (`clasificador → delegador → proveedores`, `modo → pasarela`…), solo lo que el código respalda; los que traerá un borrador llevan `previsto`. El test de arquitectura comprueba que sus extremos existen.
+- `atlas/src/fichas-componentes.ts` guarda la ficha de cada uno (resumen, entradas → pasos → salidas con el fichero que implementa cada paso, reglas y configuración viva). `especificado: false` marca los que aún no tienen código.
 - El test `atlas/tests/arquitectura.test.ts` hace cumplir la responsabilidad única:
   - cada módulo de `src/` pertenece a un solo componente;
   - cada componente tiene laboratorio o dice qué borrador lo trae;
@@ -128,3 +130,17 @@ Estrellas: «propias» si la ficha es del repo; «heredadas» si la skill está 
 | Familia de modificadores (eficiencia, método y prompts), cada uno con su laboratorio A/B y feedback humano | karajan |
 | Laboratorios de ejecución y observación (almacén, proveedores, límites, aislamiento, analítica, producción) | karajan |
 | Retirar el dashboard Python y exportar gráficas a SVG/HTML desde `kj` | karajan |
+
+## 8. Ventana de Atlas dev
+
+La ventana «Arquitectura» de Atlas dev se alimenta de dos rutas de solo lectura (`atlas/src/arquitectura.ts`; no escriben nada y no lanzan: una fuente que falla deja su campo a `null` y lo anota en `avisos` del componente).
+
+| Ruta | Qué da |
+|---|---|
+| `GET /laboratorio/arquitectura` | Todo el contrato: `{version_contrato, version, modo, generado, familias[], componentes[], enlaces[]}` |
+| `GET /laboratorio/arquitectura/:id` | Un componente con el `historial` completo (hasta 500 puntos por métrica) y el `detalle` dentro de cada `ultima`; 404 si no existe |
+
+Cada componente trae: `id`, `familia`, `responsabilidad`, `modulos`, `estado` (`ok` · `hallazgos` · `sin_ejecutar` · `pendiente` · `error`, con la lógica de `estadoDe` de `cli.ts`), `muestra_corta`, `pendiente`, `ficha`, `configuracion` (la viva), `escenarios` (con los umbrales de la última ejecución), `ultimas`, `historial` (por métrica, las últimas 30 ejecuciones, de más antigua a más reciente, sin valores nulos), `detalle` (por escenario, de su última ejecución), `hallazgos` (con su borrador y el estado que tiene en Atlas dev), `operacion` (tareas, runs, latencia p50, coste, tokens y última actividad desde `task_logs.db`, más un `extra` propio de cada componente) y `avisos`.
+
+**Ejecutar desde la ventana y el proxy de Atlas dev.** El proxy del paquete (`server/src/paquetes/rutas.ts`, en atlas-dev) solo reenvía las cabeceras `content-type` y `accept`, así que `x-karajan-tarea` no llega al paquete. Por eso la ventana manda el id de la tarea **en el cuerpo**: `{"componente": "delegador", "proponer": false, "tarea": "<id>"}`. El guardián de modo (`Guardian.tareaDe`) acepta el id indistintamente en la cabecera o en `body.tarea`; la cabecera tiene prioridad. `POST /laboratorio/ejecutar` no cambia configuración y no pasa por el guardián, pero el resto de mutaciones (`PUT /routing-layout`, presets, `desde-texto` con `aplicar`, `skills/rotar` con `aplicar`) sí, y con el id en el cuerpo funcionan igual a través del proxy. La ventana manda `proponer: false` para que ejecutar solo mida (sin ese campo, el servidor sí propone los hallazgos `alta|media` como borradores).
+

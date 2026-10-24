@@ -104,7 +104,8 @@ CREATE TABLE IF NOT EXISTS calibracion (id INTEGER PRIMARY KEY AUTOINCREMENT, ta
   respuesta TEXT NOT NULL CHECK(respuesta IN ('si','no','sin_revisar')), correccion_json TEXT NOT NULL, creada TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_calibracion ON calibracion(componente, creada);`;
 
-export interface Ejecucion { id: number; componente: string; escenario: string; tipo: string; version: string; inicio: string; ms: number; muestra: number; suficiente: boolean; metricas: Record<string, number | null>; hallazgos: Hallazgo[]; detalle: unknown; error: string | null }
+export interface Ejecucion { id: number; componente: string; escenario: string; tipo: string; version: string; inicio: string; ms: number; muestra: number; suficiente: boolean; metricas: Record<string, number | null>; hallazgos: Hallazgo[]; detalle: unknown; error: string | null;
+  /** Umbrales con los que se juzgó el escenario (no existe en ejecuciones anteriores a que se guardaran). */ umbrales?: Record<string, string> | null }
 
 export class RegistroLab {
   private readonly db: DatabaseSync;
@@ -113,12 +114,15 @@ export class RegistroLab {
     this.db = new DatabaseSync(ruta);
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec(ESQUEMA);
+    // Migración: los umbrales de cada ejecución se guardan desde que la ventana de arquitectura los muestra.
+    const columnas = (this.db.prepare('PRAGMA table_info(lab_ejecuciones)').all() as { name: string }[]).map((c) => c.name);
+    if (!columnas.includes('umbrales_json')) this.db.exec('ALTER TABLE lab_ejecuciones ADD COLUMN umbrales_json TEXT');
   }
   cerrar(): void { try { this.db.close(); } catch { /* ya cerrada */ } }
 
   guardar(e: Omit<Ejecucion, 'id'>): void {
-    this.db.prepare(`INSERT INTO lab_ejecuciones (componente, escenario, tipo, version, inicio, ms, muestra, suficiente, metricas_json, hallazgos_json, detalle_json, error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(e.componente, e.escenario, e.tipo, e.version, e.inicio, e.ms, e.muestra, e.suficiente ? 1 : 0, JSON.stringify(e.metricas), JSON.stringify(e.hallazgos), e.detalle === undefined ? null : JSON.stringify(e.detalle), e.error);
+    this.db.prepare(`INSERT INTO lab_ejecuciones (componente, escenario, tipo, version, inicio, ms, muestra, suficiente, metricas_json, hallazgos_json, detalle_json, error, umbrales_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(e.componente, e.escenario, e.tipo, e.version, e.inicio, e.ms, e.muestra, e.suficiente ? 1 : 0, JSON.stringify(e.metricas), JSON.stringify(e.hallazgos), e.detalle === undefined ? null : JSON.stringify(e.detalle), e.error, e.umbrales ? JSON.stringify(e.umbrales) : null);
   }
 
   ejecuciones(componente?: string, limite = 200): Ejecucion[] {
@@ -129,6 +133,7 @@ export class RegistroLab {
       id: Number(f['id']), componente: String(f['componente']), escenario: String(f['escenario']), tipo: String(f['tipo']), version: String(f['version']), inicio: String(f['inicio']),
       ms: Number(f['ms']), muestra: Number(f['muestra']), suficiente: f['suficiente'] === 1, metricas: JSON.parse(String(f['metricas_json'])) as Record<string, number | null>,
       hallazgos: JSON.parse(String(f['hallazgos_json'])) as Hallazgo[], detalle: f['detalle_json'] ? JSON.parse(String(f['detalle_json'])) : null, error: (f['error'] as string | null) ?? null,
+      umbrales: f['umbrales_json'] ? JSON.parse(String(f['umbrales_json'])) as Record<string, string> : null,
     }));
   }
 
@@ -159,7 +164,7 @@ export async function ejecutarLaboratorio<C>(componente: { id: string; version: 
     try { r = await esc.ejecutar(ctx); } catch (e) { error = String((e as Error).message ?? e).slice(0, 500); }
     const fila = {
       escenario: esc.id, tipo: esc.tipo, inicio: inicio.toISOString(), ms: Math.round(performance.now() - t0), muestra: r.muestra, suficiente: r.suficiente,
-      metricas: r.metricas, hallazgos: r.hallazgos, detalle: r.detalle ?? null, error,
+      metricas: r.metricas, hallazgos: r.hallazgos, detalle: r.detalle ?? null, error, umbrales: r.umbrales ?? null,
     };
     registro.guardar({ componente: componente.id, version: componente.version, ...fila });
     const propuestas: Propuesto[] = [];

@@ -160,6 +160,31 @@ export class Almacen {
     return salida;
   }
 
+  /**
+   * Resumen de actividad para la ventana de arquitectura (solo lectura, todo agregado en SQL): tareas, decisiones por fase,
+   * decisiones de git/skills y runs por proveedor (con las latencias recientes para la mediana). No lanza: una tabla que falte da ceros.
+   */
+  resumenOperacion() {
+    const n = (v: unknown) => Number(v ?? 0);
+    const t = this.todas(`SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN delegation_json IS NOT NULL THEN 1 ELSE 0 END),0) AS delegadas, MAX(created_at) AS creada, MAX(updated_at) AS actualizada FROM tasks`)[0] ?? {};
+    const fases = Object.fromEntries(this.todas('SELECT phase, COUNT(*) AS c, COUNT(DISTINCT task_id) AS t, MAX(created_at) AS ultima FROM decisions GROUP BY phase')
+      .map((f) => [String(f['phase']), { n: n(f['c']), tareas: n(f['t']), ultima: (f['ultima'] as string | null) ?? null }]));
+    const grupo = (patron: string) => {
+      const f = this.todas('SELECT COUNT(*) AS c, COUNT(DISTINCT task_id) AS t, MAX(created_at) AS ultima FROM decisions WHERE decision LIKE ?', patron)[0] ?? {};
+      return { n: n(f['c']), tareas: n(f['t']), ultima: (f['ultima'] as string | null) ?? null };
+    };
+    const proveedores = this.todas(`SELECT provider_name AS p, COUNT(*) AS c, SUM(CASE WHEN status = 'failed' OR error IS NOT NULL THEN 1 ELSE 0 END) AS fallos, COALESCE(SUM(estimated_cost_usd),0) AS coste,
+      COALESCE(SUM(input_tokens),0) AS entrada, COALESCE(SUM(output_tokens),0) AS salida, MAX(started_at) AS ultima FROM runs WHERE provider_name IS NOT NULL GROUP BY provider_name ORDER BY c DESC`)
+      .map((f) => ({ proveedor: String(f['p']), runs: n(f['c']), fallos: n(f['fallos']), coste_usd: redondear(n(f['coste']), 5), tokens_entrada: n(f['entrada']), tokens_salida: n(f['salida']), ultima: (f['ultima'] as string | null) ?? null }));
+    const latencias = this.todas('SELECT latency_ms AS l FROM runs WHERE latency_ms IS NOT NULL ORDER BY started_at DESC LIMIT 5000').map((f) => n(f['l'])).sort((a, b) => a - b);
+    const p50 = latencias.length ? Math.round(latencias.length % 2 ? latencias[(latencias.length - 1) / 2]! : (latencias[latencias.length / 2 - 1]! + latencias[latencias.length / 2]!) / 2) : null;
+    const historial = this.todas('SELECT COUNT(*) AS c, MAX(timestamp) AS ultima FROM metrics_history')[0] ?? {};
+    return {
+      tareas: { total: n(t['total']), delegadas: n(t['delegadas']), ultima_creada: (t['creada'] as string | null) ?? null, ultima_actualizada: (t['actualizada'] as string | null) ?? null },
+      fases, git: grupo('git:%'), skills: grupo('skill:%'), proveedores, latencia_p50_ms: p50, metrics_history: { filas: n(historial['c']), ultima: (historial['ultima'] as string | null) ?? null },
+    };
+  }
+
   /** La entrada de `produccion.ts`, igual que `produccion_datos.tareas_planas` en Python. */
   tareasPlanas(): TareaAnalitica[] {
     const revisiones = this.revisiones();

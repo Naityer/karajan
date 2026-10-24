@@ -1,0 +1,24 @@
+/* Tokens de Atlas dev copiados de web/src/styles/globals.css, solo para el arnés. */
+:root {
+  --atlas-bg: 255 253 248; --atlas-surface: 240 233 220; --atlas-raised: 255 255 255; --atlas-border: 207 192 168; --atlas-border-strong: 172 151 122;
+  --atlas-text: 46 38 32; --atlas-text-muted: 108 94 82; --atlas-text-subtle: 158 144 130; --atlas-heading: 62 39 35;
+  --atlas-accent: 109 76 65; --atlas-accent-soft: 237 226 212; --atlas-accent-contrast: 255 255 255; --atlas-ring: 109 76 65;
+  --atlas-success: 26 127 69; --atlas-success-soft: 227 243 233; --atlas-warning: 180 83 9; --atlas-warning-soft: 251 240 220; --atlas-danger: 185 28 28; --atlas-danger-soft: 252 232 232;
+  --atlas-hue-musgo: 85 114 41; --atlas-hue-musgo-soft: 235 236 223; --atlas-hue-cobre: 159 86 41; --atlas-hue-cobre-soft: 243 233 223;
+  --atlas-hue-mostaza: 133 100 0; --atlas-hue-mostaza-soft: 240 235 218; --atlas-hue-lago: 23 111 128; --atlas-hue-lago-soft: 227 236 234;
+  --atlas-hue-vino: 161 58 85; --atlas-hue-vino-soft: 244 230 228; --atlas-hue-lavanda: 102 87 168; --atlas-hue-lavanda-soft: 237 233 238;
+}
+.dark {
+  --atlas-bg: 26 24 22; --atlas-surface: 36 32 29; --atlas-raised: 47 42 37; --atlas-border: 58 52 45; --atlas-border-strong: 82 73 64;
+  --atlas-text: 227 222 215; --atlas-text-muted: 160 151 144; --atlas-text-subtle: 121 113 107; --atlas-heading: 245 236 227;
+  --atlas-accent: 200 161 128; --atlas-accent-soft: 58 46 36; --atlas-accent-contrast: 31 23 18; --atlas-ring: 200 161 128;
+  --atlas-success: 92 191 126; --atlas-success-soft: 28 42 33; --atlas-warning: 224 164 88; --atlas-warning-soft: 51 40 26; --atlas-danger: 248 113 113; --atlas-danger-soft: 58 34 34;
+  --atlas-hue-musgo: 157 181 107; --atlas-hue-musgo-soft: 47 49 36; --atlas-hue-cobre: 208 138 91; --atlas-hue-cobre-soft: 55 42 33;
+  --atlas-hue-mostaza: 224 184 79; --atlas-hue-mostaza-soft: 58 50 31; --atlas-hue-lago: 79 167 184; --atlas-hue-lago-soft: 34 47 48;
+  --atlas-hue-vino: 203 123 141; --atlas-hue-vino-soft: 54 40 41; --atlas-hue-lavanda: 167 154 209; --atlas-hue-lavanda-soft: 49 45 52;
+}
+html, body { margin: 0; background: rgb(var(--atlas-bg)); color: rgb(var(--atlas-text)); font-family: Inter, system-ui, sans-serif; }
+.arnes { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+.arnes aside { background: rgb(var(--atlas-surface)); border-right: 1px solid rgb(var(--atlas-border)); padding: 14px; }
+.arnes main { padding: 18px 20px; min-width: 0; }
+@media (max-width: 760px) { .arnes { grid-template-columns: 1fr; } .arnes aside { border-right: 0; border-bottom: 1px solid rgb(var(--atlas-border)); } }

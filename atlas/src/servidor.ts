@@ -15,6 +15,8 @@ import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
 import { Guardian } from './modo';
 import { Biblioteca } from './biblioteca';
+import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
+import { leerLimites } from './limites';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
@@ -107,7 +109,8 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const atlasDev = new AtlasDev();
   const pasarela = new Pasarela(atlasDev, join(dirLab, 'borradores.json'));
   const guardian = new Guardian(dirDatos, atlasDev, pasarela);
-  const biblioteca = new Biblioteca(process.env['ATLAS_KARAJAN_RESOURCES'] ?? join(nativo ?? ctx.datos, 'resources.db'));
+  const rutaBiblioteca = process.env['ATLAS_KARAJAN_RESOURCES'] ?? join(nativo ?? ctx.datos, 'resources.db');
+  const biblioteca = new Biblioteca(rutaBiblioteca);
   const registroLab = new RegistroLab(join(dirLab, 'laboratorio.db'));
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno', ...(e.extra ?? {}) }));
@@ -276,6 +279,20 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       ultimas: c.laboratorio ? ultimas(c.id) : [],
     })),
   }));
+  // Datos de la ventana «Arquitectura» de Atlas dev: solo lectura (ver arquitectura.ts y docs/laboratorio/componentes.md).
+  const cacheArquitectura = new Map<string, { en: number; valor: unknown }>();
+  const contextoArquitectura = (): ContextoArquitectura => ({
+    version: ctx.version, modo: guardian.modo(), dirDatos, dirLab, config,
+    perfil: () => { try { return perfilPorDefecto(perfiles.leer()); } catch { return null; } },
+    rotador, limites: () => leerLimites(), pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
+    registro: registroLab, almacen, cache: cacheArquitectura, ttlMs: 30_000,
+  });
+  app.get('/laboratorio/arquitectura', async () => construirArquitectura(contextoArquitectura()));
+  app.get('/laboratorio/arquitectura/:id', async (req) => {
+    const c = await construirArquitectura(contextoArquitectura(), { id: req.params['id']! });
+    if (!c) throw falla(404, `No hay componente «${req.params['id']}»`);
+    return c;
+  });
   app.get('/laboratorio/ejecuciones', (req) => registroLab.ejecuciones(req.query['componente'] || undefined, entero(req.query['limite'], 50, 1, 1000)));
   app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));
   app.get('/laboratorio/propuestas', () => pasarela.listar());

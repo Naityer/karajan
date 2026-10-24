@@ -17,8 +17,8 @@ export interface TareaAnalitica {
 export interface SkillCatalogo { nombre: string; descripcion?: string; instalada?: boolean }
 export interface Acierto { score: number; senales: Record<string, number>; retrabajo: string | null; repetida_por: string | null }
 
-const PESOS: Record<string, number> = { retrabajo: 0.5, completada: 0.2, validacion: 0.2, revision: 0.1 };
-const VENTANA_MS = 24 * 3600 * 1000;
+export const PESOS: Record<string, number> = { retrabajo: 0.5, completada: 0.2, validacion: 0.2, revision: 0.1 };
+export const VENTANA_MS = 24 * 3600 * 1000;
 const CORRECCION = [
   'arregla', 'corrige', 'sigue sin', 'sigue igual', 'sigue apareciendo', 'otra vez', 'de nuevo', 'no funciona', 'no va ',
   'todavia', 'aun no', 'falla', 'vuelve a', 'revisa otra', 'fix ', 'still', 'again', 'broken', "doesn't work", 'not working',
