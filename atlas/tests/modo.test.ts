@@ -109,4 +109,17 @@ describe('servidor del paquete en producción', () => {
     assert.equal(filas.length, 1);
     assert.match(filas[0]!.tarea_hash, /^[0-9a-f]{16}$/);
   });
+
+  it('la calibración descarta skills desconocidas y se puede leer la última respuesta de la tarea', async () => {
+    assert.deepEqual((await llamar('GET /laboratorio/calibracion', { query: { tarea: 'zzz' } })).body, { calibrada: false });
+    assert.equal((await llamar('GET /laboratorio/calibracion', { query: { tarea: ' mal' } })).status, 422);
+    const ok = await llamar('POST /laboratorio/calibracion', { body: { tarea: 'zzz', respuesta: 'no', propuesta: ['pdf'], correccion: ['skill-que-no-existe-xyz'] } });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body['descartadas'], ['skill-que-no-existe-xyz']);
+    const g = (await llamar('GET /laboratorio/calibracion', { query: { tarea: 'zzz' } })).body;
+    assert.equal(g['calibrada'], true);
+    assert.equal(g['respuesta'], 'no');
+    assert.deepEqual(g['propuesta'], ['pdf']);
+    assert.deepEqual(g['correccion'], []);
+  });
 });
