@@ -7,6 +7,7 @@ import { laboratorioComparador } from './lab/comparador.lab';
 import { laboratorioClasificador } from './lab/clasificador.lab';
 import { laboratorioCurador } from './lab/curador.lab';
 import { laboratorioDelegador } from './lab/delegador.lab';
+import { laboratorioDosificador } from './lab/dosificador.lab';
 import { laboratorioEficiencia } from './lab/eficiencia.lab';
 import { laboratorioMetodo } from './lab/metodo.lab';
 import { laboratorioPrompts } from './lab/prompts.lab';
@@ -54,6 +55,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   // ── Decisión ──
   { id: 'clasificador', capa: 'decision', responsabilidad: 'Dar nivel, dominio, intención y subtareas a un prompt', modulos: ['heuristica'], laboratorio: laboratorioClasificador },
   { id: 'delegador', capa: 'decision', responsabilidad: 'Elegir el agente de cada subtarea según el perfil y sus reglas', modulos: ['delegar', 'perfiles', 'reglas', 'perfil-texto'], laboratorio: laboratorioDelegador },
+  { id: 'dosificador', capa: 'decision', responsabilidad: 'Decidir cuándo, dónde y con qué agente se lanza cada tarea para llegar a la renovación del plan con margen', modulos: ['dosificador', 'dosificador-config', 'dosificador-cuota', 'dosificador-sim'], laboratorio: laboratorioDosificador },
   { id: 'selector', capa: 'decision', responsabilidad: 'Elegir las skills que necesita un prompt', modulos: ['skills-seleccion'], laboratorio: laboratorioSelector },
   { id: 'rotador', capa: 'decision', responsabilidad: 'Dejar instaladas solo las skills que se usan y guardar el resto en el almacén', modulos: ['rotador'], laboratorio: laboratorioRotador },
   { id: 'etiquetas', capa: 'decision', responsabilidad: 'Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente', modulos: [], pendiente: 'vive en atlas-dev (server/src/tareas/formato.ts): borrador «Componente etiquetas»' },
@@ -86,6 +88,10 @@ export interface Enlace { de: string; a: string; etiqueta?: string; /** Aún no 
 export const ENLACES: Enlace[] = [
   { de: 'clasificador', a: 'delegador', etiqueta: 'nivel, dominio, intención y subtareas' },
   { de: 'selector', a: 'delegador', etiqueta: 'skills recomendadas' },
+  { de: 'clasificador', a: 'dosificador', etiqueta: 'nivel y dominio: coste esperado de la tarea' },
+  { de: 'limites', a: 'dosificador', etiqueta: '% usado y reinicio de cada ventana de cada agente' },
+  { de: 'almacen', a: 'dosificador', etiqueta: 'coste real de las tareas terminadas (aprende el estimador)' },
+  { de: 'dosificador', a: 'delegador', etiqueta: 'cuándo, en qué equipo y con qué agente lanzar' },
   { de: 'delegador', a: 'proveedores', etiqueta: 'agente y modelo de cada subtarea' },
   { de: 'delegador', a: 'limites', etiqueta: '¿Claude pasó su umbral semanal?' },
   { de: 'delegador', a: 'rotador', etiqueta: 'repone la skill elegida' },

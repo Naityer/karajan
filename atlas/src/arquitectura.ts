@@ -159,7 +159,15 @@ function operaciones(ctx: ContextoArquitectura, avisar: (id: string, fuente: str
   }
 
   const l = intentar('limites', 'limites-plan.json', () => ctx.limites());
-  salida['limites'] = { ...SIN_OPERACION, ultima_actividad: l?.leido ?? null, extra: l ? { claude_semanal: l.claude?.semanal ?? null, claude_sesion: l.claude?.sesion ?? null, codex_semanal: l.codex?.semanal ?? null, reinicio_claude: l.claude?.reinicio ?? null } : { dato_reciente: false } };
+  salida['limites'] = { ...SIN_OPERACION, ultima_actividad: l?.leido ?? null, extra: l ? { claude_semanal: l.claude?.semanal ?? null, claude_sesion: l.claude?.sesion ?? null, codex_semanal: l.codex?.semanal ?? null, codex_sesion: l.codex?.sesion ?? null, reinicio_claude: l.claude?.reinicio ?? null, reinicio_codex: l.codex?.reinicio ?? null, plan_claude: l.claude?.plan ?? null, plan_codex: l.codex?.plan ?? null } : { dato_reciente: false } };
+
+  const dos = intentar('dosificador', 'dosificador-estado.json', () => ctx.dosificador?.estado?.() ?? null);
+  if (dos) {
+    salida['dosificador'] = {
+      ...SIN_OPERACION, tareas: dos.ultima?.decisiones ?? null, ultima_actividad: dos.ultima ? new Date(dos.ultima.en).toISOString() : null,
+      extra: { diferidas: dos.ultima?.diferidas ?? 0, tareas_en_vuelo: Object.keys(dos.leases).length, clases_aprendidas: Object.keys(dos.estimador).filter((k) => !k.startsWith('*')).length, circuitos_abiertos: Object.values(dos.circuitos).filter((c) => c.abiertoHasta !== null && c.abiertoHasta > (ctx.ahora?.().getTime() ?? Date.now())).length },
+    };
+  }
 
   const reg = intentar('pasarela', 'borradores.json', () => ctx.pasarela.leer() as Record<string, { creada?: string }>);
   if (reg) salida['pasarela'] = { ...SIN_OPERACION, tareas: Object.keys(reg).length, ultima_actividad: maximo(...Object.values(reg).map((v) => v.creada)), extra: { borradores: Object.keys(reg).length } };

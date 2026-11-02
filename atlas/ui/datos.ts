@@ -114,7 +114,7 @@ export async function ejecutar(componente: string | 'todos'): Promise<void> {
 export const componentePorId = (d: Arquitectura | null, id: string | null): Componente | null => (d && id ? d.componentes.find((c) => c.id === id) ?? null : null);
 
 /** La métrica que resume a cada componente en su caja. */
-const CLAVE: Record<string, string> = { delegador: 'concordancia', selector: 'f1', clasificador: 'nivel_exacto', biblioteca: 'con_ficha' };
+const CLAVE: Record<string, string> = { delegador: 'concordancia', selector: 'f1', clasificador: 'nivel_exacto', biblioteca: 'con_ficha', dosificador: 'sin_usar' };
 export function metricaClave(c: Componente): string | null {
   const k = CLAVE[c.id];
   if (k && (c.historial[k]?.length || c.ultimas.some((u) => k in u.metricas))) return k;
@@ -132,13 +132,15 @@ export function valorActual(c: Componente, metrica: string): number | null {
 export const serieDe = (c: Componente, metrica: string): number[] => (c.historial[metrica] ?? []).map((p: PuntoHistorial) => p.valor).filter((v): v is number => typeof v === 'number');
 
 export const esPorcentaje = (m: string): boolean => PORCENTAJE.has(m);
-const PORCENTAJE = new Set(['concordancia', 'concordancia_ic_inf', 'concordancia_ic_sup', 'trazabilidad', 'estabilidad', 'auto_igual_que_entonces', 'hit1', 'precision3', 'recall3', 'f1', 'falsos_positivos', 'f1_actual', 'f1_calibrado', 'hit1_actual', 'hit1_calibrado', 'nivel_exacto', 'nivel_mas_menos_1', 'dominio', 'con_ficha', 'estrellas_propias', 'estrellas_heredadas', 'sin_grupo']);
+const PORCENTAJE = new Set(['concordancia', 'concordancia_ic_inf', 'concordancia_ic_sup', 'trazabilidad', 'estabilidad', 'auto_igual_que_entonces', 'hit1', 'precision3', 'recall3', 'f1', 'falsos_positivos', 'f1_actual', 'f1_calibrado', 'hit1_actual', 'hit1_calibrado', 'nivel_exacto', 'nivel_mas_menos_1', 'dominio', 'con_ficha', 'estrellas_propias', 'estrellas_heredadas', 'sin_grupo', 'parsers_fieles', 'semanas_por_encima', 'sin_usar', 'uso_final_medio', 'margen_ic_sup']);
 const ETIQUETAS: Record<string, string> = {
   concordancia: 'Concordancia', concordancia_ic_inf: 'Concordancia (IC95 inf.)', concordancia_ic_sup: 'Concordancia (IC95 sup.)', trazabilidad: 'Trazabilidad', estabilidad: 'Estabilidad',
   auto_igual_que_entonces: 'Auto = entonces', hit1: 'Hit@1', precision3: 'Precisión@3', recall3: 'Recall@3', f1: 'F1', falsos_positivos: 'Falsos positivos', f1_actual: 'F1 actual', f1_calibrado: 'F1 calibrado',
   hit1_actual: 'Hit@1 actual', hit1_calibrado: 'Hit@1 calibrado', mejora_f1: 'Mejora de F1', nivel_exacto: 'Nivel exacto', nivel_mas_menos_1: 'Nivel ±1', dominio: 'Dominio', con_ficha: 'Con ficha',
   estrellas_propias: 'Estrellas propias', estrellas_heredadas: 'Estrellas heredadas', sin_grupo: 'Sin grupo', reglas_tapadas: 'Reglas tapadas', reglas_sin_uso: 'Reglas sin uso', reglas_activas: 'Reglas activas',
   niveles_sin_agente: 'Niveles sin agente', no_seleccionables: 'No seleccionables', sin_descripcion: 'Sin descripción', segmentos_inadecuados: 'Segmentos inadecuados', segmentos_evaluables: 'Segmentos evaluables',
+  parsers_fieles: 'Parsers fieles', semanas_por_encima: 'Semanas sobre el margen', margen_ic_sup: 'Sobre el margen (IC95 sup.)', sin_usar: 'Cuota sin usar', uso_final_medio: 'Uso al renovar',
+  limites_alcanzados: 'Límites alcanzados', espera_p95_h: 'Espera p95 (h)', oscilaciones_semana: 'Oscilaciones por semana', circuito_respetado: 'Circuito respetado', fail_closed: 'Sin dato no lanza', config_en_rango: 'Config en rango',
 };
 export const etiquetaMetrica = (m: string): string => ETIQUETAS[m] ?? (m.charAt(0).toUpperCase() + m.slice(1).replace(/_/g, ' '));
 export function formatear(metrica: string, v: number | null | undefined): string {

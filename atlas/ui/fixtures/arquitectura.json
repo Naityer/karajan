@@ -1,7 +1,7 @@
 {
-  "version": "0.9.0",
+  "version": "0.10.0",
   "modo": "desarrollo",
-  "generado": "2026-10-24T08:31:00Z",
+  "generado": "2026-11-02T21:59:49Z",
   "familias": [
     {
       "id": "interfaz",
@@ -50,6 +50,7 @@
       "componentes": [
         "clasificador",
         "delegador",
+        "dosificador",
         "selector",
         "rotador",
         "etiquetas"
@@ -595,7 +596,7 @@
         {
           "id": "fidelidad",
           "tipo": "contrato",
-          "descripcion": "Cada decisión sale de una regla del perfil; sin reglas tapadas ni niveles sin agente",
+          "descripcion": "Cada decisión sale de una regla o un nivel del perfil; reglas tapadas o sin uso; niveles sin agente",
           "umbrales": {
             "trazabilidad": "= 1",
             "muestra": "≥ 20 tareas para valorar reglas sin uso"
@@ -604,7 +605,7 @@
         {
           "id": "concordancia",
           "tipo": "replay",
-          "descripcion": "A ciegas: el agente que elegiría Karajan frente al que eligió la persona",
+          "descripcion": "A ciegas: el agente que elige Karajan frente al que eligió la persona",
           "umbrales": {
             "concordancia": "≥ 0.7"
           }
@@ -612,7 +613,7 @@
         {
           "id": "adecuacion",
           "tipo": "replay",
-          "descripcion": "Segmentos dominio × nivel donde el perfil discrepa de la persona y la persona acierta",
+          "descripcion": "Por dominio×nivel: si la persona acierta donde el perfil la contradice, se propone un perfil nuevo",
           "umbrales": {
             "segmento": "n ≥ 10",
             "discrepancia": "IC95 inferior > 0.3"
@@ -621,7 +622,7 @@
         {
           "id": "determinismo",
           "tipo": "contrato",
-          "descripcion": "El mismo prompt produce el mismo plan; las tareas en auto repiten su elección",
+          "descripcion": "El mismo prompt da el mismo plan; y las tareas «auto» siguen yendo al mismo agente",
           "umbrales": {
             "estabilidad": "= 1"
           }
@@ -1115,6 +1116,103 @@
       }
     },
     {
+      "id": "dosificador",
+      "familia": "decision",
+      "responsabilidad": "Decidir cuándo, dónde y con qué agente se lanza cada tarea para llegar a la renovación del plan con margen",
+      "modulos": [
+        "dosificador",
+        "dosificador-config",
+        "dosificador-cuota",
+        "dosificador-sim"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Decide cuándo, dónde (equipo) y con qué agente se lanza cada tarea para que el plan de cada agente llegue a su renovación con el margen configurado: lee el % usado y el reinicio de cada ventana, estima el coste de la tarea, reparte el presupuesto a lo largo de la semana con una línea ideal y un controlador P, y no toca a un agente que acaba de topar con su límite.",
+        "como_funciona": {
+          "entradas": [
+            "Cola de tareas (prioridad, antigüedad, agente fijo o auto, clasificación, repo) y estado de equipos y agentes, que manda el host",
+            "Uso de cada agente: % semanal y de 5 h con su reinicio (limites-plan.json de Atlas dev o la sonda de Claude/Codex)",
+            "dosificador.json (planes, márgenes, pacing, cola, concurrencia…) y dosificador-estado.json (estimador, circuitos, leases, histéresis)"
+          ],
+          "pasos": [
+            "Lee la cuota de cada agente con parsers tolerantes (porcentaje o fracción, resets_at en s/ms/ISO, ventana por duración) y marca el dato como ok, caduco o ausente (dosificador-cuota.ts · leerCuota, cuotaDeUso, estadoCuota)",
+            "Techo = límite − margen − reserva personal; presupuesto = techo − uso − lo comprometido en vuelo (dosificador.ts · pacing, reservaPersonal)",
+            "Línea ideal de gasto hasta el reinicio, ponderada por las horas útiles del horario; error = uso − línea; retraso = clamp(kp·error/tasa) con banda muerta e histéresis normal/frenado/bloqueado (dosificador.ts · pacing, transicionModo)",
+            "Estima el coste p80 de la tarea por clase nivel×dominio×agente con EWMA de media y varianza, mezclado con un prior por nivel mientras haya poca muestra (dosificador.ts · estimar, observarClase)",
+            "Admisión: el coste cabe en el presupuesto, la ventana de 5 h no pasa de su tope, no es horario de silencio y el cubo de fichas del agente espacia las ráfagas; si no cabe, se difiere con su motivo (dosificador.ts · decidir)",
+            "Circuito por agente: al alcanzar un límite se abre hasta resets_at (backoff exponencial con jitter solo si no hay fecha) y no se lanza nada en él (dosificador.ts · registrarLimite, backoffMin)",
+            "Colocación: agente fijo, preferido por tipo o el de más presupuesto relativo; equipo con el repo ya preparado y menos carga; prioridad con aging y backfilling (dosificador.ts · decidir)",
+            "Guarda el lease de cada decisión (coste en vuelo hasta que la tarea acaba) y aprende de la tarea terminada con /dosificador/observar (dosificador.ts · registrarCoste, servidor.ts · /dosificador/*)",
+            "Laboratorio · contrato: parsers fieles con fixtures sintéticas, decisión determinista, nada lanzado con el circuito abierto o sin dato (lab/dosificador.lab.ts · contrato)",
+            "Laboratorio · replay: semanas sintéticas con picos laborales y costes lognormales; semanas sobre el margen, cuota sin usar, espera p95 y oscilaciones (dosificador-sim.ts · simular, lab/dosificador.lab.ts · replay)"
+          ],
+          "salidas": [
+            "decisiones: tarea, agente, equipo y lanzarEn (null = ya) con su motivo",
+            "diferidas: tarea, hasta cuándo (o null) y por qué",
+            "estado: modo (normal|frenado|bloqueado), burn rate, agotamiento proyectado y circuitos"
+          ]
+        },
+        "reglas": [
+          "Dato de cuota ausente o caduco: no se lanza a ciegas (solo con modoSimulacion).",
+          "Con el circuito de un agente abierto no se decide nada para él hasta su resets_at; los agentes son colas independientes: uno ocupado, agotado o caído no bloquea al otro.",
+          "Más margen de seguridad nunca acorta el retraso; sin fecha de reinicio el modo es frenado.",
+          "El mismo estado y la misma entrada dan la misma decisión: sin reloj ni azar dentro de decidir.",
+          "En producción solo decide: no lanza ni cambia nada fuera de su propio estado; cambiar su configuración exige tarea aceptada.",
+          "Su laboratorio es sintético (no lee límites ni registros reales): contrato y replay semanal con Wilson y muestra mínima de 24 agente-semanas."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {
+        "margen_seguridad_pct": 10,
+        "margen_5h_pct": 10,
+        "reserva_modo": "fijo",
+        "reserva_fija_pct": 12,
+        "pacing_modo": "lineal_p",
+        "kp": 1,
+        "banda_muerta_pct": 3,
+        "retraso_max_min": 360,
+        "rafaga_max_pct": 8,
+        "histeresis_ciclos": 3,
+        "aging_por_hora": 5,
+        "backfill": true,
+        "concurrencia_por_agente": [
+          "claude: 1",
+          "codex: 1"
+        ],
+        "concurrencia_por_equipo": 1,
+        "percentil_coste": 0.8,
+        "circuito_umbral_limites": 1,
+        "lease_ttl_min": 90,
+        "dato_caduca_min": 120,
+        "horario_zona": "Europe/Madrid",
+        "horario_silencio": "sin silencio",
+        "agentes": [
+          "claude: sesion 300 min, semanal 10080 min",
+          "codex: sesion 300 min, semanal 10080 min"
+        ],
+        "modo_simulacion": false
+      },
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "Los parsers de cuota leen las variantes conocidas, la decisión es determinista y no lanza con el circuito abierto ni sin dato (fixtures sintéticas)",
+          "umbrales": {}
+        },
+        {
+          "id": "replay",
+          "tipo": "replay",
+          "descripcion": "Semanas sintéticas con uso personal y costes lognormales: ¿acaba por debajo del margen, deja poca cuota sin usar y modera la espera?",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
       "id": "selector",
       "familia": "decision",
       "responsabilidad": "Elegir las skills que necesita un prompt",
@@ -1160,7 +1258,7 @@
         {
           "id": "explicitas",
           "tipo": "contrato",
-          "descripcion": "Toda skill instalada sale si se nombra en el prompt",
+          "descripcion": "Toda skill instalada sale si se nombra en el prompt; las que no tienen descripción solo pueden salir así",
           "umbrales": {
             "no_seleccionables": "= 0"
           }
@@ -1652,7 +1750,8 @@
           "salidas": [
             "Cabecera y glosario en el prompt del agente"
           ]
-        }
+        },
+        "reglas": []
       },
       "estado": "pendiente",
       "configuracion": {},
@@ -2313,6 +2412,26 @@
       "etiqueta": "skills recomendadas"
     },
     {
+      "de": "clasificador",
+      "a": "dosificador",
+      "etiqueta": "nivel y dominio: coste esperado de la tarea"
+    },
+    {
+      "de": "limites",
+      "a": "dosificador",
+      "etiqueta": "% usado y reinicio de cada ventana de cada agente"
+    },
+    {
+      "de": "almacen",
+      "a": "dosificador",
+      "etiqueta": "coste real de las tareas terminadas (aprende el estimador)"
+    },
+    {
+      "de": "dosificador",
+      "a": "delegador",
+      "etiqueta": "cuándo, en qué equipo y con qué agente lanzar"
+    },
+    {
       "de": "delegador",
       "a": "proveedores",
       "etiqueta": "agente y modelo de cada subtarea"
@@ -2400,17 +2519,20 @@
     {
       "de": "eficiencia",
       "a": "delegador",
-      "etiqueta": "modifica lo que se delega"
+      "etiqueta": "modifica lo que se delega",
+      "previsto": true
     },
     {
       "de": "metodo",
       "a": "delegador",
-      "etiqueta": "modifica lo que se delega"
+      "etiqueta": "modifica lo que se delega",
+      "previsto": true
     },
     {
       "de": "prompts",
       "a": "delegador",
-      "etiqueta": "modifica lo que se delega"
+      "etiqueta": "modifica lo que se delega",
+      "previsto": true
     }
   ]
 }
