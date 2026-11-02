@@ -17,7 +17,11 @@ import { Guardian } from './modo';
 import { Biblioteca } from './biblioteca';
 import { aHallazgo, curar, REGLAS_CURADOR, UMBRALES_CURADOR, type EntradaCurador } from './curador';
 import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
-import { leerLimites, rutaLimites } from './limites';
+import { leerLimites, leerLimitesSinCaducidad, rutaLimites } from './limites';
+import { circuitoAbierto, decidir, estimar, registrarCoste, registrarLimite, validarEntrada } from './dosificador';
+import { guardarConfig as guardarConfigDos, guardarEstado as guardarEstadoDos, leerConfig as leerConfigDos, leerEstado as leerEstadoDos, type EstadoDosificador } from './dosificador-config';
+import { tiempoMs } from './dosificador-cuota';
+import { simular } from './dosificador-sim';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
@@ -117,6 +121,87 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const registroLab = new RegistroLab(join(dirLab, 'laboratorio.db'));
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno', ...(e.extra ?? {}) }));
+
+  // ── Dosificador: cuándo, dónde y con qué agente se lanza cada tarea (ver dosificador.ts y docs/laboratorio/componentes.md) ──
+  // Config y estado van en <datos>/dosificador.json y dosificador-estado.json. `decidir` solo DECIDE: no lanza ni cambia nada fuera de
+  // su propio estado (histéresis, estimador, circuitos y leases); cambiar la configuración sí exige tarea aceptada en producción.
+  const rutaDosCfg = join(ctx.datos, 'dosificador.json'), rutaDosEstado = join(ctx.datos, 'dosificador-estado.json');
+  const configDos = () => leerConfigDos(rutaDosCfg);
+  const estadoDos = () => leerEstadoDos(rutaDosEstado);
+  const guardarEstadoDosSeguro = (e: EstadoDosificador) => { try { guardarEstadoDos(rutaDosEstado, e); } catch { /* sin disco no se pierde la decisión, solo el aprendizaje */ } };
+  const isoOrNull = (ms: number | null | undefined) => (typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms).toISOString() : null);
+  const malaPeticion = (reply: { code(n: number): unknown }, error: string) => { reply.code(400); return { error }; };
+
+  app.post('/dosificador/decidir', (req, reply) => {
+    try {
+      const cfg = configDos();
+      const v = validarEntrada(req.body, cfg);
+      if (!v.ok) return malaPeticion(reply, v.error);
+      const r = decidir(v.entrada, cfg, estadoDos());
+      // `simulacro: true` decide sin guardar el estado (lo usa `kj dosificador decidir`).
+      if ((req.body as { simulacro?: unknown }).simulacro !== true) guardarEstadoDosSeguro(r.estado);
+      return { decisiones: r.decisiones, diferidas: r.diferidas, estado: r.resumen };
+    } catch (e) { return malaPeticion(reply, `no se pudo decidir: ${String((e as Error).message ?? e).slice(0, 200)}`); }
+  });
+
+  /** Una tarea terminó (o topó con el límite): su coste real alimenta al estimador, su lease se libera y un límite abre el circuito del agente. */
+  app.post('/dosificador/observar', (req, reply) => {
+    const cfg = configDos(), b = (req.body ?? {}) as Record<string, unknown>;
+    const agente = typeof b['agente'] === 'string' ? b['agente'] : '';
+    if (!cfg.planes[agente]) return malaPeticion(reply, `agente: ${Object.keys(cfg.planes).join('|')}`);
+    if (typeof b['tarea'] !== 'string' || !b['tarea'] || b['tarea'].length > 80) return malaPeticion(reply, 'tarea: el id de la tarea (1 a 80 caracteres)');
+    if (b['clase'] !== undefined && b['clase'] !== null && (typeof b['clase'] !== 'string' || !b['clase'] || b['clase'].length > 120)) return malaPeticion(reply, 'clase: texto «nivel|dominio|agente» de hasta 120 caracteres');
+    const coste = b['costePct'];
+    if (coste !== undefined && coste !== null && (typeof coste !== 'number' || !Number.isFinite(coste) || coste < 0 || coste > 1000)) return malaPeticion(reply, 'costePct: porcentaje del plan semanal entre 0 y 1000');
+    const lim = b['limiteAlcanzado'];
+    if (lim !== undefined && lim !== null && lim !== false && (typeof lim !== 'object' || Array.isArray(lim))) return malaPeticion(reply, 'limiteAlcanzado: {resetsAt}');
+    let est = estadoDos();
+    const clase = typeof b['clase'] === 'string' ? b['clase'] : est.leases[b['tarea']]?.clase || null;
+    est = registrarCoste(est, cfg, { tarea: b['tarea'], agente, clase: clase ?? undefined, costePct: typeof coste === 'number' ? coste : null });
+    if (lim) est = registrarLimite(est, cfg, agente, tiempoMs((lim as { resetsAt?: unknown }).resetsAt), Date.now());
+    guardarEstadoDosSeguro(est);
+    const ahora = Date.now();
+    return {
+      ok: true, clase, aprendido: clase !== null && typeof coste === 'number', circuito_hasta: isoOrNull(circuitoAbierto(est, agente, ahora)),
+      estimacion: clase ? (({ media, sigma, p, n }) => ({ media, sigma, p80: p, n }))(estimar(est, cfg, clase)) : null,
+    };
+  });
+
+  /** Cuota de cada agente, modo, burn rate, agotamiento proyectado, circuitos, tareas en vuelo y la última decisión. Solo lectura. */
+  app.get('/dosificador/estado', () => {
+    const cfg = configDos(), est = estadoDos(), ahora = Date.now(), l = leerLimitesSinCaducidad(rutaLimites());
+    const nombres = Object.keys(cfg.planes);
+    const r = decidir({
+      ahora, tareas: [], equipos: [], agentes: Object.fromEntries(nombres.map((a) => [a, { disponible: true, enCurso: 0 }])),
+      uso: Object.fromEntries(nombres.map((a) => [a, (l as unknown as Record<string, unknown> | null)?.[a] ?? {}])), leido: l && Number.isFinite(Date.parse(l.leido)) ? l.leido : undefined,
+    }, cfg, est);
+    return {
+      ahora: new Date(ahora).toISOString(), ...r.resumen, simulacion: cfg.modoSimulacion, agentes: r.agentes,
+      cuota: { fichero: rutaLimites(), leido: l?.leido ?? null },
+      ultima_decision: est.ultima ? { en: isoOrNull(est.ultima.en), decisiones: est.ultima.decisiones, diferidas: est.ultima.diferidas } : null,
+      en_vuelo: Object.entries(est.leases).map(([tarea, x]) => ({ tarea, agente: x.agente, equipo: x.equipo, coste_p80_pct: x.costePct, lanzar_en: isoOrNull(x.lanzarEn), hasta: isoOrNull(x.hasta) })),
+      clases_aprendidas: Object.keys(est.estimador).filter((k) => !k.startsWith('*')).length,
+    };
+  });
+
+  app.get('/dosificador/config', () => ({ config: configDos(), fichero: rutaDosCfg }));
+  app.put('/dosificador/config', async (req) => {
+    await guardian.exigir(req, 'PUT /dosificador/config');
+    const b = req.body;
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw falla(422, 'config: un objeto con los campos a cambiar');
+    const { tarea: _tarea, ...resto } = b as Record<string, unknown>;
+    const parcial = resto['config'] && typeof resto['config'] === 'object' ? resto['config'] : resto;
+    return { config: guardarConfigDos(rutaDosCfg, parcial), fichero: rutaDosCfg };
+  });
+
+  /** Simula semanas sintéticas con la configuración viva (solo lectura; hasta 12 semanas para no bloquear el proceso). */
+  app.post('/dosificador/simular', (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const semanas = entero(String(b['semanas'] ?? ''), 4, 1, 12), semilla = entero(String(b['semilla'] ?? ''), 1, 1, 1_000_000);
+    const demanda = typeof b['demanda'] === 'number' && Number.isFinite(b['demanda']) ? Math.min(3, Math.max(0.1, b['demanda'])) : undefined;
+    const { metricas } = simular(configDos(), { semanas, semilla, ...(demanda !== undefined ? { demanda } : {}) });
+    return { semanas, semilla, demanda: demanda ?? null, ...metricas };
+  });
 
   app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
   app.get('/metrics', () => almacen.metricas());
@@ -291,6 +376,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'almacen': return { ...base, almacen };
       case 'proveedores': return { ...base, runs: () => almacen.tareasPlanas().flatMap((t) => t.runs ?? []), buscar: (b: string) => buscarBinario(b) };
       case 'limites': return { ...base, ruta: rutaLimites(), ahora: () => Date.now() };
+      case 'dosificador': return { ...base, config: configDos };
       case 'aislamiento': return { ...base, workspace: process.env['ATLAS_WORKSPACE'] ?? null };
       case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
       case 'produccion': return base;
@@ -318,7 +404,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const contextoArquitectura = (): ContextoArquitectura => ({
     version: ctx.version, modo: guardian.modo(), dirDatos, dirLab, config,
     perfil: () => { try { return perfilPorDefecto(perfiles.leer()); } catch { return null; } },
-    rotador, limites: () => leerLimites(), pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
+    rotador, limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
     registro: registroLab, almacen, cache: cacheArquitectura, ttlMs: 30_000,
   });
   app.get('/laboratorio/arquitectura', async () => construirArquitectura(contextoArquitectura()));

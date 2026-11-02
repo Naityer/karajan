@@ -17,6 +17,10 @@ token que `at` (`ATLAS_DEV_TOKEN`). Se construye con `node atlas/build.mjs` y se
 | `kj curador [--proponer]` | Skills que sobran, agrupadas por regla y con su evidencia; con `--proponer` cada una se abre como borrador en Atlas dev (idempotente). Solo propone: no retira nada |
 | `kj grafica acierto\|eficiencia\|flujo\|matriz-skills --svg <fichero> [--html <fichero>]` | Exporta la misma gráfica como SVG autocontenido (barras horizontales, sin dependencias) y/o HTML autocontenido (título, el SVG y una tabla accesible con los datos). Colores por variables CSS y modo oscuro (`prefers-color-scheme`). `sugerencias` no se exporta |
 | `kj comparar [<skill>\|karajan] [--grupo g]` | Cada skill del equipo (o Karajan) frente a las mejores de su grupo de la taxonomía, solo con estrellas propias: puesto, percentil, mejores pares y funcionalidades declaradas por ellos que le faltan; con `karajan`, además las pruebas con feedback humano que declaran los pares. «Sin dato» si no hay estrellas propias o el grupo tiene menos de 5 recursos con ellas |
+| `kj dosificador estado` | Cuota de cada agente (uso semanal y de 5 h, techo, presupuesto libre, línea ideal), modo (normal, frenado, bloqueado), burn rate, agotamiento proyectado, circuitos abiertos y tareas en vuelo |
+| `kj dosificador config [--set '<json>']` | La configuración del dosificador (`<datos>/dosificador.json`); con `--set` mezcla y guarda los campos (en producción necesita tarea aceptada) |
+| `kj dosificador decidir --entrada <fichero.json>` | Decide con la entrada de `POST /dosificador/decidir` **sin guardar el estado** (simulacro): qué se lanza, dónde y cuándo, y qué se difiere y por qué |
+| `kj dosificador simular [--semanas N] [--semilla S] [--demanda X]` | Simula semanas sintéticas con la configuración viva: semanas por encima del margen (objetivo 0), cuota sin usar al renovar (< 15 %), espera p95 y oscilaciones de modo |
 | `kj propuestas` | Borradores que ha abierto Karajan y en qué estado están |
 | `kj modo` | Producción o desarrollo (`<datos>/modo.json`; solo cambia editando el fichero) |
 

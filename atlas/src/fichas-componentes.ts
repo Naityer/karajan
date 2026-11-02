@@ -7,6 +7,7 @@ import { MAX_SOBRECOSTE_EFICIENCIA, SKILLS_EFICIENCIA } from './eficiencia';
 import { MAX_SOBRECOSTE_METODO, SKILLS_METODO } from './metodo';
 import { MAX_SOBRECOSTE_PROMPTS, SKILLS_PROMPTS } from './prompts';
 import type { Configuracion } from './heuristica';
+import { CONFIG_BASE as CONFIG_DOSIFICADOR_BASE, type ConfigDosificador } from './dosificador-config';
 import { rutaLimites, umbralClaude, type Limites } from './limites';
 import { ESTADOS_ACEPTADA, type Modo } from './modo';
 import { PESOS as PESOS_ACIERTO, VENTANA_MS } from './produccion';
@@ -34,6 +35,8 @@ export interface ContextoFicha {
   perfil(): Perfil | null;
   rotador: { leerEstado(): EstadoRotador };
   limites(): Limites | null;
+  /** El dosificador: su configuración viva (sin él, la de fábrica) y, si se sabe, su estado persistido. */
+  dosificador?: { config(): ConfigDosificador; estado?(): { ultima: { en: number; decisiones: number; diferidas: number } | null; leases: Record<string, unknown>; estimador: Record<string, unknown>; circuitos: Record<string, { abiertoHasta: number | null }> } | null };
   pasarela: { leer(): Record<string, unknown> };
   biblioteca: { disponible: boolean; ruta: string | null };
 }
@@ -125,6 +128,45 @@ export const FICHAS: Record<string, FichaComponente> = {
         respaldo: ['codex', 'claude-cli', 'ollama-qwen'],
         tiempo_maximo_min: 15,
         aislar_git: aislarActivo(),
+      };
+    },
+  },
+  dosificador: {
+    especificado: true,
+    resumen: 'Decide cuándo, dónde (equipo) y con qué agente se lanza cada tarea para que el plan de cada agente llegue a su renovación con el margen configurado: lee el % usado y el reinicio de cada ventana, estima el coste de la tarea, reparte el presupuesto a lo largo de la semana con una línea ideal y un controlador P, y no toca a un agente que acaba de topar con su límite.',
+    como_funciona: {
+      entradas: ['Cola de tareas (prioridad, antigüedad, agente fijo o auto, clasificación, repo) y estado de equipos y agentes, que manda el host', 'Uso de cada agente: % semanal y de 5 h con su reinicio (limites-plan.json de Atlas dev o la sonda de Claude/Codex)', 'dosificador.json (planes, márgenes, pacing, cola, concurrencia…) y dosificador-estado.json (estimador, circuitos, leases, histéresis)'],
+      pasos: [
+        'Lee la cuota de cada agente con parsers tolerantes (porcentaje o fracción, resets_at en s/ms/ISO, ventana por duración) y marca el dato como ok, caduco o ausente (dosificador-cuota.ts · leerCuota, cuotaDeUso, estadoCuota)',
+        'Techo = límite − margen − reserva personal; presupuesto = techo − uso − lo comprometido en vuelo (dosificador.ts · pacing, reservaPersonal)',
+        'Línea ideal de gasto hasta el reinicio, ponderada por las horas útiles del horario; error = uso − línea; retraso = clamp(kp·error/tasa) con banda muerta e histéresis normal/frenado/bloqueado (dosificador.ts · pacing, transicionModo)',
+        'Estima el coste p80 de la tarea por clase nivel×dominio×agente con EWMA de media y varianza, mezclado con un prior por nivel mientras haya poca muestra (dosificador.ts · estimar, observarClase)',
+        'Admisión: el coste cabe en el presupuesto, la ventana de 5 h no pasa de su tope, no es horario de silencio y el cubo de fichas del agente espacia las ráfagas; si no cabe, se difiere con su motivo (dosificador.ts · decidir)',
+        'Circuito por agente: al alcanzar un límite se abre hasta resets_at (backoff exponencial con jitter solo si no hay fecha) y no se lanza nada en él (dosificador.ts · registrarLimite, backoffMin)',
+        'Colocación: agente fijo, preferido por tipo o el de más presupuesto relativo; equipo con el repo ya preparado y menos carga; prioridad con aging y backfilling (dosificador.ts · decidir)',
+        'Guarda el lease de cada decisión (coste en vuelo hasta que la tarea acaba) y aprende de la tarea terminada con /dosificador/observar (dosificador.ts · registrarCoste, servidor.ts · /dosificador/*)',
+        'Laboratorio · contrato: parsers fieles con fixtures sintéticas, decisión determinista, nada lanzado con el circuito abierto o sin dato (lab/dosificador.lab.ts · contrato)',
+        'Laboratorio · replay: semanas sintéticas con picos laborales y costes lognormales; semanas sobre el margen, cuota sin usar, espera p95 y oscilaciones (dosificador-sim.ts · simular, lab/dosificador.lab.ts · replay)',
+      ],
+      salidas: ['decisiones: tarea, agente, equipo y lanzarEn (null = ya) con su motivo', 'diferidas: tarea, hasta cuándo (o null) y por qué', 'estado: modo (normal|frenado|bloqueado), burn rate, agotamiento proyectado y circuitos'],
+    },
+    reglas: [
+      'Dato de cuota ausente o caduco: no se lanza a ciegas (solo con modoSimulacion).',
+      'Con el circuito de un agente abierto no se decide nada para él hasta su resets_at; los agentes son colas independientes: uno ocupado, agotado o caído no bloquea al otro.',
+      'Más margen de seguridad nunca acorta el retraso; sin fecha de reinicio el modo es frenado.',
+      'El mismo estado y la misma entrada dan la misma decisión: sin reloj ni azar dentro de decidir.',
+      'En producción solo decide: no lanza ni cambia nada fuera de su propio estado; cambiar su configuración exige tarea aceptada.',
+      'Su laboratorio es sintético (no lee límites ni registros reales): contrato y replay semanal con Wilson y muestra mínima de 24 agente-semanas.',
+    ],
+    configuracion: (c) => {
+      const d = c.dosificador?.config() ?? CONFIG_DOSIFICADOR_BASE;
+      return {
+        margen_seguridad_pct: d.margenSeguridadPct, margen_5h_pct: d.margen5hPct, reserva_modo: d.reserva.modo, reserva_fija_pct: d.reserva.fijaPct,
+        pacing_modo: d.pacing.modo, kp: d.pacing.kp, banda_muerta_pct: d.pacing.bandaMuertaPct, retraso_max_min: d.pacing.retrasoMaxMin, rafaga_max_pct: d.pacing.maxRafagaPct, histeresis_ciclos: d.pacing.histeresisCiclos,
+        aging_por_hora: d.cola.agingPorHora, backfill: d.cola.backfill, concurrencia_por_agente: Object.entries(d.concurrencia.porAgente).map(([a, n]) => `${a}: ${n}`), concurrencia_por_equipo: d.concurrencia.porEquipo,
+        percentil_coste: d.estimador.percentil, circuito_umbral_limites: d.circuito.umbralLimites, lease_ttl_min: d.lease.ttlMin, dato_caduca_min: d.sonda.caducidadMin,
+        horario_zona: d.horario.zona, horario_silencio: d.horario.silencio ? `${d.horario.silencio.desde}-${d.horario.silencio.hasta}` : 'sin silencio',
+        agentes: Object.entries(d.planes).map(([a, p]) => `${a}: ${p.ventanas.map((v) => `${v.nombre} ${v.duracionMin} min`).join(', ')}`), modo_simulacion: d.modoSimulacion,
       };
     },
   },

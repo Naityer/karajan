@@ -52,6 +52,21 @@ Rutas nuevas: `GET /laboratorio/componentes`, `/laboratorio/ejecuciones`, `/labo
 `x-karajan-tarea` con una tarea encolada o en marcha. `PESOS_SELECTOR` (`skills-seleccion.ts`) deja los pesos del ponderador a la
 vista para que el laboratorio los calibre, con el mismo comportamiento por defecto.
 
+## v0.10: dosificador
+
+Componente nuevo (capa Decisión, ver `docs/laboratorio/componentes.md` §9): decide cuándo, dónde y con qué agente se lanza cada tarea para llegar a la renovación del plan con margen. No es un puerto de Python.
+
+| Pieza | Aquí |
+|---|---|
+| Configuración (planes, márgenes, pacing, cola…) y estado persistente | `src/dosificador-config.ts` (`<datos>/dosificador.json`, `<datos>/dosificador-estado.json`) |
+| Sondas de cuota de Claude y Codex y lectura de `limites-plan.json` | `src/dosificador-cuota.ts` |
+| Estimador, pacer, admisión, circuito, colocación y `decidir` | `src/dosificador.ts` |
+| Simulador por replay | `src/dosificador-sim.ts` |
+| Laboratorio (`contrato`, `replay`) | `src/lab/dosificador.lab.ts` |
+| `limites-plan.json` con reinicio, plan y fuente también de Codex, y `reinicioSesion` (ventana de 5 h) opcional | `src/limites.ts` |
+
+Rutas nuevas: `POST /dosificador/decidir`, `POST /dosificador/observar`, `POST /dosificador/simular`, `GET /dosificador/estado` y `GET/PUT /dosificador/config` (el PUT necesita tarea aceptada en producción). `kj dosificador estado|config|decidir|simular`. En producción solo decide: lanzar lo decidido es cosa de la cola de Atlas dev.
+
 ## Datos
 
 `<datos del paquete>/task_logs.db` y `active_config.json`. Si no existen y `ATLAS_KARAJAN_DATA` apunta a la carpeta `data/` de un

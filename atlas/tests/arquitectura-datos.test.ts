@@ -71,11 +71,11 @@ describe('arquitectura: contrato de datos', () => {
     assert.deepEqual(a.familias.map((f) => f.nombre), ['Interfaz', 'Modificadores', 'Observación', 'Ejecución', 'Decisión', 'Base']);
     assert.deepEqual(a.familias.flatMap((f) => f.componentes).sort(), COMPONENTES.map((c) => c.id).sort());
     assert.deepEqual(a.enlaces, ENLACES);
-    assert.deepEqual(a.familias.find((f) => f.id === 'decision')!.componentes, ['clasificador', 'delegador', 'selector', 'rotador', 'etiquetas']);
+    assert.deepEqual(a.familias.find((f) => f.id === 'decision')!.componentes, ['clasificador', 'delegador', 'dosificador', 'selector', 'rotador', 'etiquetas']);
   });
 
-  it('los 22 componentes traen todos los campos del contrato', () => {
-    assert.equal(a.componentes.length, 22);
+  it('los 23 componentes traen todos los campos del contrato', () => {
+    assert.equal(a.componentes.length, 23);
     for (const c of a.componentes) {
       assert.ok(['ok', 'hallazgos', 'sin_ejecutar', 'pendiente', 'error'].includes(c.estado), c.id);
       assert.ok(c.familia && c.responsabilidad && Array.isArray(c.modulos), c.id);
@@ -142,10 +142,13 @@ describe('arquitectura: contrato de datos', () => {
     assert.deepEqual(porId(a, 'clasificador').configuracion!['umbrales_nivel'], ['N1 ≤ 1.5', 'N2 ≤ 2.5', 'N3 ≤ 3.5', 'N4 ≤ 4.3']);
     assert.equal(porId(a, 'modo').configuracion!['modo'], 'produccion');
     assert.equal(porId(a, 'rotador').configuracion!['dias_nucleo'], 14);
+    const dos = porId(a, 'dosificador').configuracion!;
+    assert.deepEqual([dos['margen_seguridad_pct'], dos['pacing_modo'], dos['modo_simulacion']], [10, 'lineal_p', false]);
+    assert.deepEqual(porId(a, 'dosificador').escenarios.map((e) => e.id), ['contrato', 'replay']);
   });
 
   it('fichas: las de los cuatro componentes con laboratorio son detalladas; las sin código, cortas y no especificadas', () => {
-    for (const id of ['clasificador', 'delegador', 'selector', 'biblioteca', 'comparador']) {
+    for (const id of ['clasificador', 'delegador', 'selector', 'biblioteca', 'comparador', 'dosificador']) {
       const f = porId(a, id).ficha;
       assert.equal(f.especificado, true);
       assert.ok(f.como_funciona.pasos.length >= 4 && f.como_funciona.entradas.length && f.como_funciona.salidas.length && f.reglas.length, id);
@@ -238,7 +241,7 @@ describe('arquitectura: nunca lanza', () => {
       pasarela: { leer: () => { throw new Error('borradores rotos'); } },
     };
     const v = await todo(roto);
-    assert.equal(v.componentes.length, 22);
+    assert.equal(v.componentes.length, 23);
     const c = porId(v, 'clasificador');
     assert.equal(c.configuracion, null);
     assert.equal(c.estado, 'sin_ejecutar');
@@ -300,13 +303,13 @@ describe('GET /laboratorio/arquitectura', () => {
     return salida;
   };
 
-  it('devuelve los 22 componentes con el contrato', async () => {
+  it('devuelve los 23 componentes con el contrato', async () => {
     const r = await llamar('GET /laboratorio/arquitectura');
     assert.equal(r.status, 200);
     const v = r.body as unknown as Arquitectura;
     assert.equal(v.version, '0.8.0');
     assert.equal(v.modo, 'produccion');
-    assert.equal(v.componentes.length, 22);
+    assert.equal(v.componentes.length, 23);
     assert.equal(porId(v, 'delegador').estado, 'sin_ejecutar');
     assert.equal(porId(v, 'rotador').estado, 'sin_ejecutar');
     assert.ok(Object.keys(porId(v, 'delegador').configuracion!).length);
