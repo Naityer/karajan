@@ -159,6 +159,27 @@ describe('API del dosificador', () => {
     assert.equal((await llamar('POST /dosificador/simular', { body: { semanas: 500 } })).body['semanas'], 12);
   });
 
+  it('relevo: decide, lo anota en el registro (salvo simulacro) y una entrada inválida da 400', async () => {
+    const cuerpo = {
+      ahora: AHORA, leido: new Date(AHORA - 60_000).toISOString(), agentes: { claude: { disponible: true, enCurso: 0 }, codex: { disponible: true, enCurso: 0 } }, uso: { claude: uso(40), codex: uso(40) },
+      relevo: { id: 'rel1', equipo: 'pc', origen: 'portatil', estadoOrigen: 'bloqueada', agente: 'auto', ultimoLatido: AHORA - 7_200_000, resetsAt: AHORA - 600_000, checkpoint: true },
+    };
+    const antes = ((await llamar('GET /dosificador/decisiones')).body['relevos'] as unknown[]).length;
+    const sim = await llamar('POST /dosificador/relevo', { body: { ...cuerpo, simulacro: true } });
+    assert.equal(sim.status, 200);
+    assert.equal(sim.body['accion'], 'tomar', String(sim.body['motivo']));
+    assert.equal(((await llamar('GET /dosificador/decisiones')).body['relevos'] as unknown[]).length, antes, 'el simulacro no se anota');
+    const r = await llamar('POST /dosificador/relevo', { body: cuerpo });
+    assert.equal(typeof r.body['agente'], 'string', 'con agente auto elige uno con el circuito cerrado (el test anterior dejó abierto uno)');
+    const d = (await llamar('GET /dosificador/decisiones')).body as { relevos: { relevo: string; accion: string; en: string }[]; relevo: { politicaDefecto: string }; topes: Record<string, unknown> };
+    assert.equal(d.relevos[0]!.relevo, 'rel1');
+    assert.equal(d.relevos[0]!.accion, 'tomar');
+    assert.match(d.relevos[0]!.en, /^\d{4}-/);
+    assert.equal(d.relevo.politicaDefecto, 'primero-vivo');
+    assert.ok('claude' in d.topes && 'codex' in d.topes);
+    assert.equal((await llamar('POST /dosificador/relevo', { body: { ...cuerpo, relevo: { id: 'x' } } })).status, 400);
+  });
+
   it('el laboratorio del dosificador corre por la ruta de siempre y su ficha sale en la arquitectura', async () => {
     const ej = await llamar('POST /laboratorio/ejecutar', { body: { componente: 'dosificador', proponer: false, escenario: 'contrato' } });
     assert.equal(ej.status, 200);

@@ -130,6 +130,8 @@ Estrellas: «propias» si la ficha es del repo; «heredadas» si la skill está 
 
 ## 7. Lo que queda (borradores en Atlas dev)
 
+Hecho en 0.11.0 (tarea 2hbf): tope y ritmo por agente, equipos dormidos y relevo entre equipos (`decidirRelevo`, §9 «Tope, ritmo, equipos dormidos y relevo»).
+
 Hecho en 0.10.0 (dosificador): el componente `dosificador` (§9) con su laboratorio, ficha, rutas `/dosificador/*`, `kj dosificador` y la lectura del reinicio, plan y fuente también de Codex en `limites-plan.json`. Cierra el borrador «Planificador como componente de karajan»: el planificador de la cola de Atlas dev no es un componente aparte, es el `dosificador` que decide y la cola de Atlas dev (lado Atlas dev) quien ejecuta lo decidido; el nombre «planificador» queda para el `Planificador` de rutinas de Atlas dev.
 
 Hecho en 0.9.0 (tarea j0co): laboratorios del rotador, curador, comparador, modificadores (eficiencia, método, prompts) y de
@@ -186,3 +188,15 @@ Decide **cuándo, dónde (equipo) y con qué agente** se lanza cada tarea para l
 **Simulador (config por defecto, demanda 1,3× el presupuesto: la cola está saturada a propósito, así que la espera crece).** Con las 3 semillas × 4 semanas × 2 agentes del laboratorio: 0 semanas sobre el margen, 13,8 % de cuota sin usar al renovar, 2,3 oscilaciones de modo por semana y agente. Con 20 semillas × 6 semanas (240 semanas de agente): 2 acaban unas décimas por encima del margen (máximo 90,4 % con margen 10 %), 13,5 % sin usar y 1,9 oscilaciones. Un coste real 2-3 veces mayor que su p80 en las últimas horas es lo que no se puede evitar. El laboratorio `replay` lo ejecuta con la configuración viva y propone cambios como borradores; nunca los aplica.
 
 **Fixture de la ventana.** `atlas/ui/fixtures/arquitectura.json` (el esquema de ejemplo de `?demo=1`) se regenera con `node atlas/ui/dev/regenerar-fixture.mjs` (`--comprobar` solo avisa si está desactualizada): refresca versión, familias, enlaces, fichas y escenarios desde `componentes.ts` y `fichas-componentes.ts` y conserva los datos de demostración que ya tenía.
+
+### Tope, ritmo, equipos dormidos y relevo (0.11.0, tarea 2hbf)
+
+- **Tope por agente** (`planes.<agente>.topePct`): techo duro del % semanal, por encima de margen y reserva; `techo = min(límite − margen − reserva, topePct)`. Sirve para dejar siempre una reserva del total que los agentes no tocan. `null` = sin tope propio.
+- **Ritmo máximo** (`planes.<agente>.ritmoMaxPctHora`): si el burn rate medido pasa de él, la tarea se difiere 30 min con el motivo «ritmo». `null` = sin límite.
+- **Equipos** (`equipos.<id>.dormido: {desde, hasta}` en horas locales del `horario.zona`): a un equipo dormido no se le coloca nada; si es el único posible, la diferida dice hasta cuándo. Por defecto el servidor duerme de 5 a 8.
+- **Relevo** (`relevo: {politicaDefecto, tomarSiSilencio, silencioMin, graciaMin, maxIntentos}`) y `decidirRelevo`: el equipo de destino (el servidor, con la reserva armada y el último checkpoint del origen) pregunta si toma ya una tarea que empezó otro equipo (el PC). La política dice si «toca»:
+  - origen **bloqueado por cuota**: tras la renovación (`resetsAt`, o el circuito del agente; sin ninguno de los dos, tras `silencioMin` sin latido). Con `primero-vivo` (por defecto) además el origen debe llevar `graciaMin` sin latido: si sigue encendido, la reanuda él. Con `auto`, la toma el destino siempre. Con `preguntar`, nunca sola.
+  - origen **trabajando** sin dar latido `silencioMin` (si `tomarSiSilencio`).
+  - nunca sin checkpoint; tras `maxIntentos` arranques fallidos, cede.
+  Si toca, `decidir` —con esa tarea como única de la cola y el destino como único equipo— aplica circuito, cuota, tope, ritmo, horario y equipo dormido y elige el agente; no deja lease (la cola del destino la vuelve a decidir con su propio id). Cada decisión se anota en `estado.relevos` (las 200 últimas).
+- **Rutas**: `POST /dosificador/relevo` (`{ahora, relevo: {id, equipo, origen, estadoOrigen, politica?, agente?, ultimoLatido, resetsAt, intentos, checkpoint, …}, agentes, uso, leido?}` → `{accion: tomar|esperar|ceder, porque, agente, lanzarEn, hasta, motivo}`; `simulacro: true` no anota) y `GET /dosificador/decisiones` (registro de relevos, política, equipos y topes) para el Monitor de Atlas dev. Los checkpoints, el testigo y la activación los hace Atlas dev (`docs/relevo.md` en atlas-dev).

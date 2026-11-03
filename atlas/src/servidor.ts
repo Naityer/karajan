@@ -18,7 +18,7 @@ import { Biblioteca } from './biblioteca';
 import { aHallazgo, curar, REGLAS_CURADOR, UMBRALES_CURADOR, type EntradaCurador } from './curador';
 import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
 import { leerLimites, leerLimitesSinCaducidad, rutaLimites } from './limites';
-import { circuitoAbierto, decidir, estimar, registrarCoste, registrarLimite, validarEntrada } from './dosificador';
+import { circuitoAbierto, decidir, decidirRelevo, estimar, registrarCoste, registrarLimite, validarEntrada, validarRelevo } from './dosificador';
 import { guardarConfig as guardarConfigDos, guardarEstado as guardarEstadoDos, leerConfig as leerConfigDos, leerEstado as leerEstadoDos, type EstadoDosificador } from './dosificador-config';
 import { tiempoMs } from './dosificador-cuota';
 import { simular } from './dosificador-sim';
@@ -181,6 +181,30 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       ultima_decision: est.ultima ? { en: isoOrNull(est.ultima.en), decisiones: est.ultima.decisiones, diferidas: est.ultima.diferidas } : null,
       en_vuelo: Object.entries(est.leases).map(([tarea, x]) => ({ tarea, agente: x.agente, equipo: x.equipo, coste_p80_pct: x.costePct, lanzar_en: isoOrNull(x.lanzarEn), hasta: isoOrNull(x.hasta) })),
       clases_aprendidas: Object.keys(est.estimador).filter((k) => !k.startsWith('*')).length,
+    };
+  });
+
+  /**
+   * Relevo entre equipos: el destino (el servidor) pregunta si toma ya una tarea que empezó otro equipo. Solo DECIDE; la anota en el
+   * registro de relevos del estado (`GET /dosificador/decisiones`). `simulacro: true` decide sin guardar.
+   */
+  app.post('/dosificador/relevo', (req, reply) => {
+    try {
+      const cfg = configDos();
+      const v = validarRelevo(req.body, cfg);
+      if (!v.ok) return malaPeticion(reply, v.error);
+      const r = decidirRelevo(v.entrada, cfg, estadoDos());
+      if ((req.body as { simulacro?: unknown }).simulacro !== true) guardarEstadoDosSeguro(r.estado);
+      return r.decision;
+    } catch (e) { return malaPeticion(reply, `no se pudo decidir el relevo: ${String((e as Error).message ?? e).slice(0, 200)}`); }
+  });
+
+  /** Las últimas decisiones de relevo (más recientes primero), con la política y los parámetros vigentes. Solo lectura. */
+  app.get('/dosificador/decisiones', () => {
+    const cfg = configDos();
+    return {
+      relevo: cfg.relevo, equipos: cfg.equipos, topes: Object.fromEntries(Object.entries(cfg.planes).map(([a, p]) => [a, { topePct: p.topePct ?? null, ritmoMaxPctHora: p.ritmoMaxPctHora ?? null }])),
+      relevos: [...estadoDos().relevos].reverse().map((x) => ({ ...x, en: isoOrNull(x.en), lanzarEn: isoOrNull(x.lanzarEn) })),
     };
   });
 

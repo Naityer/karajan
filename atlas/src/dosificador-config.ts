@@ -22,7 +22,22 @@ export interface VentanaCfg {
   /** Cuántos % de ESTA ventana cuesta 1 % del plan semanal (la de 5 h es mucho más pequeña que la semanal). 1 en la mayor. */
   escalaCoste?: number;
 }
-export interface PlanAgente { ventanas: VentanaCfg[]; pesosModelo: Record<string, number> }
+export interface PlanAgente {
+  ventanas: VentanaCfg[]; pesosModelo: Record<string, number>;
+  /** Tope duro del % semanal que los agentes nunca pasan (reserva del total), por encima de margen y reserva. null = sin tope propio. */
+  topePct?: number | null;
+  /** Tasa de consumo máxima (% semanal por hora, medida con el burn rate): por encima se difiere con el motivo «ritmo». null = sin límite. */
+  ritmoMaxPctHora?: number | null;
+}
+/** Un equipo (pc, servidor…): horas locales [desde, hasta) en que está dormido o apagado y no se le coloca ni se le activa nada. */
+export interface EquipoCfg { dormido: { desde: number; hasta: number } | null }
+export type PoliticaRelevo = 'primero-vivo' | 'auto' | 'preguntar';
+/**
+ * Relevo entre equipos: cuándo el equipo de destino (el servidor) toma una tarea que empezó otro (el PC). `primero-vivo`: al renovarse la
+ * cuota la reanuda el origen si sigue dando latido; si no, la toma el destino. `auto`: siempre el destino. `preguntar`: solo si la persona
+ * lo pidió. `tomarSiSilencio`: el destino también la toma si el origen deja de dar latido `silencioMin` sin haberse bloqueado.
+ */
+export interface RelevoCfg { politicaDefecto: PoliticaRelevo; tomarSiSilencio: boolean; silencioMin: number; graciaMin: number; maxIntentos: number }
 export interface Horario {
   zona: string;
   /** Horas locales [desde, hasta) en que no se lanza nada (puede cruzar la medianoche); null = lanza a cualquier hora. */
@@ -47,6 +62,9 @@ export interface ConfigDosificador {
   circuito: { umbralLimites: number };
   lease: { ttlMin: number };
   sonda: { intervaloMin: number; caducidadMin: number };
+  /** Equipos con su horario de disponibilidad (por id: pc, servidor…). Un equipo que no figura está siempre disponible. */
+  equipos: Record<string, EquipoCfg>;
+  relevo: RelevoCfg;
   /** Con él se lanza aunque falte el dato de cuota (solo para pruebas y simulaciones). */
   modoSimulacion: boolean;
 }
@@ -57,6 +75,7 @@ export const PLAN_CLAUDE: PlanAgente = {
     { nombre: 'semanal', duracionMin: 10080, tipo: 'fija', limitePct: 100, anclaRenovacion: null, escalaCoste: 1 },
   ],
   pesosModelo: { haiku: 0.3, sonnet: 1, opus: 5 },
+  topePct: null, ritmoMaxPctHora: null,
 };
 export const PLAN_CODEX: PlanAgente = {
   ventanas: [
@@ -64,6 +83,7 @@ export const PLAN_CODEX: PlanAgente = {
     { nombre: 'semanal', duracionMin: 10080, tipo: 'fija', limitePct: 100, anclaRenovacion: null, escalaCoste: 1 },
   ],
   pesosModelo: {},
+  topePct: null, ritmoMaxPctHora: null,
 };
 
 export const CONFIG_BASE: ConfigDosificador = {
@@ -81,6 +101,8 @@ export const CONFIG_BASE: ConfigDosificador = {
   circuito: { umbralLimites: 1 },
   lease: { ttlMin: 90 },
   sonda: { intervaloMin: 10, caducidadMin: 120 },
+  equipos: { servidor: { dormido: { desde: 5, hasta: 8 } } },
+  relevo: { politicaDefecto: 'primero-vivo', tomarSiSilencio: true, silencioMin: 45, graciaMin: 5, maxIntentos: 3 },
   modoSimulacion: false,
 };
 
@@ -111,7 +133,11 @@ function plan(v: unknown, def: PlanAgente): PlanAgente {
   const unicas = ventanas.filter((x, i) => ventanas.findIndex((y) => y.nombre === x.nombre) === i);
   const pesos: Record<string, number> = {};
   for (const [k, p] of Object.entries(obj(o['pesosModelo'])).slice(0, 30)) if (nombre(k)) pesos[k] = num(p, 1, 0.01, 1000);
-  return { ventanas: unicas.length ? unicas : def.ventanas.map((x) => ({ ...x })), pesosModelo: 'pesosModelo' in o ? pesos : { ...def.pesosModelo } };
+  const opcional = (k: 'topePct' | 'ritmoMaxPctHora', max: number) => (o[k] === undefined ? def[k] ?? null : o[k] === null ? null : num(o[k], def[k] ?? max, 0.1, max));
+  return {
+    ventanas: unicas.length ? unicas : def.ventanas.map((x) => ({ ...x })), pesosModelo: 'pesosModelo' in o ? pesos : { ...def.pesosModelo },
+    topePct: opcional('topePct', 100), ritmoMaxPctHora: opcional('ritmoMaxPctHora', 100),
+  };
 }
 function mapaNum(v: unknown, def: Record<string, number>, min: number, max: number): Record<string, number> {
   const o = obj(v);
@@ -139,6 +165,14 @@ export function normalizarConfig(crudo: unknown): ConfigDosificador {
     for (const [k, v] of Object.entries(obj(af['agentePorTipo'])).slice(0, 40)) if (nombre(k) && typeof v === 'string' && nombre(v)) agentePorTipo[k] = v;
     const porAgente = mapaNum(cc['porAgente'], B.concurrencia.porAgente, 0, 20);
     for (const k of Object.keys(planes)) if (porAgente[k] === undefined) porAgente[k] = 1;
+    const crudosEquipos = o['equipos'] === undefined ? B.equipos : obj(o['equipos']);
+    const equipos: Record<string, EquipoCfg> = {};
+    for (const [k, v] of Object.entries(crudosEquipos).slice(0, 20)) {
+      if (!nombre(k)) continue;
+      const d = obj(obj(v)['dormido']);
+      equipos[k] = { dormido: d['desde'] === undefined || d['hasta'] === undefined ? null : { desde: hora(d['desde'], 0), hasta: hora(d['hasta'], 0) } };
+    }
+    const rl = obj(o['relevo']);
     return {
       planes,
       margenSeguridadPct: num(o['margenSeguridadPct'], B.margenSeguridadPct, 0, 50),
@@ -160,6 +194,11 @@ export function normalizarConfig(crudo: unknown): ConfigDosificador {
       circuito: { umbralLimites: ent(ci['umbralLimites'], B.circuito.umbralLimites, 1, 50) },
       lease: { ttlMin: num(le['ttlMin'], B.lease.ttlMin, 1, 10_080) },
       sonda: { intervaloMin: num(so['intervaloMin'], B.sonda.intervaloMin, 1, 1440), caducidadMin: num(so['caducidadMin'], B.sonda.caducidadMin, 1, 10_080) },
+      equipos,
+      relevo: {
+        politicaDefecto: elegir(rl['politicaDefecto'], ['primero-vivo', 'auto', 'preguntar'] as const, B.relevo.politicaDefecto), tomarSiSilencio: bool(rl['tomarSiSilencio'], B.relevo.tomarSiSilencio),
+        silencioMin: ent(rl['silencioMin'], B.relevo.silencioMin, 5, 1440), graciaMin: ent(rl['graciaMin'], B.relevo.graciaMin, 1, 240), maxIntentos: ent(rl['maxIntentos'], B.relevo.maxIntentos, 1, 10),
+      },
       modoSimulacion: bool(o['modoSimulacion'], B.modoSimulacion),
     };
   } catch { return structuredClone(CONFIG_BASE); }
@@ -209,8 +248,12 @@ export interface EstadoDosificador {
   ref: Record<string, { t: number; u: number }>;
   gasto: Record<string, number>;
   ultima: { en: number; decisiones: number; diferidas: number } | null;
+  /** Las últimas decisiones de relevo (las 200 más recientes), para el monitor. */
+  relevos: RegistroRelevo[];
 }
-export const estadoInicial = (): EstadoDosificador => ({ version: 1, estimador: {}, circuitos: {}, leases: {}, buckets: {}, modos: {}, muestras: {}, personal: {}, ref: {}, gasto: {}, ultima: null });
+export interface RegistroRelevo { en: number; relevo: string; equipo: string; accion: 'tomar' | 'esperar' | 'ceder'; agente: string | null; lanzarEn: number | null; motivo: string }
+export const MAX_REGISTRO_RELEVOS = 200;
+export const estadoInicial = (): EstadoDosificador => ({ version: 1, estimador: {}, circuitos: {}, leases: {}, buckets: {}, modos: {}, muestras: {}, personal: {}, ref: {}, gasto: {}, ultima: null, relevos: [] });
 
 const fin = (v: unknown, def: number) => (typeof v === 'number' && Number.isFinite(v) ? v : def);
 const finN = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -235,6 +278,12 @@ export function normalizarEstado(crudo: unknown): EstadoDosificador {
     for (const [k, v] of Object.entries(obj(o['gasto'])).slice(0, 20)) e.gasto[k] = Math.max(0, fin(v, 0));
     const u = obj(o['ultima']);
     if (finN(u['en']) !== null) e.ultima = { en: u['en'] as number, decisiones: ent(u['decisiones'], 0, 0, 1e6), diferidas: ent(u['diferidas'], 0, 0, 1e6) };
+    if (Array.isArray(o['relevos'])) {
+      e.relevos = o['relevos'].map((x) => obj(x)).filter((x) => finN(x['en']) !== null && typeof x['relevo'] === 'string').slice(-MAX_REGISTRO_RELEVOS).map((x) => ({
+        en: x['en'] as number, relevo: (x['relevo'] as string).slice(0, 80), equipo: typeof x['equipo'] === 'string' ? x['equipo'].slice(0, 80) : '',
+        accion: elegir(x['accion'], ['tomar', 'esperar', 'ceder'] as const, 'esperar'), agente: typeof x['agente'] === 'string' ? x['agente'] : null, lanzarEn: finN(x['lanzarEn']), motivo: typeof x['motivo'] === 'string' ? x['motivo'].slice(0, 300) : '',
+      }));
+    }
   } catch { return estadoInicial(); }
   return e;
 }

@@ -145,6 +145,8 @@ export const FICHAS: Record<string, FichaComponente> = {
         'Circuito por agente: al alcanzar un límite se abre hasta resets_at (backoff exponencial con jitter solo si no hay fecha) y no se lanza nada en él (dosificador.ts · registrarLimite, backoffMin)',
         'Colocación: agente fijo, preferido por tipo o el de más presupuesto relativo; equipo con el repo ya preparado y menos carga; prioridad con aging y backfilling (dosificador.ts · decidir)',
         'Guarda el lease de cada decisión (coste en vuelo hasta que la tarea acaba) y aprende de la tarea terminada con /dosificador/observar (dosificador.ts · registrarCoste, servidor.ts · /dosificador/*)',
+        'Tope y ritmo por agente: el % semanal de topePct es un techo duro que no se pasa nunca y, por encima de ritmoMaxPctHora (burn rate), se difiere con el motivo «ritmo»; a un equipo dormido (equipos.<id>.dormido) no se le coloca nada (dosificador.ts · pacing, decidir, equipoDormido)',
+        'Relevo entre equipos: el destino (el servidor) pregunta si toma una tarea que empezó otro equipo; la política (primero-vivo, auto, preguntar) dice si toca —cuota renovada y origen sin latido, o silencio del origen— y decidir aplica circuito, cuota, tope, ritmo y horario; cada decisión queda en el registro de relevos (dosificador.ts · decidirRelevo, servidor.ts · /dosificador/relevo, /dosificador/decisiones)',
         'Laboratorio · contrato: parsers fieles con fixtures sintéticas, decisión determinista, nada lanzado con el circuito abierto o sin dato (lab/dosificador.lab.ts · contrato)',
         'Laboratorio · replay: semanas sintéticas con picos laborales y costes lognormales; semanas sobre el margen, cuota sin usar, espera p95 y oscilaciones (dosificador-sim.ts · simular, lab/dosificador.lab.ts · replay)',
       ],
@@ -156,6 +158,7 @@ export const FICHAS: Record<string, FichaComponente> = {
       'Más margen de seguridad nunca acorta el retraso; sin fecha de reinicio el modo es frenado.',
       'El mismo estado y la misma entrada dan la misma decisión: sin reloj ni azar dentro de decidir.',
       'En producción solo decide: no lanza ni cambia nada fuera de su propio estado; cambiar su configuración exige tarea aceptada.',
+      'Relevo: nunca sin checkpoint del origen; con «primero vivo» el origen vivo tiene preferencia; tras maxIntentos arranques fallidos se cede.',
       'Su laboratorio es sintético (no lee límites ni registros reales): contrato y replay semanal con Wilson y muestra mínima de 24 agente-semanas.',
     ],
     configuracion: (c) => {
@@ -167,6 +170,9 @@ export const FICHAS: Record<string, FichaComponente> = {
         percentil_coste: d.estimador.percentil, circuito_umbral_limites: d.circuito.umbralLimites, lease_ttl_min: d.lease.ttlMin, dato_caduca_min: d.sonda.caducidadMin,
         horario_zona: d.horario.zona, horario_silencio: d.horario.silencio ? `${d.horario.silencio.desde}-${d.horario.silencio.hasta}` : 'sin silencio',
         agentes: Object.entries(d.planes).map(([a, p]) => `${a}: ${p.ventanas.map((v) => `${v.nombre} ${v.duracionMin} min`).join(', ')}`), modo_simulacion: d.modoSimulacion,
+        topes: Object.entries(d.planes).map(([a, p]) => `${a}: ${p.topePct ?? 'sin tope'} % · ${p.ritmoMaxPctHora ?? 'sin límite'} %/h`),
+        equipos_dormidos: Object.entries(d.equipos).map(([e, x]) => `${e}: ${x.dormido ? `${x.dormido.desde}-${x.dormido.hasta}` : 'siempre'}`),
+        relevo_politica: d.relevo.politicaDefecto, relevo_silencio_min: d.relevo.tomarSiSilencio ? d.relevo.silencioMin : 'apagado', relevo_gracia_min: d.relevo.graciaMin, relevo_max_intentos: d.relevo.maxIntentos,
       };
     },
   },

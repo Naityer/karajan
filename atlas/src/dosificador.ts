@@ -1,6 +1,6 @@
 import {
-  CONFIG_BASE, PUNTOS_PRIORIDAD, PRIORIDADES, estadoInicial, normalizarEstado,
-  type ConfigDosificador, type EstadoDosificador, type Horario, type Modo, type Prioridad, type VentanaCfg,
+  CONFIG_BASE, MAX_REGISTRO_RELEVOS, PUNTOS_PRIORIDAD, PRIORIDADES, estadoInicial, normalizarEstado,
+  type ConfigDosificador, type EstadoDosificador, type Horario, type Modo, type PoliticaRelevo, type Prioridad, type VentanaCfg,
 } from './dosificador-config';
 import { cuotaDeUso, estadoCuota, ventanaDe, type EstadoDato } from './dosificador-cuota';
 
@@ -14,8 +14,10 @@ import { cuotaDeUso, estadoCuota, ventanaDe, type EstadoDato } from './dosificad
  *               P con banda muerta e histéresis (normal/frenado/bloqueado) y un cubo de fichas por agente para las ráfagas
  *   admisión    coste p80 ≤ presupuesto − comprometido en vuelo (leases); tope de la ventana de 5 h; horario de silencio
  *   circuito    por agente: abre al alcanzar un límite y cierra en `resets_at`, nunca por backoff ciego (el backoff solo cubre «no sé cuándo»)
- *   colocación  agente (fijo, preferido por tipo o el de más presupuesto relativo) y equipo (repo ya preparado, menos carga);
+ *   colocación  agente (fijo, preferido por tipo o el de más presupuesto relativo) y equipo (repo ya preparado, menos carga, despierto);
  *               los agentes son colas INDEPENDIENTES; prioridad con aging y backfilling
+ *   tope/ritmo  por agente: un % semanal que nunca se pasa (`topePct`) y una tasa de consumo máxima (`ritmoMaxPctHora`)
+ *   relevo      `decidirRelevo`: si el equipo de destino toma ya una tarea que empezó otro equipo (ver al final)
  *
  * Dato ausente o caduco = fail-closed: no se lanza a ciegas (salvo `modoSimulacion`).
  */
@@ -132,6 +134,19 @@ export function proximoPermitido(h: Horario, ms: number): number {
   if (pesoHora(h, ms) > 0) return ms;
   let t = (Math.floor(ms / HORA) + 1) * HORA;
   for (let i = 0; i < 24 * 7; i++, t += HORA) if (pesoHora(h, t) > 0) return t;
+  return ms + 7 * DIA;
+}
+
+/** ¿El equipo está dormido (fuera de su horario de disponibilidad) en `ms`? */
+export function equipoDormido(cfg: ConfigDosificador, equipo: string, ms: number): boolean {
+  const d = cfg.equipos[equipo]?.dormido;
+  return !!d && enRango(horaLocal(cfg.horario.zona, ms).hora, d.desde, d.hasta);
+}
+/** El primer instante ≥ `ms` en que el equipo está despierto (como mucho a 7 días). */
+export function despiertaEn(cfg: ConfigDosificador, equipo: string, ms: number): number {
+  if (!equipoDormido(cfg, equipo, ms)) return ms;
+  let t = (Math.floor(ms / HORA) + 1) * HORA;
+  for (let i = 0; i < 24 * 7; i++, t += HORA) if (!equipoDormido(cfg, equipo, t)) return t;
   return ms + 7 * DIA;
 }
 
@@ -252,9 +267,10 @@ export interface Pacing {
  * Línea ideal y controlador P de una ventana. `lineaPct` = (límite − margen)·f, con f la fracción de horas útiles ya transcurridas;
  * `errorPct` = uso − línea (positivo: vamos por delante); `retrasoMin` = clamp(kp·error/tasaIdeal, 0, retrasoMax).
  */
-export function pacing(cfg: ConfigDosificador, v: VentanaCfg, o: { usadoPct: number; reinicio: number | null; ahora: number; reservaPct: number; comprometidoPct?: number }): Pacing {
+export function pacing(cfg: ConfigDosificador, v: VentanaCfg, o: { usadoPct: number; reinicio: number | null; ahora: number; reservaPct: number; comprometidoPct?: number; topePct?: number | null }): Pacing {
   const margen = Math.min(cfg.margenSeguridadPct, v.limitePct - 0.1);
-  const techo = Math.max(0, v.limitePct - margen - o.reservaPct);
+  // El tope del agente es un techo duro: nunca se pasa, aunque el margen y la reserva dejaran más.
+  const techo = Math.min(Math.max(0, v.limitePct - margen - o.reservaPct), o.topePct ?? Infinity);
   const presupuesto = Math.max(0, techo - o.usadoPct - (o.comprometidoPct ?? 0));
   if (o.reinicio === null || o.reinicio <= o.ahora) return { techoPct: techo, presupuestoPct: presupuesto, lineaPct: null, errorPct: null, tasaIdealPorHora: null, retrasoMin: 0, sinFecha: true, fraccion: null };
   const dur = v.duracionMin * MIN, inicio = o.reinicio - dur;
@@ -329,7 +345,7 @@ function preparar(a: string, entrada: EntradaDosificador, cfg: ConfigDosificador
   const R = r.reinicio, durSem = sem.duracionMin * MIN;
   const frac = R !== null ? clamp((R - ahora) / durSem, 0, 1) : 1;
   const reserva = U === null ? 0 : Math.min(reservaPersonal(cfg, est.personal[a], frac, R !== null ? (R - ahora) / DIA : durSem / DIA), Math.max(0, sem.limitePct - cfg.margenSeguridadPct));
-  const pac = U === null ? null : pacing(cfg, sem, { usadoPct: U, reinicio: R, ahora, reservaPct: reserva, comprometidoPct: inflight });
+  const pac = U === null ? null : pacing(cfg, sem, { usadoPct: U, reinicio: R, ahora, reservaPct: reserva, comprometidoPct: inflight, topePct: cfg.planes[a]!.topePct ?? null });
   // Ritmo al que se repone el presupuesto: lo que queda, repartido en las horas útiles hasta el reinicio (o la ventana entera sin fecha).
   let tasa: number | null = null;
   if (pac) {
@@ -408,7 +424,7 @@ export function decidir(entrada: EntradaDosificador, cfg: ConfigDosificador = CO
     let mejor: EquipoEntrada | null = null, puntos = -Infinity;
     for (const e of entrada.equipos) {
       const n = asignadasEquipo[quien(e.id, a)] ?? 0;
-      if (!e.disponible || n >= 1 || (e.enCurso[a] ?? 0) + n >= cfg.concurrencia.porEquipo) continue;
+      if (!e.disponible || n >= 1 || (e.enCurso[a] ?? 0) + n >= cfg.concurrencia.porEquipo || equipoDormido(cfg, e.id, ahora)) continue;
       const carga = Object.values(e.enCurso).reduce((s, x) => s + x, 0) + Object.entries(asignadasEquipo).reduce((s, [k, x]) => (k.startsWith(`${e.id}|`) ? s + x : s), 0);
       const p = (t.equipo === e.id ? cfg.afinidad.pesoEquipoPreferido : 0) + (t.repo && e.repos.includes(t.repo) ? cfg.afinidad.pesoRepo : 0) - carga;
       if (p > puntos || (p === puntos && mejor !== null && e.id < mejor.id)) { mejor = e; puntos = p; }
@@ -426,7 +442,15 @@ export function decidir(entrada: EntradaDosificador, cfg: ConfigDosificador = CO
     if (cierre !== null) return no(`circuito abierto (límite alcanzado) hasta ${iso(cierre)}`, cierre);
     if (hueco(a) <= 0) return no('sin hueco de concurrencia');
     const eq = elegirEquipo(t, a);
-    if (!eq) return no('ningún equipo libre');
+    if (!eq) {
+      // Si los equipos que podrían llevarla solo fallan por estar dormidos, se dice hasta cuándo.
+      const libres = entrada.equipos.filter((e) => e.disponible), dormidos = libres.filter((e) => equipoDormido(cfg, e.id, ahora));
+      if (dormidos.length && dormidos.length === libres.length) {
+        const h = Math.min(...dormidos.map((e) => despiertaEn(cfg, e.id, ahora)));
+        return no(`equipo dormido hasta ${iso(h)}`, h);
+      }
+      return no('ningún equipo libre');
+    }
     if (!cfg.modoSimulacion && p.datos !== 'ok') return no(p.datos === 'ausente' ? 'sin dato de cuota (no se lanza a ciegas)' : 'dato de cuota caduco (no se lanza a ciegas)');
     if (pesoHora(cfg.horario, ahora) === 0) { const h = proximoPermitido(cfg.horario, ahora); return no(`horario de silencio hasta ${iso(h)}`, h); }
     const modelo = t.modelo ? cfg.planes[a]!.pesosModelo[t.modelo] ?? 1 : 1;
@@ -438,7 +462,10 @@ export function decidir(entrada: EntradaDosificador, cfg: ConfigDosificador = CO
       return no(`la ventana de 5 h (${pct1(p.Us)} % + ${pct1(p.escala * c)} %) pasaría de ${pct1(p.topeSesion)} %; espera al reinicio`, p.Rs !== null && p.Rs > ahora ? p.Rs : null);
     }
     if (!p.pac || p.U === null) return { ok: true, eq, clase: claseDeTarea(t, a), costePct: c, peor: e.pGuarda, lanzarEn: null, motivo: `${motivo}; sin % semanal: solo rige la ventana de 5 h`, fichas: 0 };
-    if (p.U >= p.pac.techoPct) return no(`cuota semanal agotada para dosificar (${pct1(p.U)} % ≥ techo ${pct1(p.pac.techoPct)} %) hasta el reinicio`, p.R);
+    const tope = cfg.planes[a]!.topePct ?? null;
+    if (p.U >= p.pac.techoPct) return no(`cuota semanal agotada para dosificar (${pct1(p.U)} % ≥ techo ${pct1(p.pac.techoPct)} %${tope !== null && p.pac.techoPct >= tope ? ', tope del agente' : ''}) hasta el reinicio`, p.R);
+    const ritmoMax = cfg.planes[a]!.ritmoMaxPctHora ?? null, burn = ritmoMax === null ? null : burnDe(est.muestras[a] ?? [], ahora);
+    if (ritmoMax !== null && burn !== null && burn > ritmoMax) return no(`ritmo: consumo de ${pct1(burn)} %/h por encima del máximo ${pct1(ritmoMax)} %/h`, ahora + 30 * MIN);
     if (!cfg.cola.backfill && sinCabida[a]) return no('cola estricta: la tarea anterior no cabe y no se salta');
     const libre = p.pac.techoPct - p.U - infl;
     // La guarda: aunque la tarea cueste lo peor que cabe esperar, la ventana no se come el margen de seguridad.
@@ -540,5 +567,115 @@ export function decidir(entrada: EntradaDosificador, cfg: ConfigDosificador = CO
   return {
     decisiones, diferidas: diferidas.slice(0, 200), estado: est, agentes,
     resumen: { modo, burn: burnMax === null ? null : Math.round(burnMax * 1000) / 1000, agotamiento: agota, circuitos: Object.fromEntries(agentesCfg.map((a) => [a, circuitoAbierto(est, a, ahora) !== null])) },
+  };
+}
+
+// ── relevo entre equipos ────────────────────────────────────────────────────────────────────────
+/**
+ * Una tarea empezó en un equipo (origen, p. ej. el PC) y el destino (el servidor) tiene armada su reserva con el último checkpoint.
+ * `decidirRelevo` dice si el destino la TOMA ya, ESPERA (y hasta cuándo) o la CEDE (deja de intentarlo). La política decide si «toca» y
+ * `decidir` —con la tarea como única de la cola y el destino como único equipo— aplica circuito, cuota, tope, ritmo, horario y equipo
+ * dormido, y elige el agente. Pura como `decidir`: devuelve el estado nuevo con la decisión anotada en `relevos`.
+ */
+export interface RelevoEntrada {
+  id: string;
+  /** Equipo que decide (el destino) y equipo donde empezó la tarea. */
+  equipo: string; origen: string;
+  /** Lo último que contó el origen: trabajando, bloqueada (cuota) u otra cosa. */
+  estadoOrigen: 'ejecutando' | 'bloqueada' | 'otro';
+  politica: PoliticaRelevo | null;
+  /** auto o el agente fijado en la hoja. */
+  agente: string;
+  ultimoLatido: number | null; resetsAt: number | null; intentos: number;
+  /** ¿El destino tiene ya el trabajo del origen? Sin checkpoint no se toma: se empezaría de cero. */
+  checkpoint: boolean;
+  prioridad?: Prioridad; creada?: number; clasificacion?: ClasificacionEntrada; repo?: string; modelo?: string;
+}
+export interface EntradaRelevo { ahora: number; relevo: RelevoEntrada; agentes: Record<string, { disponible: boolean; enCurso: number }>; uso: Record<string, unknown>; leido?: string; repos?: string[] }
+export interface DecisionRelevo { accion: 'tomar' | 'esperar' | 'ceder'; porque: 'cuota' | 'silencio' | null; agente: string | null; lanzarEn: number | null; hasta: number | null; motivo: string }
+
+export function decidirRelevo(entrada: EntradaRelevo, cfg: ConfigDosificador = CONFIG_BASE, previo?: EstadoDosificador | null): { decision: DecisionRelevo; estado: EstadoDosificador } {
+  const { ahora, relevo: r } = entrada, C = cfg.relevo;
+  const politica = r.politica ?? C.politicaDefecto;
+  const est0: EstadoDosificador = previo ? normalizarEstado(JSON.parse(JSON.stringify(previo))) : estadoInicial();
+  const anotar = (d: DecisionRelevo, est: EstadoDosificador) => {
+    est.relevos = [...est.relevos, { en: ahora, relevo: r.id, equipo: r.equipo, accion: d.accion, agente: d.agente, lanzarEn: d.lanzarEn, motivo: d.motivo }].slice(-MAX_REGISTRO_RELEVOS);
+    return { decision: d, estado: est };
+  };
+  const esperar = (motivo: string, hasta: number | null, porque: DecisionRelevo['porque'] = null) => anotar({ accion: 'esperar', porque, agente: null, lanzarEn: null, hasta, motivo }, est0);
+  if (r.intentos >= C.maxIntentos) return anotar({ accion: 'ceder', porque: null, agente: null, lanzarEn: null, hasta: null, motivo: `${r.intentos} intentos de arranque sin éxito (máximo ${C.maxIntentos}): se deja de intentar` }, est0);
+  if (!r.checkpoint) return esperar('aún no ha llegado ningún checkpoint del origen', null);
+  const silencio = r.ultimoLatido === null ? Infinity : ahora - r.ultimoLatido;
+  const gracia = C.graciaMin * MIN, umbralSilencio = C.silencioMin * MIN;
+  const minDe = (ms: number) => (Number.isFinite(ms) ? `${Math.round(ms / MIN)} min` : 'nunca');
+
+  // ¿Toca por la política? (antes de mirar cuota y agentes)
+  let porque: 'cuota' | 'silencio';
+  if (r.estadoOrigen === 'bloqueada') {
+    if (politica === 'preguntar') return esperar('política «preguntar»: solo se toma si la persona lo pide', null, 'cuota');
+    const renovacion = r.resetsAt ?? (r.agente !== 'auto' ? circuitoAbierto(est0, r.agente, ahora) : null);
+    if (renovacion !== null && ahora < renovacion) return esperar(`la cuota se renueva a las ${iso(renovacion)}`, politica === 'auto' ? renovacion : renovacion + gracia, 'cuota');
+    if (renovacion === null && silencio < umbralSilencio) return esperar('sin hora de renovación: se espera a que el origen la reanude o deje de dar latido', (r.ultimoLatido ?? ahora) + umbralSilencio, 'cuota');
+    if (politica === 'primero-vivo' && silencio < gracia) return esperar(`el origen (${r.origen}) sigue vivo: la reanuda él`, (r.ultimoLatido ?? ahora) + gracia, 'cuota');
+    porque = 'cuota';
+  } else if (r.estadoOrigen === 'ejecutando') {
+    if (!C.tomarSiSilencio) return esperar('el origen está trabajando y el relevo por silencio está apagado', null, 'silencio');
+    if (silencio < umbralSilencio) return esperar(`el origen (${r.origen}) está trabajando: último latido hace ${minDe(silencio)}`, (r.ultimoLatido ?? ahora) + umbralSilencio, 'silencio');
+    porque = 'silencio';
+  } else return esperar('el origen no está trabajando ni bloqueado', null);
+
+  // Toca: el dosificador dice si cabe, con qué agente y cuándo, con el destino como único equipo.
+  const r2 = decidir({
+    ahora, leido: entrada.leido, uso: entrada.uso, agentes: entrada.agentes,
+    tareas: [{ id: r.id, prioridad: r.prioridad ?? 'alta', creada: r.creada ?? ahora, programada: null, agente: r.agente, clasificacion: r.clasificacion, repo: r.repo, equipo: r.equipo, modelo: r.modelo }],
+    equipos: [{ id: r.equipo, disponible: true, enCurso: Object.fromEntries(Object.entries(entrada.agentes).map(([a, x]) => [a, x.enCurso])), repos: entrada.repos ?? (r.repo ? [r.repo] : []) }],
+  }, cfg, est0);
+  const causa = porque === 'cuota' ? 'cuota renovada y el origen no la ha retomado' : `el origen lleva ${minDe(silencio)} sin latido`;
+  // Sin lease: al tomarla, la tarea entra en la cola del destino y su `decidir` la vuelve a ver con su propio id.
+  delete r2.estado.leases[r.id];
+  const d = r2.decisiones[0];
+  if (d) return anotar({ accion: 'tomar', porque, agente: d.agente, lanzarEn: d.lanzarEn, hasta: null, motivo: `${causa}; ${d.motivo}` }, r2.estado);
+  const f = r2.diferidas[0];
+  return anotar({ accion: 'esperar', porque, agente: null, lanzarEn: null, hasta: f?.hasta ?? null, motivo: `${causa}, pero ${f?.motivo ?? 'no cabe ahora'}` }, r2.estado);
+}
+
+/** Valida la entrada de `decidirRelevo`. Nunca lanza: o la entrada normalizada o un `error` para el 400. */
+export function validarRelevo(x: unknown, cfg: ConfigDosificador): { ok: true; entrada: EntradaRelevo } | { ok: false; error: string } {
+  const o = obj(x);
+  if (!o) return { ok: false, error: 'el cuerpo debe ser un objeto' };
+  if (!fin(o['ahora'])) return { ok: false, error: 'ahora: milisegundos desde la época' };
+  const r = obj(o['relevo']);
+  if (!r) return { ok: false, error: 'relevo: objeto {id, equipo, origen, estadoOrigen, …}' };
+  const texto = (k: string, max = 80) => (typeof r[k] === 'string' && (r[k] as string).length > 0 && (r[k] as string).length <= max ? r[k] as string : null);
+  const id = texto('id'), equipo = texto('equipo'), origen = texto('origen');
+  if (!id) return { ok: false, error: 'relevo.id: texto de 1 a 80 caracteres' };
+  if (!equipo || !origen) return { ok: false, error: 'relevo.equipo y relevo.origen: ids de equipo' };
+  const agente = r['agente'] === undefined ? 'auto' : r['agente'];
+  if (typeof agente !== 'string' || (agente !== 'auto' && !cfg.planes[agente])) return { ok: false, error: `relevo.agente: auto|${Object.keys(cfg.planes).join('|')}` };
+  const estadoOrigen = r['estadoOrigen'] === 'ejecutando' || r['estadoOrigen'] === 'bloqueada' ? r['estadoOrigen'] : 'otro';
+  const politica = (['primero-vivo', 'auto', 'preguntar'] as const).find((p) => p === r['politica']) ?? null;
+  const n = (k: string) => (fin(r[k]) ? r[k] as number : null);
+  const agentesCrudos = obj(o['agentes']), uso = obj(o['uso']);
+  if (!agentesCrudos) return { ok: false, error: 'agentes: objeto {agente: {disponible, enCurso}}' };
+  if (!uso) return { ok: false, error: 'uso: objeto {agente: {semanal, sesion, reinicio, …}}' };
+  const agentes: EntradaRelevo['agentes'] = {};
+  for (const [k, v] of Object.entries(agentesCrudos)) {
+    const a = obj(v);
+    if (!a || typeof a['disponible'] !== 'boolean') return { ok: false, error: `agentes.${k}: {disponible: booleano, enCurso: número}` };
+    agentes[k] = { disponible: a['disponible'], enCurso: fin(a['enCurso']) ? Math.max(0, a['enCurso']) : 0 };
+  }
+  const cl = obj(r['clasificacion']);
+  return {
+    ok: true,
+    entrada: {
+      ahora: o['ahora'], agentes, uso, leido: typeof o['leido'] === 'string' && Number.isFinite(Date.parse(o['leido'])) ? o['leido'] : undefined,
+      repos: Array.isArray(o['repos']) ? o['repos'].filter((x): x is string => typeof x === 'string').slice(0, 500) : undefined,
+      relevo: {
+        id, equipo, origen, estadoOrigen, politica, agente, ultimoLatido: n('ultimoLatido'), resetsAt: n('resetsAt'), intentos: Math.max(0, Math.round(n('intentos') ?? 0)), checkpoint: r['checkpoint'] === true,
+        prioridad: PRIORIDADES.includes(r['prioridad'] as Prioridad) ? r['prioridad'] as Prioridad : undefined, creada: n('creada') ?? undefined,
+        clasificacion: cl ? { nivel_tarea: typeof cl['nivel_tarea'] === 'string' || fin(cl['nivel_tarea']) ? cl['nivel_tarea'] as string | number : undefined, dominio: typeof cl['dominio'] === 'string' ? cl['dominio'] : undefined, intencion: typeof cl['intencion'] === 'string' ? cl['intencion'] : undefined } : undefined,
+        repo: texto('repo', 200) ?? undefined, modelo: texto('modelo') ?? undefined,
+      },
+    },
   };
 }
