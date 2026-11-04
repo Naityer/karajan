@@ -21,6 +21,7 @@ import { claudeExcedido, leerLimites, rutaLimites } from './limites';
 import { actualizarCatalogo, elegirTutores, leerCatalogo, type ProveedorTutor } from './tutor';
 import { agenteAlumno, agenteTutor, listarRepos, type PlanTarea, type PuertosExamen } from './tutoria';
 import { calificacion, type ExamenAnonimo } from './tutoria-nota';
+import { carpetaSkillForge, efectoForjadas, informeBrechas, leerSkillsForjadas } from './skillforge';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
@@ -298,6 +299,8 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       textoSkill: (n) => { const r = rutasSkill(n).find((x) => existsSync(x)); return r ? readFileSync(r, 'utf8') : null; },
     };
   };
+  /** Las skills que SkillForge dejó activas y validadas con modelos reales para este alumno (si el laboratorio está en el Workspace). */
+  const skillsForjadas = (a: { proveedor: { nombre: string }; modelo: string }) => leerSkillsForjadas(carpetaSkillForge(), { proveedor: a.proveedor.nombre, modelo: a.modelo });
   const examenesPrevios = (): ExamenAnonimo[] => registroLab.ejecuciones('tutoria', 500).filter((e) => e.escenario === 'examen')
     .flatMap((e) => ((e.detalle as { nuevos?: ExamenAnonimo[] } | null)?.nuevos ?? []));
   const actualizarTutores = async () => {
@@ -330,6 +333,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'tutoria': return {
         ...base, tareasReales: () => atlasDev.tareas(1000), hash: (id: string) => hashTarea(sal, id), repos: () => listarRepos(process.env['ATLAS_WORKSPACE'] ?? homedir()),
         alumno: () => agenteAlumno(), tutor: () => { const a = agenteTutor(seleccionTutor().tutor); return a ? { agente: a } : { motivo: seleccionTutor().avisos.join(' · ') || 'sin tutor' }; },
+        forjadas: () => { const a = agenteAlumno(); return 'agente' in a ? skillsForjadas(a.agente) : []; },
         puertos: puertosExamen, previos: examenesPrevios, autorizado: () => process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maxPorEjecucion: () => Math.max(1, Number(process.env['KARAJAN_TUTORIA_MAX']) || 3),
       };
       case 'comparador': return { ...base, biblioteca, skills: skillsEquipo, capacidades: capacidadesKarajan };
@@ -382,7 +386,16 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const todos = examenesPrevios();
     const nombre = 'agente' in alumno ? `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}` : null;
     return { alumno: nombre, motivo_sin_alumno: 'motivo' in alumno ? alumno.motivo : null, tutor: seleccionTutor().tutor, autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1',
-      calificacion: calificacion(nombre ? todos.filter((e) => e.alumno === nombre) : todos), alumnos: [...new Set(todos.map((e) => e.alumno))] };
+      calificacion: calificacion(nombre ? todos.filter((e) => e.alumno === nombre) : todos), alumnos: [...new Set(todos.map((e) => e.alumno))],
+      skillforge: { laboratorio: carpetaSkillForge() !== null, skills: 'agente' in alumno ? skillsForjadas(alumno.agente).map((s) => ({ id: s.id, version: s.version, dominios: s.dominios })) : [], efecto: efectoForjadas(nombre ? todos.filter((e) => e.alumno === nombre) : todos) } };
+  });
+  // Brechas del alumno para la skill skillforge-lab: solo agregados anónimos. 409 si falta el alumno o el tutor (no hay a quién forjarle nada).
+  app.get('/laboratorio/tutoria/brechas', () => {
+    const alumno = agenteAlumno(), tutor = seleccionTutor().tutor;
+    if (!('agente' in alumno)) throw falla(409, `sin alumno: ${alumno.motivo}`);
+    if (!tutor) throw falla(409, 'sin tutor vigente (kj tutoria actualizar)');
+    const nombre = `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}`;
+    return informeBrechas(examenesPrevios().filter((e) => e.alumno === nombre), { proveedor: alumno.agente.proveedor.nombre, modelo: alumno.agente.modelo }, { proveedor: tutor.proveedor, modelo: tutor.modelo });
   });
   app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));
   app.get('/laboratorio/propuestas', () => pasarela.listar());

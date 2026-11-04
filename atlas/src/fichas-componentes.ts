@@ -16,6 +16,7 @@ import type { EstadoRotador } from './rotador';
 import { PESOS_SELECTOR } from './skills-seleccion';
 import { UMBRALES_TUTOR, MEZCLA_ENTRADA, elegirTutores, leerCatalogo } from './tutor';
 import { UMBRALES_TUTORIA } from './tutoria-nota';
+import { carpetaSkillForge } from './skillforge';
 import { GRUPO_KARAJAN, MIN_PARES_FUNCIONALIDAD, MUESTRA_MINIMA_GRUPO, TOP_PARES } from './comparador';
 
 /**
@@ -380,7 +381,7 @@ export const FICHAS: Record<string, FichaComponente> = {
     especificado: true,
     resumen: 'Pone nota al agente local: rehace tareas que ya se integraron bien, con la misma instrucción y skills de producción, con un tutor que lo desbloquea sin darle la solución y que compara el resultado con el commit registrado como correcto.',
     como_funciona: {
-      entradas: ['Tareas completadas de Atlas dev con su prompt', 'El commit con el trailer «Karajan-Tarea: <id>» ya en main (la referencia)', 'El plan del delegador para ese prompt (nivel, dominio, skills)', 'El alumno (KARAJAN_ALUMNO, por defecto ollama-qwen) y el tutor vigente'],
+      entradas: ['Tareas completadas de Atlas dev con su prompt', 'El commit con el trailer «Karajan-Tarea: <id>» ya en main (la referencia)', 'El plan del delegador para ese prompt (nivel, dominio, skills)', 'El alumno (KARAJAN_ALUMNO, por defecto ollama-qwen) y el tutor vigente', 'Las skills que la skill skillforge-lab dejó activas y validadas con modelos reales para ese alumno (skillforge.ts · leerSkillsForjadas)'],
       pasos: [
         'Elige tareas completadas, no examinadas ya con este alumno, y busca su referencia en los repos del Workspace (tutoria.ts · buscarReferencia)',
         'Crea un worktree temporal desnudo en el estado justo anterior a la integración (tutoria.ts · examinar)',
@@ -389,12 +390,13 @@ export const FICHAS: Record<string, FichaComponente> = {
         'Con hasta 3 ayudas, el alumno reintenta; al final el tutor, esta vez con la referencia, da cumple, equivalencia y regresiones (tutoria.ts · promptEvaluador)',
         'Nota = 70 % veredicto + 30 % solape de ficheros, menos 10 % por ayuda (tutoria-nota.ts · calificar)',
         'Agrega por nivel y por dominio×nivel, con IC95 de Wilson sobre aprobar (≥ 70) y calcula el nivel máximo delegable (tutoria-nota.ts · calificacion)',
+        'Si hay skills forjadas para el dominio de la tarea, la repite con ellas en el prompt del alumno y empareja las dos notas (skillforge.ts · efectoForjadas)',
         'Borra el worktree: sin ramas, commits ni cambios en el repo (tutoria.ts · examinar)',
       ],
-      salidas: ['Nota porcentual del alumno', 'Mapa de qué niveles y dominios se le pueden delegar', 'Obstáculos más repetidos', 'Borrador «delegar hasta N<k>» cuando hay muestra'],
+      salidas: ['Nota porcentual del alumno', 'Mapa de qué niveles y dominios se le pueden delegar', 'Obstáculos más repetidos', 'Borrador «delegar hasta N<k>» cuando hay muestra', 'Brechas anónimas por dominio y nivel para skillforge-lab (kj tutoria brechas)', 'Efecto emparejado de cada skill forjada en tareas reales, y borradores «forjar» o «instalar»'],
     },
-    reglas: ['El tutor que desbloquea nunca ve la referencia ni da código; quien la ve es el evaluador, que no habla con el alumno.', 'Sin veredicto del tutor la nota queda sin calificar, no en 0.', 'Los exámenes cuestan tokens: solo corren con KARAJAN_TUTORIA_EXAMENES=1 y con máximo por ejecución.', 'Solo propone: delegarle algo al alumno lo decide la persona.', 'Con un alumno que solo contesta texto (ollama run) se juzga la respuesta, no cambios en ficheros.'],
-    configuracion: () => ({ alumno: process.env['KARAJAN_ALUMNO'] || 'ollama-qwen', autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maximo_por_ejecucion: Number(process.env['KARAJAN_TUTORIA_MAX']) || 3, max_ayudas: UMBRALES_TUTORIA.maxAyudas, penalizacion_ayuda: UMBRALES_TUTORIA.penalizacionAyuda, aprobado: UMBRALES_TUTORIA.aprobado, muestra_segmento: UMBRALES_TUTORIA.muestraSegmento }),
+    reglas: ['El tutor que desbloquea nunca ve la referencia ni da código; quien la ve es el evaluador, que no habla con el alumno.', 'Sin veredicto del tutor la nota queda sin calificar, no en 0.', 'Los exámenes cuestan tokens: solo corren con KARAJAN_TUTORIA_EXAMENES=1 y con máximo por ejecución.', 'Solo propone: delegarle algo al alumno lo decide la persona.', 'Con un alumno que solo contesta texto (ollama run) se juzga la respuesta, no cambios en ficheros.', 'La nota del alumno es la de los exámenes SIN skills forjadas: un examen con skill mide la skill, no al alumno.', 'Una skill forjada solo entra en el prompt del alumno dentro del sandbox; no se instala, y al tutor que desbloquea nunca se le da. Que pase la validación de SkillForge no basta: se propone instalarla solo si mejora ≥ 5 puntos de media en ≥ 5 tareas reales sin empeorar más del 20 %.', 'A SkillForge solo salen agregados anónimos (dominio, nivel, nota, obstáculos): nunca prompts, ids de tarea ni commits.'],
+    configuracion: () => ({ alumno: process.env['KARAJAN_ALUMNO'] || 'ollama-qwen', autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maximo_por_ejecucion: Number(process.env['KARAJAN_TUTORIA_MAX']) || 3, skillforge: carpetaSkillForge() ?? 'no encontrado (KARAJAN_SKILLFORGE_DIR)', mejora_forjada: UMBRALES_TUTORIA.mejoraForjada, max_ayudas: UMBRALES_TUTORIA.maxAyudas, penalizacion_ayuda: UMBRALES_TUTORIA.penalizacionAyuda, aprobado: UMBRALES_TUTORIA.aprobado, muestra_segmento: UMBRALES_TUTORIA.muestraSegmento }),
   },
   api: {
     especificado: true,

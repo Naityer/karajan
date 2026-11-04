@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { construirInstruccion } from './delegar';
+import { etiquetaForjada, type SkillForjada } from './skillforge';
 import { disponibilidad, modeloPara, proveedor, type Ejecutor, type Proveedor } from './proveedores';
 import type { Eleccion } from './tutor';
 import { calificar, extraerJson, ficherosDeDiff, filtrarPista, solape, UMBRALES_TUTORIA, type ExamenAnonimo, type Veredicto } from './tutoria-nota';
@@ -125,15 +126,15 @@ export function agenteAlumno(nombre = process.env['KARAJAN_ALUMNO'] || 'ollama-q
 export interface ResultadoExamen { examen: ExamenAnonimo; veredicto: Veredicto | null }
 
 /** Examina a `alumno` con una tarea. Nunca lanza: un fallo del propio examen deja la nota a null y dice por qué. */
-export async function examinar(x: { hash: string; prompt: string; referencia: Referencia; alumno: Agente; tutor: Agente; skillsHoja?: string[] }, p: PuertosExamen): Promise<ResultadoExamen> {
+export async function examinar(x: { hash: string; prompt: string; referencia: Referencia; alumno: Agente; tutor: Agente; skillsHoja?: string[]; /** Skills de SkillForge de este dominio: el alumno las recibe en su prompt y el examen es de «con skill». */ forjadas?: SkillForjada[] }, p: PuertosExamen): Promise<ResultadoExamen> {
   const inicio = Date.now();
   const fecha = (p.ahora ?? (() => new Date()))().toISOString();
   const plan = p.planificar(x.prompt, x.skillsHoja);
-  const base: Omit<ExamenAnonimo, 'nota' | 'ayudas' | 'ayudasRechazadas' | 'ms' | 'motivo' | 'obstaculos'> = {
+  const base: Omit<ExamenAnonimo, 'nota' | 'ayudas' | 'ayudasRechazadas' | 'ms' | 'motivo' | 'obstaculos' | 'forjadas'> = {
     tarea: x.hash, dominio: plan.dominio, nivel: plan.nivel, alumno: `${x.alumno.proveedor.nombre}/${x.alumno.modelo}`, tutor: `${x.tutor.proveedor.nombre}/${x.tutor.modelo}`, fecha,
   };
   const cierre = (nota: number | null, motivo: string, ayudas: number, rechazadas: number, obstaculos: string[], veredicto: Veredicto | null): ResultadoExamen =>
-    ({ examen: { ...base, nota, ayudas, ayudasRechazadas: rechazadas, ms: Date.now() - inicio, motivo: motivo.slice(0, 300), obstaculos }, veredicto });
+    ({ examen: { ...base, nota, ayudas, ayudasRechazadas: rechazadas, ms: Date.now() - inicio, motivo: motivo.slice(0, 300), obstaculos, ...(x.forjadas?.length ? { forjadas: x.forjadas.map(etiquetaForjada) } : {}) }, veredicto });
 
   const dir = mkdtempSync(join(tmpdir(), 'kj-tutoria-'));
   const sandbox = join(dir, 'trabajo');
@@ -152,6 +153,8 @@ export async function examinar(x: { hash: string; prompt: string; referencia: Re
         const preparadas = st.skills.filter((s) => instaladas.has(s) || extras.includes(s));
         let instruccion = construirInstruccion(x.prompt, { name: st.nombre, validation: st.validacion }, preparadas);
         for (const s of extras) { const t = p.textoSkill(s); if (t) instruccion += `\n\nSkill ${s} (SKILL.md):\n${recorte(t, 6000)}`; }
+        // Skills validadas por SkillForge para este alumno: van como texto en el prompt, sin instalarlas en ningún sitio.
+        for (const f of x.forjadas ?? []) instruccion += `\n\nSkill ${f.id} (SKILL.md):\n${recorte(f.instrucciones, 6000)}`;
         if (pistas.length) instruccion += `\n\nPistas del tutor:\n- ${pistas.join('\n- ')}`;
         // Sin las skills que pedía, producción falla antes de ejecutar: aquí es un obstáculo como otro.
         const r = faltan.length ? { salida: '', error: `Skills no instaladas para el agente: ${faltan.join(', ')}`, latenciaMs: 0, modelo: x.alumno.modelo }

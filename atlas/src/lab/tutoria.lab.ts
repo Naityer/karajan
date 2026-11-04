@@ -8,6 +8,7 @@ import type { Hallazgo } from '../pasarela-borradores';
 import type { Ejecutor, Proveedor } from '../proveedores';
 import { proporcion, type ContextoLab, type Laboratorio, type Resultado } from '../laboratorio';
 import { buscarReferencia, examinar, type Agente, type PuertosExamen } from '../tutoria';
+import { aplicables, brechas, efectoForjadas, esBase, etiquetaForjada, claveConjunto, type SkillForjada } from '../skillforge';
 import { calificacion, calificar, filtrarPista, UMBRALES_TUTORIA, type ExamenAnonimo, type Veredicto } from '../tutoria-nota';
 
 /**
@@ -30,6 +31,8 @@ export interface ContextoTutoria extends ContextoLab {
   puertos(): PuertosExamen;
   /** Exámenes ya hechos (lo guardado en ejecuciones anteriores). */
   previos(): ExamenAnonimo[];
+  /** Skills de SkillForge activas, validadas con modelos reales y compatibles con el alumno (vacío si no hay laboratorio). */
+  forjadas(): SkillForjada[];
   autorizado(): boolean;
   maxPorEjecucion(): number;
 }
@@ -132,21 +135,35 @@ export const laboratorioTutoria: Laboratorio<ContextoTutoria> = {
           const motivo = !('agente' in alumno) ? `sin alumno: ${alumno.motivo}` : `sin tutor: ${(tutor as { motivo: string }).motivo}`;
           return { muestra: previos.length, suficiente: false, metricas: metricasDe(resumen(previos)), umbrales, hallazgos: [], detalle: { motivo, calificacion: resumen(previos) } };
         }
-        const hechos = new Set(previos.filter((e) => e.alumno === `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}`).map((e) => e.tarea));
+        const mismo = `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}`;
+        const delAlumno = previos.filter((e) => e.alumno === mismo);
+        // Cada tarea se examina sin skills (la nota del alumno) y, si SkillForge tiene skills validadas para su dominio, otra vez con ellas.
+        const hechos = new Set(delAlumno.map((e) => `${e.tarea}|${claveConjunto(e.forjadas ?? [])}`));
+        const forjadas = ctx.forjadas();
+        const puertos = ctx.puertos();
         const candidatas = (await ctx.tareasReales())
-          .filter((t) => t.estado === 'completada' && t.prompt?.trim() && !/^Origen: karajan:/m.test(t.prompt) && !hechos.has(ctx.hash(t.id))).sort((a, b) => b.actualizada - a.actualizada);
+          .filter((t) => t.estado === 'completada' && t.prompt?.trim() && !/^Origen: karajan:/m.test(t.prompt)).sort((a, b) => b.actualizada - a.actualizada);
         const nuevos: ExamenAnonimo[] = [];
         let sinReferencia = 0;
         for (const t of candidatas) {
           if (nuevos.length >= ctx.maxPorEjecucion()) break;
+          const hash = ctx.hash(t.id);
+          const skillsHoja = t.hoja?.agente && t.hoja.agente !== 'auto' ? t.hoja.skills : undefined;
+          const con = aplicables(forjadas, puertos.planificar(t.prompt!, skillsHoja).dominio);
+          const pendienteBase = !hechos.has(`${hash}|`);
+          const pendienteCon = con.length > 0 && !hechos.has(`${hash}|${claveConjunto(con.map(etiquetaForjada))}`);
+          if (!pendienteBase && !pendienteCon) continue;
           const referencia = buscarReferencia(ctx.repos(), t.id);
           if (!referencia) { sinReferencia++; continue; }
-          nuevos.push((await examinar({ hash: ctx.hash(t.id), prompt: t.prompt!, referencia, alumno: alumno.agente, tutor: tutor.agente, skillsHoja: t.hoja?.agente && t.hoja.agente !== 'auto' ? t.hoja.skills : undefined }, ctx.puertos())).examen);
+          const dato = { hash, prompt: t.prompt!, referencia, alumno: alumno.agente, tutor: tutor.agente, skillsHoja };
+          if (pendienteBase) nuevos.push((await examinar(dato, puertos)).examen);
+          if (pendienteCon && nuevos.length < ctx.maxPorEjecucion()) nuevos.push((await examinar({ ...dato, forjadas: con }, puertos)).examen);
         }
-        // La nota del alumno actual: sus exámenes anteriores con este mismo modelo más los de ahora.
-        const mismo = `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}`;
-        const suyos = [...previos.filter((e) => e.alumno === mismo), ...nuevos];
+        // La nota del alumno actual (sin skills forjadas): sus exámenes anteriores con este mismo modelo más los de ahora.
+        const todos = [...delAlumno, ...nuevos];
+        const suyos = todos.filter(esBase);
         const c = resumen(suyos);
+        const efectos = efectoForjadas(todos);
         const hallazgos: Hallazgo[] = [];
         const suficiente = c.examenes - c.sinCalificar >= U.muestraSegmento;
         if (suficiente) {
@@ -161,14 +178,34 @@ export const laboratorioTutoria: Laboratorio<ContextoTutoria> = {
           const frecuente = [...obst].sort((a, b) => b[1] - a[1])[0];
           if (frecuente && frecuente[1] >= 3) hallazgos.push({ clave: `obstaculo-${frecuente[0]}`, severidad: 'baja', titulo: `El obstáculo más repetido del alumno es «${frecuente[0]}» (${frecuente[1]} veces)`, evidencia: [...obst].map(([k, v]) => `${k} ${v}`).join(', '), propuesta: 'Resolverlo en la configuración del agente local en lugar de depender del tutor.' });
         }
+        for (const f of efectos) {
+          if (f.util) hallazgos.push({
+            clave: `forjada-util-${f.skills}`, severidad: 'media', titulo: `La skill forjada ${f.skills} sube la nota del alumno ${f.deltaMedio} puntos en tareas reales`,
+            evidencia: `${f.pares} tareas integradas examinadas con y sin la skill: mejoran ${f.mejoran}, empeoran ${f.empeoran}. Alumno ${mismo}.`,
+            propuesta: 'Valorar instalar esa skill para el agente local o dársela en los prompts que le delegue el perfil. La decide la persona; SkillForge solo la activó en su laboratorio.',
+            criterios: ['La nota con skill se vuelve a medir tras instalarla', 'Los niveles delegables no bajan al añadirla'],
+          });
+          else if (f.pares >= U.muestraSegmento && f.deltaMedio < U.mejoraForjada) hallazgos.push({
+            clave: `forjada-inutil-${f.skills}`, severidad: 'baja', titulo: `La skill forjada ${f.skills} no mejora al alumno en tareas reales (${f.deltaMedio >= 0 ? '+' : ''}${f.deltaMedio} puntos)`,
+            evidencia: `${f.pares} pares con y sin la skill: mejoran ${f.mejoran}, empeoran ${f.empeoran}. En SkillForge pasó su validación sintética; aquí no se confirma.`,
+            propuesta: 'No instalarla. Anotarlo en la trazabilidad de SkillForge y, si hay brechas en ese dominio, forjar otra con tareas más parecidas a las reales.',
+          });
+        }
+        const conSkill = new Set(forjadas.flatMap((s) => s.dominios));
+        for (const b of brechas(suyos).filter((x) => !x.delegable && x.n >= U.muestraSegmento && x.media < U.aprobado && !conSkill.has(x.dominio))) hallazgos.push({
+          clave: `forjar-${b.dominio}-n${b.nivel}`, severidad: 'media', titulo: `El alumno suspende ${b.dominio} N${b.nivel} (${b.media} %): forjarle una skill con SkillForge`,
+          evidencia: `${b.n} exámenes, aprobación ${b.aprobacion === null ? 'n/d' : Math.round(b.aprobacion * 100)} %. Obstáculos: ${Object.entries(b.obstaculos).map(([k, v]) => `${k} ${v}`).join(', ') || 'ninguno'}. Aún no hay skill forjada activa para «${b.dominio}».`,
+          propuesta: 'Con la skill skillforge-lab: `kj tutoria brechas --salida brechas.json`, escribir tareas verificables de ese dominio y `campaign from-karajan`. Karajan medirá después la skill con y sin ella.',
+          criterios: ['Hay una tarea verificable con el dominio como id', 'La campaña usa el tutor y el alumno actuales', 'La skill, si valida, se mide en Karajan antes de instalarla'],
+        });
         if (nuevos.length >= 3 && nuevos.filter((e) => e.nota === null).length / nuevos.length > 0.3) hallazgos.push({
           clave: 'tutor-sin-veredicto', severidad: 'media', titulo: 'El tutor no está dando veredicto en más del 30 % de los exámenes',
           evidencia: nuevos.filter((e) => e.nota === null).slice(0, 5).map((e) => e.motivo).join(' | '), propuesta: 'Revisar el tutor elegido (`kj tutoria tutores`) y el formato de respuesta que se le pide en `promptEvaluador`.',
         });
         return {
           muestra: c.examenes - c.sinCalificar, suficiente, hallazgos, umbrales,
-          metricas: { ...metricasDe(c), nuevos: nuevos.length, tareas_sin_referencia: sinReferencia, ayudas_por_examen: proporcion(suyos.reduce((s, e) => s + e.ayudas, 0), suyos.length), aprobacion: proporcion(c.aprobados, c.examenes - c.sinCalificar) },
-          detalle: { alumno: mismo, tutor: `${tutor.agente.proveedor.nombre}/${tutor.agente.modelo}`, calificacion: c, nuevos },
+          metricas: { ...metricasDe(c), skills_forjadas: forjadas.length, pares_forjada: efectos.reduce((s, f) => s + f.pares, 0), nuevos: nuevos.length, tareas_sin_referencia: sinReferencia, ayudas_por_examen: proporcion(suyos.reduce((s, e) => s + e.ayudas, 0), suyos.length), aprobacion: proporcion(c.aprobados, c.examenes - c.sinCalificar) },
+          detalle: { alumno: mismo, tutor: `${tutor.agente.proveedor.nombre}/${tutor.agente.modelo}`, calificacion: c, forjadas: efectos, nuevos },
         };
       },
     },

@@ -20,6 +20,10 @@ export const UMBRALES_TUTORIA = {
   maxPista: 600,
   /** Líneas añadidas de la referencia con al menos esta longitud no pueden aparecer en una pista. */
   minLineaProtegida: 15,
+  /** Una skill forjada (SkillForge) es útil en tareas reales con al menos `muestraSegmento` pares con y sin ella, esta ganancia media en puntos… */
+  mejoraForjada: 5,
+  /** …y como mucho esta fracción de pares en los que empeora. */
+  maxEmpeoranForjada: 0.2,
 };
 
 export interface Veredicto { cumple: number; equivalencia: number; regresiones: boolean; motivo: string }
@@ -78,6 +82,8 @@ export interface ExamenAnonimo {
   nota: number | null; ayudas: number; ayudasRechazadas: number; ms: number; fecha: string; motivo: string;
   /** Qué tipo de obstáculo tuvo el alumno (para que el informe diga dónde se atasca). */
   obstaculos: string[];
+  /** Skills de SkillForge (`id@vN`) que llevaba el alumno en este examen; ausente si iba sin ellas (la nota del alumno solo cuenta esos). */
+  forjadas?: string[];
 }
 
 export interface Segmento { clave: string; n: number; media: number; aprobados: number; autonomos: number; aprobacion: number | null; aprobacionInferior: number | null; delegable: boolean }
@@ -104,7 +110,9 @@ export interface Calificacion {
   nivelMaximoDelegable: number;
 }
 
-export function calificacion(examenes: ExamenAnonimo[]): Calificacion {
+export function calificacion(todos: ExamenAnonimo[]): Calificacion {
+  // El alumno se califica «desnudo»: un examen con skills forjadas mide la skill, no al alumno.
+  const examenes = todos.filter((e) => !e.forjadas?.length);
   const buenos = examenes.filter((e) => e.nota !== null);
   const porNivel = agrupar(examenes, (e) => `N${e.nivel}`);
   let maximo = 0;

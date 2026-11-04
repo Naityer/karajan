@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 
 import type { Fetch } from '../src/atlas-dev';
+import type { Ejecutor, Proveedor } from '../src/proveedores';
+import { aplicables, carpetaSkillForge, claveSkillForge, efectoForjadas, informeBrechas, interpretarSkills, leerSkillsForjadas, type SkillForjada } from '../src/skillforge';
 import { actualizarCatalogo, combinar, elegirTutores, leerCatalogo, normalizar, type CatalogoTutores, type ModeloTutor } from '../src/tutor';
 import { agrupar, calificacion, calificar, extraerJson, ficherosDeDiff, filtrarPista, solape, UMBRALES_TUTORIA, type ExamenAnonimo } from '../src/tutoria-nota';
 import { laboratorioTutor, type ContextoTutor } from '../src/lab/tutor.lab';
@@ -185,5 +188,105 @@ describe('laboratorios del tutor y la tutoría', () => {
     assert.equal(r.metricas['autorizado'], 0);
     assert.equal(tocado, false);
     assert.deepEqual(r.hallazgos, []);
+  });
+});
+
+describe('skillforge: el puente entre la tutoría y la skill skillforge-lab', () => {
+  const ex = (tarea: string, nota: number | null, forjadas?: string[], dominio = 'backend', nivel = 2): ExamenAnonimo => ({ tarea, dominio, nivel, alumno: 'ollama-qwen/qwen2.5:7b', tutor: 'codex/gpt-6-luna', nota, ayudas: 0, ayudasRechazadas: 0, ms: 1, fecha: '', motivo: '', obstaculos: nota !== null && nota < 70 ? ['skill'] : [], ...(forjadas ? { forjadas } : {}) });
+
+  it('traduce el alumno al modelo de SkillForge y rechaza lo que no entiende', () => {
+    assert.equal(claveSkillForge('ollama-qwen', 'qwen2.5:7b'), 'ollama:qwen2.5:7b');
+    assert.equal(claveSkillForge('claude-cli', 'sonnet'), 'claude:sonnet');
+    assert.equal(claveSkillForge('otro', 'x'), null);
+    assert.equal(carpetaSkillForge({}), null, 'sin laboratorio la integración se apaga');
+  });
+
+  it('lee las skills activas sin fiarse de la salida y nunca lanza', () => {
+    const bien = { id: 'skill-backend', version: 2, domains: ['backend'], models: ['ollama:qwen2.5:7b'], instructions: 'Haz X.' };
+    assert.deepEqual(interpretarSkills(JSON.stringify([bien, { ...bien, id: '../mala' }, { ...bien, instructions: '  ' }, { ...bien, domains: [] }, { ...bien, instructions: 'x'.repeat(16_001) }, null, 7])).map((s) => s.id), ['skill-backend']);
+    assert.deepEqual(interpretarSkills('no es json'), []);
+    assert.deepEqual(interpretarSkills('{"id":"x"}'), []);
+    const llamadas: string[][] = [];
+    const ok = leerSkillsForjadas('/lab', { proveedor: 'ollama-qwen', modelo: 'qwen2.5:7b' }, (_c, args) => { llamadas.push(args); return { ok: true, salida: JSON.stringify([bien]) }; });
+    assert.equal(ok[0]?.instrucciones, 'Haz X.');
+    assert.deepEqual(llamadas[0], ['-m', 'skillforge', 'skills', 'active', '--model', 'ollama:qwen2.5:7b']);
+    assert.deepEqual(leerSkillsForjadas('/lab', { proveedor: 'ollama-qwen', modelo: 'm' }, () => ({ ok: false, salida: '' })), []);
+    assert.deepEqual(leerSkillsForjadas(null, { proveedor: 'ollama-qwen', modelo: 'm' }, () => { throw new Error('no debe llamarse'); }), []);
+    assert.deepEqual(leerSkillsForjadas('/lab', { proveedor: 'otro', modelo: 'm' }, () => { throw new Error('no debe llamarse'); }), []);
+    assert.deepEqual(aplicables(ok, 'backend').map((s) => s.id), ['skill-backend']);
+    assert.deepEqual(aplicables(ok, 'frontend'), []);
+  });
+
+  it('las brechas son agregados anónimos de exámenes sin skill y no llevan ids ni hashes de tarea', () => {
+    const examenes = [...Array(6).fill(0).map((_, i) => ex(`hash-secreto-${i}`, 40)), ...Array(6).fill(0).map((_, i) => ex(`otro-${i}`, 95, undefined, 'frontend', 1)), ex('hash-secreto-0', 100, ['skill-backend@v1']), ex('sin-nota', null)];
+    const informe = informeBrechas(examenes, { proveedor: 'ollama-qwen', modelo: 'qwen2.5:7b' }, { proveedor: 'codex', modelo: 'gpt-6-luna' }, new Date('2026-11-04T20:00:00Z'));
+    assert.equal(informe.schema_version, 1);
+    assert.equal(informe.origen, 'karajan-tutoria');
+    assert.deepEqual(informe.brechas.map((b) => [b.dominio, b.nivel, b.n, b.delegable]), [['backend', 2, 6, false], ['frontend', 1, 6, true]], 'los exámenes con skill y sin calificar no cuentan');
+    assert.deepEqual(informe.brechas[0]!.obstaculos, { skill: 6 });
+    assert.doesNotMatch(JSON.stringify(informe), /hash-secreto|otro-|sin-nota/);
+  });
+
+  it('el efecto de una skill se mide emparejado por tarea y la nota del alumno no cuenta los exámenes con skill', () => {
+    const con = ['skill-backend@v1'];
+    const pares = [0, 1, 2, 3, 4, 5].flatMap((i) => [ex(`t${i}`, 50), ex(`t${i}`, i === 5 ? 45 : 70, con)]);
+    const [f] = efectoForjadas([...pares, ex('solo-con-skill', 100, con), ex('t0', null, con)]);
+    assert.equal(f!.skills, 'skill-backend@v1');
+    assert.equal(f!.pares, 6);
+    assert.equal(f!.mejoran, 5);
+    assert.equal(f!.empeoran, 1);
+    assert.equal(f!.deltaMedio, Math.round(((5 * 20 - 5) / 6) * 10) / 10);
+    assert.equal(f!.util, true);
+    assert.equal(calificacion([...pares]).nota, 50, 'la nota del alumno solo cuenta los exámenes sin skill');
+    assert.equal(calificacion([ex('t', 50), ex('t', 100, con)]).examenes, 1);
+    // Con poca muestra o con muchos empeoramientos no es útil; sin pares, no hay efecto.
+    assert.equal(efectoForjadas([ex('a', 50), ex('a', 90, con)])[0]!.util, false);
+    assert.equal(efectoForjadas([0, 1, 2, 3, 4].flatMap((i) => [ex(`t${i}`, 70), ex(`t${i}`, i < 2 ? 40 : 90, con)]))[0]!.util, false);
+    assert.deepEqual(efectoForjadas([ex('a', 50)]), []);
+  });
+
+  it('examen: cada tarea se hace sin skill y, si hay forjadas para su dominio, otra vez con ellas; la skill llega al alumno y no al tutor', async () => {
+    const repo = mkdtempSync(join(dir, 'repo-'));
+    const git = (...a: string[]) => spawnSync('git', a, { cwd: repo, encoding: 'utf8', windowsHide: true });
+    git('init', '-q', '-b', 'main'); git('config', 'user.email', 't@k.local'); git('config', 'user.name', 't');
+    writeFileSync(join(repo, 'a.txt'), 'uno\n'); git('add', '-A'); git('commit', '-q', '-m', 'base');
+    writeFileSync(join(repo, 'b.ts'), 'export const x = 1;\n'); git('add', '-A'); git('commit', '-q', '-m', 'tarea', '-m', 'Karajan-Tarea: t-uno');
+    const prompts: { alumno: boolean; texto: string }[] = [];
+    const ejecutor: Ejecutor = async (p, modelo, instruccion, { cwd }) => {
+      const esAlumno = p.nombre === 'alumno-falso';
+      prompts.push({ alumno: esAlumno, texto: instruccion });
+      if (esAlumno) { writeFileSync(join(cwd, 'b.ts'), 'export const y = 2;\n'); return { salida: 'hecho', error: null, latenciaMs: 1, modelo }; }
+      return { salida: '{"cumple":90,"equivalencia":90,"regresiones":false,"motivo":"ok"}', error: null, latenciaMs: 1, modelo };
+    };
+    const falso = (nombre: string): Proveedor => ({ nombre, etiqueta: nombre, binario: nombre, gratis: true, modelos: {}, args: () => [], login: '' });
+    const skill: SkillForjada = { id: 'skill-backend', version: 1, dominios: ['backend'], instrucciones: 'PASO-FORJADO: valida la entrada primero.' };
+    let previos: ExamenAnonimo[] = [];
+    const ctx = (forjadas: SkillForjada[]): ContextoTutoria => ({
+      tareas: async () => [], calibraciones: () => [],
+      tareasReales: async () => [{ id: 't-uno', estado: 'completada', prompt: 'haz algo en el backend', actualizada: 1 }] as never,
+      hash: (id) => `h-${id}`, repos: () => [repo], alumno: () => ({ agente: { proveedor: falso('alumno-falso'), modelo: 'm' } }), tutor: () => ({ agente: { proveedor: falso('tutor-falso'), modelo: 't' } }),
+      puertos: () => ({ ejecutor, planificar: () => ({ dominio: 'backend', nivel: 2, subtareas: [{ nombre: 'hacerlo', validacion: 'que funcione', skills: [] }] }), instaladas: () => new Set(), textoSkill: () => null }),
+      previos: () => previos, forjadas: () => forjadas, autorizado: () => true, maxPorEjecucion: () => 5,
+    });
+    const examen = laboratorioTutoria.escenarios.find((e) => e.id === 'examen')!;
+    const nuevosDe = async (c: ContextoTutoria) => ((await examen.ejecutar(c)).detalle as { nuevos: ExamenAnonimo[] }).nuevos;
+
+    const r1 = await examen.ejecutar(ctx([skill]));
+    const nuevos = (r1.detalle as { nuevos: ExamenAnonimo[] }).nuevos;
+    assert.deepEqual(nuevos.map((e) => e.forjadas ?? null), [null, ['skill-backend@v1']], 'primero sin skill, luego con ella');
+    assert.equal(prompts.filter((p) => p.alumno && p.texto.includes('PASO-FORJADO')).length, 1, 'solo el examen «con skill» la lleva');
+    assert.ok(!prompts.filter((p) => !p.alumno).some((p) => p.texto.includes('PASO-FORJADO')), 'el tutor no recibe la skill');
+    assert.equal(r1.metricas['skills_forjadas'], 1);
+    assert.equal(r1.metricas['pares_forjada'], 1);
+    assert.equal(git('worktree', 'list').stdout.trim().split('\n').length, 1, 'sin worktrees sobrantes');
+
+    // Con lo ya hecho no se repite nada; una skill de otro dominio no examina; una versión nueva de la skill sí.
+    previos = nuevos;
+    assert.equal((await nuevosDe(ctx([skill]))).length, 0);
+    assert.equal((await nuevosDe(ctx([{ ...skill, dominios: ['frontend'] }]))).length, 0);
+    assert.deepEqual((await nuevosDe(ctx([{ ...skill, version: 2 }]))).map((e) => e.forjadas), [['skill-backend@v2']]);
+    // Sin skills forjadas, el examen es el de siempre.
+    previos = [];
+    assert.deepEqual((await nuevosDe(ctx([]))).map((e) => e.forjadas ?? null), [null]);
   });
 });

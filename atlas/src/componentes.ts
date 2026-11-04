@@ -67,7 +67,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   // ── Observación ──
   { id: 'analitica', capa: 'observacion', responsabilidad: 'Contar skills recomendadas, preparadas y usadas', modulos: ['analitica', 'catalogo'], laboratorio: laboratorioAnalitica },
   { id: 'produccion', capa: 'observacion', responsabilidad: 'Medir acierto, re-trabajo, eficiencia y «qué mejorar»', modulos: ['produccion'], laboratorio: laboratorioProduccion },
-  { id: 'tutoria', capa: 'observacion', responsabilidad: 'Calificar al agente local con tareas ya integradas y un tutor que no da la solución', modulos: ['tutoria', 'tutoria-nota'], laboratorio: laboratorioTutoria },
+  { id: 'tutoria', capa: 'observacion', responsabilidad: 'Calificar al agente local con tareas ya integradas y un tutor que no da la solución', modulos: ['tutoria', 'tutoria-nota', 'skillforge'], laboratorio: laboratorioTutoria },
   // ── Modificadores (familia ampliable) ──
   { id: 'curador', capa: 'modificadores', responsabilidad: 'Proponer qué skills sobran en la biblioteca con reglas inequívocas', modulos: ['curador'], laboratorio: laboratorioCurador },
   { id: 'comparador', capa: 'modificadores', responsabilidad: 'Comparar cada skill (y Karajan) con las mejores de su grupo', modulos: ['comparador'], laboratorio: laboratorioComparador },
@@ -110,6 +110,7 @@ export const ENLACES: Enlace[] = [
   { de: 'almacen', a: 'tutoria', etiqueta: 'tareas integradas y su commit de referencia' },
   { de: 'delegador', a: 'tutoria', etiqueta: 'misma instrucción y skills que en producción' },
   { de: 'proveedores', a: 'tutoria', etiqueta: 'ejecuta alumno y tutor' },
+  { de: 'rotador', a: 'tutoria', etiqueta: 'skills instaladas del alumno' },
   // Previstos (borradores en Atlas dev, ver docs/laboratorio/componentes.md §6-7).
   { de: 'biblioteca', a: 'comparador', etiqueta: 'datos de las skills' },
   { de: 'eficiencia', a: 'delegador', etiqueta: 'modifica lo que se delega', previsto: true },
