@@ -6,18 +6,21 @@ import { construirAnaliticaSkills } from './analitica';
 import { Almacen } from './almacen';
 import { catalogoReal, listarSkills } from './catalogo';
 import { produccion } from './produccion';
-import { Rotador } from './rotador';
+import { destinoDe, Rotador } from './rotador';
 import { Delegador } from './delegar';
 import { configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles, perfilPorDefecto } from './perfiles';
-import { buscarBinario, disponibilidad, PROVEEDORES } from './proveedores';
+import { buscarBinario, disponibilidad, ejecutarProveedor, PROVEEDORES } from './proveedores';
 import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
 import { Guardian } from './modo';
 import { Biblioteca } from './biblioteca';
 import { aHallazgo, curar, REGLAS_CURADOR, UMBRALES_CURADOR, type EntradaCurador } from './curador';
 import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
-import { leerLimites, rutaLimites } from './limites';
+import { claudeExcedido, leerLimites, rutaLimites } from './limites';
+import { actualizarCatalogo, elegirTutores, leerCatalogo, type ProveedorTutor } from './tutor';
+import { agenteAlumno, agenteTutor, listarRepos, type PlanTarea, type PuertosExamen } from './tutoria';
+import { calificacion, type ExamenAnonimo } from './tutoria-nota';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
@@ -274,6 +277,34 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   };
   /** Lo que Karajan sabe de sí mismo para el comparador: sus componentes y los tipos de escenario de cada laboratorio. */
   const capacidadesKarajan = (): CapacidadKarajan[] => COMPONENTES.map((c) => ({ id: c.id, responsabilidad: c.responsabilidad, pruebas: c.laboratorio?.escenarios.map((e) => e.tipo) ?? [] }));
+  // ── Tutoría: el alumno local examinado con tareas ya integradas y un tutor elegido por razonamiento/precio (ver tutoria.ts, tutor.ts) ──
+  const rutaTutores = join(dirLab, 'tutores.json');
+  const seleccionTutor = () => elegirTutores(leerCatalogo(rutaTutores), {
+    disponibles: (['claude-cli', 'codex'] as ProveedorTutor[]).filter((n) => disponibilidad(PROVEEDORES.find((p) => p.nombre === n)!).disponible),
+    excluir: claudeExcedido(leerLimites()) !== null ? ['claude-cli'] : [],
+  });
+  const puertosExamen = (): PuertosExamen => {
+    const alumno = agenteAlumno();
+    const destino = 'agente' in alumno ? destinoDe(alumno.agente.proveedor.nombre) : null;
+    const rutasSkill = (n: string) => (['claude', 'codex'] as const).flatMap((d) => [join(rotador.raiz(d), n, 'SKILL.md'), join(rotador.almacen(d), n, 'SKILL.md')]);
+    return {
+      ejecutor: ejecutarProveedor,
+      planificar: (prompt, skillsHoja): PlanTarea => {
+        const c = delegadorLab.planificar(prompt).clasificacion;
+        return { dominio: c.domain[0] ?? 'general', nivel: Number(/[1-5]/.exec(c.complexity_level)?.[0] ?? 1),
+          subtareas: c.subtasks.map((st, i) => ({ nombre: st.name, validacion: st.validation, skills: i === 0 && skillsHoja?.length ? skillsHoja : st.recommended_skills ?? [] })) };
+      },
+      instaladas: () => new Set(destino ? rotador.inventario().filter((f) => f.instaladaEn.includes(destino)).map((f) => f.skill) : []),
+      textoSkill: (n) => { const r = rutasSkill(n).find((x) => existsSync(x)); return r ? readFileSync(r, 'utf8') : null; },
+    };
+  };
+  const examenesPrevios = (): ExamenAnonimo[] => registroLab.ejecuciones('tutoria', 500).filter((e) => e.escenario === 'examen')
+    .flatMap((e) => ((e.detalle as { nuevos?: ExamenAnonimo[] } | null)?.nuevos ?? []));
+  const actualizarTutores = async () => {
+    const r = await actualizarCatalogo(rutaTutores);
+    if (r.cambio) console.warn(`[karajan] tutor: ${r.antes ? `${r.antes.proveedor}/${r.antes.modelo}` : 'ninguno'} → ${r.despues ? `${r.despues.proveedor}/${r.despues.modelo}` : 'ninguno'}`);
+    return r;
+  };
   const contextoDe = (id: string) => {
     let cache: Promise<TareaAnonima[]> | null = null;
     const base: ContextoLab = {
@@ -295,6 +326,12 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
       case 'produccion': return base;
       case 'rotador': return { ...base, rotador, historial: () => rotador.historial(), ahora: () => Date.now() };
+      case 'tutor': return { ...base, catalogo: () => leerCatalogo(rutaTutores), disponibles: () => (['claude-cli', 'codex'] as ProveedorTutor[]).filter((n) => disponibilidad(PROVEEDORES.find((p) => p.nombre === n)!).disponible), excluir: () => (claudeExcedido(leerLimites()) !== null ? ['claude-cli' as ProveedorTutor] : []), ahora: () => Date.now() };
+      case 'tutoria': return {
+        ...base, tareasReales: () => atlasDev.tareas(1000), hash: (id: string) => hashTarea(sal, id), repos: () => listarRepos(process.env['ATLAS_WORKSPACE'] ?? homedir()),
+        alumno: () => agenteAlumno(), tutor: () => { const a = agenteTutor(seleccionTutor().tutor); return a ? { agente: a } : { motivo: seleccionTutor().avisos.join(' · ') || 'sin tutor' }; },
+        puertos: puertosExamen, previos: examenesPrevios, autorizado: () => process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maxPorEjecucion: () => Math.max(1, Number(process.env['KARAJAN_TUTORIA_MAX']) || 3),
+      };
       case 'comparador': return { ...base, biblioteca, skills: skillsEquipo, capacidades: capacidadesKarajan };
       default: return base;
     }
@@ -337,6 +374,16 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     return { skills: compararEquipo(biblioteca, skillsEquipo()).filter((c) => g(c.grupo)) };
   });
   app.get('/laboratorio/ejecuciones', (req) => registroLab.ejecuciones(req.query['componente'] || undefined, entero(req.query['limite'], 50, 1, 1000)));
+  // Tutores y tutoría: GET solo lee; POST actualiza el catálogo de tutores (recalcula el tutor) y no ejecuta ningún examen.
+  app.get('/laboratorio/tutores', () => ({ ...seleccionTutor(), catalogo: leerCatalogo(rutaTutores) }));
+  app.post('/laboratorio/tutores/actualizar', async () => actualizarTutores());
+  app.get('/laboratorio/tutoria', () => {
+    const alumno = agenteAlumno();
+    const todos = examenesPrevios();
+    const nombre = 'agente' in alumno ? `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}` : null;
+    return { alumno: nombre, motivo_sin_alumno: 'motivo' in alumno ? alumno.motivo : null, tutor: seleccionTutor().tutor, autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1',
+      calificacion: calificacion(nombre ? todos.filter((e) => e.alumno === nombre) : todos), alumnos: [...new Set(todos.map((e) => e.alumno))] };
+  });
   app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));
   app.get('/laboratorio/propuestas', () => pasarela.listar());
   // Curador: qué skills sobran. GET solo lee; POST manda cada propuesta como borrador (idempotente por `curador:<regla>:<skill>`), nunca retira nada.
@@ -401,6 +448,13 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const c = registroLab.calibraciones(req.query['componente'] || 'selector').filter((x) => x.tarea_hash === hash).at(-1);
     return c ? { calibrada: true, respuesta: c.respuesta, propuesta: c.propuesta, correccion: c.correccion, creada: c.creada } : { calibrada: false };
   });
+
+  // Automatismo: cada día se recalcula el tutor (los modelos y precios cambian cada semana). Sin clave no hace nada y lo dice el laboratorio.
+  if (process.env['KARAJAN_TUTOR_AUTO'] !== '0' && process.env['ARTIFICIAL_ANALYSIS_API_KEY']) {
+    const reloj = setInterval(() => { void actualizarTutores().catch(() => undefined); }, 24 * 3_600_000);
+    reloj.unref?.();
+    void actualizarTutores().catch(() => undefined);
+  }
 
   for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/executions'], ['post', '/ingest']] as const) {
     app[metodo](ruta, () => { throw falla(501, NO_DISPONIBLE); });

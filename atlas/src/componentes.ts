@@ -15,6 +15,8 @@ import { laboratorioProduccion } from './lab/produccion.lab';
 import { laboratorioProveedores } from './lab/proveedores.lab';
 import { laboratorioRotador } from './lab/rotador.lab';
 import { laboratorioSelector } from './lab/selector.lab';
+import { laboratorioTutor } from './lab/tutor.lab';
+import { laboratorioTutoria } from './lab/tutoria.lab';
 
 /**
  * Karajan como procesador de componentes (ver docs/laboratorio/componentes.md). Cada componente tiene UNA responsabilidad,
@@ -56,6 +58,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'delegador', capa: 'decision', responsabilidad: 'Elegir el agente de cada subtarea según el perfil y sus reglas', modulos: ['delegar', 'perfiles', 'reglas', 'perfil-texto'], laboratorio: laboratorioDelegador },
   { id: 'selector', capa: 'decision', responsabilidad: 'Elegir las skills que necesita un prompt', modulos: ['skills-seleccion'], laboratorio: laboratorioSelector },
   { id: 'rotador', capa: 'decision', responsabilidad: 'Dejar instaladas solo las skills que se usan y guardar el resto en el almacén', modulos: ['rotador'], laboratorio: laboratorioRotador },
+  { id: 'tutor', capa: 'decision', responsabilidad: 'Elegir con datos de cada semana el modelo tutor de mejor relación razonamiento/precio', modulos: ['tutor'], laboratorio: laboratorioTutor },
   { id: 'etiquetas', capa: 'decision', responsabilidad: 'Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente', modulos: [], pendiente: 'vive en atlas-dev (server/src/tareas/formato.ts): borrador «Componente etiquetas»' },
   // ── Ejecución ──
   { id: 'proveedores', capa: 'ejecucion', responsabilidad: 'Lanzar Claude Code, Codex o Qwen y devolver su salida', modulos: ['proveedores'], laboratorio: laboratorioProveedores },
@@ -64,6 +67,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   // ── Observación ──
   { id: 'analitica', capa: 'observacion', responsabilidad: 'Contar skills recomendadas, preparadas y usadas', modulos: ['analitica', 'catalogo'], laboratorio: laboratorioAnalitica },
   { id: 'produccion', capa: 'observacion', responsabilidad: 'Medir acierto, re-trabajo, eficiencia y «qué mejorar»', modulos: ['produccion'], laboratorio: laboratorioProduccion },
+  { id: 'tutoria', capa: 'observacion', responsabilidad: 'Calificar al agente local con tareas ya integradas y un tutor que no da la solución', modulos: ['tutoria', 'tutoria-nota'], laboratorio: laboratorioTutoria },
   // ── Modificadores (familia ampliable) ──
   { id: 'curador', capa: 'modificadores', responsabilidad: 'Proponer qué skills sobran en la biblioteca con reglas inequívocas', modulos: ['curador'], laboratorio: laboratorioCurador },
   { id: 'comparador', capa: 'modificadores', responsabilidad: 'Comparar cada skill (y Karajan) con las mejores de su grupo', modulos: ['comparador'], laboratorio: laboratorioComparador },
@@ -102,6 +106,10 @@ export const ENLACES: Enlace[] = [
   { de: 'api', a: 'delegador', etiqueta: 'planificar y delegar' },
   { de: 'api', a: 'laboratorio', etiqueta: 'ejecutar laboratorios' },
   { de: 'biblioteca', a: 'curador', etiqueta: 'datos de las skills' },
+  { de: 'tutor', a: 'tutoria', etiqueta: 'modelo tutor vigente' },
+  { de: 'almacen', a: 'tutoria', etiqueta: 'tareas integradas y su commit de referencia' },
+  { de: 'delegador', a: 'tutoria', etiqueta: 'misma instrucción y skills que en producción' },
+  { de: 'proveedores', a: 'tutoria', etiqueta: 'ejecuta alumno y tutor' },
   // Previstos (borradores en Atlas dev, ver docs/laboratorio/componentes.md §6-7).
   { de: 'biblioteca', a: 'comparador', etiqueta: 'datos de las skills' },
   { de: 'eficiencia', a: 'delegador', etiqueta: 'modifica lo que se delega', previsto: true },
