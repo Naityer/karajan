@@ -1186,6 +1186,7 @@ def seed_resource_library(
     skill_capabilities = {
         "repo-analyzer": ["repository-audit", "code-review", "dependency-analysis"],
         "security-review": ["security-audit"],
+        "aegis-secops": ["security-audit", "application-security", "vulnerability-triage", "secrets-detection", "ai-agent-security"],
         "frontend-builder": ["frontend-development", "data-visualization"],
         "backend-builder": ["api-integration", "database-access"],
         "promptfoo": ["testing"],

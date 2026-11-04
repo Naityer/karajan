@@ -132,7 +132,28 @@ _CAPABILITIES: dict[str, tuple[str, ...]] = {
     "project-management": ("project management", "timeline view", "gestion de proyectos", "linea de tiempo", "kanban"),
     "rag": ("retrieval augmented generation", "rag", "vector search", "busqueda vectorial"),
     "scientific-research": ("scientific research", "literature review", "investigacion cientifica", "revision bibliografica"),
-    "security-audit": ("security audit", "vulnerability scanning", "auditoria de seguridad", "cve", "sast"),
+    "security-audit": (
+        "security audit", "security review", "vulnerability scanning", "auditoria de seguridad", "revision de seguridad",
+        "cve", "sast", "owasp", "pentest", "hardening", "endurecimiento", "ransomware",
+        "supply chain", "cadena de suministro", "threat modeling", "modelo de amenazas", "seguridad",
+    ),
+    "application-security": (
+        "ssrf", "xss", "csrf", "sql injection", "inyeccion sql", "nosql injection", "command injection",
+        "inyeccion de comandos", "path traversal", "idor", "bola", "owasp top 10", "deserialization",
+        "deserializacion", "broken access control", "control de acceso roto",
+    ),
+    "vulnerability-triage": (
+        "vulnerability triage", "vulnerability management", "triage de vulnerabilidades", "priorizar vulnerabilidades",
+        "gestion de vulnerabilidades", "kev", "epss", "cvss", "nvd", "exploited vulnerabilities",
+    ),
+    "secrets-detection": (
+        "secrets detection", "leaked secrets", "leaked api key", "secretos filtrados", "secreto filtrado",
+        "api key filtrada", "credenciales filtradas", "api key", "api keys", "secrets", "secretos", "hardcoded secrets", "gitleaks", "exposed credentials", "rotar secretos",
+    ),
+    "ai-agent-security": (
+        "prompt injection", "inyeccion de prompt", "llm security", "seguridad de agentes", "agent security",
+        "mcp security", "seguridad de llm", "rag security", "jailbreak",
+    ),
     "testing": ("testing", "unit tests", "pytest", "tdd", "test driven development", "pruebas", "test automation"),
     "web-search": ("web search", "internet search", "busqueda web", "buscar en internet"),
     "tool-discovery": ("tool discovery", "developer resource directory", "free tools", "buscar herramientas", "directorio de recursos"),
@@ -169,6 +190,10 @@ _TAXONOMY_BY_CAPABILITY: dict[str, str] = {
     "rag": "ai-ml",
     "scientific-research": "research",
     "security-audit": "security",
+    "application-security": "security",
+    "vulnerability-triage": "security",
+    "secrets-detection": "security",
+    "ai-agent-security": "security",
     "testing": "software-development",
     "web-search": "web",
     "tool-discovery": "research",
@@ -351,6 +376,13 @@ _STOPWORDS = {
 }
 
 
+_SECURITY_CONCEPTS = frozenset({
+    "security-audit", "application-security", "vulnerability-triage", "secrets-detection", "ai-agent-security",
+})
+_SECURITY_CONTEXT_CONCEPTS = frozenset({
+    "api", "api-integration", "database-access", "mcp", "deployment", "frontend-development", "dependency-analysis",
+})
+
 _RELATED_CAPABILITIES: dict[str, tuple[str, ...]] = {
     "anatomy-visualization": ("interactive-3d", "frontend-development"),
     "geospatial-ui": ("map-markers", "map-routes", "frontend-development", "database-access"),
@@ -434,6 +466,11 @@ class ResourceRankingEngine:
             for canonical, aliases in vocabulary.items():
                 if any(_contains_phrase(query_tokens, alias) for alias in (canonical, *aliases)):
                     found.add(canonical)
+        # In a security query, technology words (API, SQL, MCP...) describe the
+        # *target* under review, not a capability to retrieve: they must not
+        # dilute coverage below the primary threshold.
+        if found & _SECURITY_CONCEPTS:
+            found -= _SECURITY_CONTEXT_CONCEPTS
         # Editorial families (web, data, software...) are intentionally not
         # query capabilities: generic words must not manufacture a primary.
         return found
