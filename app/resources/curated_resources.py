@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import ResourceItem, ResourceKind
+from app.domain.models import ResourceItem, ResourceKind
 
 
 def curated_resource_items() -> list[ResourceItem]:

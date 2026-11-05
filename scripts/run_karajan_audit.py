@@ -21,8 +21,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from app import main
 from app.execution import delegation
 from app.execution import monitoring
-from app.database import TaskStore
-from app.models import Backend, DecisionLogEntry, KarajanConfig, OrchestrationConfig
+from app.persistence.database import TaskStore
+from app.domain.models import Backend, DecisionLogEntry, KarajanConfig, OrchestrationConfig
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
 from app.routing.router import classify_prompt

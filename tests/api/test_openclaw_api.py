@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app import main
-from app.models import KarajanConfig
+from app.domain.models import KarajanConfig
 
 
 def test_openclaw_status_endpoint(karajan_install, monkeypatch) -> None:

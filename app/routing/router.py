@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections import OrderedDict
 
-from app.models import (
+from app.domain.models import (
     ClassificationResult,
     ComplexityLevel,
     CriteriaScores,

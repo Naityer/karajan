@@ -8,8 +8,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.providers import catalog
-from app.logging_config import get_logger, log_event
-from app.models import (
+from app.core.logging_config import get_logger, log_event
+from app.domain.models import (
     ClassificationResult,
     DecisionLogEntry,
     DelegationResult,
@@ -255,7 +255,7 @@ class TaskStore:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_task_history_task ON task_history(task_id)")
         # `runs` is the concrete fix for the fuzzy `_execution_owner()` attribution
-        # bug: `provider_name` is a stable catalog constant (see app/catalog.py),
+        # bug: `provider_name` is a stable catalog constant (see app/providers/catalog.py),
         # never a user-editable routing-diagram node id, so `GROUP BY provider_name`
         # is safe to aggregate on even after the diagram is reshaped.
         conn.execute(

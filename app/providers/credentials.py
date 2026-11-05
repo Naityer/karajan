@@ -6,7 +6,7 @@ import shutil
 import subprocess
 
 from app.providers import catalog
-from app.models import AuthMethod, CredentialStatus, ProviderInfo, ProviderSetup
+from app.domain.models import AuthMethod, CredentialStatus, ProviderInfo, ProviderSetup
 
 PROBE_TIMEOUT_S = 5
 

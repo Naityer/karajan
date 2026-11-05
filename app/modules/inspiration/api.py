@@ -40,7 +40,7 @@ from app.resources.inspiration_feed import (
     SOURCES,
     source_catalog,
 )
-from app.models import (
+from app.domain.models import (
     AnalyzeRequest,
     AnalyzeResult,
     ArtifactReviewDecisionRequest,

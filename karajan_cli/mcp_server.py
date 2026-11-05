@@ -16,7 +16,7 @@ Every tool uses the same semantic client contract as the terminal CLI. The
 default transport is embedded (same process, no socket); set `KARAJAN_URL` or
 `KARAJAN_TRANSPORT=http` for an explicit HTTP boundary.
 
-Usage: registered as an MCP server in ~/.claude/settings.json.
+Usage: registered as an MCP server in ~/.claude/settings.json (`python -m karajan_cli.mcp_server`).
 HTTP mode requires a running server; embedded mode owns its local runtime.
 """
 

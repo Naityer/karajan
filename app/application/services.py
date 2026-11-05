@@ -27,8 +27,8 @@ from app.application.errors import (
     OutcomeUnknownError,
     TaskNotFoundError,
 )
-from app.logging_config import get_logger, log_event
-from app.models import ClassificationResult, ComplexityLevel, TaskRecord, TaskStatus
+from app.core.logging_config import get_logger, log_event
+from app.domain.models import ClassificationResult, ComplexityLevel, TaskRecord, TaskStatus
 from app.providers.registry import resolve_by_name, resolve_entity
 from app.resources.resource_activation import attach_resource_recommendations
 from app.routing.router import model_for_level

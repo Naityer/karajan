@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import ResourceCreateRequest, ResourceGroupCreateRequest, ResourceItem, ResourceKind
+from app.domain.models import ResourceCreateRequest, ResourceGroupCreateRequest, ResourceItem, ResourceKind
 from app.resources.resource_library import ResourceStore
 from app.resources.resource_taxonomy import TAXONOMY_NODES, classify_resource, taxonomy_path
 

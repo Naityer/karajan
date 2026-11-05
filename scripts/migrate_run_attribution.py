@@ -39,7 +39,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app import catalog  # noqa: E402  - needs the sys.path shim above
+from app.providers import catalog  # noqa: E402  - needs the sys.path shim above
 
 DEFAULT_DB = PROJECT_ROOT / "data" / "task_logs.db"
 

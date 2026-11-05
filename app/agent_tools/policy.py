@@ -19,7 +19,7 @@ from app.agent_tools import catalog
 from app.agent_tools.budget import RunBudget
 from app.agent_tools.spec import RiskTier, ToolDenied
 from app.agent_tools.workspace import Workspace
-from app.models import AgentToolsConfig, KarajanConfig
+from app.domain.models import AgentToolsConfig, KarajanConfig
 
 _RISK_ORDER = {tier.value: index for index, tier in enumerate(
     (RiskTier.CONTROL, RiskTier.READ, RiskTier.WRITE, RiskTier.EXECUTE)

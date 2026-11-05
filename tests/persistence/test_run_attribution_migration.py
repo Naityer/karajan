@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from app.providers import catalog
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 from scripts import migrate_run_attribution as migration
 
 

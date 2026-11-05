@@ -88,7 +88,7 @@ def test_percentil_por_rango_cercano():
 
 
 def test_revisiones_del_baul_se_guardan_y_sustituyen(tmp_path):
-    from app.database import TaskStore
+    from app.persistence.database import TaskStore
 
     store = TaskStore(tmp_path / "t.db")
     store.save_reviews("tsk_1", {"nivel_tarea": ["N3"], "skills_usadas": ["impeccable", "frontend-builder"]}, "2026-10-12T00:00:00+00:00")

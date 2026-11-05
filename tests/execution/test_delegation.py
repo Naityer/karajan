@@ -2,8 +2,8 @@
 
 from app.execution import delegation
 from app.execution.delegation import delegate
-from app.models import Backend, KarajanConfig, OrchestrationConfig
-from app.models import RoutingEntity, RoutingLayout
+from app.domain.models import Backend, KarajanConfig, OrchestrationConfig
+from app.domain.models import RoutingEntity, RoutingLayout
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
 from app.routing.router import classify_prompt

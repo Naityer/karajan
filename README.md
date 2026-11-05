@@ -18,15 +18,22 @@ La CLI `kj` y el paquete de Atlas dev se construyen con `node atlas/build.mjs` y
 
 | Ruta | Contenido |
 |---|---|
-| `app/` | Servidor Python (FastAPI): `routing/`, `execution/`, `resources/`, `providers/`, `application/`, `modules/*/api.py` |
-| `atlas/` | Núcleo en TypeScript: componentes, laboratorios y CLI `kj` (paquete de Atlas dev) |
-| `karajan_cli/` | CLI Python `karajan` (en migración hacia `kj`) |
-| `data/` | Estado de ejecución (no versionado) y `production_baseline/` |
-| `docs/` | CLI, componentes y laboratorios, ADR y API HTTP |
+| `app/` | Servidor Python (FastAPI) por capas: `domain/` (modelos), `persistence/`, `routing/`, `execution/`, `resources/`, `providers/`, `configuration/`, `security/`, `application/` y `modules/*/api.py` |
+| `atlas/` | Núcleo en TypeScript: componentes, laboratorios, SDK de comandos (`src/sdk/`) y la CLI `kj` (paquete de Atlas dev) |
+| `karajan_cli/` | CLI Python `karajan` (en migración hacia `kj`) y el servidor MCP (`python -m karajan_cli.mcp_server`) |
 | `dashboard/` | Interfaz web congelada; se adaptará a los datos de los comandos |
+| `deploy/` | Dockerfile y `docker-compose.yml` (contexto: la raíz del repo) |
+| `scripts/` | Operación: instalación, producción, auditorías y `limpiar.py` |
+| `skills/` | Skills de Karajan para agentes (`karajan`, `task-router`) |
+| `assets/` | Imágenes de marca |
+| `data/` | Estado de ejecución (no versionado) y `production_baseline/` |
+| `tests/` | Pruebas Python por paquete (las de TypeScript están en `atlas/tests/`) |
+| `docs/` | Documentación, con índice en [docs/README.md](docs/README.md) |
 
 ## Documentación
 
+- [docs/README.md](docs/README.md): índice.
 - [docs/CLI.md](docs/CLI.md): comandos.
 - [docs/laboratorio/componentes.md](docs/laboratorio/componentes.md): componentes y laboratorios.
 - [docs/referencia-api.md](docs/referencia-api.md): API HTTP, autenticación y configuración.
+- Contenedor: `docker compose -f deploy/docker-compose.yml up -d --build`. Limpieza de cachés: `python scripts/limpiar.py`.

@@ -40,8 +40,8 @@ Main components:
 - `app/agent_tools/`: the agent tool layer (catalog, workspace confinement, budgets, loop). See `docs/agent-tools.md`.
 - `app/providers/credentials.py`: provider readiness and setup guidance.
 - `app/execution/monitoring.py`: decision log entries for classification and delegation.
-- `app/models.py`: Pydantic contracts for requests, classifications, delegations, records, and metrics.
-- `app/database.py`: SQLite persistence and metrics aggregation.
+- `app/domain/models.py`: Pydantic contracts for requests, classifications, delegations, records, and metrics.
+- `app/persistence/database.py`: SQLite persistence and metrics aggregation.
 - `dashboard/static`: browser GUI served by FastAPI.
 - `skills/karajan/SKILL.md`: operator-facing skill contract used from the model console.
 - `skills/task-router/SKILL.md`: prompt/skill contract for future LLM-backed routing.
@@ -120,14 +120,14 @@ survives reboots.
 # to start without it so /resources/ingest-url is never left unprotected:
 echo "KARAJAN_TOKEN=<a-long-random-value>" > .env
 
-docker compose up -d --build
+docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 This exposes `http://localhost:8001` persistently (`restart: unless-stopped`)
 with `data/resources.db` bind-mounted to `./data` so the catalog survives
 container restarts. `POST /resources/recommend` stays open (read-only);
 `POST /resources/ingest-url` and every other mutation require the
-`X-KARAJAN-Token` header. See [`docker-compose.yml`](docker-compose.yml) for
+`X-KARAJAN-Token` header. See [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) for
 notes on reaching the container from outside this machine (port-forward,
 Tailscale, or a reverse proxy — none of that is automated here).
 
@@ -136,7 +136,7 @@ Tailscale, or a reverse proxy — none of that is automated here).
 Use the trial runner to exercise the `/karajan` skill contract end to end without calling paid or long-running providers. It posts structured parent-router classifications to `/ingest`, delegates them through the harness, and writes an auditable JSON report.
 
 ```powershell
-.\.venv\Scripts\python.exe .\tools\run_karajan_trials.py --api http://127.0.0.1:8001
+.\.venv\Scripts\python.exe .\scripts\run_karajan_trials.py --api http://127.0.0.1:8001
 ```
 
 Reports are written to:

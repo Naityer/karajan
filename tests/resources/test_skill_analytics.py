@@ -4,8 +4,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app import main
-from app.database import TaskStore
-from app.models import (
+from app.persistence.database import TaskStore
+from app.domain.models import (
     Backend,
     ClassificationResult,
     ComplexityLevel,

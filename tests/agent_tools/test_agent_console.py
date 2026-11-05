@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.execution import agent_console
 from app.providers import catalog
 from app import main
-from app.models import KarajanConfig
+from app.domain.models import KarajanConfig
 
 
 def test_provider_run_executes_catalog_probe_command(karajan_install) -> None:

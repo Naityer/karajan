@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, ".")
 from app.analytics import produccion, produccion_datos  # noqa: E402
-from app.database import TaskStore  # noqa: E402
+from app.persistence.database import TaskStore  # noqa: E402
 
 SALIDA = Path(sys.argv[1])
 AHORA = datetime(2026, 10, 12, 9, 30, tzinfo=timezone.utc)

@@ -8,7 +8,7 @@ fleet.
 
 from __future__ import annotations
 
-from app.models import Metrics
+from app.domain.models import Metrics
 
 _PREFIX = "karajan"
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"

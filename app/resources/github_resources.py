@@ -11,7 +11,7 @@ import httpx
 
 from app.platform import http
 
-from app.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
+from app.domain.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
 from app.resources.resource_intelligence import extract_resource_signals
 from app.resources.resource_library import ResourceStore, deterministic_summary
 

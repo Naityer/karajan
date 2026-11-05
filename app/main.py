@@ -4,7 +4,7 @@ Construye la instalación standalone y la monta con la factoría
 `app/api/factory.py::create_app` (la única que sabe ensamblar la API). Los nombres
 `store`, `active_config`, `resource_store`... son **vistas de compatibilidad**
 del runtime: los tests las sustituyen por nombre (`monkeypatch.setattr(main, ...)`)
-y `karajan_mcp`/scripts las leen; los endpoints no las usan, leen
+y `karajan_cli.mcp_server`/scripts las leen; los endpoints no las usan, leen
 `runtime.current()` en cada petición.
 """
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 from app.api.factory import create_app
 from app.application.runtime import build_standalone_runtime
 from app.configuration.env import load_project_env
-from app.models import KarajanConfig
+from app.domain.models import KarajanConfig
 
 load_project_env()
 

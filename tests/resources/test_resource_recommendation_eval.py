@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from app.models import ResourceItem, ResourceKind
+from app.domain.models import ResourceItem, ResourceKind
 from app.resources.nested_resources import ItsFreeAdapter, NestedResourceIndexer
 from app.resources.resource_intelligence import ResourceRankingEngine
 from app.resources.resource_library import ResourceStore

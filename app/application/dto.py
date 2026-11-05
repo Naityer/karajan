@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from app.models import ComplexityLevel, TaskRecord
+from app.domain.models import ComplexityLevel, TaskRecord
 
 SCHEMA_VERSION = 1
 

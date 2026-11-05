@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from app.models import SkillInfo, SkillInstallResult
+from app.domain.models import SkillInfo, SkillInstallResult
 
 # Mirror of the agent-router skills configured in the user's Claude setup.
 # `applies_to` lists the model families a skill is most relevant for.

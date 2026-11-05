@@ -7,7 +7,7 @@ import type { RegistroTarea, Run } from './analitica';
 import type { TareaAnalitica } from './produccion';
 
 /**
- * Registro de tareas de Karajan (`task_logs.db`, el mismo esquema que `app/database.py`): lectura de tareas, runs y decisiones,
+ * Registro de tareas de Karajan (`task_logs.db`, el mismo esquema que `app/persistence/database.py`): lectura de tareas, runs y decisiones,
  * las agregaciones de `/metrics` y `/agents/performance`, y las escrituras que hace `/delegate-task` (tarea, decisiones y runs,
  * con las mismas columnas que Python). Se crean las tablas vacías si no existen para que un paquete recién instalado responda,
  * y se puede importar un `task_logs.db` existente (ver servidor.ts). Las filas dañadas se saltan, como en Python.

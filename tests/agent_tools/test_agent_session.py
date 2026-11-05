@@ -14,7 +14,7 @@ from app.agent_tools.session import AgentSession
 from app.agent_tools.trace import Trace
 from app.agent_tools.transport import Message, TransportTurn
 from app.agent_tools.workspace import Workspace
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 
 
 class ScriptedTransport:

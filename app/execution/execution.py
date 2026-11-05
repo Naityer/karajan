@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from app.models import KarajanConfig
+from app.domain.models import KarajanConfig
 from app.providers.base import ProviderRun
 from app.providers.registry import Resolution
 
 """Backend-agnostic execution helpers shared by the synchronous delegation path
-(`app/delegation.py`) and the async availability-driven scheduler
-(`app/scheduler.py`). Kept dependency-free of both so neither has to import the
+(`app/execution/delegation.py`) and the async availability-driven scheduler
+(`app/routing/scheduler.py`). Kept dependency-free of both so neither has to import the
 other.
 """
 

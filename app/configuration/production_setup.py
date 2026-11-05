@@ -6,7 +6,7 @@ import subprocess
 from app.configuration.env import PROJECT_ROOT
 from app.providers import catalog
 from app.providers import credentials
-from app.models import AuthMethod, CredentialStatus, RoutingLayout
+from app.domain.models import AuthMethod, CredentialStatus, RoutingLayout
 
 BASELINE_DIR = PROJECT_ROOT / "data" / "production_baseline"
 ACTIVE_CONFIG_PATH = PROJECT_ROOT / "data" / "active_config.json"

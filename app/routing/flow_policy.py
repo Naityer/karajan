@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.models import ClassificationResult, RoutingEntity, RoutingLayout, Subtask, TaskStatus
+from app.domain.models import ClassificationResult, RoutingEntity, RoutingLayout, Subtask, TaskStatus
 
 
 @dataclass(frozen=True)

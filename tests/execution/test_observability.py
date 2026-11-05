@@ -9,9 +9,9 @@ from pathlib import Path
 
 from app.routing import classifier
 from app.execution import monitoring
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 from app.execution.delegation import delegate
-from app.models import Backend, KarajanConfig, RoutingLayout
+from app.domain.models import Backend, KarajanConfig, RoutingLayout
 from app.routing.router import classify_prompt
 
 PROMPTS = [

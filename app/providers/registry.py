@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.providers import catalog
-from app.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel, RoutingEntity, RoutingLayout
+from app.domain.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel, RoutingEntity, RoutingLayout
 from app.providers.api import ApiModelProvider
 from app.providers.base import ModelProvider
 from app.providers.cli import CliModelProvider
@@ -55,7 +55,7 @@ def fallback_resolutions(
     """
     tried = set(tried_provider_names or set())
     candidates: list[Resolution] = []
-    from app import credentials  # local import avoids cycles and keeps detection lazy
+    from app.providers import credentials  # local import avoids cycles and keeps detection lazy
 
     statuses = {status.provider: status for status in credentials.detect_all()}
 
@@ -99,7 +99,7 @@ def eligible_entities(level: str, layout: RoutingLayout | None) -> list[RoutingE
     a scheduler picks a *free* agent from, including entities with several
     `levels` entries (a real "multi-level worker").
     """
-    from app import flow_policy  # local import avoids a cycle at module load time
+    from app.routing import flow_policy  # local import avoids a cycle at module load time
 
     regular_roles = {"parent", "agent", "child", "worker"}
     entities = layout.entities if layout else []

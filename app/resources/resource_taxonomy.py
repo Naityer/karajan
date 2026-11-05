@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.models import ResourceItem
+from app.domain.models import ResourceItem
 
 
 @dataclass(frozen=True)

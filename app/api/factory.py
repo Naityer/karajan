@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import KARAJAN_VERSION
 from app.execution import events
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 from app.modules.agents import api as agents_api
 from app.modules.configuration import api as configuration_api
 from app.modules.decision import api as decision_api

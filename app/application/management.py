@@ -11,7 +11,7 @@ from app.routing import classifier
 from app.providers import credentials
 from app.execution import monitoring
 from app.application.services import domain_event
-from app.models import DecisionLogEntry, KarajanConfig, RoutingLayout
+from app.domain.models import DecisionLogEntry, KarajanConfig, RoutingLayout
 from app.resources.resource_activation import attach_resource_recommendations
 
 

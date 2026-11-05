@@ -1,6 +1,6 @@
 /**
  * Reglas por dominio de un perfil de enrutado: qué entidad ejecuta una subtarea según su dominio, intención y nivel.
- * Espejo de `app/routing_rules.py` (mismas palabras clave y mismo orden de evaluación): el clasificador da dominios gruesos
+ * Espejo de `app/routing/routing_rules.py` (mismas palabras clave y mismo orden de evaluación): el clasificador da dominios gruesos
  * (`programming`, `data`, `documents`…) y aquí se añaden tres «áreas» detectadas en el propio prompt —`frontend` (interfaces y
  * diseño), `backend` (APIs, servidores, datos) y `oficina` (informes, correo, hojas de cálculo)— sin tocar la clasificación.
  */

@@ -9,7 +9,7 @@ from typing import Callable
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
-from app.models import (
+from app.domain.models import (
     AnalyzeResult,
     ResourceItem,
     ResourceKind,

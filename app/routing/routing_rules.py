@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.models import RoutingEntity, RoutingLayout, RoutingRule
+from app.domain.models import RoutingEntity, RoutingLayout, RoutingRule
 
 AREA_KEYWORDS: dict[str, tuple[str, ...]] = {
     "frontend": (

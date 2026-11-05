@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.modules.inspiration import api as inspiration_api
-from app.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
+from app.domain.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
 from app.resources.resource_library import ResourceStore
 from app.routing.routing_layout import RoutingLayoutStore
 

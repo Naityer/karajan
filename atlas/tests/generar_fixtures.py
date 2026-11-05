@@ -11,10 +11,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, ".")
-from app import skills_catalog  # noqa: E402
-from app import skill_analytics  # noqa: E402
-from app.database import TaskStore  # noqa: E402
-from app.models import (  # noqa: E402
+from app.resources import skills_catalog  # noqa: E402
+from app.resources import skill_analytics  # noqa: E402
+from app.persistence.database import TaskStore  # noqa: E402
+from app.domain.models import (  # noqa: E402
     DelegationResult, KarajanConfig, SubtaskExecution, TaskStatus, Backend,
 )
 from app.routing.router import classify_prompt  # noqa: E402

@@ -26,8 +26,8 @@ from pydantic import BaseModel, Field
 from app.analytics import ml as ml_ops
 from app.analytics.duckdb_ops import AnalyticsUnavailable
 from app.analytics.ml import MLUnavailable, ModelNotTrained
-from app.logging_config import log_event
-from app.models import (
+from app.core.logging_config import log_event
+from app.domain.models import (
     AgentPerformance,
     Metrics,
     MetricsHistory,
@@ -44,7 +44,7 @@ from fastapi import (
 from fastapi.responses import PlainTextResponse
 
 from app.application import runtime as runtime_module
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 
 
 logger = get_logger("api")

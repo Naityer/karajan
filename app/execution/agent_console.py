@@ -4,7 +4,7 @@ import os
 import shlex
 import subprocess
 
-from app.models import ProviderInfo, ProviderRunResult
+from app.domain.models import ProviderInfo, ProviderRunResult
 
 TIMEOUT_S = 20
 
@@ -13,7 +13,7 @@ def run_provider_command(provider: ProviderInfo, slot: str) -> ProviderRunResult
     """Run a provider's catalog-defined command for real, for the Agentes console.
 
     `slot` is always `login_command` or `probe_command` (enforced by the
-    request model) — both are fixed strings already shipped in `app/catalog.py`,
+    request model) — both are fixed strings already shipped in `app/providers/catalog.py`,
     never text typed by the client, so this can't become an arbitrary-command
     execution surface.
     """

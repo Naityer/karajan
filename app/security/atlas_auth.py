@@ -4,7 +4,7 @@ invocación (`Authorization: Bearer ...`).
 Antes de esto, este backend RECIBÍA el token y lo ignoraba por completo: no
 había ningún código que leyera la cabecera `Authorization` ni verificara un
 JWT, pese a que Atlas ya lo mandaba (ver `docs` de Atlas, nota "Seguridad",
-sección "Tokens de capacidad"). `require_token` (`app/auth.py`) es un
+sección "Tokens de capacidad"). `require_token` (`app/security/auth.py`) es un
 mecanismo distinto y anterior — un secreto estático compartido
 (`X-KARAJAN-Token`), no el JWT firmado por Atlas.
 

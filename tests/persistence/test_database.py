@@ -1,4 +1,4 @@
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 from app.execution.delegation import delegate
 from app.routing.router import classify_prompt
 

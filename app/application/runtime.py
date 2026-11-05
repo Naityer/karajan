@@ -31,11 +31,11 @@ from app.execution import events
 from app.resources import resource_library
 from app.routing import routing_layout
 from app.routing import scheduler as scheduler_module
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 from app.resources.github_resources import GitHubResourceAnalyzer
 from app.resources.inspiration_feed import InspirationFeed
 from app.resources.local_resources import LocalResourceAnalyzer
-from app.models import KarajanConfig, RecommendedModel
+from app.domain.models import KarajanConfig, RecommendedModel
 from app.resources.naityer_resources import NaityerAdapter
 from app.resources.nested_resources import NestedResourceIndexer
 from app.platform.auth.identity import (

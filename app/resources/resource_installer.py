@@ -10,7 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.resources.github_resources import validate_github_repository_url
-from app.models import (
+from app.domain.models import (
     ResourceInstallation,
     ResourceItem,
     ResourceOperationRequest,

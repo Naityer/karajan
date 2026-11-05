@@ -1,5 +1,5 @@
 """Shared HTTP client for the Karajan API, used by both the `karajan` CLI and
-`karajan_mcp.py` so there is exactly one implementation of each request.
+`karajan_cli/mcp_server.py` so there is exactly one implementation of each request.
 """
 
 from __future__ import annotations
@@ -224,7 +224,7 @@ class EmbeddedKarajanClient:
         return self._dump(self.management.get_config())
 
     def put_config(self, config: dict) -> dict:
-        from app.models import KarajanConfig
+        from app.domain.models import KarajanConfig
 
         return self._dump(self.management.put_config(KarajanConfig.model_validate(config)))
 
@@ -232,7 +232,7 @@ class EmbeddedKarajanClient:
         return self._dump(self.management.get_routing_layout())
 
     def put_routing_layout(self, layout: dict) -> dict:
-        from app.models import RoutingLayout
+        from app.domain.models import RoutingLayout
 
         return self._dump(self.management.put_routing_layout(RoutingLayout.model_validate(layout)))
 
@@ -280,7 +280,7 @@ class EmbeddedKarajanClient:
         )
 
     def append_decision(self, task_id: str, entry: dict) -> dict:
-        from app.models import DecisionLogEntry
+        from app.domain.models import DecisionLogEntry
 
         value = DecisionLogEntry.model_validate({**entry, "task_id": task_id})
         return self._dump(self.management.append_decision(task_id, value))

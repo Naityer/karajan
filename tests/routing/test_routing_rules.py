@@ -5,7 +5,7 @@ import json
 from app.execution import delegation
 from app.routing import routing_rules
 from app.execution.delegation import delegate
-from app.models import Backend, KarajanConfig, RoutingLayout, RoutingRule
+from app.domain.models import Backend, KarajanConfig, RoutingLayout, RoutingRule
 from app.providers.registry import Resolution
 from app.routing.router import classify_prompt
 from app.routing.routing_layout import RoutingLayoutStore

@@ -27,7 +27,7 @@ import pytest
 
 from app.routing import classifier
 from app.execution import delegation
-from app.models import Backend, RecommendedModel
+from app.domain.models import Backend, RecommendedModel
 from app.providers.api import ApiModelProvider
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.cli import CliModelProvider

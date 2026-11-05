@@ -1,6 +1,6 @@
 from app.configuration import config as config_module
 from app.providers import credentials
-from app.models import AuthMethod, Backend, CredentialStatus, KarajanConfig, Profile
+from app.domain.models import AuthMethod, Backend, CredentialStatus, KarajanConfig, Profile
 
 
 def _status(provider: str, *, available: bool, ready: bool, method: AuthMethod) -> CredentialStatus:

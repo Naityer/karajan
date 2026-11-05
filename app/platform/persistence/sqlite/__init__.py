@@ -20,8 +20,8 @@ from pathlib import Path
 from app.configuration import config as config_module
 from app.resources import resource_library
 from app.routing import routing_layout
-from app.database import TaskStore
-from app.models import KarajanConfig
+from app.persistence.database import TaskStore
+from app.domain.models import KarajanConfig
 
 # Rutas históricas, relativas al directorio de trabajo. Se mantienen como
 # valores por defecto para no cambiar dónde escribe una instalación existente.

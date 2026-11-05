@@ -7,7 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
-from app.models import (
+from app.domain.models import (
     OpenClawChannelInfo,
     OpenClawDaemonStatus,
     OpenClawInstallRequest,

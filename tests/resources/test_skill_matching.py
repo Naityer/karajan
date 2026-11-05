@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.models import ClassificationResult, ComplexityLevel, CriteriaScores, RecommendedModel, Subtask, SubtaskExecution, TaskRecord, TaskStatus, Backend, DelegationResult
+from app.domain.models import ClassificationResult, ComplexityLevel, CriteriaScores, RecommendedModel, Subtask, SubtaskExecution, TaskRecord, TaskStatus, Backend, DelegationResult
 from app.resources.resource_activation import attach_installed_skills
 from app.resources.skill_analytics import build_skill_analytics
 from app.resources.skill_matching import AvailableSkill, discover_skills, prepare_skills, select_skills
@@ -81,7 +81,7 @@ def test_classification_and_metrics_do_not_confuse_preparation_with_usage():
 
 def test_forced_local_model_cannot_silently_skip_a_required_skill():
     from app.execution.delegation import run_subtask
-    from app.models import KarajanConfig
+    from app.domain.models import KarajanConfig
     from app.providers.base import ModelProvider
     from app.providers.registry import Resolution
 

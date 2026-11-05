@@ -31,7 +31,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from app.database import DEFAULT_DB_PATH
+from app.persistence.database import DEFAULT_DB_PATH
 
 try:  # optional dependency — /analytics/dashboard degrades gracefully if absent
     import duckdb

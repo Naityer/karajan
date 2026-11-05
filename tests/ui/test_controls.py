@@ -3,9 +3,9 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app import main
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 from app.execution.delegation import delegate, estimate_task_cost
-from app.models import Backend, KarajanConfig, OrchestrationConfig
+from app.domain.models import Backend, KarajanConfig, OrchestrationConfig
 from app.routing.router import classify_prompt
 
 CRITICAL_INGEST = {

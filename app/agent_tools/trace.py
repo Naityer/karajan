@@ -16,7 +16,7 @@ from typing import Any
 
 from app.execution import events
 from app.agent_tools.spec import ToolResult
-from app.logging_config import get_logger, log_event
+from app.core.logging_config import get_logger, log_event
 
 logger = get_logger("agent_tools")
 

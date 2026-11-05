@@ -11,7 +11,7 @@ from app.application.dto import ClassifyCommand
 from app.application.errors import ConflictError
 from app.application.container import KarajanContainer, StorageAlreadyOwnedError
 from app.clients.local_client import LocalKarajanClient
-from app.models import Profile
+from app.domain.models import Profile
 from app.modules.v1.api import router as v1_router
 from app.application.runtime import set_current
 

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from app import main
-from app.models import ResourceItem, ResourceKind
+from app.domain.models import ResourceItem, ResourceKind
 from app.resources.nested_resources import ClaudeSkillsCollectionAdapter
 from app.resources.resource_library import ResourceStore
 from app.resources.resource_validity import decorate_catalog_resources, load_policy

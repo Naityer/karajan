@@ -4,7 +4,7 @@ import pytest
 
 from app.providers import resolve
 from app.providers import registry
-from app.models import AuthMethod, Backend, KarajanConfig, ProviderInfo, RecommendedModel
+from app.domain.models import AuthMethod, Backend, KarajanConfig, ProviderInfo, RecommendedModel
 from app.providers.api import ApiModelProvider
 from app.providers.cli import CliModelProvider
 from app.providers.catalog import get_provider

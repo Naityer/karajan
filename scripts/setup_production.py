@@ -33,7 +33,7 @@ from app.configuration.env import ensure_project_env, load_project_env  # noqa: 
 ensure_project_env()
 load_project_env()
 
-from app import skills_catalog  # noqa: E402
+from app.resources import skills_catalog  # noqa: E402
 from app.providers import catalog
 from app.configuration import setup_status
 from app.configuration.config import load_config  # noqa: E402

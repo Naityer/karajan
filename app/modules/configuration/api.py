@@ -18,9 +18,9 @@ from app.configuration import production_setup
 from app.configuration import setup_status
 from app.security.atlas_auth import require_atlas_token
 from app.security.auth import require_token
-from app.modo import require_tarea_aceptada
-from app.logging_config import log_event
-from app.models import (
+from app.configuration.modo import require_tarea_aceptada
+from app.core.logging_config import log_event
+from app.domain.models import (
     CredentialStatus,
     DefaultConfigApplyResult,
     KarajanConfig,
@@ -34,7 +34,7 @@ from fastapi import (
 )
 
 from app.application import runtime as runtime_module
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 
 
 logger = get_logger("api")

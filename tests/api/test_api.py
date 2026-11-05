@@ -5,8 +5,8 @@ from fastapi.testclient import TestClient
 from app.configuration import config as config_module
 from app import main
 from app.modules.tasks import api as tasks_api
-from app.database import TaskStore
-from app.models import Backend, KarajanConfig
+from app.persistence.database import TaskStore
+from app.domain.models import Backend, KarajanConfig
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
 from app.routing.routing_layout import RoutingLayoutStore

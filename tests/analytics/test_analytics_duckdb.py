@@ -15,8 +15,8 @@ from datetime import datetime, timezone
 import pytest
 
 from app.analytics import duckdb_ops
-from app.database import TaskStore
-from app.models import (
+from app.persistence.database import TaskStore
+from app.domain.models import (
     ClassificationResult,
     ComplexityLevel,
     CriteriaScores,

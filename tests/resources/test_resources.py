@@ -7,7 +7,7 @@ import httpx
 
 from app.resources.github_resources import GitHubResourceAnalyzer, validate_github_repository_url
 from app.modules.inspiration.api import _github_resource_parts
-from app.models import ResourceCreateRequest, ResourceItem, ResourceKind, ResourceOperationRequest, SkillInfo
+from app.domain.models import ResourceCreateRequest, ResourceItem, ResourceKind, ResourceOperationRequest, SkillInfo
 from app.resources.naityer_resources import NaityerAdapter
 from app.resources.nested_resources import ItsFreeAdapter, TooolsDesignAdapter
 from app.resources.resource_installer import SkillRepositoryManager

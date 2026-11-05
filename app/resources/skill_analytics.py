@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
-from app.models import TaskRecord, TaskStatus
+from app.domain.models import TaskRecord, TaskStatus
 
 
 def _utc(value: datetime) -> datetime:

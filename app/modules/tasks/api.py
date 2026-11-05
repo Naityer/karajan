@@ -19,7 +19,7 @@ from app.execution import events
 from app.execution import monitoring
 from app.security.atlas_auth import require_atlas_token
 from app.security.auth import require_token
-from app.logging_config import log_event
+from app.core.logging_config import log_event
 from app.application.dto import ClassifyCommand, ExecuteCommand
 from app.application.errors import (
     BudgetExceededError,
@@ -27,7 +27,7 @@ from app.application.errors import (
     HostedModeRequiredError,
     TaskNotFoundError,
 )
-from app.models import (
+from app.domain.models import (
     ArtifactInfo,
     ClassificationResult,
     ComplexityLevel,
@@ -58,7 +58,7 @@ from fastapi import (
 )
 
 from app.application import runtime as runtime_module
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 
 
 logger = get_logger("api")

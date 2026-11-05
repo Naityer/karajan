@@ -4,7 +4,7 @@ best tier is fully busy, instead of blocking the whole queue."""
 import asyncio
 
 from app.routing import scheduler as scheduler_module
-from app.models import (
+from app.domain.models import (
     Backend,
     ClassificationResult,
     CriteriaScores,

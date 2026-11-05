@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.models import ClassificationResult, ResourceRecommendationContext
+from app.domain.models import ClassificationResult, ResourceRecommendationContext
 from app.resources.skill_matching import AvailableSkill, discover_skills, select_skills
 
 

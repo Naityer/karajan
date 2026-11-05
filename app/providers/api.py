@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 
-from app.models import Backend, ProviderInfo
+from app.domain.models import Backend, ProviderInfo
 from app.providers.base import ModelProvider, ProviderRun
 
 

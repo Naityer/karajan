@@ -22,7 +22,7 @@ from app.application.errors import (
 )
 from app.security.atlas_auth import require_atlas_token
 from app.security.auth import require_token
-from app.models import ComplexityLevel
+from app.domain.models import ComplexityLevel
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 secured = [Depends(require_token), Depends(require_atlas_token)]

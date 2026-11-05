@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.execution import metrics_export
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 from app.execution.delegation import delegate
-from app.models import Backend, KarajanConfig
+from app.domain.models import Backend, KarajanConfig
 from app.routing.router import classify_prompt
 
 
@@ -48,7 +48,7 @@ def test_render_prometheus_has_help_type_and_samples(tmp_path: Path) -> None:
 
 
 def test_render_prometheus_marks_db_down() -> None:
-    from app.models import Metrics
+    from app.domain.models import Metrics
 
     empty = Metrics(
         total_tasks=0, by_level={}, by_model={}, by_backend={},

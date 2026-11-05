@@ -14,9 +14,9 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-from app.database import TaskStore, _denorm_values
+from app.persistence.database import TaskStore, _denorm_values
 from app.execution.delegation import delegate
-from app.models import (
+from app.domain.models import (
     Backend,
     ClassificationResult,
     ComplexityLevel,

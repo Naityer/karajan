@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.execution import delegation
-from app.database import TaskStore
-from app.models import Backend, KarajanConfig, ResourceItem, ResourceKind
+from app.persistence.database import TaskStore
+from app.domain.models import Backend, KarajanConfig, ResourceItem, ResourceKind
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
 from app.resources.resource_activation import attach_resource_recommendations

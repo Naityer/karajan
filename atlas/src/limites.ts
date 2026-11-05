@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Límites del plan de los agentes (port de `app/limites_plan.py`). Atlas dev los lee de las CLIs y los deja en
+ * Límites del plan de los agentes (port de `app/configuration/limites_plan.py`). Atlas dev los lee de las CLIs y los deja en
  * `ATLAS_LIMITES_PLAN` (o `~/.atlas-dev/limites-plan.json`); aquí solo se leen. Si Claude pasa del umbral semanal
  * (`KARAJAN_LIMITE_CLAUDE`, 50 % por defecto) lo suyo va a Codex. Un dato de más de dos horas no se usa.
  *

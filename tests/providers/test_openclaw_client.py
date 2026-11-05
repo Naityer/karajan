@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 
-from app.models import KarajanConfig, OpenClawInstallRequest
+from app.domain.models import KarajanConfig, OpenClawInstallRequest
 from app.clients.openclaw_client import OpenClawClient
 
 

@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Catálogo de skills de Karajan (puerto de `app/skills_catalog.py`, solo lectura): las que trae el router, las que se instalan
+ * Catálogo de skills de Karajan (puerto de `app/resources/skills_catalog.py`, solo lectura): las que trae el router, las que se instalan
  * desde repos de GitHub y las que viven en el propio repo de Karajan, con su estado de instalación en este equipo. Instalarlas
  * (`install_skill`) necesita git y copiar ficheros del repo y queda fuera del paquete (ver PORTE.md).
  */

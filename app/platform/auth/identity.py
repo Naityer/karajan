@@ -3,8 +3,8 @@
 Karajan ya tenía los dos mecanismos que hacen falta, pero sueltos y acoplados a
 FastAPI (nota "Plan de mejora", §22):
 
-- `app/auth.py` — secreto compartido `X-KARAJAN-Token`, el modo standalone.
-- `app/atlas_auth.py` — JWT RS256 de capacidad firmado por Atlas, el modo
+- `app/security/auth.py` — secreto compartido `X-KARAJAN-Token`, el modo standalone.
+- `app/security/atlas_auth.py` — JWT RS256 de capacidad firmado por Atlas, el modo
   add-on.
 
 Aquí se convierten en implementaciones de `IdentityProvider`, y ambas producen

@@ -13,7 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.routing import scheduler as scheduler_module
-from app.models import (
+from app.domain.models import (
     Backend,
     ClassificationResult,
     CriteriaScores,

@@ -20,8 +20,8 @@ from app.resources import resource_library
 from app.resources import skills_catalog
 from app.security.atlas_auth import require_atlas_token
 from app.security.auth import require_token
-from app.modo import require_tarea_aceptada
-from app.models import (
+from app.configuration.modo import require_tarea_aceptada
+from app.domain.models import (
     CredentialStatus,
     OpenClawChannelInfo,
     OpenClawDaemonStatus,
@@ -203,7 +203,7 @@ def provider_run(name: str, request: ProviderRunRequest, _: None = Depends(requi
     """Run a provider's catalog-defined login/probe command for the Agentes console.
 
     Only `login_command`/`probe_command` from the static catalog can run — see
-    `app/agent_console.py` for why this can't become arbitrary command execution.
+    `app/execution/agent_console.py` for why this can't become arbitrary command execution.
     """
     provider = catalog.get_provider(name)
     if provider is None:

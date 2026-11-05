@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 from uuid import uuid4
 
-from app.models import (
+from app.domain.models import (
     DiscoverySource,
     ResourceCreateRequest,
     ResourceGroup,
