@@ -44,9 +44,15 @@ interfaz web lo dibuje con los mismos datos. Código en `atlas/src/sdk/` (`ascii
 | `kj estadisticas agentes [--dias N] [--perfil …]` | Tareas, acierto, latencia p50/p90 y ranking por agente |
 | `kj estadisticas skills [--dias N] [--perfil …]` | Actividad semanal, skills y categorías más usadas, mapas agente×skill y skill×categoría |
 | `kj estadisticas tareas [--limite N]` · `kj estadisticas tarea <id>` | Lista de tareas; detalle con criterios de clasificación y decisiones |
+| `kj control estado` | Modo, proveedores listos, dosificador, borradores abiertos y revisiones pendientes de un vistazo |
+| `kj control mapa` | Agentes por zona con su carga, errores y cuota usada, más la actividad reciente (sustituye al canvas de «Control humano») |
+| `kj control jerarquia [--perfil <id>]` | Árbol de quién delega en quién (con vigilancias) y las reglas de enrutado |
+| `kj control perfiles` · `kj control proveedores` · `kj control cuota` | Perfiles (el que ejecuta y el que se edita), proveedores disponibles y cuota por agente |
+| `kj control revisiones` | Tareas que esperan revisión humana (la aprobación se hace desde Atlas dev) |
+| `kj control mision "<texto>" [--ejecutar]` | Clasifica y planifica una tarea sin ejecutarla; con `--ejecutar` la delega de verdad (en producción sigue el guardián) |
 
 `<componente>` es cualquiera de los de `kj componentes`. Los comandos propios de un componente (p. ej. `kj dosificador config`, que
-también escribe) mandan sobre los genéricos. Pendiente: módulos `inspiration` y `control`, y configuración escribible por componente.
+también escribe) mandan sobre los genéricos. Pendiente: módulo `inspiration` y configuración escribible por componente.
 
 ## `karajan` (CLI del servidor nativo)
 
