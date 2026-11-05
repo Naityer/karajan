@@ -14,6 +14,7 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "frontend-builder": ("frontend", "interfaz", "dashboard", "react", "css"),
     "backend-builder": ("backend", "endpoint", "api", "base de datos"),
     "security-review": ("seguridad", "security", "vulnerabilidad", "credenciales", "secretos"),
+    "aegis-secops": ("seguridad", "security", "vulnerabilidad", "cve", "ssrf", "xss", "owasp", "secretos filtrados", "prompt injection", "hardening"),
     "webapp-testing": ("playwright", "prueba e2e", "pruebas de extremo a extremo"),
     "pdf": ("pdf",), "docx": ("docx", "word"), "pptx": ("pptx", "powerpoint"),
     "xlsx": ("xlsx", "excel", "hoja de calculo"),

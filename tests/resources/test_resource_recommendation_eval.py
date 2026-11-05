@@ -47,6 +47,11 @@ def _critical_resources() -> list[ResourceItem]:
             capabilities=["security-audit"],
         ),
         _resource(
+            "aegis-secops", name="aegis-secops",
+            summary="Seguridad aplicada: revision de codigo, auditoria por sistema, triage de CVE con KEV y EPSS, secretos filtrados y seguridad de agentes.",
+            capabilities=["security-audit", "application-security", "vulnerability-triage", "secrets-detection", "ai-agent-security"],
+        ),
+        _resource(
             "tanstack-charts", name="TanStack Charts", summary="Graficas para visualizar datos.",
             capabilities=["data-visualization"],
         ),

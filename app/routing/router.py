@@ -46,7 +46,7 @@ DOMAIN_KEYWORDS: OrderedDict[str, tuple[str, ...]] = OrderedDict(
 
 # Skill/strategy recommendations surfaced to the operator (mirrors the agent router).
 DOMAIN_SKILLS: dict[str, tuple[str, ...]] = {
-    "security": ("security-review", "cti-analyst"),
+    "security": ("aegis-secops", "security-review", "cti-analyst"),
     "devops": ("repo-analyzer",),
     "programming": ("repo-analyzer", "backend-builder", "frontend-builder"),
     "data": ("repo-analyzer", "promptfoo"),
