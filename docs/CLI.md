@@ -28,6 +28,26 @@ token que `at` (`ATLAS_DEV_TOKEN`). Se construye con `node atlas/build.mjs` y se
 Todos admiten `--json`. En producción nada cambia la configuración sin una tarea aceptada: el agente que la ejecute repite la
 petición con la cabecera `x-karajan-tarea: <id>`. Arquitectura y laboratorios: [laboratorio/componentes.md](laboratorio/componentes.md).
 
+## SDK de componentes y módulos (salida ASCII)
+
+Cada comando devuelve un **panel** (datos + bloques de presentación): en la terminal se pinta en ASCII (barras, medidores, tablas,
+mapas de calor `░▒▓█`, árboles, rangos de percentiles, dispersión, flujo por capas) y con `--json` se entrega tal cual para que la
+interfaz web lo dibuje con los mismos datos. Código en `atlas/src/sdk/` (`ascii.ts`, `panel.ts`, `comandos.ts`, `registro.ts`).
+
+| Comando | Qué muestra |
+|---|---|
+| `kj <componente> describe` | Ficha: qué hace, entradas, pasos, salidas, reglas y su laboratorio |
+| `kj <componente> config` | Configuración viva (solo lectura; los cambios pasan por el guardián del modo producción) |
+| `kj <componente> salud` | Estado de su laboratorio, último resultado por escenario y hallazgos con su borrador |
+| `kj <componente> metricas` | Operación real (tareas, ejecuciones, latencia, coste, lo propio) e historial de métricas |
+| `kj estadisticas resumen [--dias N] [--perfil activo\|todos]` | Indicadores, acierto, flujo entrada→nivel→agente→estado, coste frente a latencia y qué mejorar |
+| `kj estadisticas agentes [--dias N] [--perfil …]` | Tareas, acierto, latencia p50/p90 y ranking por agente |
+| `kj estadisticas skills [--dias N] [--perfil …]` | Actividad semanal, skills y categorías más usadas, mapas agente×skill y skill×categoría |
+| `kj estadisticas tareas [--limite N]` · `kj estadisticas tarea <id>` | Lista de tareas; detalle con criterios de clasificación y decisiones |
+
+`<componente>` es cualquiera de los de `kj componentes`. Los comandos propios de un componente (p. ej. `kj dosificador config`, que
+también escribe) mandan sobre los genéricos. Pendiente: módulos `inspiration` y `control`, y configuración escribible por componente.
+
 ## `karajan` (CLI del servidor nativo)
 
 Kit de comandos para manejar el harness KARAJAN desde terminal (o desde

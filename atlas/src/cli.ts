@@ -1,5 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { barras, sparkline } from './sdk/ascii';
+import { crearRegistro } from './sdk/registro';
+import { renderAscii, renderJson } from './sdk/panel';
 
 /**
  * `kj`: Karajan desde la terminal (sustituye a la interfaz). Habla con el paquete dentro de Atlas dev
@@ -22,23 +25,7 @@ type Fetch = (url: string, init?: { method?: string; headers?: Record<string, st
 interface Entorno { fetch: Fetch; escribir: (s: string) => void; api: string; /** Escribe un fichero (para `--svg` y `--html` de `kj grafica`); sin él, esas opciones fallan. */ guardar?: (ruta: string, contenido: string) => void;
   /** Lee un fichero (para `kj dosificador decidir --entrada`); sin él, esa opción falla. */ leer?: (ruta: string) => string }
 
-const BLOQUES = '▁▂▃▄▅▆▇█';
-export function sparkline(valores: (number | null)[]): string {
-  const v = valores.filter((x): x is number => x !== null && Number.isFinite(x));
-  if (!v.length) return '';
-  const min = Math.min(...v), max = Math.max(...v);
-  return valores.map((x) => (x === null || !Number.isFinite(x) ? ' ' : BLOQUES[max === min ? 3 : Math.round(((x - min) / (max - min)) * 7)]!)).join('');
-}
-
-export function barras(filas: { etiqueta: string; valor: number | null; nota?: string }[], { ancho = 30, formato = (x: number) => String(x) } = {}): string {
-  if (!filas.length) return '(sin datos)';
-  const max = Math.max(0, ...filas.map((f) => f.valor ?? 0)) || 1;
-  const largo = Math.min(28, Math.max(...filas.map((f) => f.etiqueta.length)));
-  return filas.map((f) => {
-    const n = f.valor === null ? 0 : Math.round((f.valor / max) * ancho);
-    return `${f.etiqueta.slice(0, largo).padEnd(largo)} ${'█'.repeat(n)}${'·'.repeat(ancho - n)} ${f.valor === null ? '—' : formato(f.valor)}${f.nota ? `  ${f.nota}` : ''}`;
-  }).join('\n');
-}
+export { barras, sparkline };
 
 const xml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const COLORES = ':root{--kj-fondo:#ffffff;--kj-texto:#1f2933;--kj-tenue:#52606d;--kj-barra:#2563eb;--kj-pista:#e4e7eb}@media (prefers-color-scheme:dark){:root{--kj-fondo:#12161c;--kj-texto:#e4e7eb;--kj-tenue:#9aa5b1;--kj-barra:#60a5fa;--kj-pista:#2a323d}}';
@@ -107,10 +94,23 @@ function pintarEjecucion(x: Ejecucion): string {
   return lineas.join('\n');
 }
 
+/** `<componente> <acción>` que ya tienen un comando propio en el despachador de abajo. */
+const PROPIOS = new Set(['dosificador config']);
+
 export async function ejecutar(args: string[], e: Entorno): Promise<number> {
   const [cmd, sub, ...resto] = args;
   const json = bandera(args, 'json');
   const salida = (datos: unknown, texto: () => string) => e.escribir(json ? JSON.stringify(datos, null, 2) : texto());
+  // Módulos y comandos genéricos de componente (sdk/): devuelven un Panel que se pinta en ASCII o en JSON.
+  const registro = crearRegistro();
+  const encontrado = registro.resolver(args);
+  // Los comandos propios de un componente (`kj dosificador config`, que además escribe) mandan sobre los genéricos de `<componente> <acción>`.
+  const propio = encontrado?.comando.ruta[0] === '*' && PROPIOS.has(`${args[0]} ${args[1]}`);
+  if (encontrado && !propio) {
+    const panel = await encontrado.comando.ejecutar({ pedir: (ruta, metodo, cuerpo) => pedir(e, ruta, metodo, cuerpo), opcion: (n) => opcion(args, n), bandera: (n) => bandera(args, n) }, encontrado.resto, encontrado.ruta);
+    e.escribir(json ? renderJson(panel) : renderAscii(panel));
+    return 0;
+  }
   switch (cmd) {
     case 'modo': {
       const m = (await pedir(e, '/laboratorio/modo')) as { modo: string; fichero: string };
@@ -327,7 +327,8 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       return 0;
     }
     default:
-      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | comparar [<skill>|karajan] [--grupo g] | dosificador estado|config|decidir|simular | tutoria [tutores|actualizar|brechas] | propuestas | modo   (--json en todos)');
+      e.escribir(`${registro.ayuda()}
+kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | comparar [<skill>|karajan] [--grupo g] | dosificador estado|config|decidir|simular | tutoria [tutores|actualizar|brechas] | propuestas | modo   (--json en todos)`);
       return cmd ? 2 : 0;
   }
 }
