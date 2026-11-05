@@ -13,8 +13,6 @@ from karajan_cli import userconfig
 from karajan_cli.client import KarajanClient
 
 LAUNCH_HINTS = [
-    'KARAJAN Desktop.bat  (doble clic, arranca en el puerto 8001)',
-    'python desktop_app.py  (ventana nativa pywebview, elige un puerto libre)',
     '.venv\\Scripts\\python -m uvicorn app.main:app --host 127.0.0.1 --port 8001  (arranque manual)',
 ]
 

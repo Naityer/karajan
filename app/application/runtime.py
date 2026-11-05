@@ -54,7 +54,7 @@ from app.resource_intelligence import ResourceRankingEngine
 from app.resource_refresh import ResourceRefreshCoordinator
 from app.web_references import WebReferenceAnalyzer
 
-Mode = Literal["standalone", "addon", "saas"]
+Mode = Literal["standalone", "addon"]
 
 
 @dataclass

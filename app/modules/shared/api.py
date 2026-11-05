@@ -95,7 +95,7 @@ def manifest() -> dict:
         "id": "karajan",
         "version": KARAJAN_VERSION,
         "modules": [m.to_dict() for m in _MODULE_MANIFESTS],
-        "modes": ["standalone", "addon", "saas"],
+        "modes": ["standalone", "addon"],
     }
 
 
