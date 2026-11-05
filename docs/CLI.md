@@ -44,6 +44,12 @@ interfaz web lo dibuje con los mismos datos. Código en `atlas/src/sdk/` (`ascii
 | `kj estadisticas agentes [--dias N] [--perfil …]` | Tareas, acierto, latencia p50/p90 y ranking por agente |
 | `kj estadisticas skills [--dias N] [--perfil …]` | Actividad semanal, skills y categorías más usadas, mapas agente×skill y skill×categoría |
 | `kj estadisticas tareas [--limite N]` · `kj estadisticas tarea <id>` | Lista de tareas; detalle con criterios de clasificación y decisiones |
+| `kj inspiration resumen` | Recursos activos por tipo, estado, validez, origen y grupo |
+| `kj inspiration lista [--tipo skill\|capability\|reference] [--estado e] [--runtime r] [--origen o] [--validez v] [--buscar texto] [--limite N]` | Catálogo con filtros (`★*` = estrellas heredadas del repo que recoge la skill) |
+| `kj inspiration arbol [--grupo <id\|nombre>]` | Grupo → artefacto → componentes (hasta 12 por artefacto); `--grupo` acepta cualquier nivel |
+| `kj inspiration grupos` · `ver <id\|slug>` · `radar` · `refresco` | Taxonomía con recuentos; ficha de un recurso; fuentes de descubrimiento; estado del último refresco |
+| `kj inspiration revision` · `validez` | Recursos pendientes de aceptar y política de validez. **Limitación:** casi ningún recurso tiene estado de validez guardado en `resources.db` (lo evalúa el Karajan nativo al leerlo), así que aquí salen «sin dato» y lo avisan |
+
 | `kj control estado` | Modo, proveedores listos, dosificador, borradores abiertos y revisiones pendientes de un vistazo |
 | `kj control mapa` | Agentes por zona con su carga, errores y cuota usada, más la actividad reciente (sustituye al canvas de «Control humano») |
 | `kj control jerarquia [--perfil <id>]` | Árbol de quién delega en quién (con vigilancias) y las reglas de enrutado |
@@ -52,7 +58,7 @@ interfaz web lo dibuje con los mismos datos. Código en `atlas/src/sdk/` (`ascii
 | `kj control mision "<texto>" [--ejecutar]` | Clasifica y planifica una tarea sin ejecutarla; con `--ejecutar` la delega de verdad (en producción sigue el guardián) |
 
 `<componente>` es cualquiera de los de `kj componentes`. Los comandos propios de un componente (p. ej. `kj dosificador config`, que
-también escribe) mandan sobre los genéricos. Pendiente: módulo `inspiration` y configuración escribible por componente.
+también escribe) mandan sobre los genéricos. Inspiration es de solo lectura (`resources.db`, `ATLAS_KARAJAN_RESOURCES`): altas, instalación, revisión y recomendador siguen en el Karajan nativo. Pendiente: configuración escribible por componente.
 
 ## `karajan` (CLI del servidor nativo)
 

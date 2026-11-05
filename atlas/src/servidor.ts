@@ -326,6 +326,18 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.get('/analytics/acierto', (req) => { const p = calcular(req.query); return { ...cabecera(p), tareas: p.acierto }; });
   app.get('/skills/catalogo', (req) => { const p = calcular({ dias: req.query['dias'] ?? '90', perfil: 'todos' }); return { dias: p.dias, ...p.catalogo }; });
 
+  // ── Inspiration: la biblioteca de recursos en SOLO LECTURA (las altas, la revisión y el refresco son del Karajan nativo) ──
+  const conBiblioteca = <T,>(fn: () => T): T => { if (!biblioteca.disponible) throw falla(409, 'La biblioteca necesita resources.db (ATLAS_KARAJAN_RESOURCES).'); return fn(); };
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined);
+  app.get('/resources', (req) => conBiblioteca(() => biblioteca.listar({ grupo: texto(req.query['group']), tipo: texto(req.query['kind']), estado: texto(req.query['status']), runtime: texto(req.query['runtime']), origen: texto(req.query['source']), validez: texto(req.query['validity']), q: texto(req.query['q']), limite: entero(req.query['limit'], 100, 1, 500), desplazamiento: entero(req.query['offset'], 0, 0, 1_000_000) })));
+  app.get('/resources/index', () => conBiblioteca(() => biblioteca.recuentos()));
+  app.get('/resources/discovery/sources', () => conBiblioteca(() => ({ fuentes: biblioteca.fuentes() })));
+  app.get('/resources/review', (req) => conBiblioteca(() => biblioteca.listar({ validez: texto(req.query['state']) ?? 'pending_review', limite: 500 })));
+  app.get('/resources/validity-policy', () => conBiblioteca(() => { const pref = biblioteca.preferencias(); return { preferencias: Object.fromEntries(Object.entries(pref).filter(([k]) => /valid|polic/i.test(k))) }; }));
+  app.get('/resources/refresh/settings', () => conBiblioteca(() => { const pref = biblioteca.preferencias(); return { preferencias: Object.fromEntries(Object.entries(pref).filter(([k]) => /refresh|cadenc|schedule/i.test(k))) }; }));
+  app.get('/resource-groups', () => conBiblioteca(() => biblioteca.grupos()));
+  app.get('/resources/:id', (req) => conBiblioteca(() => biblioteca.detalle((req.params as { id: string }).id) ?? (() => { throw falla(404, 'recurso no encontrado'); })()));
+
   // ── Rotador de skills: núcleo (14 d), frecuentes (45 d) e instantáneas (bajo demanda, 3 d); el resto, al almacén ──
   app.get('/skills/rotacion', () => {
     const inventario = rotador.inventario();

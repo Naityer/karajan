@@ -39,9 +39,10 @@ export function medidor(valor: number | null, max = 1, { ancho = 20, formato = p
 const texto = (v: string | number | null | undefined) => (v === null || v === undefined ? '—' : String(v));
 
 /** Tabla con cabecera y columnas alineadas (números a la derecha). */
-export function tabla(columnas: string[], filas: (string | number | null)[][], { maxAncho = 40 }: { maxAncho?: number } = {}): string {
+export function tabla(columnas: string[], filas: (string | number | null)[][], { maxAncho = 60 }: { maxAncho?: number } = {}): string {
   if (!filas.length) return '(sin datos)';
-  const celdas = filas.map((f) => columnas.map((_, i) => texto(f[i]).slice(0, maxAncho)));
+  const corta = (s: string) => (s.length > maxAncho ? `${s.slice(0, maxAncho - 1)}…` : s);
+  const celdas = filas.map((f) => columnas.map((_, i) => corta(texto(f[i]))));
   const anchos = columnas.map((c, i) => Math.max(c.length, ...celdas.map((f) => f[i]!.length)));
   const derecha = columnas.map((_, i) => filas.every((f) => f[i] === null || typeof f[i] === 'number'));
   const pinta = (f: string[]) => f.map((c, i) => (derecha[i] ? c.padStart(anchos[i]!) : c.padEnd(anchos[i]!))).join(' │ ').trimEnd();

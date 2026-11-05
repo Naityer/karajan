@@ -48,6 +48,7 @@ describe('sdk · piezas ASCII', () => {
     assert.match(d, /2 b {2}\(10, 5\)/);
     const f = flujo([{ nombre: 'entrada', nodos: [{ id: 'e1', nombre: 'claude', valor: 2 }] }, { nombre: 'estado', nodos: [{ id: 's1', nombre: 'ok', valor: 2 }] }], [{ origen: 'e1', destino: 's1', valor: 2 }]);
     assert.match(f, /entrada:claude ─\(2\)→ estado:ok/);
+    assert.equal(tabla(['k'], [['x'.repeat(70)]]).split('\n')[2], `${'x'.repeat(59)}…`);
     assert.equal(barras([]), '(sin datos)');
     assert.equal(sparkline([0, 0.5, 1]), '▁▅█');
   });
