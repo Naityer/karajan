@@ -4,7 +4,7 @@ la app *y* la instalación standalone en el mismo módulo, al importarse — no
 había forma de pedir "esta misma API, pero con otro runtime" sin duplicar
 ~170 líneas de cableado (lifespan, CORS, `include_router` x7, estáticos).
 
-`create_standalone_app()` / `create_atlas_addon_app()` / `create_saas_app()`
+`create_standalone_app()` / `create_atlas_addon_app()`
 (en `app/distributions/`) son configuraciones distintas de esta misma
 factoría — no tres implementaciones separadas.
 """
@@ -33,6 +33,7 @@ from app.modules.inspiration import api as inspiration_api
 from app.modules.monitoring import api as monitoring_api
 from app.modules.shared import api as shared_api
 from app.modules.tasks import api as tasks_api
+from app.modules.v1 import api as v1_api
 from app.application.runtime import KarajanRuntime, set_current
 
 logger = get_logger("api")
@@ -47,14 +48,14 @@ _ROUTERS = (
     inspiration_api.router,
     configuration_api.router,
     shared_api.router,
+    v1_api.router,
 )
 
 
 def _static_asset_version(static_dir: Path) -> str:
     """Fingerprint of the served JS/CSS, used to cache-bust static asset URLs.
 
-    Without this, a browser (or the pywebview/WebView2 control the desktop
-    launcher uses) can keep serving an old app.js/styles.css from its own
+    Without this, a browser can keep serving an old app.js/styles.css from its own
     cache even after the files on disk changed, because the URL never
     changes. Deriving the version from each file's mtime means the URL
     changes the moment the content does, with nothing to remember to bump.
@@ -67,8 +68,17 @@ def _static_asset_version(static_dir: Path) -> str:
     return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:10]
 
 
+class _NoCacheStaticFiles(StaticFiles):
+    """`StaticFiles` que siempre revalida: las ediciones de `src/` se ven en la siguiente recarga."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def _mount_dashboard(app: FastAPI, static_dir: Path) -> None:
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    app.mount("/static", _NoCacheStaticFiles(directory=static_dir), name="static")
 
     @app.get("/", include_in_schema=False)
     def index() -> HTMLResponse:
@@ -137,9 +147,8 @@ def create_app(
 
     `set_current(runtime)` se llama tanto aquí (para que esté activo desde el
     primer `import`, como hoy) como dentro del lifespan (por si el proceso
-    sirve más de un runtime a la vez — SaaS multi-tenant, ver
-    `app/distributions/saas.py`). Los routers siempre son los mismos 7: lo que
-    cambia entre standalone/add-on/SaaS es el runtime que hay detrás, no la
+    sirve más de un runtime a la vez). Los routers siempre son los mismos 8: lo que
+    cambia entre standalone/add-on es el runtime que hay detrás, no la
     superficie de la API.
     """
     set_current(runtime)
