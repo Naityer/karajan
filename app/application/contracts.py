@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from app.application_dto import (
+from app.application.dto import (
     AdministrativeOverrideCommand,
     ClassifyCommand,
     ExecuteCommand,

@@ -6,8 +6,8 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from app.logging_config import get_logger, log_event
-from app.models import (
+from app.core.logging_config import get_logger, log_event
+from app.domain.models import (
     ClassificationResult,
     CriteriaScores,
     KarajanConfig,
@@ -15,7 +15,7 @@ from app.models import (
     RecommendedModel,
 )
 from app.providers import resolve
-from app.router import (
+from app.routing.router import (
     _requires_human_review,
     calculate_complexity_score,
     classify_prompt,

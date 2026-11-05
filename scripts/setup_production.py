@@ -28,15 +28,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.env import ensure_project_env, load_project_env  # noqa: E402
+from app.configuration.env import ensure_project_env, load_project_env  # noqa: E402
 
 ensure_project_env()
 load_project_env()
 
-from app import catalog, setup_status, skills_catalog  # noqa: E402
-from app.config import load_config  # noqa: E402
-from app.openclaw_client import OpenClawClient  # noqa: E402
-from app.production_setup import (  # noqa: E402
+from app.resources import skills_catalog  # noqa: E402
+from app.providers import catalog
+from app.configuration import setup_status
+from app.configuration.config import load_config  # noqa: E402
+from app.clients.openclaw_client import OpenClawClient  # noqa: E402
+from app.configuration.production_setup import (  # noqa: E402
     BASELINE_DIR,
     ACTIVE_CONFIG_PATH,
     ROUTING_LAYOUT_PATH,

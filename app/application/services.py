@@ -9,14 +9,16 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from app import classifier, delegation, monitoring
-from app.application_dto import (
+from app.routing import classifier
+from app.execution import delegation
+from app.execution import monitoring
+from app.application.dto import (
     AdministrativeOverrideCommand,
     ClassifyCommand,
     ExecuteCommand,
     ResolvedIdentity,
 )
-from app.application_errors import (
+from app.application.errors import (
     AuthorizationDeniedError,
     BudgetExceededError,
     ConflictError,
@@ -25,11 +27,11 @@ from app.application_errors import (
     OutcomeUnknownError,
     TaskNotFoundError,
 )
-from app.logging_config import get_logger, log_event
-from app.models import ClassificationResult, ComplexityLevel, TaskRecord, TaskStatus
+from app.core.logging_config import get_logger, log_event
+from app.domain.models import ClassificationResult, ComplexityLevel, TaskRecord, TaskStatus
 from app.providers.registry import resolve_by_name, resolve_entity
-from app.resource_activation import attach_resource_recommendations
-from app.router import model_for_level
+from app.resources.resource_activation import attach_resource_recommendations
+from app.routing.router import model_for_level
 
 logger = get_logger("application")
 

@@ -14,9 +14,9 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-from app.database import TaskStore, _denorm_values
-from app.delegation import delegate
-from app.models import (
+from app.persistence.database import TaskStore, _denorm_values
+from app.execution.delegation import delegate
+from app.domain.models import (
     Backend,
     ClassificationResult,
     ComplexityLevel,
@@ -27,7 +27,7 @@ from app.models import (
     SubtaskExecution,
     TaskStatus,
 )
-from app.router import classify_prompt
+from app.routing.router import classify_prompt
 
 
 def _classification(task_id: str) -> ClassificationResult:

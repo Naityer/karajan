@@ -1,5 +1,5 @@
-from app.catalog import get_provider
-from app.models import AuthMethod, Backend, RecommendedModel
+from app.providers.catalog import get_provider
+from app.domain.models import AuthMethod, Backend, RecommendedModel
 from app.providers.api import _openai_base_url
 
 

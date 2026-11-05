@@ -1,0 +1,22 @@
+services:
+  karajan-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      # Persiste data/resources.db (biblioteca Inspiration) fuera del contenedor.
+      - ../data:/app/data
+    environment:
+      # Obligatoria: sin ella, app/security/auth.py::require_token desactiva la
+      # autenticación y cualquiera podría dar de alta/borrar recursos.
+      - KARAJAN_TOKEN=${KARAJAN_TOKEN:?Define KARAJAN_TOKEN en tu .env antes de exponer este servicio}
+
+    # Para alcanzar este servicio fuera de esta máquina (otro dispositivo en
+    # tu red, u otro agente en internet) necesitas además:
+    #   - Port-forward del puerto 8001 en tu router, y/o
+    #   - Una red tipo Tailscale/WireGuard, y/o
+    #   - Un reverse proxy (Caddy/Nginx) con TLS delante de este puerto.
+    # Nada de eso se automatiza aquí: es configuración de tu red, no del repo.

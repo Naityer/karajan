@@ -3,9 +3,9 @@ from __future__ import annotations
 import statistics
 import time
 
-from app.models import ResourceItem, ResourceKind
-from app.resource_intelligence import ResourceRankingEngine
-from app.resource_library import ResourceStore
+from app.domain.models import ResourceItem, ResourceKind
+from app.resources.resource_intelligence import ResourceRankingEngine
+from app.resources.resource_library import ResourceStore
 
 
 def test_fts_rerank_pipeline_meets_10k_latency_budget(tmp_path) -> None:

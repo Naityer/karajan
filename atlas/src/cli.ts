@@ -1,5 +1,8 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { barras, sparkline } from './sdk/ascii';
+import { crearRegistro } from './sdk/registro';
+import { renderAscii, renderJson } from './sdk/panel';
 
 /**
  * `kj`: Karajan desde la terminal (sustituye a la interfaz). Habla con el paquete dentro de Atlas dev
@@ -14,29 +17,15 @@ import { pathToFileURL } from 'node:url';
  *   kj grafica acierto|eficiencia|flujo|matriz-skills|sugerencias [--dias N] [--perfil todos]
  *   kj curador [--proponer]                 skills que sobran, por regla; --proponer las abre como borradores
  *   kj comparar [<skill>|karajan] [--grupo g]  cada skill (o Karajan) frente a las mejores de su grupo, con estrellas propias
+ *   kj dosificador estado|config|decidir|simular   cuándo, dónde y con qué agente se lanza cada tarea (cuota por agente, circuitos, simulación)
  *   kj propuestas                           borradores abiertos por Karajan y su estado
  *   kj modo                                 producción o desarrollo
  */
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
-interface Entorno { fetch: Fetch; escribir: (s: string) => void; api: string; /** Escribe un fichero (para `--svg` y `--html` de `kj grafica`); sin él, esas opciones fallan. */ guardar?: (ruta: string, contenido: string) => void }
+interface Entorno { fetch: Fetch; escribir: (s: string) => void; api: string; /** Escribe un fichero (para `--svg` y `--html` de `kj grafica`); sin él, esas opciones fallan. */ guardar?: (ruta: string, contenido: string) => void;
+  /** Lee un fichero (para `kj dosificador decidir --entrada`); sin él, esa opción falla. */ leer?: (ruta: string) => string }
 
-const BLOQUES = '▁▂▃▄▅▆▇█';
-export function sparkline(valores: (number | null)[]): string {
-  const v = valores.filter((x): x is number => x !== null && Number.isFinite(x));
-  if (!v.length) return '';
-  const min = Math.min(...v), max = Math.max(...v);
-  return valores.map((x) => (x === null || !Number.isFinite(x) ? ' ' : BLOQUES[max === min ? 3 : Math.round(((x - min) / (max - min)) * 7)]!)).join('');
-}
-
-export function barras(filas: { etiqueta: string; valor: number | null; nota?: string }[], { ancho = 30, formato = (x: number) => String(x) } = {}): string {
-  if (!filas.length) return '(sin datos)';
-  const max = Math.max(0, ...filas.map((f) => f.valor ?? 0)) || 1;
-  const largo = Math.min(28, Math.max(...filas.map((f) => f.etiqueta.length)));
-  return filas.map((f) => {
-    const n = f.valor === null ? 0 : Math.round((f.valor / max) * ancho);
-    return `${f.etiqueta.slice(0, largo).padEnd(largo)} ${'█'.repeat(n)}${'·'.repeat(ancho - n)} ${f.valor === null ? '—' : formato(f.valor)}${f.nota ? `  ${f.nota}` : ''}`;
-  }).join('\n');
-}
+export { barras, sparkline };
 
 const xml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const COLORES = ':root{--kj-fondo:#ffffff;--kj-texto:#1f2933;--kj-tenue:#52606d;--kj-barra:#2563eb;--kj-pista:#e4e7eb}@media (prefers-color-scheme:dark){:root{--kj-fondo:#12161c;--kj-texto:#e4e7eb;--kj-tenue:#9aa5b1;--kj-barra:#60a5fa;--kj-pista:#2a323d}}';
@@ -63,8 +52,11 @@ const pct = (x: number) => `${Math.round(x * 100)} %`;
 const opcion = (args: string[], nombre: string) => { const i = args.indexOf(`--${nombre}`); return i >= 0 ? args[i + 1] ?? '' : null; };
 const bandera = (args: string[], nombre: string) => args.includes(`--${nombre}`);
 
-async function pedir(e: Entorno, ruta: string, metodo = 'GET', cuerpo?: unknown): Promise<unknown> {
+async function pedir(e: Entorno, ruta: string, metodo = 'GET', cuerpo?: unknown, tarea?: string | null): Promise<unknown> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
+  // En producción toda escritura necesita una tarea aceptada de Atlas dev (modo.ts): `--tarea <id>` o KARAJAN_TAREA.
+  const t = tarea ?? process.env['KARAJAN_TAREA'];
+  if (t) headers['x-karajan-tarea'] = t;
   if (process.env['ATLAS_DEV_TOKEN']) headers['x-atlas-dev-token'] = process.env['ATLAS_DEV_TOKEN'];
   const r = await e.fetch(`${e.api}${ruta}`, { method: metodo, headers, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) });
   const datos = await r.json().catch(() => null);
@@ -105,10 +97,23 @@ function pintarEjecucion(x: Ejecucion): string {
   return lineas.join('\n');
 }
 
+/** `<componente> <acción>` que ya tienen un comando propio en el despachador de abajo. */
+const PROPIOS = new Set(['dosificador config']);
+
 export async function ejecutar(args: string[], e: Entorno): Promise<number> {
   const [cmd, sub, ...resto] = args;
   const json = bandera(args, 'json');
   const salida = (datos: unknown, texto: () => string) => e.escribir(json ? JSON.stringify(datos, null, 2) : texto());
+  // Módulos y comandos genéricos de componente (sdk/): devuelven un Panel que se pinta en ASCII o en JSON.
+  const registro = crearRegistro();
+  const encontrado = registro.resolver(args);
+  // Los comandos propios de un componente (`kj dosificador config`, que además escribe) mandan sobre los genéricos de `<componente> <acción>`.
+  const propio = encontrado?.comando.ruta[0] === '*' && PROPIOS.has(`${args[0]} ${args[1]}`);
+  if (encontrado && !propio) {
+    const panel = await encontrado.comando.ejecutar({ pedir: (ruta, metodo, cuerpo) => pedir(e, ruta, metodo, cuerpo, opcion(args, 'tarea')), opcion: (n) => opcion(args, n), bandera: (n) => bandera(args, n) }, encontrado.resto, encontrado.ruta);
+    e.escribir(json ? renderJson(panel) : renderAscii(panel));
+    return 0;
+  }
   switch (cmd) {
     case 'modo': {
       const m = (await pedir(e, '/laboratorio/modo')) as { modo: string; fichero: string };
@@ -219,6 +224,54 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       });
       return 0;
     }
+    case 'dosificador': {
+      // kj dosificador estado | config [--set '<json>'] | decidir --entrada <fichero.json> | simular [--semanas N] [--semilla S] [--demanda X]
+      interface InfoAg { datos: string; usadoPct: number | null; usadoSesionPct: number | null; reinicio: number | null; techoPct: number | null; presupuestoPct: number | null; comprometidoPct: number; lineaPct: number | null; errorPct: number | null; modo: string; burn: number | null; agotamiento: string | null; circuitoHasta: number | null }
+      const n1 = (x: number | null | undefined, sufijo = ' %') => (x === null || x === undefined ? '—' : `${Math.round(x * 10) / 10}${sufijo}`);
+      const hora = (ms: number | null) => (ms === null ? '—' : new Date(ms).toISOString().slice(0, 16).replace('T', ' '));
+      if (sub === undefined || sub === 'estado') {
+        const d = (await pedir(e, '/dosificador/estado')) as { ahora: string; modo: string; burn: number | null; agotamiento: string | null; circuitos: Record<string, boolean>; simulacion: boolean; agentes: Record<string, InfoAg>; ultima_decision: { en: string; decisiones: number; diferidas: number } | null; en_vuelo: { tarea: string; agente: string; equipo: string; coste_p80_pct: number; lanzar_en: string | null }[]; clases_aprendidas: number };
+        salida(d, () => [
+          `Dosificador · ${d.modo.toUpperCase()}${d.simulacion ? ' · SIMULACIÓN' : ''} · uso ${n1(d.burn, ' %/h')} · agotamiento ${d.agotamiento?.slice(0, 16).replace('T', ' ') ?? 'no antes del reinicio'} · ${d.clases_aprendidas} clases aprendidas`,
+          ...Object.entries(d.agentes).map(([a, x]) => `  ${a.padEnd(7)} ${x.datos === 'ok' ? '' : `[${x.datos}] `}semanal ${n1(x.usadoPct)} (techo ${n1(x.techoPct)}, libre ${n1(x.presupuestoPct)}, en vuelo ${n1(x.comprometidoPct)}) · línea ${n1(x.lineaPct)} · 5 h ${n1(x.usadoSesionPct)} · ${x.modo} · reinicio ${hora(x.reinicio)}${x.circuitoHasta ? ` · CIRCUITO ABIERTO hasta ${hora(x.circuitoHasta)}` : ''}`),
+          d.ultima_decision ? `Última decisión ${d.ultima_decision.en.slice(0, 16).replace('T', ' ')}: ${d.ultima_decision.decisiones} decididas, ${d.ultima_decision.diferidas} diferidas` : 'Sin decisiones todavía.',
+          ...(d.en_vuelo.length ? ['En vuelo:', ...d.en_vuelo.map((t) => `  ${t.tarea} → ${t.agente}/${t.equipo} (${n1(t.coste_p80_pct)}${t.lanzar_en ? `, sale ${t.lanzar_en.slice(11, 16)}` : ''})`)] : []),
+        ].join('\n'));
+        return 0;
+      }
+      if (sub === 'config') {
+        const nuevo = opcion(args, 'set');
+        if (nuevo === '') { e.escribir('uso: kj dosificador config [--set \'{"margenSeguridadPct": 12}\']'); return 2; }
+        let parcial: unknown;
+        try { parcial = nuevo === null ? undefined : JSON.parse(nuevo); } catch { e.escribir('--set: JSON no válido'); return 2; }
+        const d = (await (parcial === undefined ? pedir(e, '/dosificador/config') : pedir(e, '/dosificador/config', 'PUT', parcial))) as { config: Record<string, unknown>; fichero: string };
+        salida(d, () => `${d.fichero}\n${JSON.stringify(d.config, null, 2)}`);
+        return 0;
+      }
+      if (sub === 'decidir') {
+        const ruta = opcion(args, 'entrada');
+        if (!ruta || !e.leer) { e.escribir('uso: kj dosificador decidir --entrada <fichero.json> [--json]   (decide sin guardar el estado)'); return 2; }
+        let cuerpo: Record<string, unknown>;
+        try { cuerpo = JSON.parse(e.leer(ruta)) as Record<string, unknown>; } catch { e.escribir(`${ruta}: no es un JSON legible`); return 2; }
+        const d = (await pedir(e, '/dosificador/decidir', 'POST', { ...cuerpo, simulacro: true })) as { decisiones: { tarea: string; agente: string; equipo: string; lanzarEn: number | null; motivo: string }[]; diferidas: { tarea: string; hasta: number | null; motivo: string }[]; estado: { modo: string } };
+        salida(d, () => [`Modo ${d.estado.modo}`, ...d.decisiones.map((x) => `  ✔ ${x.tarea} → ${x.agente}/${x.equipo} ${x.lanzarEn === null ? 'ya' : `a las ${hora(x.lanzarEn)}`}  ${x.motivo}`), ...d.diferidas.map((x) => `  … ${x.tarea} ${x.hasta === null ? 'sin fecha' : `hasta ${hora(x.hasta)}`}  ${x.motivo}`)].join('\n'));
+        return 0;
+      }
+      if (sub === 'simular') {
+        const num = (k: string) => { const v = opcion(args, k); return v === null || v === '' || !Number.isFinite(Number(v)) ? undefined : Number(v); };
+        const d = (await pedir(e, '/dosificador/simular', 'POST', { semanas: num('semanas'), semilla: num('semilla'), demanda: num('demanda') })) as Record<string, number | null>;
+        salida(d, () => [
+          `Simulación sintética · ${d['semanas']} semanas · semilla ${d['semilla']} · ${d['agenteSemanas']} semanas de agente`,
+          `  semanas por encima del margen ${d['semanasPorEncima']}  (objetivo 0) · límites alcanzados ${d['limitesAlcanzados']}`,
+          `  cuota sin usar al renovar ${d['sinUsarPct']} %  (objetivo < 15 %) · uso al renovar ${d['usoFinalMedioPct']} % de media, ${d['usoFinalMaxPct']} % máximo`,
+          `  espera p50 ${d['esperaP50Horas'] ?? '—'} h · p95 ${d['esperaP95Horas'] ?? '—'} h · oscilaciones de modo ${d['oscilacionesPorSemana']} por semana y agente`,
+          `  tareas ${d['tareasLanzadas']} lanzadas de ${d['tareasLlegadas']} · ${d['pendientesAlFinal']} en cola al final`,
+        ].join('\n'));
+        return 0;
+      }
+      e.escribir('uso: kj dosificador estado | config [--set <json>] | decidir --entrada <fichero> | simular [--semanas N] [--semilla S] [--demanda X]   (--json en todos)');
+      return 2;
+    }
     case 'propuestas': {
       const d = (await pedir(e, '/laboratorio/propuestas')) as { clave: string; tarea: string; estado: string; titulo: string | null }[];
       salida(d, () => d.map((p) => `${p.tarea}  ${p.estado.padEnd(11)} ${p.titulo ?? p.clave}`).join('\n') || 'Karajan no ha propuesto nada todavía.');
@@ -239,8 +292,46 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       });
       return 0;
     }
+    case 'tutoria': {
+      interface Eleg { proveedor: string; modelo: string; razonamiento: number; precio_mezcla: number; valor: number; motivo: string }
+      interface Seg { clave: string; n: number; media: number; aprobados: number; aprobacionInferior: number | null; delegable: boolean }
+      const el = (t: Eleg | null) => (t ? `${t.proveedor}/${t.modelo} · ${t.razonamiento} pts · ${t.precio_mezcla} USD/Mtok · valor ${t.valor}` : 'ninguno');
+      if (sub === 'actualizar') {
+        const r = (await pedir(e, '/laboratorio/tutores/actualizar', 'POST', {})) as { antes: Eleg | null; despues: Eleg | null; cambio: boolean; error: string | null };
+        salida(r, () => (r.error ? `No se actualizó (se sigue con el catálogo anterior): ${r.error}` : `Tutor: ${el(r.despues)}${r.cambio ? `\n(antes: ${el(r.antes)})` : ' (sin cambios)'}`));
+        return r.error ? 1 : 0;
+      }
+      if (sub === 'tutores') {
+        const d = (await pedir(e, '/laboratorio/tutores')) as { tutor: Eleg | null; porProveedor: Eleg[]; obsoleto: boolean; avisos: string[]; catalogo: { actualizado: string } | null };
+        salida(d, () => [`Tutor vigente: ${el(d.tutor)}`, ...d.porProveedor.map((x) => `  ${x.proveedor}: ${el(x)}\n    ${x.motivo}`), `Catálogo: ${d.catalogo?.actualizado ?? 'sin catálogo'}${d.obsoleto ? ' (OBSOLETO)' : ''}`, ...d.avisos.map((a) => `  ! ${a}`)].join('\n'));
+        return 0;
+      }
+      if (sub === 'brechas') {
+        // Para la skill skillforge-lab: dónde falla el alumno (agregados anónimos) con el alumno y el tutor de ahora.
+        const b = (await pedir(e, '/laboratorio/tutoria/brechas')) as { alumno: { proveedor: string; modelo: string }; tutor: { proveedor: string; modelo: string }; brechas: { dominio: string; nivel: number; n: number; media: number; delegable: boolean }[] };
+        const fichero = opcion(args, 'salida');
+        if (fichero) {
+          if (!e.guardar) { e.escribir('No se puede escribir ficheros desde aquí.'); return 2; }
+          e.guardar(fichero, `${JSON.stringify(b, null, 2)}\n`);
+          e.escribir(`Brechas guardadas en ${fichero}: ${b.brechas.filter((x) => !x.delegable).length} sin delegar de ${b.brechas.length}. Siguiente: python -m skillforge campaign from-karajan ${fichero} --output campana.json --tareas tareas.json`);
+        } else salida(b, () => [`Alumno ${b.alumno.proveedor}/${b.alumno.modelo} · tutor ${b.tutor.proveedor}/${b.tutor.modelo}`, ...b.brechas.map((x) => `  ${x.dominio}·N${x.nivel}  ${x.media} %  (n=${x.n})${x.delegable ? '  delegable' : '  brecha'}`)].join('\n'));
+        return 0;
+      }
+      const d = (await pedir(e, '/laboratorio/tutoria')) as { alumno: string | null; motivo_sin_alumno: string | null; tutor: Eleg | null; autorizado: boolean; calificacion: { nota: number | null; examenes: number; sinCalificar: number; aprobados: number; porNivel: Seg[]; porDominioNivel: Seg[]; nivelMaximoDelegable: number }; skillforge?: { laboratorio: boolean; skills: { id: string; version: number; dominios: string[] }[]; efecto: { skills: string; pares: number; deltaMedio: number; util: boolean }[] } };
+      const c = d.calificacion;
+      salida(d, () => [
+        `Alumno: ${d.alumno ?? `no disponible (${d.motivo_sin_alumno})`} · tutor: ${el(d.tutor)}`,
+        `Nota: ${c.nota === null ? 'sin exámenes todavía' : `${c.nota} %`} · ${c.examenes} exámenes (${c.aprobados} aprobados, ${c.sinCalificar} sin calificar)${d.autorizado ? '' : ' · exámenes desactivados: KARAJAN_TUTORIA_EXAMENES=1'}`,
+        c.nivelMaximoDelegable ? `Se le puede delegar hasta N${c.nivelMaximoDelegable}.` : 'Aún no se le puede delegar ningún nivel (falta muestra o aprobación).',
+        ...(c.porNivel.length ? ['Por nivel', barras(c.porNivel.map((x) => ({ etiqueta: x.clave, valor: x.media, nota: `n=${x.n} · aprueba ${x.aprobados}${x.delegable ? ' · delegable' : ''}` })))] : []),
+        ...(c.porDominioNivel.length ? ['Por dominio y nivel', ...c.porDominioNivel.map((x) => `  ${x.clave}  ${x.media} %  (n=${x.n}, IC95 inf. ${x.aprobacionInferior})${x.delegable ? '  delegable' : ''}`)] : []),
+        ...(d.skillforge?.laboratorio ? [`SkillForge: ${d.skillforge.skills.length ? d.skillforge.skills.map((s) => `${s.id}@v${s.version} (${s.dominios.join(', ')})`).join('; ') : 'sin skills forjadas activas para este alumno'}`, ...d.skillforge.efecto.map((f) => `  ${f.skills}: ${f.deltaMedio >= 0 ? '+' : ''}${f.deltaMedio} puntos en ${f.pares} tareas reales con y sin ella${f.util ? '  ÚTIL' : ''}`)] : []),
+      ].join('\n'));
+      return 0;
+    }
     default:
-      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | comparar [<skill>|karajan] [--grupo g] | propuestas | modo   (--json en todos)');
+      e.escribir(`${registro.ayuda()}
+kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | comparar [<skill>|karajan] [--grupo g] | dosificador estado|config|decidir|simular | tutoria [tutores|actualizar|brechas] | propuestas | modo   (--json en todos)`);
       return cmd ? 2 : 0;
   }
 }
@@ -248,7 +339,7 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
 // Solo como programa (`node kj.mjs`), no al importarlo (los tests empaquetan este módulo en el suyo).
 if (process.argv[1] && /(^|[\\/])(kj|cli)\.(mjs|js|ts)$/.test(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const api = process.env['KARAJAN_API'] ?? `${(process.env['ATLAS_DEV_API'] ?? 'http://127.0.0.1:4100').replace(/\/$/, '')}/paquetes/karajan/api`;
-  ejecutar(process.argv.slice(2), { fetch: fetch as unknown as Fetch, escribir: (s) => process.stdout.write(`${s}\n`), api, guardar: (ruta, contenido) => writeFileSync(ruta, contenido, 'utf8') })
+  ejecutar(process.argv.slice(2), { fetch: fetch as unknown as Fetch, escribir: (s) => process.stdout.write(`${s}\n`), api, guardar: (ruta, contenido) => writeFileSync(ruta, contenido, 'utf8'), leer: (ruta) => readFileSync(ruta, 'utf8') })
     .then((c) => { process.exitCode = c; })
     .catch((err: Error) => { process.stderr.write(`kj: ${err.message}\n`); process.exitCode = 1; });
 }

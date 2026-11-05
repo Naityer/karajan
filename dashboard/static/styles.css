@@ -5786,7 +5786,7 @@ body.resizing-human {
 }
 
 /* Theme polish v7: stronger palettes, clearer data hierarchy and richer tags. */
-/* Oscuro: #0E1013 #2A2F36 #5C6773 #F9C74F #FEEBC8 (icon/preset_oscuro.avif) */
+/* Oscuro: #0E1013 #2A2F36 #5C6773 #F9C74F #FEEBC8 (assets/preset_oscuro.avif) */
 html[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0e1013;

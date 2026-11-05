@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from app.models import ComplexityLevel, TaskRecord
+from app.domain.models import ComplexityLevel, TaskRecord
 
 SCHEMA_VERSION = 1
 
@@ -45,7 +45,7 @@ class ExecuteCommand:
 
     def ensure_within_deadline(self) -> None:
         if self.remaining_seconds() == 0:
-            from app.application_errors import DeadlineExceededError
+            from app.application.errors import DeadlineExceededError
 
             raise DeadlineExceededError("execution deadline has expired")
 

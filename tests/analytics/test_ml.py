@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.analytics import ml
-from app.database import TaskStore
-from app.models import (
+from app.persistence.database import TaskStore
+from app.domain.models import (
     ClassificationResult,
     ComplexityLevel,
     CriteriaScores,

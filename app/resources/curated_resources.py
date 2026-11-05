@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import ResourceItem, ResourceKind
+from app.domain.models import ResourceItem, ResourceKind
 
 
 def curated_resource_items() -> list[ResourceItem]:
@@ -300,7 +300,7 @@ def curated_resource_items() -> list[ResourceItem]:
             compatible_runtimes=entry.get("runtimes", []),
             install_strategy=entry.get("install_strategy", "none"),
             metadata={
-                "seed": "app.curated_resources",
+                "seed": "app.resources.curated_resources",
                 "homepage_url": entry.get("homepage_url", entry["repo_url"]),
                 "taxonomy": {
                     "category": entry["category"],

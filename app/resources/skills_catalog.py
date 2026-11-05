@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from app.models import SkillInfo, SkillInstallResult
+from app.domain.models import SkillInfo, SkillInstallResult
 
 # Mirror of the agent-router skills configured in the user's Claude setup.
 # `applies_to` lists the model families a skill is most relevant for.
@@ -15,6 +15,7 @@ _SKILLS: tuple[dict, ...] = (
     {"name": "frontend-builder", "description": "UI, componentes, dashboards, visualización.", "applies_to": ["claude", "codex"]},
     {"name": "backend-builder", "description": "APIs, base de datos, auth, workers, lógica de servidor.", "applies_to": ["claude", "codex"]},
     {"name": "security-review", "description": "Secretos, permisos, despliegues, acciones irreversibles.", "applies_to": ["claude"]},
+    {"name": "aegis-secops", "description": "Seguridad aplicada: revisión de código/PR, auditoría por sistema, triage de CVE (KEV/EPSS), secretos filtrados, incidentes, IA/agentes y supply chain, con biblioteca de 40 vulnerabilidades.", "applies_to": ["claude", "codex"]},
     {"name": "ponytail", "description": "Simplicidad, mínimo código seguro, YAGNI.", "applies_to": ["claude", "codex", "ollama"]},
     {"name": "promptfoo", "description": "Testing de prompts, evals y comparación de modelos.", "applies_to": ["claude"]},
     {"name": "aider", "description": "Pair-programming en terminal con edición multiarchivo.", "applies_to": ["claude", "ollama", "codex"]},

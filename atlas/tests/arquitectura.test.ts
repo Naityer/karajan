@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { CAPAS, COMPONENTES, ENLACES, FAMILIAS } from '../src/componentes';
+import { CAPAS, COMPARTIDOS, COMPONENTES, ENLACES, FAMILIAS } from '../src/componentes';
 import { FICHAS } from '../src/fichas-componentes';
 
 /**
@@ -18,7 +18,8 @@ describe('arquitectura por componentes', () => {
   it('cada módulo pertenece a un solo componente', () => {
     const duenos = new Map<string, string[]>();
     for (const c of COMPONENTES) for (const m of c.modulos) duenos.set(m, [...(duenos.get(m) ?? []), c.id]);
-    assert.deepEqual(modulos.filter((m) => !duenos.has(m)), [], 'módulos sin componente');
+    assert.deepEqual(modulos.filter((m) => !duenos.has(m) && !COMPARTIDOS.includes(m)), [], 'módulos sin componente (ni compartidos)');
+    assert.deepEqual(COMPARTIDOS.filter((m) => duenos.has(m) || !modulos.includes(m)), [], 'compartidos que son de un componente o no existen');
     assert.deepEqual([...duenos].filter(([, cs]) => cs.length > 1), [], 'módulos en varios componentes');
     assert.deepEqual([...duenos.keys()].filter((m) => !modulos.includes(m)), [], 'componentes que citan módulos que no existen');
   });
@@ -72,5 +73,65 @@ describe('arquitectura por componentes', () => {
       assert.equal(f.especificado, c.modulos.length > 0, `${c.id}: especificado debe coincidir con tener módulos`);
       if (c.laboratorio) assert.ok(f.como_funciona.pasos.length >= 4 && (f.reglas ?? []).length, `${c.id}: los componentes con laboratorio llevan ficha detallada`);
     }
+  });
+
+  describe('dependencias entre componentes', () => {
+    const duenoDe = new Map(COMPONENTES.flatMap((c) => c.modulos.map((m) => [m, c.id] as const)));
+    /** Imports en ejecución (sin `import type`) que cada componente hace a módulos de OTRO componente; los compartidos no cuentan. */
+    const reales = (id: string): string[] => {
+      const salida = new Set<string>();
+      for (const m of COMPONENTES.find((c) => c.id === id)!.modulos) {
+        const codigo = readFileSync(join(SRC, `${m}.ts`), 'utf8');
+        for (const x of codigo.matchAll(/^(?:import|export) (?!type )[^;]*from '\.\/([\w-]+)';/gm)) {
+          const d = duenoDe.get(x[1]!);
+          if (d && d !== id) salida.add(d);
+        }
+      }
+      return [...salida].sort();
+    };
+    const raices = COMPONENTES.filter((c) => c.requiere === 'todos').map((c) => c.id);
+
+    it('lo que cada componente declara que requiere es lo que su código importa (ni más ni menos)', () => {
+      for (const c of COMPONENTES) {
+        if (c.requiere === 'todos') continue;
+        assert.deepEqual([...c.requiere].sort(), reales(c.id), `${c.id}: dependencias declaradas ≠ imports reales`);
+      }
+    });
+
+    it('lo requerido existe, no se repite ni apunta a uno mismo; solo api y laboratorio son raíces de composición', () => {
+      const ids = new Set(COMPONENTES.map((c) => c.id));
+      for (const c of COMPONENTES) if (c.requiere !== 'todos') {
+        assert.equal(new Set(c.requiere).size, c.requiere.length, `${c.id}: repetidas`);
+        for (const r of c.requiere) { assert.ok(ids.has(r), `${c.id} requiere «${r}», que no existe`); assert.notEqual(r, c.id); }
+      }
+      assert.deepEqual(raices.sort(), ['api', 'laboratorio']);
+    });
+
+    it('no hay ciclos entre componentes (las raíces quedan fuera)', () => {
+      const grafo = new Map(COMPONENTES.filter((c) => c.requiere !== 'todos').map((c) => [c.id, c.requiere as string[]]));
+      const estado = new Map<string, 1 | 2>();
+      const visita = (id: string, ruta: string[]) => {
+        if (estado.get(id) === 2) return;
+        assert.notEqual(estado.get(id), 1, `ciclo: ${[...ruta, id].join(' → ')}`);
+        estado.set(id, 1);
+        for (const d of grafo.get(id) ?? []) if (grafo.has(d)) visita(d, [...ruta, id]);
+        estado.set(id, 2);
+      };
+      for (const id of grafo.keys()) visita(id, []);
+    });
+
+    it('los componentes de la capa base no dependen de capas superiores', () => {
+      const capa = new Map(COMPONENTES.map((c) => [c.id, c.capa]));
+      for (const c of COMPONENTES.filter((x) => x.capa === 'base' && x.requiere !== 'todos')) {
+        for (const r of c.requiere as string[]) assert.equal(capa.get(r), 'base', `${c.id} (base) requiere ${r} (${capa.get(r)})`);
+      }
+    });
+
+    it('la configuración declarada apunta a rutas del paquete y la escritura implica lectura', () => {
+      for (const c of COMPONENTES) if (c.config) {
+        assert.match(c.config.lectura, /^\//, c.id);
+        if (c.config.escritura) assert.match(c.config.escritura, /^\//, c.id);
+      }
+    });
   });
 });

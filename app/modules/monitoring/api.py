@@ -12,24 +12,22 @@ from __future__ import annotations
 
 import logging
 
-from app import (
-    metrics_export,
-    monitoring,
-    skill_analytics as skill_analytics_module,
-    skills_catalog,
-)
+from app.execution import metrics_export
+from app.execution import monitoring
+from app.resources import skill_analytics as skill_analytics_module
+from app.resources import skills_catalog
 from app.analytics import duckdb_ops
 from app.analytics import produccion as produccion_ops
 from app.analytics import produccion_datos
-from app.auth import require_token
-from app import credentials
+from app.security.auth import require_token
+from app.providers import credentials
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from app.analytics import ml as ml_ops
 from app.analytics.duckdb_ops import AnalyticsUnavailable
 from app.analytics.ml import MLUnavailable, ModelNotTrained
-from app.logging_config import log_event
-from app.models import (
+from app.core.logging_config import log_event
+from app.domain.models import (
     AgentPerformance,
     Metrics,
     MetricsHistory,
@@ -45,8 +43,8 @@ from fastapi import (
 )
 from fastapi.responses import PlainTextResponse
 
-from app import runtime as runtime_module
-from app.logging_config import get_logger, log_event
+from app.application import runtime as runtime_module
+from app.core.logging_config import get_logger
 
 
 logger = get_logger("api")

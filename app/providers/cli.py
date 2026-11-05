@@ -14,7 +14,7 @@ from pathlib import Path
 # inside anything built from it.
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|[\r\x0b\x0c]")
 
-from app.models import Backend, ProviderInfo
+from app.domain.models import Backend, ProviderInfo
 from app.providers.base import ModelProvider, ProviderRun
 
 

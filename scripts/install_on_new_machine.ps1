@@ -80,7 +80,6 @@ Write-Host "      .env OK" -ForegroundColor Green
 Write-Host "[6/6] Registrando MCP server en Claude Code..." -ForegroundColor Yellow
 $claudeSettings = "$env:USERPROFILE\.claude\settings.json"
 $pythonExe = "$Root\.venv\Scripts\python.exe" -replace "\\", "\\\\"
-$mcpScript = "$Root\karajan_mcp.py" -replace "\\", "\\\\"
 
 if (Test-Path $claudeSettings) {
     $settings = Get-Content $claudeSettings -Raw | ConvertFrom-Json
@@ -94,7 +93,8 @@ if (-not $settings.PSObject.Properties["mcpServers"]) {
 }
 $mcpEntry = [PSCustomObject]@{
     command = "$Root\.venv\Scripts\python.exe"
-    args = @("$Root\karajan_mcp.py")
+    cwd = "$Root"
+    args = @("-m", "karajan_cli.mcp_server")
     env = [PSCustomObject]@{ KARAJAN_URL = "http://127.0.0.1:8000" }
 }
 $settings.mcpServers | Add-Member -NotePropertyName "karajan" -NotePropertyValue $mcpEntry -Force

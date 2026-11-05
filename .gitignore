@@ -37,3 +37,12 @@ __pycache__/
 *.bak*
 .ua/
 .env.bak
+
+# Estado de ejecución (se genera en runtime; no se versiona)
+data/*.db
+data/*.db.*
+data/*.lock
+data/.karajan.sqlite.lock
+data/routing_layout.json
+data/modo.json
+data/handoff/

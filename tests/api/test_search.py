@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.database import TaskStore
-from app.models import (
+from app.persistence.database import TaskStore
+from app.domain.models import (
     ClassificationResult,
     ComplexityLevel,
     CriteriaScores,

@@ -16,8 +16,8 @@ from app.agent_tools.policy import AgentPlan
 from app.agent_tools.session import AgentOutcome, AgentSession
 from app.agent_tools.trace import Trace
 from app.agent_tools.transport import CompletionTransport
-from app.logging_config import get_logger, log_event
-from app.models import AgentToolsConfig, ClassificationResult, Subtask
+from app.core.logging_config import get_logger, log_event
+from app.domain.models import AgentToolsConfig, ClassificationResult, Subtask
 from app.providers.registry import Resolution
 
 logger = get_logger("agent_tools")

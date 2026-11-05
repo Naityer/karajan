@@ -31,16 +31,16 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app import events
-from app import runtime as runtime_module
-from app.atlas_auth import require_atlas_token
-from app.auth import require_token
-from app.inspiration_feed import (
+from app.execution import events
+from app.application import runtime as runtime_module
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import require_token
+from app.resources.inspiration_feed import (
     DEFAULT_SOURCE_IDS,
     SOURCES,
     source_catalog,
 )
-from app.models import (
+from app.domain.models import (
     AnalyzeRequest,
     AnalyzeResult,
     ArtifactReviewDecisionRequest,
@@ -65,10 +65,10 @@ from app.models import (
     ResourceUpdateRequest,
     ResourceVisibilityRequest,
 )
-from app.resource_intelligence import rank_resources
-from app.resource_inventory import create_inventory_snapshot, get_inventory_snapshot
-from app.resource_sources import classify_external_url
-from app.resource_validity import (
+from app.resources.resource_intelligence import rank_resources
+from app.resources.resource_inventory import create_inventory_snapshot, get_inventory_snapshot
+from app.resources.resource_sources import classify_external_url
+from app.resources.resource_validity import (
     PolicyResetConfirmationRequired,
     PolicyVersionConflict,
     decide_resource,
@@ -81,7 +81,7 @@ from app.resource_validity import (
     policy_impact,
     update_policy,
 )
-from app.web_references import validate_reference_url
+from app.resources.web_references import validate_reference_url
 
 
 def _github_resource_parts(value: str) -> tuple[str, str, bool] | None:

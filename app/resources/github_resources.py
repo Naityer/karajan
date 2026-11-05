@@ -11,9 +11,9 @@ import httpx
 
 from app.platform import http
 
-from app.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
-from app.resource_intelligence import extract_resource_signals
-from app.resource_library import ResourceStore, deterministic_summary
+from app.domain.models import AnalyzeResult, ResourceCreateRequest, ResourceKind
+from app.resources.resource_intelligence import extract_resource_signals
+from app.resources.resource_library import ResourceStore, deterministic_summary
 
 
 _OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")

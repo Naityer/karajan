@@ -6,10 +6,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from app import delegation
-from app import flow_policy
-from app.logging_config import get_logger, log_event
-from app.models import (
+from app.execution import delegation
+from app.routing import flow_policy
+from app.core.logging_config import get_logger, log_event
+from app.domain.models import (
     ClassificationResult,
     DecisionLogEntry,
     DelegationResult,
@@ -30,7 +30,7 @@ _WAIT_POLL_TIMEOUT_S = 5.0
 class AvailabilityTracker:
     """Live busy/free bookkeeping per routing-layout entity.
 
-    Distinct from `app.credentials` readiness (installed/configured) — this is
+    Distinct from `app.providers.credentials` readiness (installed/configured) — this is
     "is this specific agent mid-task right now," the signal a real queue needs
     to decide whether to hand it more work.
     """

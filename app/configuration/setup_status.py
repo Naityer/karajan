@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.env import PROJECT_ROOT
-from app.tutorial import navigation_tutorial_markdown
+from app.configuration.env import PROJECT_ROOT
+from app.resources.tutorial import navigation_tutorial_markdown
 
 # Dedicated marker, deliberately decoupled from data/active_config.json — a
 # user who explicitly wants to keep the default config shouldn't have that

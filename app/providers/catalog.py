@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import AuthMethod, Backend, ProviderInfo, RecommendedModel as RM
+from app.domain.models import AuthMethod, Backend, ProviderInfo, RecommendedModel as RM
 
 # Catalog of the main AI providers, free and paid. Static data only — no calls.
 # `tiers` maps a logical complexity tier to the concrete model id for that provider.

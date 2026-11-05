@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from app.models import Backend, KarajanConfig, Profile
+from app.domain.models import Backend, KarajanConfig, Profile
 
 CONFIG_ENV_VAR = "KARAJAN_CONFIG"
 DEFAULT_CONFIG_PATHS = (Path("karajan.yaml"), Path("karajan.yml"), Path("karajan.json"))
@@ -49,7 +49,7 @@ def auto_detect(config: KarajanConfig) -> KarajanConfig:
     withheld with an explicit reason — the app reports that it cannot work
     instead of pretending it can.
     """
-    from app import catalog, credentials  # local import to avoid cycles
+    from app.providers import catalog, credentials  # local import to avoid cycles
 
     statuses = {s.provider: s for s in credentials.detect_all()}
     ready = [p for p in catalog.all_providers() if statuses.get(p.name) and statuses[p.name].ready]

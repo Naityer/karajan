@@ -4,10 +4,10 @@ import time
 
 import pytest
 
-from app.models import AnalyzeResult, ResourceCreateRequest, ResourceKind, ResourceRefreshSettingsUpdate, ResourceUpdateRequest
-from app.resource_library import ResourceStore
-from app.resource_refresh import ResourceRefreshCoordinator
-from app.local_resources import LocalResourceAnalyzer
+from app.domain.models import AnalyzeResult, ResourceCreateRequest, ResourceKind, ResourceRefreshSettingsUpdate, ResourceUpdateRequest
+from app.resources.resource_library import ResourceStore
+from app.resources.resource_refresh import ResourceRefreshCoordinator
+from app.resources.local_resources import LocalResourceAnalyzer
 
 
 class FakeAnalyzer:

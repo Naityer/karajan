@@ -7,13 +7,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.application_dto import ClassifyCommand
-from app.application_errors import ConflictError
-from app.container import KarajanContainer, StorageAlreadyOwnedError
-from app.local_client import LocalKarajanClient
-from app.models import Profile
+from app.application.dto import ClassifyCommand
+from app.application.errors import ConflictError
+from app.application.container import KarajanContainer, StorageAlreadyOwnedError
+from app.clients.local_client import LocalKarajanClient
+from app.domain.models import Profile
 from app.modules.v1.api import router as v1_router
-from app.runtime import set_current
+from app.application.runtime import set_current
 
 
 def _container(tmp_path: Path, *, in_memory: bool = True) -> KarajanContainer:

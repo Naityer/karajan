@@ -9,9 +9,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app import skills_catalog
-from app.database import TaskStore
-from app.models import RoutingLayout, TaskRecord
+from app.resources import skills_catalog
+from app.persistence.database import TaskStore
+from app.domain.models import RoutingLayout, TaskRecord
 
 _DESCRIPCION = re.compile(r"^description:\s*(.+)$", re.MULTILINE)
 

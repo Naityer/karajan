@@ -13,8 +13,6 @@ from karajan_cli import userconfig
 from karajan_cli.client import KarajanClient
 
 LAUNCH_HINTS = [
-    'KARAJAN Desktop.bat  (doble clic, arranca en el puerto 8001)',
-    'python desktop_app.py  (ventana nativa pywebview, elige un puerto libre)',
     '.venv\\Scripts\\python -m uvicorn app.main:app --host 127.0.0.1 --port 8001  (arranque manual)',
 ]
 
@@ -45,8 +43,8 @@ def find_repo_root(start: Path | None = None) -> Path | None:
 def start_server(repo_root: Path, port: int) -> subprocess.Popen:
     """Launch `uvicorn app.main:app` with cwd=repo_root.
 
-    cwd must be the repo root: `app/config.py`'s `RUNTIME_CONFIG_PATH` and
-    `app/routing_layout.py`'s `DEFAULT_LAYOUT_PATH` resolve `data/*.json`
+    cwd must be the repo root: `app/configuration/config.py`'s `RUNTIME_CONFIG_PATH` and
+    `app/routing/routing_layout.py`'s `DEFAULT_LAYOUT_PATH` resolve `data/*.json`
     relative to the process's working directory, not the package location.
     """
     return subprocess.Popen(

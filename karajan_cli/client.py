@@ -1,5 +1,5 @@
 """Shared HTTP client for the Karajan API, used by both the `karajan` CLI and
-`karajan_mcp.py` so there is exactly one implementation of each request.
+`karajan_cli/mcp_server.py` so there is exactly one implementation of each request.
 """
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ class EmbeddedKarajanClient:
     base_url = "embedded://karajan"
 
     def __init__(self, container, *, token: str | None = None) -> None:
-        from app.application_dto import ResolvedIdentity
+        from app.application.dto import ResolvedIdentity
 
         self.container = container
         self.application = container.application
@@ -186,14 +186,14 @@ class EmbeddedKarajanClient:
         return self.management.health()
 
     def classify(self, prompt: str, entry_agent: str | None = None) -> dict:
-        from app.application_dto import ClassifyCommand
+        from app.application.dto import ClassifyCommand
 
         return self.application.classify(ClassifyCommand(prompt=prompt, entry_agent=entry_agent)).legacy_payload()
 
     def delegate(
         self, task_id: str, *, force_provider: str | None = None, force_entity_id: str | None = None
     ) -> dict:
-        from app.application_dto import AdministrativeOverrideCommand, ExecuteCommand
+        from app.application.dto import AdministrativeOverrideCommand, ExecuteCommand
 
         if force_provider or force_entity_id:
             result = self.application.override_route(
@@ -224,7 +224,7 @@ class EmbeddedKarajanClient:
         return self._dump(self.management.get_config())
 
     def put_config(self, config: dict) -> dict:
-        from app.models import KarajanConfig
+        from app.domain.models import KarajanConfig
 
         return self._dump(self.management.put_config(KarajanConfig.model_validate(config)))
 
@@ -232,7 +232,7 @@ class EmbeddedKarajanClient:
         return self._dump(self.management.get_routing_layout())
 
     def put_routing_layout(self, layout: dict) -> dict:
-        from app.models import RoutingLayout
+        from app.domain.models import RoutingLayout
 
         return self._dump(self.management.put_routing_layout(RoutingLayout.model_validate(layout)))
 
@@ -280,7 +280,7 @@ class EmbeddedKarajanClient:
         )
 
     def append_decision(self, task_id: str, entry: dict) -> dict:
-        from app.models import DecisionLogEntry
+        from app.domain.models import DecisionLogEntry
 
         value = DecisionLogEntry.model_validate({**entry, "task_id": task_id})
         return self._dump(self.management.append_decision(task_id, value))
@@ -297,7 +297,7 @@ def build_client(
         return HttpKarajanClient(base_url=url, token=token, timeout=timeout)
     if transport != "embedded":
         raise ValueError(f"unsupported Karajan transport: {transport}")
-    from app.container import KarajanContainer
+    from app.application.container import KarajanContainer
 
     return EmbeddedKarajanClient(
         KarajanContainer.build(data_dir=data_dir), token=token

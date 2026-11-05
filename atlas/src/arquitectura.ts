@@ -48,6 +48,8 @@ export interface HallazgoVista extends Hallazgo { escenario: string; borrador: {
 
 export interface ComponenteVista {
   id: string; familia: string; responsabilidad: string; modulos: string[];
+  /** De qué componentes depende en ejecución (comprobado contra los imports) y dónde se lee/escribe su configuración. */
+  requiere: string[] | 'todos'; config: { lectura: string; escritura?: string } | null;
   estado: EstadoComponente; muestra_corta: boolean; pendiente: string | null;
   ficha: { especificado: boolean; resumen: string; como_funciona: { entradas: string[]; pasos: string[]; salidas: string[] }; reglas: string[] };
   configuracion: Record<string, ValorConfig> | null;
@@ -159,7 +161,15 @@ function operaciones(ctx: ContextoArquitectura, avisar: (id: string, fuente: str
   }
 
   const l = intentar('limites', 'limites-plan.json', () => ctx.limites());
-  salida['limites'] = { ...SIN_OPERACION, ultima_actividad: l?.leido ?? null, extra: l ? { claude_semanal: l.claude?.semanal ?? null, claude_sesion: l.claude?.sesion ?? null, codex_semanal: l.codex?.semanal ?? null, reinicio_claude: l.claude?.reinicio ?? null } : { dato_reciente: false } };
+  salida['limites'] = { ...SIN_OPERACION, ultima_actividad: l?.leido ?? null, extra: l ? { claude_semanal: l.claude?.semanal ?? null, claude_sesion: l.claude?.sesion ?? null, codex_semanal: l.codex?.semanal ?? null, codex_sesion: l.codex?.sesion ?? null, reinicio_claude: l.claude?.reinicio ?? null, reinicio_codex: l.codex?.reinicio ?? null, plan_claude: l.claude?.plan ?? null, plan_codex: l.codex?.plan ?? null } : { dato_reciente: false } };
+
+  const dos = intentar('dosificador', 'dosificador-estado.json', () => ctx.dosificador?.estado?.() ?? null);
+  if (dos) {
+    salida['dosificador'] = {
+      ...SIN_OPERACION, tareas: dos.ultima?.decisiones ?? null, ultima_actividad: dos.ultima ? new Date(dos.ultima.en).toISOString() : null,
+      extra: { diferidas: dos.ultima?.diferidas ?? 0, tareas_en_vuelo: Object.keys(dos.leases).length, clases_aprendidas: Object.keys(dos.estimador).filter((k) => !k.startsWith('*')).length, circuitos_abiertos: Object.values(dos.circuitos).filter((c) => c.abiertoHasta !== null && c.abiertoHasta > (ctx.ahora?.().getTime() ?? Date.now())).length },
+    };
+  }
 
   const reg = intentar('pasarela', 'borradores.json', () => ctx.pasarela.leer() as Record<string, { creada?: string }>);
   if (reg) salida['pasarela'] = { ...SIN_OPERACION, tareas: Object.keys(reg).length, ultima_actividad: maximo(...Object.values(reg).map((v) => v.creada)), extra: { borradores: Object.keys(reg).length } };
@@ -214,7 +224,7 @@ export async function construirArquitectura(ctx: ContextoArquitectura, op: { id?
       return { ...h, severidad: h.severidad as Severidad, escenario: e.escenario, borrador: reg ? { tarea: reg.tarea, creada: reg.creada, estado: borradores.get(clave) ?? null } : null };
     }));
     return {
-      id: c.id, familia: c.familia, responsabilidad: c.responsabilidad, modulos: c.modulos,
+      id: c.id, familia: c.familia, responsabilidad: c.responsabilidad, modulos: c.modulos, requiere: c.requiere, config: c.config ?? null,
       estado: estadoDe(!!c.laboratorio, vistaUltimas), muestra_corta: vistaUltimas.some((u) => !u.suficiente), pendiente: c.pendiente ?? null,
       ficha: ficha ? { especificado: ficha.especificado, resumen: ficha.resumen, como_funciona: ficha.como_funciona, reglas: ficha.reglas ?? [] }
         : { especificado: false, resumen: c.responsabilidad, como_funciona: { entradas: [], pasos: [], salidas: [] }, reglas: [] },

@@ -3,8 +3,8 @@
 Karajan ya tenía los dos mecanismos que hacen falta, pero sueltos y acoplados a
 FastAPI (nota "Plan de mejora", §22):
 
-- `app/auth.py` — secreto compartido `X-KARAJAN-Token`, el modo standalone.
-- `app/atlas_auth.py` — JWT RS256 de capacidad firmado por Atlas, el modo
+- `app/security/auth.py` — secreto compartido `X-KARAJAN-Token`, el modo standalone.
+- `app/security/atlas_auth.py` — JWT RS256 de capacidad firmado por Atlas, el modo
   add-on.
 
 Aquí se convierten en implementaciones de `IdentityProvider`, y ambas producen
@@ -27,7 +27,8 @@ from typing import Any, Protocol
 import jwt
 from fastapi import HTTPException
 
-from app import atlas_auth, auth
+from app.security import atlas_auth
+from app.security import auth
 
 #: Identificadores del único inquilino que existe fuera de SaaS. Explícitos, en
 #: vez de `None`, para que el día que haya varios el código que ya los propaga
@@ -115,66 +116,6 @@ class AtlasCapabilityIdentityProvider:
             actor=str(claims.get("sub") or "atlas"),
             tenant=str(claims.get("tenant") or LOCAL_TENANT),
             workspace=str(claims.get("workspace") or LOCAL_WORKSPACE),
-            project=str(claims.get("project") or LOCAL_PROJECT),
-            permissions=frozenset(str(scope) for scope in scopes),
-            claims=claims,
-        )
-
-
-SAAS_JWT_SECRET_ENV_VAR = "KARAJAN_SAAS_JWT_SECRET"
-
-
-class SaaSIdentityProvider:
-    """Multi-tenant: JWT HS256 firmado por el propio backend SaaS.
-
-    A diferencia de `LocalIdentityProvider`/`AtlasCapabilityIdentityProvider`
-    (verificación opt-in — sin configurar, se comportan como local, que es lo
-    que permite arrancar Karajan suelto sin fricción), este falla CERRADO: sin
-    `KARAJAN_SAAS_JWT_SECRET` configurado, o sin un token válido con `tenant`/
-    `workspace`/`sub`, ninguna petición pasa. Un SaaS multi-tenant sin
-    autenticación por defecto no es "conveniente", es una fuga de datos entre
-    inquilinos — el riesgo que `LocalIdentityProvider` no tiene (un solo
-    operador) está presente en TODA petición aquí.
-    """
-
-    def __init__(self, secret: str | None = None) -> None:
-        self._secret = secret
-
-    def _resolve_secret(self) -> str:
-        secret = self._secret or os.environ.get(SAAS_JWT_SECRET_ENV_VAR)
-        if not secret:
-            raise HTTPException(
-                status_code=503,
-                detail=f"SaaS mal configurado: falta {SAAS_JWT_SECRET_ENV_VAR}",
-            )
-        return secret
-
-    def authenticate(
-        self,
-        *,
-        karajan_token: str | None = None,
-        authorization: str | None = None,
-    ) -> RequestContext:
-        secret = self._resolve_secret()
-        if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="falta el token de sesión (Authorization: Bearer ...)")
-        token = authorization.removeprefix("Bearer ")
-        try:
-            claims = jwt.decode(token, secret, algorithms=["HS256"], issuer="karajan-saas")
-        except jwt.PyJWTError as exc:
-            raise HTTPException(status_code=401, detail=f"token de sesión inválido: {exc}") from exc
-
-        missing = [key for key in ("sub", "tenant", "workspace") if not claims.get(key)]
-        if missing:
-            raise HTTPException(status_code=401, detail=f"token de sesión incompleto: faltan {missing}")
-
-        scopes = claims.get("scopes") or claims.get("scope") or []
-        if isinstance(scopes, str):
-            scopes = scopes.split()
-        return RequestContext(
-            actor=str(claims["sub"]),
-            tenant=str(claims["tenant"]),
-            workspace=str(claims["workspace"]),
             project=str(claims.get("project") or LOCAL_PROJECT),
             permissions=frozenset(str(scope) for scope in scopes),
             claims=claims,

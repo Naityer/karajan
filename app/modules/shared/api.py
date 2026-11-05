@@ -15,18 +15,15 @@ import json
 import logging
 import os
 
-from app import (
-    agent_tools,
-    events,
-    handoff,
-)
-from app.atlas_auth import require_atlas_token
-from app.auth import (
+from app import agent_tools, handoff
+from app.execution import events
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import (
     TOKEN_ENV_VAR,
     require_token,
 )
-from app.logging_config import log_event
-from app.models import (
+from app.core.logging_config import log_event
+from app.domain.models import (
     ContextPackDetail,
     ContextPackRequest,
     ContextPackSummary,
@@ -42,8 +39,8 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 
 from app import KARAJAN_VERSION
-from app import runtime as runtime_module
-from app.logging_config import get_logger, log_event
+from app.application import runtime as runtime_module
+from app.core.logging_config import get_logger
 from app.modules.agents.manifest import MANIFEST as _agents_manifest
 from app.modules.configuration.manifest import MANIFEST as _configuration_manifest
 from app.modules.decision.manifest import MANIFEST as _decision_manifest
@@ -95,7 +92,7 @@ def manifest() -> dict:
         "id": "karajan",
         "version": KARAJAN_VERSION,
         "modules": [m.to_dict() for m in _MODULE_MANIFESTS],
-        "modes": ["standalone", "addon", "saas"],
+        "modes": ["standalone", "addon"],
     }
 
 

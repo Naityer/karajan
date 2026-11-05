@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app import main
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 
 
 def _client(karajan_install) -> TestClient:

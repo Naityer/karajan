@@ -8,9 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app import routing_rules  # noqa: E402
-from app.models import RoutingLayout  # noqa: E402
-from app.router import classify_prompt  # noqa: E402
+from app.routing import routing_rules  # noqa: E402
+from app.domain.models import RoutingLayout  # noqa: E402
+from app.routing.router import classify_prompt  # noqa: E402
 
 PROMPTS = [
     "Diseña la interfaz del dashboard con componentes React y animaciones",

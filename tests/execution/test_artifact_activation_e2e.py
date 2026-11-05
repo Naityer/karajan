@@ -4,17 +4,18 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app import delegation, main
-from app.database import TaskStore
-from app.models import Backend, KarajanConfig, ResourceItem, ResourceKind
+from app import main
+from app.execution import delegation
+from app.persistence.database import TaskStore
+from app.domain.models import Backend, KarajanConfig, ResourceItem, ResourceKind
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
-from app.resource_activation import attach_resource_recommendations
-from app.skill_matching import AvailableSkill
-from app.resource_intelligence import ResourceRankingEngine
-from app.resource_library import ResourceStore
-from app.router import classify_prompt
-from app.routing_layout import RoutingLayoutStore
+from app.resources.resource_activation import attach_resource_recommendations
+from app.resources.skill_matching import AvailableSkill
+from app.resources.resource_intelligence import ResourceRankingEngine
+from app.resources.resource_library import ResourceStore
+from app.routing.router import classify_prompt
+from app.routing.routing_layout import RoutingLayoutStore
 
 
 class _CapturingProvider(ModelProvider):
@@ -86,8 +87,8 @@ def test_exact_parent_name_remains_recommended_alongside_indexed_children(tmp_pa
 
 
 def test_classify_delegate_resource_activation_and_skill_analytics(karajan_install, monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("app.resource_activation.discover_skills", lambda: [AvailableSkill("repo-analyzer", "Repository audit", frozenset({"codex"}), frozenset())])
-    monkeypatch.setattr("app.delegation.prepare_skills", lambda names, provider: [name for name in names if name == "repo-analyzer"])
+    monkeypatch.setattr("app.resources.resource_activation.discover_skills", lambda: [AvailableSkill("repo-analyzer", "Repository audit", frozenset({"codex"}), frozenset())])
+    monkeypatch.setattr("app.execution.delegation.prepare_skills", lambda names, provider: [name for name in names if name == "repo-analyzer"])
     resource_store = ResourceStore(tmp_path / "resources.db")
     resource_store.upsert(_repo_analyzer())
     client = _client(karajan_install, monkeypatch, resource_store)

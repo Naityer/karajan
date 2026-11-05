@@ -17,10 +17,10 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
-from app.models import ResourceItem, ResourceKind
+from app.domain.models import ResourceItem, ResourceKind
 from app.platform import http
-from app.resource_intelligence import extract_resource_signals
-from app.resource_library import ResourceStore, deterministic_summary
+from app.resources.resource_intelligence import extract_resource_signals
+from app.resources.resource_library import ResourceStore, deterministic_summary
 
 MAX_CHILDREN = 150
 MAX_COLLECTION_CHILDREN = 300

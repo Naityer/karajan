@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.models import ResourceItem
+from app.domain.models import ResourceItem
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ _SLUG_GROUPS = {
     "skill-creator": "rgrp_agents_extensions", "mcp-builder": "rgrp_agents_extensions", "agent-plugins-spec": "rgrp_agents_extensions", "openai-plugin-examples": "rgrp_agents_extensions", "anthropic-skills": "rgrp_agents_extensions", "addyosmani-agent-skills": "rgrp_agents_extensions", "complementos-ia": "rgrp_agents_extensions",
     "browser-use": "rgrp_agents_web",
     "promptfoo": "rgrp_quality_testing", "webapp-testing": "rgrp_quality_testing",
-    "cti-analyst": "rgrp_quality_security", "security-review": "rgrp_quality_security",
+    "cti-analyst": "rgrp_quality_security", "security-review": "rgrp_quality_security", "aegis-secops": "rgrp_quality_security",
     "docx": "rgrp_knowledge_documents", "pdf": "rgrp_knowledge_documents", "pdf-inspector": "rgrp_knowledge_documents", "pptx": "rgrp_knowledge_documents", "xlsx": "rgrp_knowledge_documents",
     "llamaindex": "rgrp_knowledge_rag", "graphify": "rgrp_knowledge_rag",
     "scientific-agent-skills": "rgrp_knowledge_research", "itsfree-dev": "rgrp_knowledge_research",

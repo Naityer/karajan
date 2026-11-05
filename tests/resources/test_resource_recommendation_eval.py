@@ -6,10 +6,10 @@ from pathlib import Path
 
 import httpx
 
-from app.models import ResourceItem, ResourceKind
-from app.nested_resources import ItsFreeAdapter, NestedResourceIndexer
-from app.resource_intelligence import ResourceRankingEngine
-from app.resource_library import ResourceStore
+from app.domain.models import ResourceItem, ResourceKind
+from app.resources.nested_resources import ItsFreeAdapter, NestedResourceIndexer
+from app.resources.resource_intelligence import ResourceRankingEngine
+from app.resources.resource_library import ResourceStore
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -45,6 +45,11 @@ def _critical_resources() -> list[ResourceItem]:
         _resource(
             "security-review", name="security-review", summary="Revisa secretos, permisos y vulnerabilidades.",
             capabilities=["security-audit"],
+        ),
+        _resource(
+            "aegis-secops", name="aegis-secops",
+            summary="Seguridad aplicada: revision de codigo, auditoria por sistema, triage de CVE con KEV y EPSS, secretos filtrados y seguridad de agentes.",
+            capabilities=["security-audit", "application-security", "vulnerability-triage", "secrets-detection", "ai-agent-security"],
         ),
         _resource(
             "tanstack-charts", name="TanStack Charts", summary="Graficas para visualizar datos.",

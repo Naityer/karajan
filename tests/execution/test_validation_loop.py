@@ -1,13 +1,13 @@
 """Real validator feedback loop: bounded retries of the owner, then a single
 escalation to the root once the retry cap is exhausted and still rejected."""
 
-from app import delegation
-from app import validation
-from app.delegation import delegate
-from app.models import Backend, KarajanConfig, RoutingEntity, RoutingLayout, ValidationVerdict
+from app.execution import delegation
+from app.execution import validation
+from app.execution.delegation import delegate
+from app.domain.models import Backend, KarajanConfig, RoutingEntity, RoutingLayout, ValidationVerdict
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
-from app.router import classify_prompt
+from app.routing.router import classify_prompt
 
 PROMPT = "Implementa una funcion de busqueda binaria con tests unitarios."
 

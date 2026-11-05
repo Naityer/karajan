@@ -26,7 +26,7 @@ import shutil
 import subprocess
 import time
 
-from app.agent_console import _redact
+from app.execution.agent_console import _redact
 from app.agent_tools.spec import ToolResult
 from app.agent_tools.workspace import Workspace
 

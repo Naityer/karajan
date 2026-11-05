@@ -1,12 +1,12 @@
 from fastapi.testclient import TestClient
 
 from app import main
-from app.models import KarajanConfig
+from app.domain.models import KarajanConfig
 
 
 def test_openclaw_status_endpoint(karajan_install, monkeypatch) -> None:
     karajan_install.set_config(KarajanConfig())
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: None)
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: None)
     client = karajan_install.client
 
     response = client.get("/integrations/openclaw/status")
@@ -19,7 +19,7 @@ def test_openclaw_status_endpoint(karajan_install, monkeypatch) -> None:
 
 def test_openclaw_skills_endpoint_handles_missing_cli(karajan_install, monkeypatch) -> None:
     karajan_install.set_config(KarajanConfig())
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: None)
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: None)
     client = karajan_install.client
 
     response = client.get("/integrations/openclaw/skills")
@@ -30,7 +30,7 @@ def test_openclaw_skills_endpoint_handles_missing_cli(karajan_install, monkeypat
 
 def test_openclaw_install_endpoint_returns_safe_error(karajan_install, monkeypatch) -> None:
     karajan_install.set_config(KarajanConfig())
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: None)
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: None)
     client = karajan_install.client
 
     response = client.post("/integrations/openclaw/skills/install", json={"spec": "@owner/test"})

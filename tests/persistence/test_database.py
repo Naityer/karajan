@@ -1,6 +1,6 @@
-from app.database import TaskStore
-from app.delegation import delegate
-from app.router import classify_prompt
+from app.persistence.database import TaskStore
+from app.execution.delegation import delegate
+from app.routing.router import classify_prompt
 
 
 def test_persists_classification_and_delegation(tmp_path) -> None:

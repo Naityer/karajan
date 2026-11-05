@@ -1,7 +1,7 @@
 import { redondear } from './redondeo';
 
 /**
- * Analítica de skills (puerto de `app/skill_analytics.py`): separa «recomendada» (la sugiere la clasificación o una subtarea)
+ * Analítica de skills (puerto de `app/resources/skill_analytics.py`): separa «recomendada» (la sugiere la clasificación o una subtarea)
  * de «preparada» y «usada» (confirmada en la ejecución), sin inferir uso de una recomendación.
  */
 export interface RegistroTarea {

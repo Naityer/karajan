@@ -5,11 +5,11 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.modules.inspiration import api as inspiration_api
-from app.models import ResourceCreateRequest, ResourceKind
-from app.nested_resources import RefactoringGuruAdapter, TooolsDesignAdapter
-from app.resource_library import ResourceStore
-from app.resource_sources import classify_external_url, normalize_external_url
-from app.routing_layout import RoutingLayoutStore
+from app.domain.models import ResourceCreateRequest, ResourceKind
+from app.resources.nested_resources import RefactoringGuruAdapter, TooolsDesignAdapter
+from app.resources.resource_library import ResourceStore
+from app.resources.resource_sources import classify_external_url, normalize_external_url
+from app.routing.routing_layout import RoutingLayoutStore
 
 
 def _client(karajan_install, monkeypatch, tmp_path) -> TestClient:

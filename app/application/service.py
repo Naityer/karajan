@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application_dto import (
+from app.application.dto import (
     AdministrativeOverrideCommand,
     ClassifyCommand,
     ExecuteCommand,
@@ -11,7 +11,7 @@ from app.application_dto import (
     TaskView,
     decision_fingerprint,
 )
-from app.application_services import (
+from app.application.services import (
     AdministrativeOverrideService,
     CapabilityAuthorization,
     ClassificationService,
@@ -20,7 +20,7 @@ from app.application_services import (
     TaskQueryService,
     WorkspaceLocks,
 )
-from app.management import ManagementService
+from app.application.management import ManagementService
 
 
 class KarajanApplication:

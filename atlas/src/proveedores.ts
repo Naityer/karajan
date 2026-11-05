@@ -4,7 +4,7 @@ import { delimiter, join } from 'node:path';
 
 /**
  * Proveedores CLI que el paquete sabe ejecutar: los tres del perfil por dominio (Claude Code, Codex y Qwen con ollama). Los
- * comandos y los modelos por nivel son los de `app/catalog.py`. Se ejecutan como subproceso, SIN shell y con argumentos fijos:
+ * comandos y los modelos por nivel son los de `app/providers/catalog.py`. Se ejecutan como subproceso, SIN shell y con argumentos fijos:
  * la instrucción va por stdin, así que nada de lo que escriba el usuario llega a la línea de comandos.
  */
 export type Tier = 'cheap_model' | 'cheap_or_medium_model' | 'medium_model' | 'strong_model' | 'strong_model_with_human_review';

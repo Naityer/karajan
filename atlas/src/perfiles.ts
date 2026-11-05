@@ -5,7 +5,7 @@ import { perfilDesdeTexto, type Propuesta } from './perfil-texto';
 import { ID_PRESET_DOMINIO, ID_PRESET_NIVEL, presetDominio, presetNivel, type Perfil, type Regla } from './reglas';
 
 /**
- * Perfiles de enrutado (`routing_layout.json`, el mismo fichero y esquema que `app/routing_layout.py`). Se comparte con el
+ * Perfiles de enrutado (`routing_layout.json`, el mismo fichero y esquema que `app/routing/routing_layout.py`). Se comparte con el
  * Karajan nativo: lo que se configure desde Atlas dev lo ve también su vista Decisión, y al revés. Escritura atómica con
  * `.bak` del anterior; un fichero roto o vacío no tumba nada (se lee el `.bak` o un layout vacío), como en Python.
  *

@@ -1,5 +1,6 @@
-from app import catalog, skills_catalog
-from app.models import Backend
+from app.providers import catalog
+from app.resources import skills_catalog
+from app.domain.models import Backend
 
 
 def test_skill_catalog_has_claude_defaults() -> None:

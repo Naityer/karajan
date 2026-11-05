@@ -6,18 +6,26 @@ import { construirAnaliticaSkills } from './analitica';
 import { Almacen } from './almacen';
 import { catalogoReal, listarSkills } from './catalogo';
 import { produccion } from './produccion';
-import { Rotador } from './rotador';
+import { destinoDe, Rotador } from './rotador';
 import { Delegador } from './delegar';
 import { configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles, perfilPorDefecto } from './perfiles';
-import { buscarBinario, disponibilidad, PROVEEDORES } from './proveedores';
+import { buscarBinario, disponibilidad, ejecutarProveedor, PROVEEDORES } from './proveedores';
 import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
 import { Guardian } from './modo';
 import { Biblioteca } from './biblioteca';
 import { aHallazgo, curar, REGLAS_CURADOR, UMBRALES_CURADOR, type EntradaCurador } from './curador';
 import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
-import { leerLimites, rutaLimites } from './limites';
+import { claudeExcedido, leerLimites, leerLimitesSinCaducidad, rutaLimites } from './limites';
+import { circuitoAbierto, decidir, decidirRelevo, estimar, registrarCoste, registrarLimite, validarEntrada, validarRelevo } from './dosificador';
+import { guardarConfig as guardarConfigDos, guardarEstado as guardarEstadoDos, leerConfig as leerConfigDos, leerEstado as leerEstadoDos, type EstadoDosificador } from './dosificador-config';
+import { tiempoMs } from './dosificador-cuota';
+import { simular } from './dosificador-sim';
+import { actualizarCatalogo, elegirTutores, leerCatalogo, type ProveedorTutor } from './tutor';
+import { agenteAlumno, agenteTutor, listarRepos, type PlanTarea, type PuertosExamen } from './tutoria';
+import { calificacion, type ExamenAnonimo } from './tutoria-nota';
+import { carpetaSkillForge, efectoForjadas, informeBrechas, leerSkillsForjadas } from './skillforge';
 import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
@@ -118,6 +126,111 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno', ...(e.extra ?? {}) }));
 
+  // ── Dosificador: cuándo, dónde y con qué agente se lanza cada tarea (ver dosificador.ts y docs/laboratorio/componentes.md) ──
+  // Config y estado van en <datos>/dosificador.json y dosificador-estado.json. `decidir` solo DECIDE: no lanza ni cambia nada fuera de
+  // su propio estado (histéresis, estimador, circuitos y leases); cambiar la configuración sí exige tarea aceptada en producción.
+  const rutaDosCfg = join(ctx.datos, 'dosificador.json'), rutaDosEstado = join(ctx.datos, 'dosificador-estado.json');
+  const configDos = () => leerConfigDos(rutaDosCfg);
+  const estadoDos = () => leerEstadoDos(rutaDosEstado);
+  const guardarEstadoDosSeguro = (e: EstadoDosificador) => { try { guardarEstadoDos(rutaDosEstado, e); } catch { /* sin disco no se pierde la decisión, solo el aprendizaje */ } };
+  const isoOrNull = (ms: number | null | undefined) => (typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms).toISOString() : null);
+  const malaPeticion = (reply: { code(n: number): unknown }, error: string) => { reply.code(400); return { error }; };
+
+  app.post('/dosificador/decidir', (req, reply) => {
+    try {
+      const cfg = configDos();
+      const v = validarEntrada(req.body, cfg);
+      if (!v.ok) return malaPeticion(reply, v.error);
+      const r = decidir(v.entrada, cfg, estadoDos());
+      // `simulacro: true` decide sin guardar el estado (lo usa `kj dosificador decidir`).
+      if ((req.body as { simulacro?: unknown }).simulacro !== true) guardarEstadoDosSeguro(r.estado);
+      return { decisiones: r.decisiones, diferidas: r.diferidas, estado: r.resumen };
+    } catch (e) { return malaPeticion(reply, `no se pudo decidir: ${String((e as Error).message ?? e).slice(0, 200)}`); }
+  });
+
+  /** Una tarea terminó (o topó con el límite): su coste real alimenta al estimador, su lease se libera y un límite abre el circuito del agente. */
+  app.post('/dosificador/observar', (req, reply) => {
+    const cfg = configDos(), b = (req.body ?? {}) as Record<string, unknown>;
+    const agente = typeof b['agente'] === 'string' ? b['agente'] : '';
+    if (!cfg.planes[agente]) return malaPeticion(reply, `agente: ${Object.keys(cfg.planes).join('|')}`);
+    if (typeof b['tarea'] !== 'string' || !b['tarea'] || b['tarea'].length > 80) return malaPeticion(reply, 'tarea: el id de la tarea (1 a 80 caracteres)');
+    if (b['clase'] !== undefined && b['clase'] !== null && (typeof b['clase'] !== 'string' || !b['clase'] || b['clase'].length > 120)) return malaPeticion(reply, 'clase: texto «nivel|dominio|agente» de hasta 120 caracteres');
+    const coste = b['costePct'];
+    if (coste !== undefined && coste !== null && (typeof coste !== 'number' || !Number.isFinite(coste) || coste < 0 || coste > 1000)) return malaPeticion(reply, 'costePct: porcentaje del plan semanal entre 0 y 1000');
+    const lim = b['limiteAlcanzado'];
+    if (lim !== undefined && lim !== null && lim !== false && (typeof lim !== 'object' || Array.isArray(lim))) return malaPeticion(reply, 'limiteAlcanzado: {resetsAt}');
+    let est = estadoDos();
+    const clase = typeof b['clase'] === 'string' ? b['clase'] : est.leases[b['tarea']]?.clase || null;
+    est = registrarCoste(est, cfg, { tarea: b['tarea'], agente, clase: clase ?? undefined, costePct: typeof coste === 'number' ? coste : null });
+    if (lim) est = registrarLimite(est, cfg, agente, tiempoMs((lim as { resetsAt?: unknown }).resetsAt), Date.now());
+    guardarEstadoDosSeguro(est);
+    const ahora = Date.now();
+    return {
+      ok: true, clase, aprendido: clase !== null && typeof coste === 'number', circuito_hasta: isoOrNull(circuitoAbierto(est, agente, ahora)),
+      estimacion: clase ? (({ media, sigma, p, n }) => ({ media, sigma, p80: p, n }))(estimar(est, cfg, clase)) : null,
+    };
+  });
+
+  /** Cuota de cada agente, modo, burn rate, agotamiento proyectado, circuitos, tareas en vuelo y la última decisión. Solo lectura. */
+  app.get('/dosificador/estado', () => {
+    const cfg = configDos(), est = estadoDos(), ahora = Date.now(), l = leerLimitesSinCaducidad(rutaLimites());
+    const nombres = Object.keys(cfg.planes);
+    const r = decidir({
+      ahora, tareas: [], equipos: [], agentes: Object.fromEntries(nombres.map((a) => [a, { disponible: true, enCurso: 0 }])),
+      uso: Object.fromEntries(nombres.map((a) => [a, (l as unknown as Record<string, unknown> | null)?.[a] ?? {}])), leido: l && Number.isFinite(Date.parse(l.leido)) ? l.leido : undefined,
+    }, cfg, est);
+    return {
+      ahora: new Date(ahora).toISOString(), ...r.resumen, simulacion: cfg.modoSimulacion, agentes: r.agentes,
+      cuota: { fichero: rutaLimites(), leido: l?.leido ?? null },
+      ultima_decision: est.ultima ? { en: isoOrNull(est.ultima.en), decisiones: est.ultima.decisiones, diferidas: est.ultima.diferidas } : null,
+      en_vuelo: Object.entries(est.leases).map(([tarea, x]) => ({ tarea, agente: x.agente, equipo: x.equipo, coste_p80_pct: x.costePct, lanzar_en: isoOrNull(x.lanzarEn), hasta: isoOrNull(x.hasta) })),
+      clases_aprendidas: Object.keys(est.estimador).filter((k) => !k.startsWith('*')).length,
+    };
+  });
+
+  /**
+   * Relevo entre equipos: el destino (el servidor) pregunta si toma ya una tarea que empezó otro equipo. Solo DECIDE; la anota en el
+   * registro de relevos del estado (`GET /dosificador/decisiones`). `simulacro: true` decide sin guardar.
+   */
+  app.post('/dosificador/relevo', (req, reply) => {
+    try {
+      const cfg = configDos();
+      const v = validarRelevo(req.body, cfg);
+      if (!v.ok) return malaPeticion(reply, v.error);
+      const r = decidirRelevo(v.entrada, cfg, estadoDos());
+      if ((req.body as { simulacro?: unknown }).simulacro !== true) guardarEstadoDosSeguro(r.estado);
+      return r.decision;
+    } catch (e) { return malaPeticion(reply, `no se pudo decidir el relevo: ${String((e as Error).message ?? e).slice(0, 200)}`); }
+  });
+
+  /** Las últimas decisiones de relevo (más recientes primero), con la política y los parámetros vigentes. Solo lectura. */
+  app.get('/dosificador/decisiones', () => {
+    const cfg = configDos();
+    return {
+      relevo: cfg.relevo, equipos: cfg.equipos, topes: Object.fromEntries(Object.entries(cfg.planes).map(([a, p]) => [a, { topePct: p.topePct ?? null, ritmoMaxPctHora: p.ritmoMaxPctHora ?? null }])),
+      relevos: [...estadoDos().relevos].reverse().map((x) => ({ ...x, en: isoOrNull(x.en), lanzarEn: isoOrNull(x.lanzarEn) })),
+    };
+  });
+
+  app.get('/dosificador/config', () => ({ config: configDos(), fichero: rutaDosCfg }));
+  app.put('/dosificador/config', async (req) => {
+    await guardian.exigir(req, 'PUT /dosificador/config');
+    const b = req.body;
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw falla(422, 'config: un objeto con los campos a cambiar');
+    const { tarea: _tarea, ...resto } = b as Record<string, unknown>;
+    const parcial = resto['config'] && typeof resto['config'] === 'object' ? resto['config'] : resto;
+    return { config: guardarConfigDos(rutaDosCfg, parcial), fichero: rutaDosCfg };
+  });
+
+  /** Simula semanas sintéticas con la configuración viva (solo lectura; hasta 12 semanas para no bloquear el proceso). */
+  app.post('/dosificador/simular', (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const semanas = entero(String(b['semanas'] ?? ''), 4, 1, 12), semilla = entero(String(b['semilla'] ?? ''), 1, 1, 1_000_000);
+    const demanda = typeof b['demanda'] === 'number' && Number.isFinite(b['demanda']) ? Math.min(3, Math.max(0.1, b['demanda'])) : undefined;
+    const { metricas } = simular(configDos(), { semanas, semilla, ...(demanda !== undefined ? { demanda } : {}) });
+    return { semanas, semilla, demanda: demanda ?? null, ...metricas };
+  });
+
   app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
   app.get('/metrics', () => almacen.metricas());
   app.get('/agents/performance', () => almacen.rendimientoAgentes());
@@ -213,6 +326,18 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.get('/analytics/acierto', (req) => { const p = calcular(req.query); return { ...cabecera(p), tareas: p.acierto }; });
   app.get('/skills/catalogo', (req) => { const p = calcular({ dias: req.query['dias'] ?? '90', perfil: 'todos' }); return { dias: p.dias, ...p.catalogo }; });
 
+  // ── Inspiration: la biblioteca de recursos en SOLO LECTURA (las altas, la revisión y el refresco son del Karajan nativo) ──
+  const conBiblioteca = <T,>(fn: () => T): T => { if (!biblioteca.disponible) throw falla(409, 'La biblioteca necesita resources.db (ATLAS_KARAJAN_RESOURCES).'); return fn(); };
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined);
+  app.get('/resources', (req) => conBiblioteca(() => biblioteca.listar({ grupo: texto(req.query['group']), tipo: texto(req.query['kind']), estado: texto(req.query['status']), runtime: texto(req.query['runtime']), origen: texto(req.query['source']), validez: texto(req.query['validity']), q: texto(req.query['q']), limite: entero(req.query['limit'], 100, 1, 500), desplazamiento: entero(req.query['offset'], 0, 0, 1_000_000) })));
+  app.get('/resources/index', () => conBiblioteca(() => biblioteca.recuentos()));
+  app.get('/resources/discovery/sources', () => conBiblioteca(() => ({ fuentes: biblioteca.fuentes() })));
+  app.get('/resources/review', (req) => conBiblioteca(() => biblioteca.listar({ validez: texto(req.query['state']) ?? 'pending_review', limite: 500 })));
+  app.get('/resources/validity-policy', () => conBiblioteca(() => { const pref = biblioteca.preferencias(); return { preferencias: Object.fromEntries(Object.entries(pref).filter(([k]) => /valid|polic/i.test(k))) }; }));
+  app.get('/resources/refresh/settings', () => conBiblioteca(() => { const pref = biblioteca.preferencias(); return { preferencias: Object.fromEntries(Object.entries(pref).filter(([k]) => /refresh|cadenc|schedule/i.test(k))) }; }));
+  app.get('/resource-groups', () => conBiblioteca(() => biblioteca.grupos()));
+  app.get('/resources/:id', (req) => conBiblioteca(() => biblioteca.detalle((req.params as { id: string }).id) ?? (() => { throw falla(404, 'recurso no encontrado'); })()));
+
   // ── Rotador de skills: núcleo (14 d), frecuentes (45 d) e instantáneas (bajo demanda, 3 d); el resto, al almacén ──
   app.get('/skills/rotacion', () => {
     const inventario = rotador.inventario();
@@ -274,6 +399,36 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   };
   /** Lo que Karajan sabe de sí mismo para el comparador: sus componentes y los tipos de escenario de cada laboratorio. */
   const capacidadesKarajan = (): CapacidadKarajan[] => COMPONENTES.map((c) => ({ id: c.id, responsabilidad: c.responsabilidad, pruebas: c.laboratorio?.escenarios.map((e) => e.tipo) ?? [] }));
+  // ── Tutoría: el alumno local examinado con tareas ya integradas y un tutor elegido por razonamiento/precio (ver tutoria.ts, tutor.ts) ──
+  const rutaTutores = join(dirLab, 'tutores.json');
+  const seleccionTutor = () => elegirTutores(leerCatalogo(rutaTutores), {
+    disponibles: (['claude-cli', 'codex'] as ProveedorTutor[]).filter((n) => disponibilidad(PROVEEDORES.find((p) => p.nombre === n)!).disponible),
+    excluir: claudeExcedido(leerLimites()) !== null ? ['claude-cli'] : [],
+  });
+  const puertosExamen = (): PuertosExamen => {
+    const alumno = agenteAlumno();
+    const destino = 'agente' in alumno ? destinoDe(alumno.agente.proveedor.nombre) : null;
+    const rutasSkill = (n: string) => (['claude', 'codex'] as const).flatMap((d) => [join(rotador.raiz(d), n, 'SKILL.md'), join(rotador.almacen(d), n, 'SKILL.md')]);
+    return {
+      ejecutor: ejecutarProveedor,
+      planificar: (prompt, skillsHoja): PlanTarea => {
+        const c = delegadorLab.planificar(prompt).clasificacion;
+        return { dominio: c.domain[0] ?? 'general', nivel: Number(/[1-5]/.exec(c.complexity_level)?.[0] ?? 1),
+          subtareas: c.subtasks.map((st, i) => ({ nombre: st.name, validacion: st.validation, skills: i === 0 && skillsHoja?.length ? skillsHoja : st.recommended_skills ?? [] })) };
+      },
+      instaladas: () => new Set(destino ? rotador.inventario().filter((f) => f.instaladaEn.includes(destino)).map((f) => f.skill) : []),
+      textoSkill: (n) => { const r = rutasSkill(n).find((x) => existsSync(x)); return r ? readFileSync(r, 'utf8') : null; },
+    };
+  };
+  /** Las skills que SkillForge dejó activas y validadas con modelos reales para este alumno (si el laboratorio está en el Workspace). */
+  const skillsForjadas = (a: { proveedor: { nombre: string }; modelo: string }) => leerSkillsForjadas(carpetaSkillForge(), { proveedor: a.proveedor.nombre, modelo: a.modelo });
+  const examenesPrevios = (): ExamenAnonimo[] => registroLab.ejecuciones('tutoria', 500).filter((e) => e.escenario === 'examen')
+    .flatMap((e) => ((e.detalle as { nuevos?: ExamenAnonimo[] } | null)?.nuevos ?? []));
+  const actualizarTutores = async () => {
+    const r = await actualizarCatalogo(rutaTutores);
+    if (r.cambio) console.warn(`[karajan] tutor: ${r.antes ? `${r.antes.proveedor}/${r.antes.modelo}` : 'ninguno'} → ${r.despues ? `${r.despues.proveedor}/${r.despues.modelo}` : 'ninguno'}`);
+    return r;
+  };
   const contextoDe = (id: string) => {
     let cache: Promise<TareaAnonima[]> | null = null;
     const base: ContextoLab = {
@@ -291,10 +446,18 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
       case 'almacen': return { ...base, almacen };
       case 'proveedores': return { ...base, runs: () => almacen.tareasPlanas().flatMap((t) => t.runs ?? []), buscar: (b: string) => buscarBinario(b) };
       case 'limites': return { ...base, ruta: rutaLimites(), ahora: () => Date.now() };
+      case 'dosificador': return { ...base, config: configDos };
       case 'aislamiento': return { ...base, workspace: process.env['ATLAS_WORKSPACE'] ?? null };
       case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
       case 'produccion': return base;
       case 'rotador': return { ...base, rotador, historial: () => rotador.historial(), ahora: () => Date.now() };
+      case 'tutor': return { ...base, catalogo: () => leerCatalogo(rutaTutores), disponibles: () => (['claude-cli', 'codex'] as ProveedorTutor[]).filter((n) => disponibilidad(PROVEEDORES.find((p) => p.nombre === n)!).disponible), excluir: () => (claudeExcedido(leerLimites()) !== null ? ['claude-cli' as ProveedorTutor] : []), ahora: () => Date.now() };
+      case 'tutoria': return {
+        ...base, tareasReales: () => atlasDev.tareas(1000), hash: (id: string) => hashTarea(sal, id), repos: () => listarRepos(process.env['ATLAS_WORKSPACE'] ?? homedir()),
+        alumno: () => agenteAlumno(), tutor: () => { const a = agenteTutor(seleccionTutor().tutor); return a ? { agente: a } : { motivo: seleccionTutor().avisos.join(' · ') || 'sin tutor' }; },
+        forjadas: () => { const a = agenteAlumno(); return 'agente' in a ? skillsForjadas(a.agente) : []; },
+        puertos: puertosExamen, previos: examenesPrevios, autorizado: () => process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maxPorEjecucion: () => Math.max(1, Number(process.env['KARAJAN_TUTORIA_MAX']) || 3),
+      };
       case 'comparador': return { ...base, biblioteca, skills: skillsEquipo, capacidades: capacidadesKarajan };
       default: return base;
     }
@@ -318,7 +481,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const contextoArquitectura = (): ContextoArquitectura => ({
     version: ctx.version, modo: guardian.modo(), dirDatos, dirLab, config,
     perfil: () => { try { return perfilPorDefecto(perfiles.leer()); } catch { return null; } },
-    rotador, limites: () => leerLimites(), pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
+    rotador, limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
     registro: registroLab, almacen, cache: cacheArquitectura, ttlMs: 30_000,
   });
   app.get('/laboratorio/arquitectura', async () => construirArquitectura(contextoArquitectura()));
@@ -337,6 +500,25 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     return { skills: compararEquipo(biblioteca, skillsEquipo()).filter((c) => g(c.grupo)) };
   });
   app.get('/laboratorio/ejecuciones', (req) => registroLab.ejecuciones(req.query['componente'] || undefined, entero(req.query['limite'], 50, 1, 1000)));
+  // Tutores y tutoría: GET solo lee; POST actualiza el catálogo de tutores (recalcula el tutor) y no ejecuta ningún examen.
+  app.get('/laboratorio/tutores', () => ({ ...seleccionTutor(), catalogo: leerCatalogo(rutaTutores) }));
+  app.post('/laboratorio/tutores/actualizar', async () => actualizarTutores());
+  app.get('/laboratorio/tutoria', () => {
+    const alumno = agenteAlumno();
+    const todos = examenesPrevios();
+    const nombre = 'agente' in alumno ? `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}` : null;
+    return { alumno: nombre, motivo_sin_alumno: 'motivo' in alumno ? alumno.motivo : null, tutor: seleccionTutor().tutor, autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1',
+      calificacion: calificacion(nombre ? todos.filter((e) => e.alumno === nombre) : todos), alumnos: [...new Set(todos.map((e) => e.alumno))],
+      skillforge: { laboratorio: carpetaSkillForge() !== null, skills: 'agente' in alumno ? skillsForjadas(alumno.agente).map((s) => ({ id: s.id, version: s.version, dominios: s.dominios })) : [], efecto: efectoForjadas(nombre ? todos.filter((e) => e.alumno === nombre) : todos) } };
+  });
+  // Brechas del alumno para la skill skillforge-lab: solo agregados anónimos. 409 si falta el alumno o el tutor (no hay a quién forjarle nada).
+  app.get('/laboratorio/tutoria/brechas', () => {
+    const alumno = agenteAlumno(), tutor = seleccionTutor().tutor;
+    if (!('agente' in alumno)) throw falla(409, `sin alumno: ${alumno.motivo}`);
+    if (!tutor) throw falla(409, 'sin tutor vigente (kj tutoria actualizar)');
+    const nombre = `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}`;
+    return informeBrechas(examenesPrevios().filter((e) => e.alumno === nombre), { proveedor: alumno.agente.proveedor.nombre, modelo: alumno.agente.modelo }, { proveedor: tutor.proveedor, modelo: tutor.modelo });
+  });
   app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));
   app.get('/laboratorio/propuestas', () => pasarela.listar());
   // Curador: qué skills sobran. GET solo lee; POST manda cada propuesta como borrador (idempotente por `curador:<regla>:<skill>`), nunca retira nada.
@@ -401,6 +583,13 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const c = registroLab.calibraciones(req.query['componente'] || 'selector').filter((x) => x.tarea_hash === hash).at(-1);
     return c ? { calibrada: true, respuesta: c.respuesta, propuesta: c.propuesta, correccion: c.correccion, creada: c.creada } : { calibrada: false };
   });
+
+  // Automatismo: cada día se recalcula el tutor (los modelos y precios cambian cada semana). Sin clave no hace nada y lo dice el laboratorio.
+  if (process.env['KARAJAN_TUTOR_AUTO'] !== '0' && process.env['ARTIFICIAL_ANALYSIS_API_KEY']) {
+    const reloj = setInterval(() => { void actualizarTutores().catch(() => undefined); }, 24 * 3_600_000);
+    reloj.unref?.();
+    void actualizarTutores().catch(() => undefined);
+  }
 
   for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/executions'], ['post', '/ingest']] as const) {
     app[metodo](ruta, () => { throw falla(501, NO_DISPONIBLE); });

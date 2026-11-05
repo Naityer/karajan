@@ -13,11 +13,11 @@ comprueba contra él (ver «Paridad»).
 |---|---|---|
 | Clasificador heurístico (dominios, intención, 6 criterios, nivel, modelo, skills, subtareas, revisión humana, razón) | `app/routing/router.py`, parte determinista de `app/routing/classifier.py` | `src/heuristica.ts` |
 | Redondeo y formato como Python (`round`, `:.1f`, `sum()` compensado de 3.12) | — | `src/redondeo.ts`, `sumaPython` |
-| Registro de tareas: lectura, runs, decisiones, `/metrics`, `/agents/performance` | `app/database.py` (`TaskStore`) | `src/almacen.ts` (`node:sqlite`) |
+| Registro de tareas: lectura, runs, decisiones, `/metrics`, `/agents/performance` | `app/persistence/database.py` (`TaskStore`) | `src/almacen.ts` (`node:sqlite`) |
 | Analítica de skills (recomendada ≠ ejecutada) | `app/resources/skill_analytics.py` | `src/analitica.ts` |
 | Catálogo de skills con su estado de instalación | `app/resources/skills_catalog.py` (lectura) | `src/catalogo.ts` |
 | Servidor | `app/modules/monitoring/api.py` y rutas de tareas | `src/servidor.ts` (`registrar(app, ctx)` de Fastify) |
-| Perfiles de enrutado (lectura y escritura, compartidos) | `app/routing/routing_layout.py`, `RoutingLayout` de `app/models.py` | `src/perfiles.ts` |
+| Perfiles de enrutado (lectura y escritura, compartidos) | `app/routing/routing_layout.py`, `RoutingLayout` de `app/domain/models.py` | `src/perfiles.ts` |
 | Reglas por dominio y preset «Claude · Codex · Qwen» | `app/routing/routing_rules.py` | `src/reglas.ts` |
 | Proveedores CLI (Claude Code, Codex, Qwen/ollama) | `app/providers/catalog.py`, `app/providers/cli.py` | `src/proveedores.ts` |
 | Delegación real (clasificar, elegir agente, ejecutar, registrar) | `app/execution/delegation.py` (camino síncrono, sin validador ni bucle de herramientas) | `src/delegar.ts` |
@@ -33,7 +33,7 @@ Home) se resuelve contra él cuando el paquete está instalado.
 
 ## v0.7: componentes, laboratorio, modo producción y `kj`
 
-Ver `docs/laboratorio/componentes.md`. Es nuevo del paquete, no un puerto: en Python solo existe el modo (`app/modo.py`), que
+Ver `docs/laboratorio/componentes.md`. Es nuevo del paquete, no un puerto: en Python solo existe el modo (`app/configuration/modo.py`), que
 lee el mismo `modo.json`.
 
 | Pieza | Aquí |
@@ -51,6 +51,21 @@ Rutas nuevas: `GET /laboratorio/componentes`, `/laboratorio/ejecuciones`, `/labo
 `PUT /routing-layout`, los presets, `desde-texto` con `aplicar` y `skills/rotar` con `aplicar` necesitan la cabecera
 `x-karajan-tarea` con una tarea encolada o en marcha. `PESOS_SELECTOR` (`skills-seleccion.ts`) deja los pesos del ponderador a la
 vista para que el laboratorio los calibre, con el mismo comportamiento por defecto.
+
+## v0.10: dosificador
+
+Componente nuevo (capa Decisión, ver `docs/laboratorio/componentes.md` §9): decide cuándo, dónde y con qué agente se lanza cada tarea para llegar a la renovación del plan con margen. No es un puerto de Python.
+
+| Pieza | Aquí |
+|---|---|
+| Configuración (planes, márgenes, pacing, cola…) y estado persistente | `src/dosificador-config.ts` (`<datos>/dosificador.json`, `<datos>/dosificador-estado.json`) |
+| Sondas de cuota de Claude y Codex y lectura de `limites-plan.json` | `src/dosificador-cuota.ts` |
+| Estimador, pacer, admisión, circuito, colocación y `decidir` | `src/dosificador.ts` |
+| Simulador por replay | `src/dosificador-sim.ts` |
+| Laboratorio (`contrato`, `replay`) | `src/lab/dosificador.lab.ts` |
+| `limites-plan.json` con reinicio, plan y fuente también de Codex, y `reinicioSesion` (ventana de 5 h) opcional | `src/limites.ts` |
+
+Rutas nuevas: `POST /dosificador/decidir`, `POST /dosificador/observar`, `POST /dosificador/simular`, `GET /dosificador/estado` y `GET/PUT /dosificador/config` (el PUT necesita tarea aceptada en producción). `kj dosificador estado|config|decidir|simular`. En producción solo decide: lanzar lo decidido es cosa de la cola de Atlas dev.
 
 ## Datos
 

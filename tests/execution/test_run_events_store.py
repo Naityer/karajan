@@ -6,7 +6,7 @@ first tests that actually write to them.
 
 from pathlib import Path
 
-from app.database import TaskStore
+from app.persistence.database import TaskStore
 
 
 def test_open_run_then_close_run_updates_the_same_row(tmp_path: Path) -> None:

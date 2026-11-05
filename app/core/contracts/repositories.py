@@ -16,7 +16,7 @@ consume de cada almacén, así que:
 - los tests pueden sustituir un almacén por un doble sin heredar de nada.
 
 Son estructurales (`Protocol`): ninguna clase existente necesita declararlos.
-Los tipos de retorno son los modelos de dominio de `app/models.py`, que no
+Los tipos de retorno son los modelos de dominio de `app/domain/models.py`, que no
 dependen del motor de almacenamiento.
 """
 
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from app.models import (
+from app.domain.models import (
     DecisionLogEntry,
     DiscoverySource,
     KarajanConfig,

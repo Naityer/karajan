@@ -1,8 +1,8 @@
 """app/configuration/production_setup.py: the additive, idempotent hierarchy-merge helper
 used by POST /setup/apply-queue-config."""
 
-from app.models import RoutingEntity, RoutingLayout
-from app.production_setup import ensure_queue_hierarchy_entities
+from app.domain.models import RoutingEntity, RoutingLayout
+from app.configuration.production_setup import ensure_queue_hierarchy_entities
 
 
 def test_merge_adds_missing_baseline_entities() -> None:

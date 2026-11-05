@@ -9,14 +9,14 @@ import tempfile
 from pathlib import Path
 from uuid import uuid4
 
-from app.github_resources import validate_github_repository_url
-from app.models import (
+from app.resources.github_resources import validate_github_repository_url
+from app.domain.models import (
     ResourceInstallation,
     ResourceItem,
     ResourceOperationRequest,
     ResourceOperationResult,
 )
-from app.resource_library import ResourceStore
+from app.resources.resource_library import ResourceStore
 
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$")

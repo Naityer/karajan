@@ -84,4 +84,45 @@ describe('kj (terminal)', () => {
     assert.match(graficaSvg('t', []), /\(sin datos\)/);
     assert.match(graficaHtml('t', [{ etiqueta: 'a', valor: null }]), /<td>—<\/td>/);
   });
+  describe('kj dosificador', () => {
+    const agente = { datos: 'ok', usadoPct: 41, usadoSesionPct: 12, reinicio: Date.UTC(2026, 10, 8, 12), techoPct: 78, presupuestoPct: 30.2, comprometidoPct: 2, lineaPct: 38.5, errorPct: 2.5, modo: 'normal', burn: 0.5, agotamiento: null, circuitoHasta: null };
+    const estado = { ahora: '2026-11-04T12:00:00.000Z', modo: 'frenado', burn: 0.52, agotamiento: null, circuitos: { claude: false, codex: true }, simulacion: false, agentes: { claude: agente, codex: { ...agente, modo: 'bloqueado', circuitoHasta: Date.UTC(2026, 10, 4, 15) } },
+      ultima_decision: { en: '2026-11-04T11:59:00.000Z', decisiones: 2, diferidas: 1 }, en_vuelo: [{ tarea: 't1', agente: 'claude', equipo: 'pc', coste_p80_pct: 1.2, lanzar_en: '2026-11-04T12:30:00.000Z' }], clases_aprendidas: 7 };
+
+    it('estado pinta cada agente con su techo, su línea y los circuitos abiertos', async () => {
+      const r = await correr(['dosificador', 'estado'], { '/dosificador/estado': estado });
+      assert.equal(r.codigo, 0);
+      assert.match(r.texto, /Dosificador · FRENADO/);
+      assert.match(r.texto, /claude {2}semanal 41 % \(techo 78 %, libre 30\.2 %, en vuelo 2 %\) · línea 38\.5 %/);
+      assert.match(r.texto, /CIRCUITO ABIERTO hasta 2026-11-04 15:00/);
+      assert.match(r.texto, /t1 → claude\/pc/);
+      assert.equal((await correr(['dosificador'], { '/dosificador/estado': estado })).pedidas[0]!.url, '/dosificador/estado', 'sin subcomando, el estado');
+      assert.deepEqual(JSON.parse((await correr(['dosificador', 'estado', '--json'], { '/dosificador/estado': estado })).texto).circuitos, { claude: false, codex: true });
+    });
+    it('config lee y, con --set, cambia (PUT); un JSON roto es error de uso', async () => {
+      const r = await correr(['dosificador', 'config'], { '/dosificador/config': { config: { margenSeguridadPct: 10 }, fichero: '/d/dosificador.json' } });
+      assert.match(r.texto, /dosificador\.json[\s\S]*"margenSeguridadPct": 10/);
+      const p = await correr(['dosificador', 'config', '--set', '{"margenSeguridadPct": 12}'], { '/dosificador/config': { config: { margenSeguridadPct: 12 }, fichero: 'x' } });
+      assert.deepEqual(p.pedidas[0], { url: '/dosificador/config', metodo: 'PUT', cuerpo: { margenSeguridadPct: 12 } });
+      assert.equal((await correr(['dosificador', 'config', '--set', '{roto'], {})).codigo, 2);
+    });
+    it('decidir manda la entrada del fichero SIN guardar el estado (simulacro) y pinta decisiones y diferidas', async () => {
+      const s = servidor({ '/dosificador/decidir': { decisiones: [{ tarea: 'a', agente: 'codex', equipo: 'pc', lanzarEn: null, motivo: 'codex en pc' }], diferidas: [{ tarea: 'b', hasta: Date.UTC(2026, 10, 8, 12), motivo: 'claude: agotada' }], estado: { modo: 'normal' } } });
+      let texto = '';
+      const codigo = await ejecutar(['dosificador', 'decidir', '--entrada', 'in.json'], { fetch: s.fetch, escribir: (x) => { texto += `${x}
+`; }, api: 'http://k', leer: () => '{"ahora": 1, "tareas": []}' });
+      assert.equal(codigo, 0);
+      assert.deepEqual(s.pedidas[0]!.cuerpo, { ahora: 1, tareas: [], simulacro: true });
+      assert.match(texto, /✔ a → codex\/pc ya/);
+      assert.match(texto, /… b hasta 2026-11-08 12:00 {2}claude: agotada/);
+      assert.equal((await correr(['dosificador', 'decidir'], {})).codigo, 2);
+    });
+    it('simular manda los parámetros y resume los objetivos', async () => {
+      const r = await correr(['dosificador', 'simular', '--semanas', '3', '--demanda', '1.2'], { '/dosificador/simular': { semanas: 3, semilla: 1, agenteSemanas: 6, semanasPorEncima: 0, limitesAlcanzados: 0, sinUsarPct: 13.4, usoFinalMedioPct: 86.6, usoFinalMaxPct: 89.2, esperaP50Horas: 6, esperaP95Horas: 70.5, oscilacionesPorSemana: 1.5, tareasLanzadas: 100, tareasLlegadas: 120, pendientesAlFinal: 20 } });
+      assert.deepEqual(r.pedidas[0]!.cuerpo, { semanas: 3, demanda: 1.2 });
+      assert.match(r.texto, /semanas por encima del margen 0 {2}\(objetivo 0\)/);
+      assert.match(r.texto, /sin usar al renovar 13\.4 % {2}\(objetivo < 15 %\)/);
+      assert.equal((await correr(['dosificador', 'otra'], {})).codigo, 2);
+    });
+  });
 });

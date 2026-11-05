@@ -1,5 +1,5 @@
-from app.models import ComplexityLevel, CriteriaScores, KarajanConfig, PolicyConfig, RecommendedModel
-from app.router import calculate_complexity_score, classify_prompt, level_for_score, model_for_level
+from app.domain.models import ComplexityLevel, CriteriaScores, KarajanConfig, PolicyConfig, RecommendedModel
+from app.routing.router import calculate_complexity_score, classify_prompt, level_for_score, model_for_level
 
 
 def test_calculates_weighted_complexity_score() -> None:

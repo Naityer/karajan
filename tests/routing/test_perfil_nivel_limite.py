@@ -3,8 +3,9 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from app import limites_plan, routing_rules
-from app.models import RoutingLayout
+from app.configuration import limites_plan
+from app.routing import routing_rules
+from app.domain.models import RoutingLayout
 
 
 def _layout() -> RoutingLayout:

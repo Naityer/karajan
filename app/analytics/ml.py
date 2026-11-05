@@ -44,7 +44,7 @@ from typing import Any
 
 from app.analytics import duckdb_ops
 from app.analytics.duckdb_ops import AnalyticsUnavailable
-from app.database import DEFAULT_DB_PATH
+from app.persistence.database import DEFAULT_DB_PATH
 
 try:  # optional dependency — every ML path degrades to MLUnavailable if absent
     import numpy as np

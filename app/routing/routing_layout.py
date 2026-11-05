@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from app.models import RoutingLayout
+from app.domain.models import RoutingLayout
 
 
 DEFAULT_LAYOUT_PATH = Path("data/routing_layout.json")

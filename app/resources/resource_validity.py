@@ -7,7 +7,7 @@ from copy import deepcopy
 from threading import RLock
 from urllib.parse import urlsplit
 
-from app.models import (
+from app.domain.models import (
     ArtifactReviewDecisionRequest,
     ArtifactValidityPolicy,
     ArtifactValidityPolicyImpactRequest,

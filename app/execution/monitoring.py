@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app import catalog
-from app.models import (
+from app.providers import catalog
+from app.domain.models import (
     ClassificationResult,
     DecisionLogEntry,
     FlowEvent,

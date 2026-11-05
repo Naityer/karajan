@@ -2,7 +2,7 @@
 
 import json
 
-from app import modo
+from app.configuration import modo
 
 
 def _layout(client):

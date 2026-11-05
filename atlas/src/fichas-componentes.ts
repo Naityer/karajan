@@ -7,6 +7,7 @@ import { MAX_SOBRECOSTE_EFICIENCIA, SKILLS_EFICIENCIA } from './eficiencia';
 import { MAX_SOBRECOSTE_METODO, SKILLS_METODO } from './metodo';
 import { MAX_SOBRECOSTE_PROMPTS, SKILLS_PROMPTS } from './prompts';
 import type { Configuracion } from './heuristica';
+import { CONFIG_BASE as CONFIG_DOSIFICADOR_BASE, type ConfigDosificador } from './dosificador-config';
 import { rutaLimites, umbralClaude, type Limites } from './limites';
 import { ESTADOS_ACEPTADA, type Modo } from './modo';
 import { PESOS as PESOS_ACIERTO, VENTANA_MS } from './produccion';
@@ -14,6 +15,9 @@ import { buscarBinario, PROVEEDORES } from './proveedores';
 import type { Perfil } from './reglas';
 import type { EstadoRotador } from './rotador';
 import { PESOS_SELECTOR } from './skills-seleccion';
+import { UMBRALES_TUTOR, MEZCLA_ENTRADA, elegirTutores, leerCatalogo } from './tutor';
+import { UMBRALES_TUTORIA } from './tutoria-nota';
+import { carpetaSkillForge } from './skillforge';
 import { GRUPO_KARAJAN, MIN_PARES_FUNCIONALIDAD, MUESTRA_MINIMA_GRUPO, TOP_PARES } from './comparador';
 
 /**
@@ -34,6 +38,8 @@ export interface ContextoFicha {
   perfil(): Perfil | null;
   rotador: { leerEstado(): EstadoRotador };
   limites(): Limites | null;
+  /** El dosificador: su configuración viva (sin él, la de fábrica) y, si se sabe, su estado persistido. */
+  dosificador?: { config(): ConfigDosificador; estado?(): { ultima: { en: number; decisiones: number; diferidas: number } | null; leases: Record<string, unknown>; estimador: Record<string, unknown>; circuitos: Record<string, { abiertoHasta: number | null }> } | null };
   pasarela: { leer(): Record<string, unknown> };
   biblioteca: { disponible: boolean; ruta: string | null };
 }
@@ -128,6 +134,51 @@ export const FICHAS: Record<string, FichaComponente> = {
       };
     },
   },
+  dosificador: {
+    especificado: true,
+    resumen: 'Decide cuándo, dónde (equipo) y con qué agente se lanza cada tarea para que el plan de cada agente llegue a su renovación con el margen configurado: lee el % usado y el reinicio de cada ventana, estima el coste de la tarea, reparte el presupuesto a lo largo de la semana con una línea ideal y un controlador P, y no toca a un agente que acaba de topar con su límite.',
+    como_funciona: {
+      entradas: ['Cola de tareas (prioridad, antigüedad, agente fijo o auto, clasificación, repo) y estado de equipos y agentes, que manda el host', 'Uso de cada agente: % semanal y de 5 h con su reinicio (limites-plan.json de Atlas dev o la sonda de Claude/Codex)', 'dosificador.json (planes, márgenes, pacing, cola, concurrencia…) y dosificador-estado.json (estimador, circuitos, leases, histéresis)'],
+      pasos: [
+        'Lee la cuota de cada agente con parsers tolerantes (porcentaje o fracción, resets_at en s/ms/ISO, ventana por duración) y marca el dato como ok, caduco o ausente (dosificador-cuota.ts · leerCuota, cuotaDeUso, estadoCuota)',
+        'Techo = límite − margen − reserva personal; presupuesto = techo − uso − lo comprometido en vuelo (dosificador.ts · pacing, reservaPersonal)',
+        'Línea ideal de gasto hasta el reinicio, ponderada por las horas útiles del horario; error = uso − línea; retraso = clamp(kp·error/tasa) con banda muerta e histéresis normal/frenado/bloqueado (dosificador.ts · pacing, transicionModo)',
+        'Estima el coste p80 de la tarea por clase nivel×dominio×agente con EWMA de media y varianza, mezclado con un prior por nivel mientras haya poca muestra (dosificador.ts · estimar, observarClase)',
+        'Admisión: el coste cabe en el presupuesto, la ventana de 5 h no pasa de su tope, no es horario de silencio y el cubo de fichas del agente espacia las ráfagas; si no cabe, se difiere con su motivo (dosificador.ts · decidir)',
+        'Circuito por agente: al alcanzar un límite se abre hasta resets_at (backoff exponencial con jitter solo si no hay fecha) y no se lanza nada en él (dosificador.ts · registrarLimite, backoffMin)',
+        'Colocación: agente fijo, preferido por tipo o el de más presupuesto relativo; equipo con el repo ya preparado y menos carga; prioridad con aging y backfilling (dosificador.ts · decidir)',
+        'Guarda el lease de cada decisión (coste en vuelo hasta que la tarea acaba) y aprende de la tarea terminada con /dosificador/observar (dosificador.ts · registrarCoste, servidor.ts · /dosificador/*)',
+        'Tope y ritmo por agente: el % semanal de topePct es un techo duro que no se pasa nunca y, por encima de ritmoMaxPctHora (burn rate), se difiere con el motivo «ritmo»; a un equipo dormido (equipos.<id>.dormido) no se le coloca nada (dosificador.ts · pacing, decidir, equipoDormido)',
+        'Relevo entre equipos: el destino (el servidor) pregunta si toma una tarea que empezó otro equipo; la política (primero-vivo, auto, preguntar) dice si toca —cuota renovada y origen sin latido, o silencio del origen— y decidir aplica circuito, cuota, tope, ritmo y horario; cada decisión queda en el registro de relevos (dosificador.ts · decidirRelevo, servidor.ts · /dosificador/relevo, /dosificador/decisiones)',
+        'Laboratorio · contrato: parsers fieles con fixtures sintéticas, decisión determinista, nada lanzado con el circuito abierto o sin dato (lab/dosificador.lab.ts · contrato)',
+        'Laboratorio · replay: semanas sintéticas con picos laborales y costes lognormales; semanas sobre el margen, cuota sin usar, espera p95 y oscilaciones (dosificador-sim.ts · simular, lab/dosificador.lab.ts · replay)',
+      ],
+      salidas: ['decisiones: tarea, agente, equipo y lanzarEn (null = ya) con su motivo', 'diferidas: tarea, hasta cuándo (o null) y por qué', 'estado: modo (normal|frenado|bloqueado), burn rate, agotamiento proyectado y circuitos'],
+    },
+    reglas: [
+      'Dato de cuota ausente o caduco: no se lanza a ciegas (solo con modoSimulacion).',
+      'Con el circuito de un agente abierto no se decide nada para él hasta su resets_at; los agentes son colas independientes: uno ocupado, agotado o caído no bloquea al otro.',
+      'Más margen de seguridad nunca acorta el retraso; sin fecha de reinicio el modo es frenado.',
+      'El mismo estado y la misma entrada dan la misma decisión: sin reloj ni azar dentro de decidir.',
+      'En producción solo decide: no lanza ni cambia nada fuera de su propio estado; cambiar su configuración exige tarea aceptada.',
+      'Relevo: nunca sin checkpoint del origen; con «primero vivo» el origen vivo tiene preferencia; tras maxIntentos arranques fallidos se cede.',
+      'Su laboratorio es sintético (no lee límites ni registros reales): contrato y replay semanal con Wilson y muestra mínima de 24 agente-semanas.',
+    ],
+    configuracion: (c) => {
+      const d = c.dosificador?.config() ?? CONFIG_DOSIFICADOR_BASE;
+      return {
+        margen_seguridad_pct: d.margenSeguridadPct, margen_5h_pct: d.margen5hPct, reserva_modo: d.reserva.modo, reserva_fija_pct: d.reserva.fijaPct,
+        pacing_modo: d.pacing.modo, kp: d.pacing.kp, banda_muerta_pct: d.pacing.bandaMuertaPct, retraso_max_min: d.pacing.retrasoMaxMin, rafaga_max_pct: d.pacing.maxRafagaPct, histeresis_ciclos: d.pacing.histeresisCiclos,
+        aging_por_hora: d.cola.agingPorHora, backfill: d.cola.backfill, concurrencia_por_agente: Object.entries(d.concurrencia.porAgente).map(([a, n]) => `${a}: ${n}`), concurrencia_por_equipo: d.concurrencia.porEquipo,
+        percentil_coste: d.estimador.percentil, circuito_umbral_limites: d.circuito.umbralLimites, lease_ttl_min: d.lease.ttlMin, dato_caduca_min: d.sonda.caducidadMin,
+        horario_zona: d.horario.zona, horario_silencio: d.horario.silencio ? `${d.horario.silencio.desde}-${d.horario.silencio.hasta}` : 'sin silencio',
+        agentes: Object.entries(d.planes).map(([a, p]) => `${a}: ${p.ventanas.map((v) => `${v.nombre} ${v.duracionMin} min`).join(', ')}`), modo_simulacion: d.modoSimulacion,
+        topes: Object.entries(d.planes).map(([a, p]) => `${a}: ${p.topePct ?? 'sin tope'} % · ${p.ritmoMaxPctHora ?? 'sin límite'} %/h`),
+        equipos_dormidos: Object.entries(d.equipos).map(([e, x]) => `${e}: ${x.dormido ? `${x.dormido.desde}-${x.dormido.hasta}` : 'siempre'}`),
+        relevo_politica: d.relevo.politicaDefecto, relevo_silencio_min: d.relevo.tomarSiSilencio ? d.relevo.silencioMin : 'apagado', relevo_gracia_min: d.relevo.graciaMin, relevo_max_intentos: d.relevo.maxIntentos,
+      };
+    },
+  },
   selector: {
     especificado: true,
     resumen: 'Elige hasta tres skills para un prompt puntuándolas contra las que hay en el equipo: nombre citado, alias, palabras del nombre y de la descripción, con un umbral mínimo.',
@@ -172,6 +223,28 @@ export const FICHAS: Record<string, FichaComponente> = {
     configuracion: (c) => {
       const e = c.rotador.leerEstado();
       return { dias_nucleo: e.config.nucleoDias, dias_frecuente: e.config.frecuenteDias, dias_instantanea: e.config.instantaneaDias, protegidas: e.config.protegidas, repuestas_recientes: Object.keys(e.repuestas).length };
+    },
+  },
+  tutor: {
+    especificado: true,
+    resumen: 'Decide qué modelo hace de tutor con datos de cada semana: razonamiento (Artificial Analysis) entre precio mezclado (OpenRouter) de los modelos de Claude Code y Codex. Nada del tutor está escrito a mano.',
+    como_funciona: {
+      entradas: ['API de Artificial Analysis (ARTIFICIAL_ANALYSIS_API_KEY): índice de inteligencia por modelo', 'API pública de OpenRouter: precio de entrada y salida por modelo', 'tutores.json: el último catálogo bueno', 'Qué proveedores están disponibles y si Claude pasó su umbral semanal'],
+      pasos: [
+        'Lee las dos fuentes y las une por el nombre normalizado del modelo (tutor.ts · leerArtificialAnalysis, leerOpenRouter, combinar)',
+        'Si una fuente falla, o no hay clave, el catálogo anterior NO se toca y el error se devuelve (tutor.ts · actualizarCatalogo)',
+        'Por proveedor, descarta los que razonan menos del 75 % del mejor y se queda con el de más razonamiento por dólar mezclado 3:1 (tutor.ts · elegirTutores)',
+        'Entre proveedores usables (disponibles y sin pasar su umbral) elige el de mejor valor; desempata por razonamiento y nombre (tutor.ts · elegirTutores)',
+        'El servidor repite la actualización cada día y avisa si el tutor cambia (servidor.ts · actualización diaria)',
+        'Laboratorio · seleccion: catálogo presente y de ≤ 7 días, elección determinista con el catálogo en cualquier orden y tutor que razona lo exigido (lab/tutor.lab.ts · seleccion)',
+      ],
+      salidas: ['Tutor vigente (proveedor, modelo, razonamiento, precio, valor)', 'Mejor de cada proveedor', 'tutores.json actualizado', 'Informe del laboratorio'],
+    },
+    reglas: ['Sin razonamiento medido un modelo no entra: no se adivina.', 'Un tutor barato pero torpe no gana: el filtro de razonamiento va antes que la relación.', 'Los candidatos son solo los que se pueden lanzar por CLI (Claude Code y Codex).', 'El tutor no se cambia a mano: se recalcula.'],
+    configuracion: (c) => {
+      const cat = leerCatalogo(join(c.dirLab, 'tutores.json'));
+      const t = elegirTutores(cat).tutor;
+      return { fichero: join(c.dirLab, 'tutores.json'), actualizado: cat?.actualizado ?? 'nunca', modelos: cat?.modelos.length ?? 0, tutor: t ? `${t.proveedor}/${t.modelo}` : 'ninguno', razonamiento_relativo_min: UMBRALES_TUTOR.razonamientoRelativoMin, edad_maxima_dias: UMBRALES_TUTOR.edadMaximaDias, mezcla_entrada_salida: `${MEZCLA_ENTRADA}:1` };
     },
   },
   etiquetas: borrador('Componente etiquetas', 'Pondrá la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente. Hoy vive en atlas-dev (server/src/tareas/formato.ts).', ['Tarea de Atlas dev'], ['Cabecera y glosario en el prompt del agente']),
@@ -352,6 +425,27 @@ export const FICHAS: Record<string, FichaComponente> = {
   },
 
   // ── Interfaz ──
+  tutoria: {
+    especificado: true,
+    resumen: 'Pone nota al agente local: rehace tareas que ya se integraron bien, con la misma instrucción y skills de producción, con un tutor que lo desbloquea sin darle la solución y que compara el resultado con el commit registrado como correcto.',
+    como_funciona: {
+      entradas: ['Tareas completadas de Atlas dev con su prompt', 'El commit con el trailer «Karajan-Tarea: <id>» ya en main (la referencia)', 'El plan del delegador para ese prompt (nivel, dominio, skills)', 'El alumno (KARAJAN_ALUMNO, por defecto ollama-qwen) y el tutor vigente', 'Las skills que la skill skillforge-lab dejó activas y validadas con modelos reales para ese alumno (skillforge.ts · leerSkillsForjadas)'],
+      pasos: [
+        'Elige tareas completadas, no examinadas ya con este alumno, y busca su referencia en los repos del Workspace (tutoria.ts · buscarReferencia)',
+        'Crea un worktree temporal desnudo en el estado justo anterior a la integración (tutoria.ts · examinar)',
+        'Lanza al alumno con la MISMA instrucción de producción (delegar.ts · construirInstruccion); sin las skills que pedía, es un obstáculo, como en producción',
+        'Si falla (permisos, comando, skill, tiempo), el tutor lo desbloquea SIN ver la referencia: una pista o instalar la skill que faltaba; el filtro rechaza código y líneas de la solución (tutoria.ts · promptTutor; tutoria-nota.ts · filtrarPista)',
+        'Con hasta 3 ayudas, el alumno reintenta; al final el tutor, esta vez con la referencia, da cumple, equivalencia y regresiones (tutoria.ts · promptEvaluador)',
+        'Nota = 70 % veredicto + 30 % solape de ficheros, menos 10 % por ayuda (tutoria-nota.ts · calificar)',
+        'Agrega por nivel y por dominio×nivel, con IC95 de Wilson sobre aprobar (≥ 70) y calcula el nivel máximo delegable (tutoria-nota.ts · calificacion)',
+        'Si hay skills forjadas para el dominio de la tarea, la repite con ellas en el prompt del alumno y empareja las dos notas (skillforge.ts · efectoForjadas)',
+        'Borra el worktree: sin ramas, commits ni cambios en el repo (tutoria.ts · examinar)',
+      ],
+      salidas: ['Nota porcentual del alumno', 'Mapa de qué niveles y dominios se le pueden delegar', 'Obstáculos más repetidos', 'Borrador «delegar hasta N<k>» cuando hay muestra', 'Brechas anónimas por dominio y nivel para skillforge-lab (kj tutoria brechas)', 'Efecto emparejado de cada skill forjada en tareas reales, y borradores «forjar» o «instalar»'],
+    },
+    reglas: ['El tutor que desbloquea nunca ve la referencia ni da código; quien la ve es el evaluador, que no habla con el alumno.', 'Sin veredicto del tutor la nota queda sin calificar, no en 0.', 'Los exámenes cuestan tokens: solo corren con KARAJAN_TUTORIA_EXAMENES=1 y con máximo por ejecución.', 'Solo propone: delegarle algo al alumno lo decide la persona.', 'Con un alumno que solo contesta texto (ollama run) se juzga la respuesta, no cambios en ficheros.', 'La nota del alumno es la de los exámenes SIN skills forjadas: un examen con skill mide la skill, no al alumno.', 'Una skill forjada solo entra en el prompt del alumno dentro del sandbox; no se instala, y al tutor que desbloquea nunca se le da. Que pase la validación de SkillForge no basta: se propone instalarla solo si mejora ≥ 5 puntos de media en ≥ 5 tareas reales sin empeorar más del 20 %.', 'A SkillForge solo salen agregados anónimos (dominio, nivel, nota, obstáculos): nunca prompts, ids de tarea ni commits.'],
+    configuracion: () => ({ alumno: process.env['KARAJAN_ALUMNO'] || 'ollama-qwen', autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maximo_por_ejecucion: Number(process.env['KARAJAN_TUTORIA_MAX']) || 3, skillforge: carpetaSkillForge() ?? 'no encontrado (KARAJAN_SKILLFORGE_DIR)', mejora_forjada: UMBRALES_TUTORIA.mejoraForjada, max_ayudas: UMBRALES_TUTORIA.maxAyudas, penalizacion_ayuda: UMBRALES_TUTORIA.penalizacionAyuda, aprobado: UMBRALES_TUTORIA.aprobado, muestra_segmento: UMBRALES_TUTORIA.muestraSegmento }),
+  },
   api: {
     especificado: true,
     resumen: 'Expone Karajan a Atlas dev: las rutas del paquete, con las formas de respuesta de la API de Karajan, más las del laboratorio y esta arquitectura.',

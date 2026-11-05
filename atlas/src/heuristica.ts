@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { formatear, redondear } from './redondeo';
 
 /**
- * Clasificador heurístico de Karajan (puerto de `app/router.py` y de la parte determinista de `app/classifier.py`): detecta
+ * Clasificador heurístico de Karajan (puerto de `app/routing/router.py` y de la parte determinista de `app/routing/classifier.py`): detecta
  * dominios e intención por palabras, puntúa seis criterios, pondera la complejidad, elige nivel y modelo lógico, propone
  * skills y subtareas y decide si hace falta revisión humana. Es lo que usa Karajan en el perfil `offline` y como respaldo
  * cuando no hay LLM; aquí es el único clasificador (la clasificación con LLM necesita proveedores, ver PORTE.md).
@@ -32,7 +32,7 @@ export interface Configuracion {
   policy: Politica;
 }
 
-/** Valores por defecto de `KarajanConfig` (`app/models.py`) que afectan a la clasificación. */
+/** Valores por defecto de `KarajanConfig` (`app/domain/models.py`) que afectan a la clasificación. */
 export const CONFIG_POR_DEFECTO: Configuracion = {
   criteria_weights: { ambiguity: 0.2, context_required: 0.2, reasoning_depth: 0.2, autonomy_required: 0.15, operational_risk: 0.15, validation_difficulty: 0.1 },
   level_thresholds: [1.5, 2.5, 3.5, 4.3],

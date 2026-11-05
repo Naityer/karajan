@@ -5,13 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-from app.logging_config import get_logger, log_event
+from app.core.logging_config import get_logger, log_event
 from app import agent_tools
-from app import events
+from app.execution import events
 from app import execution as execution_helpers
-from app import flow_policy
-from app import validation
-from app.models import (
+from app.routing import flow_policy
+from app.execution import validation
+from app.domain.models import (
     Backend,
     ClassificationResult,
     DecisionLogEntry,
@@ -24,10 +24,10 @@ from app.models import (
 )
 from app.providers import resolve
 from app.providers.registry import Resolution, fallback_resolutions, resolve_by_name, resolve_entity
-from app import limites_plan
-from app import routing_rules
-from app.resource_activation import build_resource_context
-from app.skill_matching import prepare_skills
+from app.configuration import limites_plan
+from app.routing import routing_rules
+from app.resources.resource_activation import build_resource_context
+from app.resources.skill_matching import prepare_skills
 
 logger = get_logger("delegation")
 
@@ -61,7 +61,7 @@ def delegate(
     withhold execution entirely — nothing is spent on real backends until they
     pass. Returns the delegation result plus a compact, append-only decision trail.
 
-    `store` (an `app.database.TaskStore`, kept as `Any` here to avoid a circular
+    `store` (an `app.persistence.database.TaskStore`, kept as `Any` here to avoid a circular
     import since `database.py` doesn't need to import this module) is optional
     and threaded straight through to `run_subtask` so it can persist a `runs`
     row with the real `resolution.provider_name` — the stable attribution this
@@ -308,7 +308,7 @@ def run_subtask(
     tier-pinned `resolve()` and use that entity's resolution instead — the
     rest of the pipeline (fallback, validation) is identical either way.
 
-    `store` (optional `app.database.TaskStore`) receives a `runs` row for this
+    `store` (optional `app.persistence.database.TaskStore`) receives a `runs` row for this
     subtask's execution once it's fully resolved (including any runtime
     fallback/validator escalation), keyed on `resolution.provider_name` — the
     stable catalog identity that fixes the old fuzzy `_execution_owner()`
@@ -359,7 +359,7 @@ def run_subtask(
                 weekly_limit = None
     if resolution is not None and resolution.provider_name == "ollama-qwen" and selected_skills:
         if preresolved is None:
-            from app import catalog, credentials
+            from app.providers import catalog, credentials
             for candidate in ("codex", "claude-cli"):
                 info = catalog.get_provider(candidate)
                 if info is not None and credentials.detect(info).ready:
