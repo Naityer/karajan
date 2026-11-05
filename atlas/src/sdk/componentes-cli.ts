@@ -1,4 +1,5 @@
-import type { Comando } from './comandos';
+import type { Comando, Contexto } from './comandos';
+import type { NodoArbol } from './ascii';
 import type { Bloque, Panel } from './panel';
 
 /**
@@ -7,7 +8,7 @@ import type { Bloque, Panel } from './panel';
  * laboratorio, historial y operación de los 25 componentes. Un componente nuevo los tiene sin tocar la CLI.
  */
 interface VistaComponente {
-  id: string; familia: string; responsabilidad: string; modulos: string[]; estado: string; muestra_corta: boolean; pendiente: string | null;
+  id: string; familia: string; responsabilidad: string; modulos: string[]; requiere?: string[] | 'todos'; config?: { lectura: string; escritura?: string } | null; estado: string; muestra_corta: boolean; pendiente: string | null;
   ficha: { especificado: boolean; resumen: string; como_funciona: { entradas: string[]; pasos: string[]; salidas: string[] }; reglas: string[] };
   configuracion: Record<string, unknown> | null;
   escenarios: { id: string; tipo: string; descripcion: string }[];
@@ -25,7 +26,7 @@ const lista = (xs: string[]) => (xs.length ? xs.map((x) => `  • ${x}`) : ['  (
 export function panelDescribe(v: VistaComponente): Panel {
   const f = v.ficha;
   return { origen: v.id, titulo: `${v.id} · describe`, subtitulo: `${v.familia} · ${v.estado}`, datos: v, bloques: [
-    { tipo: 'texto', lineas: [v.responsabilidad, '', f.resumen, '', `Módulos: ${v.modulos.join(', ') || '(vive fuera de Karajan)'}`] },
+    { tipo: 'texto', lineas: [v.responsabilidad, '', f.resumen, '', `Módulos: ${v.modulos.join(', ') || '(vive fuera de Karajan)'}`, `Depende de: ${v.requiere === 'todos' ? 'todos (raíz de composición)' : v.requiere?.length ? v.requiere.join(', ') : 'nadie (independiente)'}`] },
     { tipo: 'texto', titulo: 'Cómo funciona', lineas: ['Entradas', ...lista(f.como_funciona.entradas), 'Pasos', ...lista(f.como_funciona.pasos), 'Salidas', ...lista(f.como_funciona.salidas)] },
     ...(f.reglas.length ? [{ tipo: 'texto', titulo: 'Reglas', lineas: lista(f.reglas) } as Bloque] : []),
     { tipo: 'texto', titulo: 'Laboratorio', lineas: v.escenarios.length ? v.escenarios.map((e) => `${e.id} [${e.tipo}] ${e.descripcion}`) : [v.pendiente ?? '(sin laboratorio)'] },
@@ -34,7 +35,18 @@ export function panelDescribe(v: VistaComponente): Panel {
 
 export function panelConfig(v: VistaComponente): Panel {
   const c = Object.entries(v.configuracion ?? {});
-  return { origen: v.id, titulo: `${v.id} · config`, datos: v.configuracion, bloques: [{ tipo: 'tabla', columnas: ['parámetro', 'valor'], filas: c.map(([k, x]) => [k, valor(x)]) }, { tipo: 'texto', lineas: ['Solo lectura desde aquí; los cambios pasan por el guardián del modo producción (tarea aceptada).'] }] };
+  const aviso = v.config?.escritura ? `Se cambia con: kj ${v.id} config --set '<json con los campos a cambiar>' (en producción, el guardián exige una tarea aceptada).` : 'Solo lectura: este componente no declara una ruta de escritura de su configuración.';
+  return { origen: v.id, titulo: `${v.id} · config`, datos: { configuracion: v.configuracion, rutas: v.config ?? null }, bloques: [{ tipo: 'tabla', columnas: ['parámetro', 'valor'], filas: c.map(([k, x]) => [k, valor(x)]) }, { tipo: 'texto', lineas: [aviso] }] };
+}
+
+/** `config --set '<json>'`: escribe en la ruta de escritura que el componente declara (PUT) y muestra lo que ha quedado. */
+async function aplicarConfig(ctx: Contexto, v: VistaComponente, crudo: string): Promise<Panel> {
+  if (!v.config?.escritura) throw new Error(`${v.id}: configuración de solo lectura (no declara ruta de escritura)`);
+  let cuerpo: unknown;
+  try { cuerpo = JSON.parse(crudo); } catch { throw new Error(`--set espera un JSON válido, p. ej. --set '{"campo": 1}'`); }
+  if (!cuerpo || typeof cuerpo !== 'object' || Array.isArray(cuerpo)) throw new Error('--set espera un objeto JSON');
+  const nuevo = await ctx.pedir(v.config.escritura, 'PUT', cuerpo);
+  return { origen: v.id, titulo: `${v.id} · config actualizada`, datos: nuevo, bloques: [{ tipo: 'texto', lineas: ['Cambios aplicados:', ...Object.entries(cuerpo as Record<string, unknown>).map(([k, x]) => `  ${k} = ${valor(x)}`)] }] };
 }
 
 export function panelSalud(v: VistaComponente): Panel {
@@ -57,8 +69,29 @@ export function panelMetricas(v: VistaComponente): Panel {
 
 const PRESENTADORES = { describe: panelDescribe, config: panelConfig, salud: panelSalud, metricas: panelMetricas } as const;
 
+/** Dependencias entre componentes (de los imports reales, comprobados por el test de arquitectura), agrupadas por capa. */
+export function panelDependencias(vistas: VistaComponente[]): Panel {
+  const con = vistas.filter((v) => Array.isArray(v.requiere) && v.requiere.length), raices = vistas.filter((v) => v.requiere === 'todos');
+  const libres = vistas.filter((v) => Array.isArray(v.requiere) && !v.requiere.length);
+  const nodo = (v: VistaComponente): NodoArbol => ({ nombre: v.id, nota: `(${v.familia})`, hijos: ((v.requiere as string[]) ?? []).map((r) => ({ nombre: r })) });
+  const usados = new Map<string, string[]>();
+  for (const v of con) for (const r of v.requiere as string[]) usados.set(r, [...(usados.get(r) ?? []), v.id]);
+  return { origen: 'componentes', titulo: 'Componentes · dependencias', subtitulo: `${vistas.length} componentes`, datos: vistas.map((v) => ({ id: v.id, familia: v.familia, requiere: v.requiere })), bloques: [
+    { tipo: 'arbol', titulo: 'Quién depende de quién (en ejecución)', raiz: { nombre: 'Componentes con dependencias', hijos: con.map(nodo) } },
+    { tipo: 'tabla', titulo: 'De quién dependen otros', columnas: ['componente', 'lo usan'], filas: [...usados].sort((a, b) => b[1].length - a[1].length).map(([c, us]) => [c, us.join(', ')]) },
+    { tipo: 'texto', titulo: 'Independientes', lineas: [libres.map((v) => v.id).join(', ') || '(ninguno)'] },
+    { tipo: 'texto', titulo: 'Raíces de composición (enchufan a todos)', lineas: [raices.map((v) => v.id).join(', ') || '(ninguna)'] },
+  ] };
+}
+
+export const comandoDependencias: Comando = { ruta: ['componentes', 'dependencias'], resumen: 'mapa de dependencias entre componentes', ejecutar: async (ctx) => panelDependencias(((await ctx.pedir('/laboratorio/arquitectura')) as { componentes: VistaComponente[] }).componentes) };
+
 /** Un comando por acción, con `*` en la posición del componente. */
 export const comandosComponente: Comando[] = ACCIONES_COMPONENTE.map((accion) => ({
-  ruta: ['*', accion], uso: `<componente> ${accion}`, resumen: { describe: 'ficha: qué hace, cómo y qué mide', config: 'configuración viva del componente', salud: 'estado de su laboratorio y hallazgos', metricas: 'su actividad real e historial' }[accion],
-  ejecutar: async (ctx, _args, ruta) => PRESENTADORES[accion]((await ctx.pedir(`/laboratorio/arquitectura/${encodeURIComponent(ruta[0]!)}`)) as VistaComponente),
+  ruta: ['*', accion], uso: accion === 'config' ? '<componente> config [--set <json>]' : `<componente> ${accion}`, resumen: { describe: 'ficha: qué hace, cómo y qué mide', config: 'configuración viva del componente', salud: 'estado de su laboratorio y hallazgos', metricas: 'su actividad real e historial' }[accion],
+  ejecutar: async (ctx, _args, ruta) => {
+    const v = (await ctx.pedir(`/laboratorio/arquitectura/${encodeURIComponent(ruta[0]!)}`)) as VistaComponente;
+    const set = accion === 'config' ? ctx.opcion('set') : null;
+    return set !== null ? aplicarConfig(ctx, v, set) : PRESENTADORES[accion](v);
+  },
 }));

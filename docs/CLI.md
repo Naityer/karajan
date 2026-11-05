@@ -37,7 +37,8 @@ interfaz web lo dibuje con los mismos datos. Código en `atlas/src/sdk/` (`ascii
 | Comando | Qué muestra |
 |---|---|
 | `kj <componente> describe` | Ficha: qué hace, entradas, pasos, salidas, reglas y su laboratorio |
-| `kj <componente> config` | Configuración viva (solo lectura; los cambios pasan por el guardián del modo producción) |
+| `kj <componente> config [--set '<json>'] [--tarea <id>]` | Configuración viva; con `--set` la escribe por PUT en la ruta de escritura que el componente declara (hoy solo el dosificador; en producción necesita `--tarea` o `KARAJAN_TAREA`, la tarea aceptada de Atlas dev) |
+| `kj componentes dependencias` | Mapa de dependencias entre componentes (de los imports reales), quién usa a quién, los independientes y las raíces de composición |
 | `kj <componente> salud` | Estado de su laboratorio, último resultado por escenario y hallazgos con su borrador |
 | `kj <componente> metricas` | Operación real (tareas, ejecuciones, latencia, coste, lo propio) e historial de métricas |
 | `kj estadisticas resumen [--dias N] [--perfil activo\|todos]` | Indicadores, acierto, flujo entrada→nivel→agente→estado, coste frente a latencia y qué mejorar |

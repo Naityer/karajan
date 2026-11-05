@@ -202,3 +202,13 @@ Decide **cuándo, dónde (equipo) y con qué agente** se lanza cada tarea para l
   - nunca sin checkpoint; tras `maxIntentos` arranques fallidos, cede.
   Si toca, `decidir` —con esa tarea como única de la cola y el destino como único equipo— aplica circuito, cuota, tope, ritmo, horario y equipo dormido y elige el agente; no deja lease (la cola del destino la vuelve a decidir con su propio id). Cada decisión se anota en `estado.relevos` (las 200 últimas).
 - **Rutas**: `POST /dosificador/relevo` (`{ahora, relevo: {id, equipo, origen, estadoOrigen, politica?, agente?, ultimoLatido, resetsAt, intentos, checkpoint, …}, agentes, uso, leido?}` → `{accion: tomar|esperar|ceder, porque, agente, lanzarEn, hasta, motivo}`; `simulacro: true` no anota) y `GET /dosificador/decisiones` (registro de relevos, política, equipos y topes) para el Monitor de Atlas dev. Los checkpoints, el testigo y la activación los hace Atlas dev (`docs/relevo.md` en atlas-dev).
+
+## Contrato de componente: dependencias y configuración
+
+Cada componente (`atlas/src/componentes.ts`) declara, además de su responsabilidad, módulos y laboratorio:
+
+- **`requiere`**: de qué otros componentes depende *en ejecución* (imports reales entre sus módulos; no cuentan los `import type` ni los módulos compartidos). `arquitectura.test.ts` lo comprueba en los dos sentidos, impide ciclos y exige que la capa base no dependa de capas superiores. `'todos'` solo lo tienen las raíces de composición (`api`, `laboratorio`). Hoy solo hay tres dependencias entre componentes de lógica: `delegador` (aislamiento, clasificador, limites, proveedores, rotador, selector), `tutoria` (delegador, proveedores) y `comparador` (biblioteca); el resto son independientes.
+- **`config`**: rutas del paquete donde se lee y, si existe `escritura`, se escribe su configuración (`kj <componente> config --set`). Hoy escribe el dosificador; el delegador solo declara lectura (`/routing-layout`).
+- **Módulos compartidos** (`COMPARTIDOS`: `redondeo`, `estadistica`): utilidades puras que no son de ningún componente y cualquiera puede importar.
+
+Ver el mapa con `kj componentes dependencias`.

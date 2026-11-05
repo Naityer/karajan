@@ -1,4 +1,4 @@
-import { proporcion, wilson } from './laboratorio';
+import { proporcion, wilson } from './estadistica';
 
 /**
  * Lo puro de la tutoría: la regla que impide que el tutor dé la solución, la nota de un examen y el mapa de qué se le puede

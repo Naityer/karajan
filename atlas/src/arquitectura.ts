@@ -48,6 +48,8 @@ export interface HallazgoVista extends Hallazgo { escenario: string; borrador: {
 
 export interface ComponenteVista {
   id: string; familia: string; responsabilidad: string; modulos: string[];
+  /** De qué componentes depende en ejecución (comprobado contra los imports) y dónde se lee/escribe su configuración. */
+  requiere: string[] | 'todos'; config: { lectura: string; escritura?: string } | null;
   estado: EstadoComponente; muestra_corta: boolean; pendiente: string | null;
   ficha: { especificado: boolean; resumen: string; como_funciona: { entradas: string[]; pasos: string[]; salidas: string[] }; reglas: string[] };
   configuracion: Record<string, ValorConfig> | null;
@@ -222,7 +224,7 @@ export async function construirArquitectura(ctx: ContextoArquitectura, op: { id?
       return { ...h, severidad: h.severidad as Severidad, escenario: e.escenario, borrador: reg ? { tarea: reg.tarea, creada: reg.creada, estado: borradores.get(clave) ?? null } : null };
     }));
     return {
-      id: c.id, familia: c.familia, responsabilidad: c.responsabilidad, modulos: c.modulos,
+      id: c.id, familia: c.familia, responsabilidad: c.responsabilidad, modulos: c.modulos, requiere: c.requiere, config: c.config ?? null,
       estado: estadoDe(!!c.laboratorio, vistaUltimas), muestra_corta: vistaUltimas.some((u) => !u.suficiente), pendiente: c.pendiente ?? null,
       ficha: ficha ? { especificado: ficha.especificado, resumen: ficha.resumen, como_funciona: ficha.como_funciona, reglas: ficha.reglas ?? [] }
         : { especificado: false, resumen: c.responsabilidad, como_funciona: { entradas: [], pasos: [], salidas: [] }, reglas: [] },

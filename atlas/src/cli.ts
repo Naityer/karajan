@@ -52,8 +52,11 @@ const pct = (x: number) => `${Math.round(x * 100)} %`;
 const opcion = (args: string[], nombre: string) => { const i = args.indexOf(`--${nombre}`); return i >= 0 ? args[i + 1] ?? '' : null; };
 const bandera = (args: string[], nombre: string) => args.includes(`--${nombre}`);
 
-async function pedir(e: Entorno, ruta: string, metodo = 'GET', cuerpo?: unknown): Promise<unknown> {
+async function pedir(e: Entorno, ruta: string, metodo = 'GET', cuerpo?: unknown, tarea?: string | null): Promise<unknown> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
+  // En producción toda escritura necesita una tarea aceptada de Atlas dev (modo.ts): `--tarea <id>` o KARAJAN_TAREA.
+  const t = tarea ?? process.env['KARAJAN_TAREA'];
+  if (t) headers['x-karajan-tarea'] = t;
   if (process.env['ATLAS_DEV_TOKEN']) headers['x-atlas-dev-token'] = process.env['ATLAS_DEV_TOKEN'];
   const r = await e.fetch(`${e.api}${ruta}`, { method: metodo, headers, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) });
   const datos = await r.json().catch(() => null);
@@ -107,7 +110,7 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
   // Los comandos propios de un componente (`kj dosificador config`, que además escribe) mandan sobre los genéricos de `<componente> <acción>`.
   const propio = encontrado?.comando.ruta[0] === '*' && PROPIOS.has(`${args[0]} ${args[1]}`);
   if (encontrado && !propio) {
-    const panel = await encontrado.comando.ejecutar({ pedir: (ruta, metodo, cuerpo) => pedir(e, ruta, metodo, cuerpo), opcion: (n) => opcion(args, n), bandera: (n) => bandera(args, n) }, encontrado.resto, encontrado.ruta);
+    const panel = await encontrado.comando.ejecutar({ pedir: (ruta, metodo, cuerpo) => pedir(e, ruta, metodo, cuerpo, opcion(args, 'tarea')), opcion: (n) => opcion(args, n), bandera: (n) => bandera(args, n) }, encontrado.resto, encontrado.ruta);
     e.escribir(json ? renderJson(panel) : renderAscii(panel));
     return 0;
   }
