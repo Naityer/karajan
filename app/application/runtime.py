@@ -27,15 +27,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Literal
 
-from app import events, resource_library, routing_layout
-from app import scheduler as scheduler_module
+from app.execution import events
+from app.resources import resource_library
+from app.routing import routing_layout
+from app.routing import scheduler as scheduler_module
 from app.database import TaskStore
-from app.github_resources import GitHubResourceAnalyzer
-from app.inspiration_feed import InspirationFeed
-from app.local_resources import LocalResourceAnalyzer
+from app.resources.github_resources import GitHubResourceAnalyzer
+from app.resources.inspiration_feed import InspirationFeed
+from app.resources.local_resources import LocalResourceAnalyzer
 from app.models import KarajanConfig, RecommendedModel
-from app.naityer_resources import NaityerAdapter
-from app.nested_resources import NestedResourceIndexer
+from app.resources.naityer_resources import NaityerAdapter
+from app.resources.nested_resources import NestedResourceIndexer
 from app.platform.auth.identity import (
     AtlasCapabilityIdentityProvider,
     IdentityProvider,
@@ -49,10 +51,10 @@ from app.platform.persistence.sqlite import (
     build_task_repository,
 )
 from app.providers import resolve as resolve_provider
-from app.resource_installer import SkillRepositoryManager
-from app.resource_intelligence import ResourceRankingEngine
-from app.resource_refresh import ResourceRefreshCoordinator
-from app.web_references import WebReferenceAnalyzer
+from app.resources.resource_installer import SkillRepositoryManager
+from app.resources.resource_intelligence import ResourceRankingEngine
+from app.resources.resource_refresh import ResourceRefreshCoordinator
+from app.resources.web_references import WebReferenceAnalyzer
 
 Mode = Literal["standalone", "addon"]
 

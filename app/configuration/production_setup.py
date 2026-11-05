@@ -3,8 +3,9 @@ from __future__ import annotations
 import shutil
 import subprocess
 
-from app.env import PROJECT_ROOT
-from app import catalog, credentials
+from app.configuration.env import PROJECT_ROOT
+from app.providers import catalog
+from app.providers import credentials
 from app.models import AuthMethod, CredentialStatus, RoutingLayout
 
 BASELINE_DIR = PROJECT_ROOT / "data" / "production_baseline"

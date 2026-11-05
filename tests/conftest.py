@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import pytest
 
-from app import classifier, delegation
+from app.routing import classifier
+from app.execution import delegation
 from app.models import Backend, RecommendedModel
 from app.providers.api import ApiModelProvider
 from app.providers.base import ModelProvider, ProviderRun
@@ -153,7 +154,7 @@ class KarajanInstall:
 @pytest.fixture
 def karajan_install(tmp_path, monkeypatch: pytest.MonkeyPatch):
     from app import main
-    from app.runtime import build_standalone_runtime, set_current
+    from app.application.runtime import build_standalone_runtime, set_current
 
     runtime = build_standalone_runtime(tmp_path / "data")
     previous = set_current(runtime)

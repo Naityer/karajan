@@ -3,11 +3,11 @@ from __future__ import annotations
 import subprocess
 
 from app.models import KarajanConfig, OpenClawInstallRequest
-from app.openclaw_client import OpenClawClient
+from app.clients.openclaw_client import OpenClawClient
 
 
 def test_status_reports_missing_cli(monkeypatch) -> None:
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: None)
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: None)
 
     status = OpenClawClient(KarajanConfig()).status()
 
@@ -18,9 +18,9 @@ def test_status_reports_missing_cli(monkeypatch) -> None:
 
 
 def test_status_accepts_gateway_json(monkeypatch) -> None:
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: "openclaw")
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: "openclaw")
     monkeypatch.setattr(
-        "app.openclaw_client.subprocess.run",
+        "app.clients.openclaw_client.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(
             args=args[0],
             returncode=0,
@@ -37,9 +37,9 @@ def test_status_accepts_gateway_json(monkeypatch) -> None:
 
 
 def test_status_handles_invalid_json(monkeypatch) -> None:
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: "openclaw")
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: "openclaw")
     monkeypatch.setattr(
-        "app.openclaw_client.subprocess.run",
+        "app.clients.openclaw_client.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(args=args[0], returncode=0, stdout="not-json", stderr=""),
     )
 
@@ -50,9 +50,9 @@ def test_status_handles_invalid_json(monkeypatch) -> None:
 
 
 def test_skills_list_is_normalized(monkeypatch) -> None:
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: "openclaw")
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: "openclaw")
     monkeypatch.setattr(
-        "app.openclaw_client.subprocess.run",
+        "app.clients.openclaw_client.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(
             args=args[0],
             returncode=0,
@@ -70,9 +70,9 @@ def test_skills_list_is_normalized(monkeypatch) -> None:
 
 def test_install_result_redacts_secret(monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "super-secret-token")
-    monkeypatch.setattr("app.openclaw_client.shutil.which", lambda _: "openclaw")
+    monkeypatch.setattr("app.clients.openclaw_client.shutil.which", lambda _: "openclaw")
     monkeypatch.setattr(
-        "app.openclaw_client.subprocess.run",
+        "app.clients.openclaw_client.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(
             args=args[0],
             returncode=1,

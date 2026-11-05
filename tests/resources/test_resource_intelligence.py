@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.resource_intelligence import (
+from app.resources.resource_intelligence import (
     ResourceRankingEngine,
     ResourceSignalExtractor,
     extract_resource_signals,

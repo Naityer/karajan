@@ -783,7 +783,7 @@ class ResourceStore:
 
     def migrate_radar_profiles(self) -> list[DiscoverySource]:
         """Move legacy Radar profiles out of the artifact catalog without deleting history."""
-        from app.resource_sources import classify_external_url
+        from app.resources.resource_sources import classify_external_url
 
         migrated: list[DiscoverySource] = []
         for item in self.list_resources(limit=500):
@@ -818,7 +818,7 @@ class ResourceStore:
 
     def apply_resource_taxonomy(self) -> list[ResourceGroup]:
         """Create the decision taxonomy and classify system-owned resources."""
-        from app.resource_taxonomy import TAXONOMY_NODES, TAXONOMY_VERSION, taxonomy_path
+        from app.resources.resource_taxonomy import TAXONOMY_NODES, TAXONOMY_VERSION, taxonomy_path
 
         taxonomy_ids = {node.id for node in TAXONOMY_NODES}
         legacy_ids = {"rgrp_skills", "rgrp_capabilities", "rgrp_references"}
@@ -1179,9 +1179,9 @@ def seed_resource_library(
     installers_dir: Path | str = DEFAULT_NAITYER_INSTALLERS,
 ) -> list[ResourceItem]:
     """Idempotently seed Karajan, Naityer and verified editorial resources."""
-    from app.skills_catalog import list_skills
-    from app.curated_resources import curated_resource_items
-    from app.resource_intelligence import extract_resource_signals
+    from app.resources.skills_catalog import list_skills
+    from app.resources.curated_resources import curated_resource_items
+    from app.resources.resource_intelligence import extract_resource_signals
 
     skill_capabilities = {
         "repo-analyzer": ["repository-audit", "code-review", "dependency-analysis"],
@@ -1215,7 +1215,7 @@ def seed_resource_library(
             compatible_runtimes=skill.applies_to,
             install_strategy="github_skill" if skill.repo_url else "catalog",
             status="installed" if skill.installed else "available",
-            metadata={"seed": "app.skills_catalog", "intelligence": intelligence},
+            metadata={"seed": "app.resources.skills_catalog", "intelligence": intelligence},
         )
         try:
             old = store.get_by_slug(item.slug, ResourceKind.SKILL)

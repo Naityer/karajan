@@ -7,9 +7,9 @@ from pathlib import Path
 import httpx
 
 from app.models import ResourceItem, ResourceKind
-from app.nested_resources import ItsFreeAdapter, NestedResourceIndexer
-from app.resource_intelligence import ResourceRankingEngine
-from app.resource_library import ResourceStore
+from app.resources.nested_resources import ItsFreeAdapter, NestedResourceIndexer
+from app.resources.resource_intelligence import ResourceRankingEngine
+from app.resources.resource_library import ResourceStore
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

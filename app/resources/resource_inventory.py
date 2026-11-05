@@ -12,7 +12,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
-from app.resource_validity import decorate_catalog_resources, load_policy
+from app.resources.resource_validity import decorate_catalog_resources, load_policy
 
 _SNAPSHOT_TTL = timedelta(minutes=10)
 _LOCK = RLock()

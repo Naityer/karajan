@@ -1,9 +1,9 @@
 from pathlib import Path
 
 from app.models import ClassificationResult, ComplexityLevel, CriteriaScores, RecommendedModel, Subtask, SubtaskExecution, TaskRecord, TaskStatus, Backend, DelegationResult
-from app.resource_activation import attach_installed_skills
-from app.skill_analytics import build_skill_analytics
-from app.skill_matching import AvailableSkill, discover_skills, prepare_skills, select_skills
+from app.resources.resource_activation import attach_installed_skills
+from app.resources.skill_analytics import build_skill_analytics
+from app.resources.skill_matching import AvailableSkill, discover_skills, prepare_skills, select_skills
 
 
 def _skill(home: Path, root: str, name: str, description: str) -> None:
@@ -80,7 +80,7 @@ def test_classification_and_metrics_do_not_confuse_preparation_with_usage():
 
 
 def test_forced_local_model_cannot_silently_skip_a_required_skill():
-    from app.delegation import run_subtask
+    from app.execution.delegation import run_subtask
     from app.models import KarajanConfig
     from app.providers.base import ModelProvider
     from app.providers.registry import Resolution
@@ -91,7 +91,7 @@ def test_forced_local_model_cannot_silently_skip_a_required_skill():
         def run(self, instruction: str, model_id: str, timeout_s: int):
             raise AssertionError("The agent must not run without its required skill")
 
-    from app.router import classify_prompt
+    from app.routing.router import classify_prompt
     classification = classify_prompt("Resume este PDF")
     subtask = classification.subtasks[0].model_copy(update={"recommended_skill": "pdf", "recommended_skills": ["pdf"]})
     execution, decisions = run_subtask(classification, 0, subtask, KarajanConfig(backend=Backend.CLI), None,

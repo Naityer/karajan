@@ -1,5 +1,5 @@
-from app import config as config_module
-from app import credentials
+from app.configuration import config as config_module
+from app.providers import credentials
 from app.models import AuthMethod, Backend, CredentialStatus, KarajanConfig, Profile
 
 

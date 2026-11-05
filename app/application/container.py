@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Self
 
 from app.application import KarajanApplication
-from app.application_contracts import DomainEventPublisher
-from app.runtime import KarajanRuntime, build_runtime
+from app.application.contracts import DomainEventPublisher
+from app.application.runtime import KarajanRuntime, build_runtime
 
 
 class StorageAlreadyOwnedError(RuntimeError):

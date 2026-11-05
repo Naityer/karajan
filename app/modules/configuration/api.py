@@ -12,14 +12,12 @@ from __future__ import annotations
 
 import logging
 
-from app import (
-    catalog,
-    events,
-    production_setup,
-    setup_status,
-)
-from app.atlas_auth import require_atlas_token
-from app.auth import require_token
+from app.providers import catalog
+from app.execution import events
+from app.configuration import production_setup
+from app.configuration import setup_status
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import require_token
 from app.modo import require_tarea_aceptada
 from app.logging_config import log_event
 from app.models import (
@@ -29,13 +27,13 @@ from app.models import (
     SetupStatus,
     SetupTutorial,
 )
-from app.tutorial import navigation_tutorial_markdown
+from app.resources.tutorial import navigation_tutorial_markdown
 from fastapi import (
     APIRouter,
     Depends,
 )
 
-from app import runtime as runtime_module
+from app.application import runtime as runtime_module
 from app.logging_config import get_logger, log_event
 
 

@@ -18,12 +18,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app import delegation, main, monitoring
+from app import main
+from app.execution import delegation
+from app.execution import monitoring
 from app.database import TaskStore
 from app.models import Backend, DecisionLogEntry, KarajanConfig, OrchestrationConfig
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
-from app.router import classify_prompt
+from app.routing.router import classify_prompt
 
 
 DEFAULT_API = os.environ.get("KARAJAN_API", "http://127.0.0.1:8000")

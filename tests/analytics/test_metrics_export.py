@@ -5,11 +5,11 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app import main
-from app import metrics_export
+from app.execution import metrics_export
 from app.database import TaskStore
-from app.delegation import delegate
+from app.execution.delegation import delegate
 from app.models import Backend, KarajanConfig
-from app.router import classify_prompt
+from app.routing.router import classify_prompt
 
 
 def _seeded_store(tmp_path: Path) -> TaskStore:

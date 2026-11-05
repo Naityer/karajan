@@ -1,6 +1,6 @@
 """Owner/validator selection: role_tags-based lookup (guardian/validator), not `role`."""
 
-from app import flow_policy
+from app.routing import flow_policy
 from app.models import ClassificationResult, CriteriaScores, RoutingEntity, RoutingLayout, Subtask
 
 CRITERIA = CriteriaScores(

@@ -17,7 +17,7 @@ from app.models import (
     TaskRecord,
     TaskStatus,
 )
-from app.skill_analytics import build_skill_analytics
+from app.resources.skill_analytics import build_skill_analytics
 
 
 NOW = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)

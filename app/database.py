@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from app import catalog
+from app.providers import catalog
 from app.logging_config import get_logger, log_event
 from app.models import (
     ClassificationResult,

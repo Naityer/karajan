@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import os
 
-from app import (
-    KARAJAN_VERSION,
-    agent_console,
-    catalog,
-    classifier,
-    credentials,
-    monitoring,
-)
-from app.application_services import domain_event
+from app import KARAJAN_VERSION
+from app.execution import agent_console
+from app.providers import catalog
+from app.routing import classifier
+from app.providers import credentials
+from app.execution import monitoring
+from app.application.services import domain_event
 from app.models import DecisionLogEntry, KarajanConfig, RoutingLayout
-from app.resource_activation import attach_resource_recommendations
+from app.resources.resource_activation import attach_resource_recommendations
 
 
 class ManagementService:

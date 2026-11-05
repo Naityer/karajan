@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app import main
-from app.resource_library import ResourceStore
+from app.resources.resource_library import ResourceStore
 
 
 def _client(karajan_install, monkeypatch, tmp_path) -> TestClient:

@@ -2,8 +2,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app import main, setup_status
-from app.tutorial import NAV_SECTIONS, navigation_tutorial_markdown
+from app import main
+from app.configuration import setup_status
+from app.resources.tutorial import NAV_SECTIONS, navigation_tutorial_markdown
 
 
 def test_navigation_tutorial_mentions_every_nav_view() -> None:

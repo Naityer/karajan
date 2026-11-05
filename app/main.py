@@ -26,12 +26,12 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import KARAJAN_VERSION
-from app.env import load_project_env
+from app.configuration.env import load_project_env
 
 load_project_env()
 
-from app import events
-from app.runtime import build_standalone_runtime, set_current as _set_current_runtime
+from app.execution import events
+from app.application.runtime import build_standalone_runtime, set_current as _set_current_runtime
 from app.modules.agents import api as agents_api
 from app.modules.configuration import api as configuration_api
 from app.modules.decision import api as decision_api

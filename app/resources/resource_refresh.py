@@ -15,9 +15,9 @@ from app.models import (
     ResourceKind,
     ResourceRefreshSettingsUpdate,
 )
-from app.github_resources import GitHubResourceAnalyzer
-from app.resource_library import ResourceStore
-from app.resource_validity import is_internal_local_reference
+from app.resources.github_resources import GitHubResourceAnalyzer
+from app.resources.resource_library import ResourceStore
+from app.resources.resource_validity import is_internal_local_reference
 
 SETTINGS_KEY = "resource_refresh_settings_v1"
 STATUS_KEY = "resource_refresh_status_v1"

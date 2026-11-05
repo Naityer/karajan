@@ -7,8 +7,8 @@ import re
 from pathlib import Path
 
 from app.models import AnalyzeResult, ResourceCreateRequest, ResourceItem
-from app.resource_intelligence import extract_resource_signals
-from app.resource_library import deterministic_summary
+from app.resources.resource_intelligence import extract_resource_signals
+from app.resources.resource_library import deterministic_summary
 
 
 _MAX_FILE_BYTES = 256_000

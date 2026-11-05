@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from app.api.factory import create_app
 from app.platform.persistence.sqlite import DEFAULT_DATA_DIR
-from app.runtime import build_standalone_runtime
+from app.application.runtime import build_standalone_runtime
 
 
 def create_standalone_app(data_dir: Path | str = DEFAULT_DATA_DIR) -> FastAPI:

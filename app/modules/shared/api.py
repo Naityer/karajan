@@ -15,13 +15,10 @@ import json
 import logging
 import os
 
-from app import (
-    agent_tools,
-    events,
-    handoff,
-)
-from app.atlas_auth import require_atlas_token
-from app.auth import (
+from app import agent_tools, handoff
+from app.execution import events
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import (
     TOKEN_ENV_VAR,
     require_token,
 )
@@ -42,7 +39,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 
 from app import KARAJAN_VERSION
-from app import runtime as runtime_module
+from app.application import runtime as runtime_module
 from app.logging_config import get_logger, log_event
 from app.modules.agents.manifest import MANIFEST as _agents_manifest
 from app.modules.configuration.manifest import MANIFEST as _configuration_manifest

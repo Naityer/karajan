@@ -1,4 +1,5 @@
-from app import catalog, skills_catalog
+from app.providers import catalog
+from app.resources import skills_catalog
 from app.models import Backend
 
 

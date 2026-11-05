@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app import execution
-from app.classifier import _extract_json
+from app.routing.classifier import _extract_json
 from app.models import KarajanConfig, RecommendedModel, RoutingEntity, Subtask, ValidationVerdict
 from app.providers.registry import resolve_entity
 

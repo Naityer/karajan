@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from app.inspiration_feed import InspirationFeed, source_catalog
+from app.resources.inspiration_feed import InspirationFeed, source_catalog
 
 
 class _Client:

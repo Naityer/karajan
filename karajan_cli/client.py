@@ -158,7 +158,7 @@ class EmbeddedKarajanClient:
     base_url = "embedded://karajan"
 
     def __init__(self, container, *, token: str | None = None) -> None:
-        from app.application_dto import ResolvedIdentity
+        from app.application.dto import ResolvedIdentity
 
         self.container = container
         self.application = container.application
@@ -186,14 +186,14 @@ class EmbeddedKarajanClient:
         return self.management.health()
 
     def classify(self, prompt: str, entry_agent: str | None = None) -> dict:
-        from app.application_dto import ClassifyCommand
+        from app.application.dto import ClassifyCommand
 
         return self.application.classify(ClassifyCommand(prompt=prompt, entry_agent=entry_agent)).legacy_payload()
 
     def delegate(
         self, task_id: str, *, force_provider: str | None = None, force_entity_id: str | None = None
     ) -> dict:
-        from app.application_dto import AdministrativeOverrideCommand, ExecuteCommand
+        from app.application.dto import AdministrativeOverrideCommand, ExecuteCommand
 
         if force_provider or force_entity_id:
             result = self.application.override_route(
@@ -297,7 +297,7 @@ def build_client(
         return HttpKarajanClient(base_url=url, token=token, timeout=timeout)
     if transport != "embedded":
         raise ValueError(f"unsupported Karajan transport: {transport}")
-    from app.container import KarajanContainer
+    from app.application.container import KarajanContainer
 
     return EmbeddedKarajanClient(
         KarajanContainer.build(data_dir=data_dir), token=token

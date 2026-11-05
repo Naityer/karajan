@@ -7,10 +7,10 @@ from typing import Any
 
 from app.logging_config import get_logger, log_event
 from app import agent_tools
-from app import events
+from app.execution import events
 from app import execution as execution_helpers
-from app import flow_policy
-from app import validation
+from app.routing import flow_policy
+from app.execution import validation
 from app.models import (
     Backend,
     ClassificationResult,
@@ -24,10 +24,10 @@ from app.models import (
 )
 from app.providers import resolve
 from app.providers.registry import Resolution, fallback_resolutions, resolve_by_name, resolve_entity
-from app import limites_plan
-from app import routing_rules
-from app.resource_activation import build_resource_context
-from app.skill_matching import prepare_skills
+from app.configuration import limites_plan
+from app.routing import routing_rules
+from app.resources.resource_activation import build_resource_context
+from app.resources.skill_matching import prepare_skills
 
 logger = get_logger("delegation")
 

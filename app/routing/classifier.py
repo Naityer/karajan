@@ -15,7 +15,7 @@ from app.models import (
     RecommendedModel,
 )
 from app.providers import resolve
-from app.router import (
+from app.routing.router import (
     _requires_human_review,
     calculate_complexity_score,
     classify_prompt,

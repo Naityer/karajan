@@ -2,14 +2,14 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app import config as config_module
+from app.configuration import config as config_module
 from app import main
 from app.modules.tasks import api as tasks_api
 from app.database import TaskStore
 from app.models import Backend, KarajanConfig
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
-from app.routing_layout import RoutingLayoutStore
+from app.routing.routing_layout import RoutingLayoutStore
 
 
 class _FakeFixerProvider(ModelProvider):

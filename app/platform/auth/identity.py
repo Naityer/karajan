@@ -27,7 +27,8 @@ from typing import Any, Protocol
 import jwt
 from fastapi import HTTPException
 
-from app import atlas_auth, auth
+from app.security import atlas_auth
+from app.security import auth
 
 #: Identificadores del único inquilino que existe fuera de SaaS. Explícitos, en
 #: vez de `None`, para que el día que haya varios el código que ya los propaga

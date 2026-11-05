@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app import catalog, events, routing_rules, runtime as runtime_module
-from app.atlas_auth import require_atlas_token
-from app.auth import require_token
+from app.providers import catalog
+from app.execution import events
+from app.routing import routing_rules
+from app.application import runtime as runtime_module
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import require_token
 from app.modo import require_tarea_aceptada
 from app.models import ComplexityLevel, RecommendedModel, RoutingEntity, RoutingLayout, RoutingProfile
 

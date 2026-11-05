@@ -2,12 +2,13 @@
 
 import json
 
-from app import delegation, routing_rules
-from app.delegation import delegate
+from app.execution import delegation
+from app.routing import routing_rules
+from app.execution.delegation import delegate
 from app.models import Backend, KarajanConfig, RoutingLayout, RoutingRule
 from app.providers.registry import Resolution
-from app.router import classify_prompt
-from app.routing_layout import RoutingLayoutStore
+from app.routing.router import classify_prompt
+from app.routing.routing_layout import RoutingLayoutStore
 from tests.conftest import StubProvider
 
 

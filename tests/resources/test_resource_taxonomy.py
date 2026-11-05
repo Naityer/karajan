@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from app.models import ResourceCreateRequest, ResourceGroupCreateRequest, ResourceItem, ResourceKind
-from app.resource_library import ResourceStore
-from app.resource_taxonomy import TAXONOMY_NODES, classify_resource, taxonomy_path
+from app.resources.resource_library import ResourceStore
+from app.resources.resource_taxonomy import TAXONOMY_NODES, classify_resource, taxonomy_path
 
 
 def _item(slug: str, *, summary: str = "") -> ResourceItem:

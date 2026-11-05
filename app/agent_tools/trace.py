@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app import events
+from app.execution import events
 from app.agent_tools.spec import ToolResult
 from app.logging_config import get_logger, log_event
 

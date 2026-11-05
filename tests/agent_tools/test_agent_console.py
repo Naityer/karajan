@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app import agent_console, catalog
+from app.execution import agent_console
+from app.providers import catalog
 from app import main
 from app.models import KarajanConfig
 

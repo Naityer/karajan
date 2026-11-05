@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.application_contracts import ApplicationProtocol
-from app.application_dto import ClassifyCommand, ExecuteCommand
+from app.application.contracts import ApplicationProtocol
+from app.application.dto import ClassifyCommand, ExecuteCommand
 
 
 class LocalKarajanClient:

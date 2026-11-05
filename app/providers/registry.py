@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app import catalog
+from app.providers import catalog
 from app.models import Backend, KarajanConfig, ProviderInfo, RecommendedModel, RoutingEntity, RoutingLayout
 from app.providers.api import ApiModelProvider
 from app.providers.base import ModelProvider

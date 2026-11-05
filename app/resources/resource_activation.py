@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.models import ClassificationResult, ResourceRecommendationContext
-from app.skill_matching import AvailableSkill, discover_skills, select_skills
+from app.resources.skill_matching import AvailableSkill, discover_skills, select_skills
 
 
 def attach_installed_skills(

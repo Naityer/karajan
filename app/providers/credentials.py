@@ -5,7 +5,7 @@ import shlex
 import shutil
 import subprocess
 
-from app import catalog
+from app.providers import catalog
 from app.models import AuthMethod, CredentialStatus, ProviderInfo, ProviderSetup
 
 PROBE_TIMEOUT_S = 5

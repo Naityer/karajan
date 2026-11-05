@@ -7,9 +7,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app import runtime as runtime_module
-from app.application_dto import ClassifyCommand, ExecuteCommand
-from app.application_errors import (
+from app.application import runtime as runtime_module
+from app.application.dto import ClassifyCommand, ExecuteCommand
+from app.application.errors import (
     AuthorizationDeniedError,
     BudgetExceededError,
     ConflictError,
@@ -20,8 +20,8 @@ from app.application_errors import (
     ProviderUnavailableError,
     TaskNotFoundError,
 )
-from app.atlas_auth import require_atlas_token
-from app.auth import require_token
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import require_token
 from app.models import ComplexityLevel
 
 router = APIRouter(prefix="/v1", tags=["v1"])

@@ -7,11 +7,12 @@ drift from the source of truth.
 
 from pathlib import Path
 
-from app import classifier, monitoring
+from app.routing import classifier
+from app.execution import monitoring
 from app.database import TaskStore
-from app.delegation import delegate
+from app.execution.delegation import delegate
 from app.models import Backend, KarajanConfig, RoutingLayout
-from app.router import classify_prompt
+from app.routing.router import classify_prompt
 
 PROMPTS = [
     "Renombra una variable trivial en un script local.",

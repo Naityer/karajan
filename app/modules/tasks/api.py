@@ -13,17 +13,15 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from app import (
-    classifier,
-    delegation,
-    events,
-    monitoring,
-)
-from app.atlas_auth import require_atlas_token
-from app.auth import require_token
+from app.routing import classifier
+from app.execution import delegation
+from app.execution import events
+from app.execution import monitoring
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import require_token
 from app.logging_config import log_event
-from app.application_dto import ClassifyCommand, ExecuteCommand
-from app.application_errors import (
+from app.application.dto import ClassifyCommand, ExecuteCommand
+from app.application.errors import (
     BudgetExceededError,
     ConflictError,
     HostedModeRequiredError,
@@ -46,8 +44,8 @@ from app.providers.registry import (
     resolve_by_name,
     resolve_entity,
 )
-from app.resource_activation import attach_resource_recommendations
-from app.router import model_for_level
+from app.resources.resource_activation import attach_resource_recommendations
+from app.routing.router import model_for_level
 from datetime import (
     datetime,
     timezone,
@@ -59,7 +57,7 @@ from fastapi import (
     Query,
 )
 
-from app import runtime as runtime_module
+from app.application import runtime as runtime_module
 from app.logging_config import get_logger, log_event
 
 

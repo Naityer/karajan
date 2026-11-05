@@ -17,7 +17,7 @@ from app.database import TaskStore  # noqa: E402
 from app.models import (  # noqa: E402
     DelegationResult, KarajanConfig, SubtaskExecution, TaskStatus, Backend,
 )
-from app.router import classify_prompt  # noqa: E402
+from app.routing.router import classify_prompt  # noqa: E402
 
 SALIDA = Path(sys.argv[1])
 SALIDA.mkdir(parents=True, exist_ok=True)

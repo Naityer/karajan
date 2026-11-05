@@ -23,7 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import KARAJAN_VERSION, events
+from app import KARAJAN_VERSION
+from app.execution import events
 from app.logging_config import get_logger
 from app.modules.agents import api as agents_api
 from app.modules.configuration import api as configuration_api
@@ -32,7 +33,7 @@ from app.modules.inspiration import api as inspiration_api
 from app.modules.monitoring import api as monitoring_api
 from app.modules.shared import api as shared_api
 from app.modules.tasks import api as tasks_api
-from app.runtime import KarajanRuntime, set_current
+from app.application.runtime import KarajanRuntime, set_current
 
 logger = get_logger("api")
 

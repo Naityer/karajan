@@ -12,7 +12,7 @@ import asyncio
 import pytest
 from pydantic import ValidationError
 
-from app import scheduler as scheduler_module
+from app.routing import scheduler as scheduler_module
 from app.models import (
     Backend,
     ClassificationResult,
@@ -26,7 +26,7 @@ from app.models import (
     SubtaskExecution,
     TaskStatus,
 )
-from app.routing_layout import RoutingLayoutStore
+from app.routing.routing_layout import RoutingLayoutStore
 
 CRITERIA = CriteriaScores(
     ambiguity=3, context_required=3, reasoning_depth=3, autonomy_required=3, operational_risk=3, validation_difficulty=3

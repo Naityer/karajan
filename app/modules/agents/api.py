@@ -10,18 +10,16 @@ módulo `main` — se resuelven contra el runtime activo en cada petición.
 
 from __future__ import annotations
 
-from app import (
-    agent_console,
-    agent_tools,
-    catalog,
-    credentials,
-    events,
-    openclaw_client,
-    resource_library,
-    skills_catalog,
-)
-from app.atlas_auth import require_atlas_token
-from app.auth import require_token
+from app import agent_tools
+from app.execution import agent_console
+from app.providers import catalog
+from app.providers import credentials
+from app.execution import events
+from app.clients import openclaw_client
+from app.resources import resource_library
+from app.resources import skills_catalog
+from app.security.atlas_auth import require_atlas_token
+from app.security.auth import require_token
 from app.modo import require_tarea_aceptada
 from app.models import (
     CredentialStatus,
@@ -52,7 +50,7 @@ from fastapi import (
     HTTPException,
 )
 
-from app import runtime as runtime_module
+from app.application import runtime as runtime_module
 
 
 router = APIRouter(tags=["agents"])

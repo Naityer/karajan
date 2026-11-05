@@ -1,12 +1,12 @@
 """Delegation engine: execution, failure propagation, parallelism, retries."""
 
-from app import delegation
-from app.delegation import delegate
+from app.execution import delegation
+from app.execution.delegation import delegate
 from app.models import Backend, KarajanConfig, OrchestrationConfig
 from app.models import RoutingEntity, RoutingLayout
 from app.providers.base import ModelProvider, ProviderRun
 from app.providers.registry import Resolution
-from app.router import classify_prompt
+from app.routing.router import classify_prompt
 from tests.conftest import stub_resolution
 
 PROMPT = "Corrige un bug en una API y valida con tests de integracion."

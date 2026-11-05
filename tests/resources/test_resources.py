@@ -5,13 +5,13 @@ from pathlib import Path
 
 import httpx
 
-from app.github_resources import GitHubResourceAnalyzer, validate_github_repository_url
+from app.resources.github_resources import GitHubResourceAnalyzer, validate_github_repository_url
 from app.modules.inspiration.api import _github_resource_parts
 from app.models import ResourceCreateRequest, ResourceItem, ResourceKind, ResourceOperationRequest, SkillInfo
-from app.naityer_resources import NaityerAdapter
-from app.nested_resources import ItsFreeAdapter, TooolsDesignAdapter
-from app.resource_installer import SkillRepositoryManager
-from app.resource_library import ResourceStore, seed_resource_library
+from app.resources.naityer_resources import NaityerAdapter
+from app.resources.nested_resources import ItsFreeAdapter, TooolsDesignAdapter
+from app.resources.resource_installer import SkillRepositoryManager
+from app.resources.resource_library import ResourceStore, seed_resource_library
 
 
 def _item(store: ResourceStore, **updates) -> ResourceItem:
@@ -81,7 +81,7 @@ def test_create_rejects_duplicate_kind_and_slug(tmp_path) -> None:
 
 def test_seed_is_idempotent_and_includes_all_resource_kinds(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
-        "app.skills_catalog.list_skills",
+        "app.resources.skills_catalog.list_skills",
         lambda: [
             SkillInfo(
                 name="seed-skill", description="Seeded skill", installed=False,
@@ -481,7 +481,7 @@ def test_naityer_is_allowlisted_preflighted_and_audited(monkeypatch, tmp_path) -
     (root / "scripts" / "Invoke-Setup.ps1").write_text("# launcher", encoding="utf-8")
     (root / "scripts" / "installers" / "complementos_ia" / "dspy.ps1").write_text("@{}", encoding="utf-8")
     (root / "config" / "setup.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr("app.naityer_resources.shutil.which", lambda command: f"C:/bin/{command}")
+    monkeypatch.setattr("app.resources.naityer_resources.shutil.which", lambda command: f"C:/bin/{command}")
     calls = []
 
     def runner(argv, **kwargs):
@@ -507,7 +507,7 @@ def test_naityer_redacts_secrets_from_audit_log(monkeypatch, tmp_path) -> None:
     (root / "scripts" / "Invoke-Setup.ps1").write_text("# launcher", encoding="utf-8")
     (installers / "dspy.ps1").write_text("@{}", encoding="utf-8")
     (root / "config" / "setup.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr("app.naityer_resources.shutil.which", lambda command: f"C:/bin/{command}")
+    monkeypatch.setattr("app.resources.naityer_resources.shutil.which", lambda command: f"C:/bin/{command}")
 
     def runner(argv, **kwargs):
         return subprocess.CompletedProcess(argv, 0, stdout="API_KEY=very-secret Authorization: Bearer abc123", stderr="")

@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app import skills_catalog
+from app.resources import skills_catalog
 from app.database import TaskStore
 from app.models import RoutingLayout, TaskRecord
 

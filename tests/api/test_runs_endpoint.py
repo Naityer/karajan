@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app import main
 from app.database import TaskStore
 from app.models import Backend, KarajanConfig
-from app.routing_layout import RoutingLayoutStore
+from app.routing.routing_layout import RoutingLayoutStore
 
 
 def test_task_runs_endpoint_returns_recorded_runs(karajan_install, tmp_path: Path) -> None:

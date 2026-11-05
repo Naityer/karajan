@@ -45,7 +45,7 @@ class ExecuteCommand:
 
     def ensure_within_deadline(self) -> None:
         if self.remaining_seconds() == 0:
-            from app.application_errors import DeadlineExceededError
+            from app.application.errors import DeadlineExceededError
 
             raise DeadlineExceededError("execution deadline has expired")
 

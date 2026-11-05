@@ -17,8 +17,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app import config as config_module
-from app import resource_library, routing_layout
+from app.configuration import config as config_module
+from app.resources import resource_library
+from app.routing import routing_layout
 from app.database import TaskStore
 from app.models import KarajanConfig
 

@@ -22,7 +22,7 @@ from pathlib import Path
 
 from fastapi import HTTPException, Request
 
-from app import runtime as runtime_module
+from app.application import runtime as runtime_module
 
 ACEPTADA = {"encolada", "ejecutando"}
 

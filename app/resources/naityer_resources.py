@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 from app.models import NaityerPreflight, ResourceOperationResult
-from app.resource_library import ResourceStore
+from app.resources.resource_library import ResourceStore
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
