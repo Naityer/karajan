@@ -11,6 +11,43 @@ def curated_resource_items() -> list[ResourceItem]:
     """
     entries = (
         {
+            "slug": "cloudflare-security-audit-skill", "name": "Cloudflare Security Audit",
+            "kind": ResourceKind.SKILL, "repo_url": "https://github.com/cloudflare/security-audit-skill",
+            "summary": "Skill de auditoría de seguridad en varias fases, con hallazgos verificables.",
+            "tags": ["security", "audit", "agent-skills"], "capabilities": ["security audit", "vulnerability analysis"],
+            "category": "security", "use_cases": ["auditar la seguridad de un repositorio"],
+            "runtimes": ["claude", "codex"], "install_strategy": "github_skill",
+        },
+        {
+            "slug": "impeccable-design", "name": "Impeccable",
+            "kind": ResourceKind.SKILL, "repo_url": "https://github.com/pbakaus/impeccable",
+            "summary": "Skill para diseñar, revisar y mejorar interfaces y experiencia de usuario.",
+            "tags": ["design", "frontend", "ux", "agent-skills"], "capabilities": ["interface design", "design review"],
+            "category": "product-design", "use_cases": ["mejorar y auditar interfaces"],
+            "runtimes": ["claude", "codex"], "install_strategy": "github_skill",
+        },
+        {
+            "slug": "ai-job-search", "name": "AI Job Search",
+            "kind": ResourceKind.REFERENCE, "repo_url": "https://github.com/ai-job-search-dev/ai-job-search",
+            "summary": "Framework de búsqueda de empleo con skills de portales y flujos para candidaturas, CV y entrevistas; requiere configuración propia.",
+            "tags": ["job-search", "career", "agent-skills"], "capabilities": ["job search", "application preparation"],
+            "category": "career", "use_cases": ["buscar empleo", "preparar candidaturas"],
+        },
+        {
+            "slug": "linkedin-skills", "name": "LinkedIn Skills",
+            "kind": ResourceKind.REFERENCE, "repo_url": "https://github.com/sergebulaev/linkedin-skills",
+            "summary": "Colección de 12 skills para contenido, perfil y análisis de LinkedIn, con recursos compartidos.",
+            "tags": ["linkedin", "content", "agent-skills"], "capabilities": ["LinkedIn content", "profile optimization"],
+            "category": "content", "use_cases": ["preparar publicaciones", "optimizar un perfil"],
+        },
+        {
+            "slug": "firecrawl-web", "name": "Firecrawl",
+            "kind": ResourceKind.CAPABILITY, "repo_url": "https://github.com/firecrawl/firecrawl",
+            "summary": "Plataforma de búsqueda y extracción web que incluye skills para construir integraciones; puede requerir API y credenciales.",
+            "tags": ["web", "scraping", "search", "agent-skills"], "capabilities": ["web extraction", "web search"],
+            "category": "web-research", "use_cases": ["extraer contenido web", "integrar búsqueda web"],
+        },
+        {
             "slug": "circle-project-management",
             "name": "Circle",
             "kind": ResourceKind.REFERENCE,
@@ -264,7 +301,7 @@ def curated_resource_items() -> list[ResourceItem]:
             install_strategy=entry.get("install_strategy", "none"),
             metadata={
                 "seed": "app.curated_resources",
-                "homepage_url": entry["homepage_url"],
+                "homepage_url": entry.get("homepage_url", entry["repo_url"]),
                 "taxonomy": {
                     "category": entry["category"],
                     "use_cases": entry["use_cases"],

@@ -104,7 +104,8 @@ def test_seed_is_idempotent_and_includes_all_resource_kinds(monkeypatch, tmp_pat
     seed_resource_library(store, installers)
 
     resources = store.list_resources(limit=50)
-    assert len(resources) == 27
+    assert len(resources) == 32
+    assert {"cloudflare-security-audit-skill", "impeccable-design", "ai-job-search", "linkedin-skills", "firecrawl-web"} <= {item.slug for item in resources}
     assert {item.kind for item in resources} == {
         ResourceKind.SKILL, ResourceKind.CAPABILITY, ResourceKind.REFERENCE,
     }
