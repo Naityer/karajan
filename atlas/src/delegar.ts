@@ -21,6 +21,13 @@ const TIMEOUT_MS = 15 * 60_000;
 /** Orden de respaldo cuando el agente elegido no está disponible en este equipo. */
 const RESPALDO = ['codex', 'claude-cli', 'ollama-qwen'];
 
+/** La instrucción que recibe un agente: prompt, subtarea y, si las hay, las skills preparadas. La usa también la tutoría para examinar con la MISMA instrucción. */
+export function construirInstruccion(prompt: string, st: Pick<Subtarea, 'name' | 'validation'>, preparadas: string[]): string {
+  let instruccion = `${prompt}\n\nSubtarea: ${st.name}\nValidación: ${st.validation}`;
+  if (preparadas.length) instruccion += `\n\nSkills preparadas para este agente, en orden: ${preparadas.join(', ')}. Consulta sus SKILL.md cuando correspondan.`;
+  return instruccion;
+}
+
 export interface Asignacion { subtarea: string; nombre: string; entidad: string | null; entidad_nombre: string | null; proveedor: string; modelo: string; regla: string | null; motivo: string; /** % semanal de Claude si pasó a Codex por el límite. */ limite?: number }
 export interface Plan { task_id: string; status: string; clasificacion: Clasificacion; asignaciones: Asignacion[]; bloqueada: string | null }
 
@@ -182,7 +189,6 @@ export class Delegador {
       const max = perfil.entities.find((e) => e.id === a.entidad)?.max_concurrent ?? 1;
       const liberar = await this.turno(a.entidad ?? a.proveedor, max);
       const inicio = new Date().toISOString();
-      let instruccion = `${c.original_prompt}\n\nSubtarea: ${st.name}\nValidación: ${st.validation}`;
       // Skill recomendada: se deja instalada para el agente que ejecuta (desde el almacén si hace falta) y se le pide usarla.
       const destino = destinoDe(p.nombre);
       const preparadas: string[] = [];
@@ -192,7 +198,7 @@ export class Delegador {
         almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:${s.disponible ? 'preparada' : 'no-disponible'}:${nombre}->${destino}`, reason: s.motivo });
         if (s.repuesta) almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:repuesta:${nombre}->${destino}`, reason: s.motivo });
       }
-      if (preparadas.length) instruccion += `\n\nSkills preparadas para este agente, en orden: ${preparadas.join(', ')}. Consulta sus SKILL.md cuando correspondan.`;
+      const instruccion = construirInstruccion(c.original_prompt, st, preparadas);
       let r;
       const skillsRequeridas = st.recommended_skills ?? (st.recommended_skill ? [st.recommended_skill] : []);
       try {

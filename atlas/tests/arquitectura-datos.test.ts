@@ -71,11 +71,11 @@ describe('arquitectura: contrato de datos', () => {
     assert.deepEqual(a.familias.map((f) => f.nombre), ['Interfaz', 'Modificadores', 'Observación', 'Ejecución', 'Decisión', 'Base']);
     assert.deepEqual(a.familias.flatMap((f) => f.componentes).sort(), COMPONENTES.map((c) => c.id).sort());
     assert.deepEqual(a.enlaces, ENLACES);
-    assert.deepEqual(a.familias.find((f) => f.id === 'decision')!.componentes, ['clasificador', 'delegador', 'dosificador', 'selector', 'rotador', 'etiquetas']);
+    assert.deepEqual(a.familias.find((f) => f.id === 'decision')!.componentes, ['clasificador', 'delegador', 'dosificador', 'selector', 'rotador', 'tutor', 'etiquetas']);
   });
 
-  it('los 23 componentes traen todos los campos del contrato', () => {
-    assert.equal(a.componentes.length, 23);
+  it('los 25 componentes traen todos los campos del contrato', () => {
+    assert.equal(a.componentes.length, 25);
     for (const c of a.componentes) {
       assert.ok(['ok', 'hallazgos', 'sin_ejecutar', 'pendiente', 'error'].includes(c.estado), c.id);
       assert.ok(c.familia && c.responsabilidad && Array.isArray(c.modulos), c.id);
@@ -241,7 +241,7 @@ describe('arquitectura: nunca lanza', () => {
       pasarela: { leer: () => { throw new Error('borradores rotos'); } },
     };
     const v = await todo(roto);
-    assert.equal(v.componentes.length, 23);
+    assert.equal(v.componentes.length, 25);
     const c = porId(v, 'clasificador');
     assert.equal(c.configuracion, null);
     assert.equal(c.estado, 'sin_ejecutar');
@@ -309,7 +309,7 @@ describe('GET /laboratorio/arquitectura', () => {
     const v = r.body as unknown as Arquitectura;
     assert.equal(v.version, '0.8.0');
     assert.equal(v.modo, 'produccion');
-    assert.equal(v.componentes.length, 23);
+    assert.equal(v.componentes.length, 25);
     assert.equal(porId(v, 'delegador').estado, 'sin_ejecutar');
     assert.equal(porId(v, 'rotador').estado, 'sin_ejecutar');
     assert.ok(Object.keys(porId(v, 'delegador').configuracion!).length);

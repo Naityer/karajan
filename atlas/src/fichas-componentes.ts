@@ -15,6 +15,9 @@ import { buscarBinario, PROVEEDORES } from './proveedores';
 import type { Perfil } from './reglas';
 import type { EstadoRotador } from './rotador';
 import { PESOS_SELECTOR } from './skills-seleccion';
+import { UMBRALES_TUTOR, MEZCLA_ENTRADA, elegirTutores, leerCatalogo } from './tutor';
+import { UMBRALES_TUTORIA } from './tutoria-nota';
+import { carpetaSkillForge } from './skillforge';
 import { GRUPO_KARAJAN, MIN_PARES_FUNCIONALIDAD, MUESTRA_MINIMA_GRUPO, TOP_PARES } from './comparador';
 
 /**
@@ -222,6 +225,28 @@ export const FICHAS: Record<string, FichaComponente> = {
       return { dias_nucleo: e.config.nucleoDias, dias_frecuente: e.config.frecuenteDias, dias_instantanea: e.config.instantaneaDias, protegidas: e.config.protegidas, repuestas_recientes: Object.keys(e.repuestas).length };
     },
   },
+  tutor: {
+    especificado: true,
+    resumen: 'Decide qué modelo hace de tutor con datos de cada semana: razonamiento (Artificial Analysis) entre precio mezclado (OpenRouter) de los modelos de Claude Code y Codex. Nada del tutor está escrito a mano.',
+    como_funciona: {
+      entradas: ['API de Artificial Analysis (ARTIFICIAL_ANALYSIS_API_KEY): índice de inteligencia por modelo', 'API pública de OpenRouter: precio de entrada y salida por modelo', 'tutores.json: el último catálogo bueno', 'Qué proveedores están disponibles y si Claude pasó su umbral semanal'],
+      pasos: [
+        'Lee las dos fuentes y las une por el nombre normalizado del modelo (tutor.ts · leerArtificialAnalysis, leerOpenRouter, combinar)',
+        'Si una fuente falla, o no hay clave, el catálogo anterior NO se toca y el error se devuelve (tutor.ts · actualizarCatalogo)',
+        'Por proveedor, descarta los que razonan menos del 75 % del mejor y se queda con el de más razonamiento por dólar mezclado 3:1 (tutor.ts · elegirTutores)',
+        'Entre proveedores usables (disponibles y sin pasar su umbral) elige el de mejor valor; desempata por razonamiento y nombre (tutor.ts · elegirTutores)',
+        'El servidor repite la actualización cada día y avisa si el tutor cambia (servidor.ts · actualización diaria)',
+        'Laboratorio · seleccion: catálogo presente y de ≤ 7 días, elección determinista con el catálogo en cualquier orden y tutor que razona lo exigido (lab/tutor.lab.ts · seleccion)',
+      ],
+      salidas: ['Tutor vigente (proveedor, modelo, razonamiento, precio, valor)', 'Mejor de cada proveedor', 'tutores.json actualizado', 'Informe del laboratorio'],
+    },
+    reglas: ['Sin razonamiento medido un modelo no entra: no se adivina.', 'Un tutor barato pero torpe no gana: el filtro de razonamiento va antes que la relación.', 'Los candidatos son solo los que se pueden lanzar por CLI (Claude Code y Codex).', 'El tutor no se cambia a mano: se recalcula.'],
+    configuracion: (c) => {
+      const cat = leerCatalogo(join(c.dirLab, 'tutores.json'));
+      const t = elegirTutores(cat).tutor;
+      return { fichero: join(c.dirLab, 'tutores.json'), actualizado: cat?.actualizado ?? 'nunca', modelos: cat?.modelos.length ?? 0, tutor: t ? `${t.proveedor}/${t.modelo}` : 'ninguno', razonamiento_relativo_min: UMBRALES_TUTOR.razonamientoRelativoMin, edad_maxima_dias: UMBRALES_TUTOR.edadMaximaDias, mezcla_entrada_salida: `${MEZCLA_ENTRADA}:1` };
+    },
+  },
   etiquetas: borrador('Componente etiquetas', 'Pondrá la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente. Hoy vive en atlas-dev (server/src/tareas/formato.ts).', ['Tarea de Atlas dev'], ['Cabecera y glosario en el prompt del agente']),
 
   // ── Base ──
@@ -400,6 +425,27 @@ export const FICHAS: Record<string, FichaComponente> = {
   },
 
   // ── Interfaz ──
+  tutoria: {
+    especificado: true,
+    resumen: 'Pone nota al agente local: rehace tareas que ya se integraron bien, con la misma instrucción y skills de producción, con un tutor que lo desbloquea sin darle la solución y que compara el resultado con el commit registrado como correcto.',
+    como_funciona: {
+      entradas: ['Tareas completadas de Atlas dev con su prompt', 'El commit con el trailer «Karajan-Tarea: <id>» ya en main (la referencia)', 'El plan del delegador para ese prompt (nivel, dominio, skills)', 'El alumno (KARAJAN_ALUMNO, por defecto ollama-qwen) y el tutor vigente', 'Las skills que la skill skillforge-lab dejó activas y validadas con modelos reales para ese alumno (skillforge.ts · leerSkillsForjadas)'],
+      pasos: [
+        'Elige tareas completadas, no examinadas ya con este alumno, y busca su referencia en los repos del Workspace (tutoria.ts · buscarReferencia)',
+        'Crea un worktree temporal desnudo en el estado justo anterior a la integración (tutoria.ts · examinar)',
+        'Lanza al alumno con la MISMA instrucción de producción (delegar.ts · construirInstruccion); sin las skills que pedía, es un obstáculo, como en producción',
+        'Si falla (permisos, comando, skill, tiempo), el tutor lo desbloquea SIN ver la referencia: una pista o instalar la skill que faltaba; el filtro rechaza código y líneas de la solución (tutoria.ts · promptTutor; tutoria-nota.ts · filtrarPista)',
+        'Con hasta 3 ayudas, el alumno reintenta; al final el tutor, esta vez con la referencia, da cumple, equivalencia y regresiones (tutoria.ts · promptEvaluador)',
+        'Nota = 70 % veredicto + 30 % solape de ficheros, menos 10 % por ayuda (tutoria-nota.ts · calificar)',
+        'Agrega por nivel y por dominio×nivel, con IC95 de Wilson sobre aprobar (≥ 70) y calcula el nivel máximo delegable (tutoria-nota.ts · calificacion)',
+        'Si hay skills forjadas para el dominio de la tarea, la repite con ellas en el prompt del alumno y empareja las dos notas (skillforge.ts · efectoForjadas)',
+        'Borra el worktree: sin ramas, commits ni cambios en el repo (tutoria.ts · examinar)',
+      ],
+      salidas: ['Nota porcentual del alumno', 'Mapa de qué niveles y dominios se le pueden delegar', 'Obstáculos más repetidos', 'Borrador «delegar hasta N<k>» cuando hay muestra', 'Brechas anónimas por dominio y nivel para skillforge-lab (kj tutoria brechas)', 'Efecto emparejado de cada skill forjada en tareas reales, y borradores «forjar» o «instalar»'],
+    },
+    reglas: ['El tutor que desbloquea nunca ve la referencia ni da código; quien la ve es el evaluador, que no habla con el alumno.', 'Sin veredicto del tutor la nota queda sin calificar, no en 0.', 'Los exámenes cuestan tokens: solo corren con KARAJAN_TUTORIA_EXAMENES=1 y con máximo por ejecución.', 'Solo propone: delegarle algo al alumno lo decide la persona.', 'Con un alumno que solo contesta texto (ollama run) se juzga la respuesta, no cambios en ficheros.', 'La nota del alumno es la de los exámenes SIN skills forjadas: un examen con skill mide la skill, no al alumno.', 'Una skill forjada solo entra en el prompt del alumno dentro del sandbox; no se instala, y al tutor que desbloquea nunca se le da. Que pase la validación de SkillForge no basta: se propone instalarla solo si mejora ≥ 5 puntos de media en ≥ 5 tareas reales sin empeorar más del 20 %.', 'A SkillForge solo salen agregados anónimos (dominio, nivel, nota, obstáculos): nunca prompts, ids de tarea ni commits.'],
+    configuracion: () => ({ alumno: process.env['KARAJAN_ALUMNO'] || 'ollama-qwen', autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maximo_por_ejecucion: Number(process.env['KARAJAN_TUTORIA_MAX']) || 3, skillforge: carpetaSkillForge() ?? 'no encontrado (KARAJAN_SKILLFORGE_DIR)', mejora_forjada: UMBRALES_TUTORIA.mejoraForjada, max_ayudas: UMBRALES_TUTORIA.maxAyudas, penalizacion_ayuda: UMBRALES_TUTORIA.penalizacionAyuda, aprobado: UMBRALES_TUTORIA.aprobado, muestra_segmento: UMBRALES_TUTORIA.muestraSegmento }),
+  },
   api: {
     especificado: true,
     resumen: 'Expone Karajan a Atlas dev: las rutas del paquete, con las formas de respuesta de la API de Karajan, más las del laboratorio y esta arquitectura.',

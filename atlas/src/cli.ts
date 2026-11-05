@@ -289,8 +289,45 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       });
       return 0;
     }
+    case 'tutoria': {
+      interface Eleg { proveedor: string; modelo: string; razonamiento: number; precio_mezcla: number; valor: number; motivo: string }
+      interface Seg { clave: string; n: number; media: number; aprobados: number; aprobacionInferior: number | null; delegable: boolean }
+      const el = (t: Eleg | null) => (t ? `${t.proveedor}/${t.modelo} · ${t.razonamiento} pts · ${t.precio_mezcla} USD/Mtok · valor ${t.valor}` : 'ninguno');
+      if (sub === 'actualizar') {
+        const r = (await pedir(e, '/laboratorio/tutores/actualizar', 'POST', {})) as { antes: Eleg | null; despues: Eleg | null; cambio: boolean; error: string | null };
+        salida(r, () => (r.error ? `No se actualizó (se sigue con el catálogo anterior): ${r.error}` : `Tutor: ${el(r.despues)}${r.cambio ? `\n(antes: ${el(r.antes)})` : ' (sin cambios)'}`));
+        return r.error ? 1 : 0;
+      }
+      if (sub === 'tutores') {
+        const d = (await pedir(e, '/laboratorio/tutores')) as { tutor: Eleg | null; porProveedor: Eleg[]; obsoleto: boolean; avisos: string[]; catalogo: { actualizado: string } | null };
+        salida(d, () => [`Tutor vigente: ${el(d.tutor)}`, ...d.porProveedor.map((x) => `  ${x.proveedor}: ${el(x)}\n    ${x.motivo}`), `Catálogo: ${d.catalogo?.actualizado ?? 'sin catálogo'}${d.obsoleto ? ' (OBSOLETO)' : ''}`, ...d.avisos.map((a) => `  ! ${a}`)].join('\n'));
+        return 0;
+      }
+      if (sub === 'brechas') {
+        // Para la skill skillforge-lab: dónde falla el alumno (agregados anónimos) con el alumno y el tutor de ahora.
+        const b = (await pedir(e, '/laboratorio/tutoria/brechas')) as { alumno: { proveedor: string; modelo: string }; tutor: { proveedor: string; modelo: string }; brechas: { dominio: string; nivel: number; n: number; media: number; delegable: boolean }[] };
+        const fichero = opcion(args, 'salida');
+        if (fichero) {
+          if (!e.guardar) { e.escribir('No se puede escribir ficheros desde aquí.'); return 2; }
+          e.guardar(fichero, `${JSON.stringify(b, null, 2)}\n`);
+          e.escribir(`Brechas guardadas en ${fichero}: ${b.brechas.filter((x) => !x.delegable).length} sin delegar de ${b.brechas.length}. Siguiente: python -m skillforge campaign from-karajan ${fichero} --output campana.json --tareas tareas.json`);
+        } else salida(b, () => [`Alumno ${b.alumno.proveedor}/${b.alumno.modelo} · tutor ${b.tutor.proveedor}/${b.tutor.modelo}`, ...b.brechas.map((x) => `  ${x.dominio}·N${x.nivel}  ${x.media} %  (n=${x.n})${x.delegable ? '  delegable' : '  brecha'}`)].join('\n'));
+        return 0;
+      }
+      const d = (await pedir(e, '/laboratorio/tutoria')) as { alumno: string | null; motivo_sin_alumno: string | null; tutor: Eleg | null; autorizado: boolean; calificacion: { nota: number | null; examenes: number; sinCalificar: number; aprobados: number; porNivel: Seg[]; porDominioNivel: Seg[]; nivelMaximoDelegable: number }; skillforge?: { laboratorio: boolean; skills: { id: string; version: number; dominios: string[] }[]; efecto: { skills: string; pares: number; deltaMedio: number; util: boolean }[] } };
+      const c = d.calificacion;
+      salida(d, () => [
+        `Alumno: ${d.alumno ?? `no disponible (${d.motivo_sin_alumno})`} · tutor: ${el(d.tutor)}`,
+        `Nota: ${c.nota === null ? 'sin exámenes todavía' : `${c.nota} %`} · ${c.examenes} exámenes (${c.aprobados} aprobados, ${c.sinCalificar} sin calificar)${d.autorizado ? '' : ' · exámenes desactivados: KARAJAN_TUTORIA_EXAMENES=1'}`,
+        c.nivelMaximoDelegable ? `Se le puede delegar hasta N${c.nivelMaximoDelegable}.` : 'Aún no se le puede delegar ningún nivel (falta muestra o aprobación).',
+        ...(c.porNivel.length ? ['Por nivel', barras(c.porNivel.map((x) => ({ etiqueta: x.clave, valor: x.media, nota: `n=${x.n} · aprueba ${x.aprobados}${x.delegable ? ' · delegable' : ''}` })))] : []),
+        ...(c.porDominioNivel.length ? ['Por dominio y nivel', ...c.porDominioNivel.map((x) => `  ${x.clave}  ${x.media} %  (n=${x.n}, IC95 inf. ${x.aprobacionInferior})${x.delegable ? '  delegable' : ''}`)] : []),
+        ...(d.skillforge?.laboratorio ? [`SkillForge: ${d.skillforge.skills.length ? d.skillforge.skills.map((s) => `${s.id}@v${s.version} (${s.dominios.join(', ')})`).join('; ') : 'sin skills forjadas activas para este alumno'}`, ...d.skillforge.efecto.map((f) => `  ${f.skills}: ${f.deltaMedio >= 0 ? '+' : ''}${f.deltaMedio} puntos en ${f.pares} tareas reales con y sin ella${f.util ? '  ÚTIL' : ''}`)] : []),
+      ].join('\n'));
+      return 0;
+    }
     default:
-      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | comparar [<skill>|karajan] [--grupo g] | dosificador estado|config|decidir|simular | propuestas | modo   (--json en todos)');
+      e.escribir('kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--proponer] | comparar [<skill>|karajan] [--grupo g] | dosificador estado|config|decidir|simular | tutoria [tutores|actualizar|brechas] | propuestas | modo   (--json en todos)');
       return cmd ? 2 : 0;
   }
 }
