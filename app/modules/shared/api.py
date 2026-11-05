@@ -40,7 +40,7 @@ from fastapi.responses import StreamingResponse
 
 from app import KARAJAN_VERSION
 from app.application import runtime as runtime_module
-from app.logging_config import get_logger, log_event
+from app.logging_config import get_logger
 from app.modules.agents.manifest import MANIFEST as _agents_manifest
 from app.modules.configuration.manifest import MANIFEST as _configuration_manifest
 from app.modules.decision.manifest import MANIFEST as _decision_manifest

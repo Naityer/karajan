@@ -44,7 +44,7 @@ from fastapi import (
 from fastapi.responses import PlainTextResponse
 
 from app.application import runtime as runtime_module
-from app.logging_config import get_logger, log_event
+from app.logging_config import get_logger
 
 
 logger = get_logger("api")
