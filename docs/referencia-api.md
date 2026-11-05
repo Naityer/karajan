@@ -1,4 +1,6 @@
-# KARAJAN AI Harness Router
+# Referencia de la API HTTP de KARAJAN
+
+> Antes era el README. El uso principal es ahora la terminal: ver [README](../README.md) y [CLI](CLI.md). Esta página conserva el detalle de la API y su configuración.
 
 KARAJAN is a local MVP for an AI task-routing harness. It receives a free-form prompt, classifies the work, computes a configurable complexity score, recommends a model strategy, simulates or prepares delegated subtasks, stores the full audit trail in SQLite, and exposes a compact console-style GUI.
 
@@ -107,33 +109,10 @@ python -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
 ```
 
-## Run As A Local Desktop Window
-
-Use this mode when you want KARAJAN to feel like a local application instead of opening it in a browser tab. It starts the FastAPI backend on a free localhost port and wraps the same GUI in a native desktop window.
-
-From PowerShell:
-
-```powershell
-.\.venv\Scripts\python.exe .\desktop_app.py
-```
-
-Or double-click the launcher to open the web GUI in your browser:
-
-```text
-KARAJAN Desktop.bat
-```
-
-The launcher creates `.env` on first run, loads it automatically, creates `.venv`
-when needed, installs `requirements.txt`, starts FastAPI on
-`http://127.0.0.1:8001/`, and opens that URL in your default browser. The
-browser launcher does not require `pywebview`; the native-window mode remains
-available by running `desktop_app.py` manually.
-
 ## Run As A Persistent Public API (Docker)
 
 Use this mode when you want the skill recommender and the Inspiration library
-reachable by any agent at any time, without opening the desktop app or a
-terminal. It runs the same FastAPI backend headless, in a container that
+reachable by any agent at any time, without a terminal session open. It runs the same FastAPI backend headless, in a container that
 survives reboots.
 
 ```powershell
@@ -168,25 +147,6 @@ data/trial_reports/
 
 For safe local audits, keep `agent_tools.dry_run` on and pin the tier preferences to free local providers before running trials.
 
-## Run The Browser GUI
-
-```powershell
-.\.venv\Scripts\uvicorn app.main:app --reload
-```
-
-Open:
-
-```text
-http://127.0.0.1:8000
-```
-
-The GUI lets you submit a prompt, run classification and delegation, inspect KPIs, review the audit log, and drill into criteria and subtasks.
-
-If the default port is already busy, choose another port:
-
-```powershell
-.\.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8001
-```
 
 ## API
 

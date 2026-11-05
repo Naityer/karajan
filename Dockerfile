@@ -1,6 +1,5 @@
 # Imagen headless para exponer la API de KARAJAN (recomendador + biblioteca
-# Inspiration) sin la app de escritorio. `app/main.py` no importa pywebview,
-# así que basta con las dependencias del modo standalone/servidor.
+# Inspiration) en modo servidor. Basta con las dependencias del modo standalone.
 FROM python:3.12-slim
 
 WORKDIR /app
