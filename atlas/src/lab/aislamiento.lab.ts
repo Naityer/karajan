@@ -69,7 +69,15 @@ function ciclo(): Resultado {
     }
     const fuera = join(dir, 'fuera');
     mkdirSync(fuera);
-    comprobar('fuera de un repo no aísla', aislar(fuera, 'lab-3') === null);
+    // TEMP puede estar dentro de un repo ajeno: Git no debe descubrirlo ni
+    // crear worktrees o ramas fuera del laboratorio.
+    const limitePrevio = process.env['GIT_CEILING_DIRECTORIES'];
+    process.env['GIT_CEILING_DIRECTORIES'] = dir;
+    try { comprobar('fuera de un repo no aísla', aislar(fuera, 'lab-3') === null); }
+    finally {
+      if (limitePrevio === undefined) delete process.env['GIT_CEILING_DIRECTORIES'];
+      else process.env['GIT_CEILING_DIRECTORIES'] = limitePrevio;
+    }
   } catch (e) {
     fallos.push(`excepción: ${String((e as Error).message ?? e).slice(0, 200)}`);
   } finally {

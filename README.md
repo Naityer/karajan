@@ -20,7 +20,7 @@ La CLI `kj` y el paquete de Atlas dev se construyen con `node atlas/build.mjs` y
 |---|---|
 | `app/` | Servidor Python (FastAPI) por capas: `domain/` (modelos), `persistence/`, `routing/`, `execution/`, `resources/`, `providers/`, `configuration/`, `security/`, `application/` y `modules/*/api.py` |
 | `atlas/` | Núcleo en TypeScript: componentes, laboratorios, SDK de comandos (`src/sdk/`) y la CLI `kj` (paquete de Atlas dev) |
-| `karajan_cli/` | CLI Python `karajan` (en migración hacia `kj`) y el servidor MCP (`python -m karajan_cli.mcp_server`) |
+| `karajan_cli/` | Cliente compartido y servidor MCP (`python -m karajan_cli.mcp_server`); la CLI de terminal es `kj` |
 | `dashboard/` | Interfaz web congelada; se adaptará a los datos de los comandos |
 | `deploy/` | Dockerfile y `docker-compose.yml` (contexto: la raíz del repo) |
 | `scripts/` | Operación: instalación, producción, auditorías y `limpiar.py` |

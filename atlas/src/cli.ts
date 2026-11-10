@@ -1,8 +1,27 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import paquete from '../../atlas-package.json';
 import { barras, sparkline } from './sdk/ascii';
 import { crearRegistro } from './sdk/registro';
 import { renderAscii, renderJson } from './sdk/panel';
+import { normalizarConfig, normalizarEstado } from './dosificador-config';
+import { simularSolicitud } from './dosificador-sim';
+import { decidirSolicitud } from './dosificador';
+import { validarLayout, proyectar } from './perfiles';
+import { Perfiles } from './perfiles';
+import { configDesde } from './heuristica';
+import { Delegador } from './delegar';
+import { Biblioteca, consultarBiblioteca } from './biblioteca';
+import { Almacen, consultarTareas } from './almacen';
+import { abrirBibliotecaLocal, produccionLocal, proveedoresLocales } from './cli-local';
+import { CAPAS, COMPONENTES, catalogoComponentes, componente as buscarComponente } from './componentes';
+import { consultarComparacion } from './comparador';
+import { descubrirSkills } from './skills-seleccion';
+import { argumentosPosicionales } from './sdk/comandos';
+import { ejecutarLaboratorio, leerEjecucionesDe, leerEjecucionesLocal, RegistroLab } from './laboratorio';
 
 /**
  * `kj`: Karajan desde la terminal (sustituye a la interfaz). Habla con el paquete dentro de Atlas dev
@@ -22,7 +41,7 @@ import { renderAscii, renderJson } from './sdk/panel';
  *   kj modo                                 producción o desarrollo
  */
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
-interface Entorno { fetch: Fetch; escribir: (s: string) => void; api: string; /** Escribe un fichero (para `--svg` y `--html` de `kj grafica`); sin él, esas opciones fallan. */ guardar?: (ruta: string, contenido: string) => void;
+interface Entorno { fetch: Fetch; escribir: (s: string) => void; api: string; localPorDefecto?: boolean; /** Escribe un fichero (para `--svg` y `--html` de `kj grafica`); sin él, esas opciones fallan. */ guardar?: (ruta: string, contenido: string) => void;
   /** Lee un fichero (para `kj dosificador decidir --entrada`); sin él, esa opción falla. */ leer?: (ruta: string) => string }
 
 export { barras, sparkline };
@@ -51,6 +70,9 @@ export function graficaHtml(titulo: string, filas: { etiqueta: string; valor: nu
 const pct = (x: number) => `${Math.round(x * 100)} %`;
 const opcion = (args: string[], nombre: string) => { const i = args.indexOf(`--${nombre}`); return i >= 0 ? args[i + 1] ?? '' : null; };
 const bandera = (args: string[], nombre: string) => args.includes(`--${nombre}`);
+/** Cada ruta explícita prevalece; un directorio también explícito evita duplicar opciones. */
+const rutaLocal = (args: string[], opcionNombre: string, variable: string, carpeta: string | undefined, ...partes: string[]) =>
+  opcion(args, opcionNombre) ?? process.env[variable] ?? (carpeta ? join(carpeta, ...partes) : undefined);
 
 async function pedir(e: Entorno, ruta: string, metodo = 'GET', cuerpo?: unknown, tarea?: string | null): Promise<unknown> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
@@ -58,14 +80,32 @@ async function pedir(e: Entorno, ruta: string, metodo = 'GET', cuerpo?: unknown,
   const t = tarea ?? process.env['KARAJAN_TAREA'];
   if (t) headers['x-karajan-tarea'] = t;
   if (process.env['ATLAS_DEV_TOKEN']) headers['x-atlas-dev-token'] = process.env['ATLAS_DEV_TOKEN'];
-  const r = await e.fetch(`${e.api}${ruta}`, { method: metodo, headers, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) });
+  let r: Awaited<ReturnType<Fetch>>;
+  try { r = await e.fetch(`${e.api}${ruta}`, { method: metodo, headers, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) }); }
+  catch { throw new Error(`No se puede conectar con Karajan en ${e.api}; esta operación necesita el servicio HTTP configurado`); }
   const datos = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(`${r.status}: ${(datos as { detail?: string } | null)?.detail ?? 'error'}`);
+  if (!r.ok) {
+    const fallo = datos as { detail?: string; error?: string } | null;
+    throw new Error(`${r.status}: ${fallo?.detail ?? fallo?.error ?? 'error'}`);
+  }
   return datos;
 }
 
 interface ComponenteVista { id: string; capa: string; responsabilidad: string; pendiente: string | null; escenarios: { id: string; tipo: string; descripcion: string }[]; ultimas: { escenario: string; inicio: string; muestra: number; suficiente: boolean; hallazgos: number; error: string | null; metricas: Record<string, number | null> }[] }
 interface Ejecucion { escenario: string; tipo: string; inicio: string; muestra: number; suficiente: boolean; metricas: Record<string, number | null>; hallazgos: { severidad: string; titulo: string }[]; error: string | null; propuestas?: { accion: string; tarea: string | null }[] }
+
+function catalogoLocal(ruta: string): ComponenteVista[] {
+  if (!existsSync(ruta)) throw new Error('la base no existe');
+  const db = new DatabaseSync(ruta, { readOnly: true });
+  try {
+    const ultimas = (id: string) => {
+      const vistos = new Set<string>();
+      return leerEjecucionesDe(db, id, 100).filter((f) => !vistos.has(f.escenario) && vistos.add(f.escenario))
+        .map((f) => ({ escenario: f.escenario, inicio: f.inicio, muestra: f.muestra, suficiente: f.suficiente, hallazgos: f.hallazgos.length, error: f.error, metricas: f.metricas }));
+    };
+    return catalogoComponentes(ultimas) as ComponenteVista[];
+  } finally { db.close(); }
+}
 
 function estadoDe(c: ComponenteVista): string {
   if (!c.escenarios.length) return 'sin laboratorio';
@@ -103,6 +143,18 @@ const PROPIOS = new Set(['dosificador config']);
 export async function ejecutar(args: string[], e: Entorno): Promise<number> {
   const [cmd, sub, ...resto] = args;
   const json = bandera(args, 'json');
+  const datos = opcion(args, 'datos') ?? process.env['KARAJAN_DATA_DIR'];
+  const datosAtlas = opcion(args, 'datos-atlas') ?? process.env['KARAJAN_ATLAS_DATA_DIR'];
+  const rutaLayout = () => rutaLocal(args, 'layout', 'KARAJAN_ROUTING_LAYOUT', datos, 'routing_layout.json');
+  const rutaTareas = () => rutaLocal(args, 'tasks-db', 'KARAJAN_TASKS_DB', datos, 'task_logs.db');
+  const rutaLab = () => rutaLocal(args, 'lab-db', 'KARAJAN_LAB_DB', datosAtlas, 'laboratorio', 'laboratorio.db');
+  const rutaConfig = () => rutaLocal(args, 'config', 'KARAJAN_DOSIFICADOR_CONFIG', datosAtlas, 'dosificador.json');
+  const rutaEstado = () => rutaLocal(args, 'estado', 'KARAJAN_DOSIFICADOR_ESTADO', datosAtlas, 'dosificador-estado.json');
+  const rutaRecursos = () => opcion(args, 'resources-db') ?? process.env['KARAJAN_RESOURCES_DB'] ?? process.env['ATLAS_KARAJAN_RESOURCES'] ?? (datos ? join(datos, 'resources.db') : undefined);
+  if (bandera(args, 'local') && bandera(args, 'http')) { e.escribir('Elige --local o --http, no ambos'); return 2; }
+  if (bandera(args, 'local') && !(cmd === 'modo' || cmd === 'inspiration' || cmd === 'grafica' || cmd === 'comparar' || (cmd === 'estadisticas' && ['tareas', 'tarea', 'resumen', 'agentes', 'skills'].includes(sub ?? '')) || (cmd === 'control' && (['perfiles', 'jerarquia', 'proveedores'].includes(sub ?? '') || (sub === 'mision' && !bandera(args, 'ejecutar')))) || (cmd === 'componentes' && (!sub || sub.startsWith('--'))) || (cmd === 'lab' && ['ls', 'run', 'informe', 'historial'].includes(sub ?? '')) || (cmd === 'dosificador' && ['simular', 'decidir', 'config'].includes(sub ?? '')))) {
+    e.escribir('Esta operación no está disponible en modo local; usa --http para conectar con Atlas dev'); return 2;
+  }
   const salida = (datos: unknown, texto: () => string) => e.escribir(json ? JSON.stringify(datos, null, 2) : texto());
   // Módulos y comandos genéricos de componente (sdk/): devuelven un Panel que se pinta en ASCII o en JSON.
   const registro = crearRegistro();
@@ -110,18 +162,92 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
   // Los comandos propios de un componente (`kj dosificador config`, que además escribe) mandan sobre los genéricos de `<componente> <acción>`.
   const propio = encontrado?.comando.ruta[0] === '*' && PROPIOS.has(`${args[0]} ${args[1]}`);
   if (encontrado && !propio) {
-    const panel = await encontrado.comando.ejecutar({ pedir: (ruta, metodo, cuerpo) => pedir(e, ruta, metodo, cuerpo, opcion(args, 'tarea')), opcion: (n) => opcion(args, n), bandera: (n) => bandera(args, n) }, encontrado.resto, encontrado.ruta);
-    e.escribir(json ? renderJson(panel) : renderAscii(panel));
-    return 0;
+    const localPerfil = cmd === 'control' && ['perfiles', 'jerarquia'].includes(sub ?? '') && (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http')));
+    const localProveedores = cmd === 'control' && sub === 'proveedores' && (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http')));
+    const localMision = cmd === 'control' && sub === 'mision' && !bandera(args, 'ejecutar') && (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http')));
+    const localBiblioteca = cmd === 'inspiration' && (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http')));
+    const localTareas = cmd === 'estadisticas' && ['tareas', 'tarea', 'resumen', 'agentes', 'skills'].includes(sub ?? '') && (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http')));
+    let layout: unknown;
+    if (localPerfil) {
+      const fichero = rutaLayout();
+      if (!fichero || !e.leer) { e.escribir('control local necesita --layout <routing_layout.json> o KARAJAN_ROUTING_LAYOUT'); return 2; }
+      try { layout = { ...proyectar(validarLayout(JSON.parse(e.leer(fichero)))), path: fichero }; }
+      catch (err) { e.escribir(`No se puede leer el perfil en ${fichero}: ${(err as Error).message}`); return 2; }
+    }
+    let biblioteca: Biblioteca | null = null;
+    let almacen: Almacen | null = null;
+    if (localBiblioteca) {
+      const archivo = rutaRecursos();
+      if (!archivo || !existsSync(archivo)) { e.escribir('inspiration local necesita --resources-db <resources.db> existente'); return 2; }
+      try { biblioteca = abrirBibliotecaLocal(archivo); } catch (err) { e.escribir(`No se puede abrir resources.db: ${(err as Error).message}`); return 2; }
+    }
+    if (localTareas || localMision) {
+      const archivo = rutaTareas();
+      if (!archivo) { e.escribir('estadisticas local necesita --tasks-db <task_logs.db> o KARAJAN_TASKS_DB'); return 2; }
+      try { almacen = new Almacen(archivo, { soloLectura: true }); }
+      catch (err) { e.escribir(`No se puede abrir task_logs.db: ${(err as Error).message}`); return 2; }
+    }
+    try {
+      const panel = await encontrado.comando.ejecutar({ pedir: async (ruta, metodo, cuerpo) => {
+        if (localPerfil) { if (ruta === '/routing-layout' && (!metodo || metodo === 'GET')) return layout; throw new Error('Operación no disponible en modo local'); }
+        if (localProveedores) { if (ruta === '/providers' && (!metodo || metodo === 'GET')) return proveedoresLocales(); throw new Error('Operación no disponible en modo local'); }
+        if (localMision) {
+          if (ruta !== '/routing/plan' || metodo !== 'POST') throw new Error('La planificación local no ejecuta agentes');
+          const fichero = rutaLayout(), cfgRuta = datos ? join(datos, 'active_config.json') : undefined;
+          if (!fichero || !cfgRuta || !e.leer) throw new Error('mision local necesita --datos con active_config.json y --layout');
+          validarLayout(JSON.parse(e.leer(fichero)));
+          const cfg = JSON.parse(e.leer(cfgRuta));
+          if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new Error('active_config.json no es un objeto válido');
+          const prompt = (cuerpo as { prompt?: unknown } | null)?.prompt;
+          if (typeof prompt !== 'string' || !prompt.trim() || prompt.trim().length > 20_000) throw new Error('prompt vacío o demasiado largo (máx. 20000 caracteres)');
+          return new Delegador({ almacen: almacen!, perfiles: new Perfiles(fichero), config: () => configDesde(cfg), raiz: process.cwd() }).planificar(prompt.trim());
+        }
+        if (localBiblioteca) {
+          if (metodo && metodo !== 'GET') throw new Error('La biblioteca local solo admite lectura');
+          const url = new URL(ruta, 'http://localhost');
+          return consultarBiblioteca(biblioteca!, url.pathname, Object.fromEntries(url.searchParams));
+        }
+        if (localTareas) {
+          if (metodo && metodo !== 'GET') throw new Error('Las tareas locales solo admiten lectura');
+          const url = new URL(ruta, 'http://localhost');
+          if (url.pathname === '/analytics/produccion') {
+            const q = Object.fromEntries(url.searchParams);
+            const p = produccionLocal(almacen!, q, e.leer, rutaLayout());
+            const { acierto: _acierto, ...resultado } = p;
+            return resultado;
+          }
+          return consultarTareas(almacen!, url.pathname, Object.fromEntries(url.searchParams));
+        }
+        return pedir(e, ruta, metodo, cuerpo, opcion(args, 'tarea'));
+      }, opcion: (n) => opcion(args, n), bandera: (n) => bandera(args, n) }, encontrado.resto, encontrado.ruta);
+      e.escribir(json ? renderJson(panel) : renderAscii(panel));
+      return 0;
+    } finally { biblioteca?.cerrar(); almacen?.cerrar(); }
   }
   switch (cmd) {
     case 'modo': {
-      const m = (await pedir(e, '/laboratorio/modo')) as { modo: string; fichero: string };
+      let m: { modo: string; fichero: string };
+      if (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'))) {
+        if (!datos || !e.leer) { e.escribir('modo local necesita --datos <directorio> o KARAJAN_DATA_DIR'); return 2; }
+        const fichero = join(datos, 'modo.json');
+        try { const modo = JSON.parse(e.leer(fichero)).modo; if (!['produccion', 'desarrollo'].includes(modo)) throw new Error(); m = { modo, fichero }; }
+        catch { e.escribir(`No se puede leer un modo válido en ${fichero}`); return 2; }
+      } else m = (await pedir(e, '/laboratorio/modo')) as { modo: string; fichero: string };
       salida(m, () => `Karajan en ${m.modo.toUpperCase()}${m.modo === 'produccion' ? ': los cambios necesitan una tarea aceptada; el resto se propone como borrador.' : '.'}\n(${m.fichero}, solo se cambia editando el fichero)`);
       return 0;
     }
     case 'componentes': {
-      const d = (await pedir(e, '/laboratorio/componentes')) as { version: string; modo: string; capas: { id: string; nombre: string }[]; componentes: ComponenteVista[] };
+      let d: { version: string; modo: string; capas: { id: string; nombre: string }[]; componentes: ComponenteVista[] };
+      if (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'))) {
+        const lab = rutaLab();
+        if (!datos || !lab || !e.leer) { e.escribir('componentes local necesita --datos <directorio> y --lab-db <laboratorio.db> (o KARAJAN_DATA_DIR y KARAJAN_LAB_DB)'); return 2; }
+        let modo: string;
+        try { const valor = JSON.parse(e.leer(join(datos, 'modo.json'))); if (!['produccion', 'desarrollo'].includes(valor.modo)) throw new Error(); modo = valor.modo; }
+        catch { e.escribir('No se puede leer modo.json válido en el directorio de datos'); return 2; }
+        try {
+          d = { version: paquete.version, modo, capas: CAPAS, componentes: catalogoLocal(lab) };
+        } catch (err) { e.escribir(`No se puede leer el laboratorio en ${lab}: ${(err as Error).message}`); return 2; }
+      } else d = (await pedir(e, '/laboratorio/componentes')) as typeof d;
       salida(d, () => [`Karajan ${d.version} · ${d.modo}`, ...d.capas.flatMap((capa) => {
         const cs = d.componentes.filter((c) => c.capa === capa.id);
         return [`┌ ${capa.nombre}`, ...cs.map((c) => `│ ${c.id.padEnd(13)} ${estadoDe(c).padEnd(26)} ${c.responsabilidad}`)];
@@ -130,7 +256,13 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
     }
     case 'lab': {
       if (sub === 'ls') {
-        const d = (await pedir(e, '/laboratorio/componentes')) as { componentes: ComponenteVista[] };
+        const local = bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'));
+        let d: { componentes: ComponenteVista[] };
+        if (local) {
+          const lab = rutaLab();
+          try { d = { componentes: lab ? catalogoLocal(lab) : catalogoComponentes() as ComponenteVista[] }; }
+          catch (err) { e.escribir(`No se puede leer el laboratorio en ${lab}: ${(err as Error).message}`); return 2; }
+        } else d = (await pedir(e, '/laboratorio/componentes')) as { componentes: ComponenteVista[] };
         salida(d.componentes, () => d.componentes.map((c) => c.escenarios.length
           ? `${c.id}\n${c.escenarios.map((s) => `  ${s.id.padEnd(22)} ${s.tipo.padEnd(9)} ${s.descripcion}`).join('\n')}`
           : `${c.id}  — ${c.pendiente ?? 'sin laboratorio'}`).join('\n'));
@@ -139,13 +271,38 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       if (sub === 'run') {
         const componente = resto.find((a) => !a.startsWith('--')) ?? '';
         if (!componente) { e.escribir('uso: kj lab run <componente|todos> [--escenario x] [--sin-borradores]'); return 2; }
-        const d = (await pedir(e, '/laboratorio/ejecutar', 'POST', { componente, escenario: opcion(args, 'escenario'), proponer: !bandera(args, 'sin-borradores') })) as { informes: { componente: string; escenarios: Ejecucion[] }[] };
+        let d: { informes: { componente: string; escenarios: Ejecucion[] }[] };
+        if (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http') && componente === 'dosificador' && bandera(args, 'sin-borradores'))) {
+          if (componente !== 'dosificador' || !bandera(args, 'sin-borradores')) { e.escribir('El laboratorio local solo admite dosificador con --sin-borradores; usa --http para los demás casos'); return 2; }
+          const cfgRuta = rutaConfig();
+          const lab = rutaLab();
+          if (!cfgRuta || !lab || !e.leer || !existsSync(lab)) { e.escribir('lab local necesita --config y --lab-db existentes'); return 2; }
+          let cfg: unknown;
+          try { cfg = JSON.parse(e.leer(cfgRuta)); } catch { e.escribir('No se puede leer la configuración del dosificador'); return 2; }
+          if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) { e.escribir('La configuración debe ser un objeto JSON'); return 2; }
+          let db: DatabaseSync | null = null;
+          try {
+            db = new DatabaseSync(lab, { readOnly: true });
+            const columnas = db.prepare('PRAGMA table_info(lab_ejecuciones)').all() as { name: string }[];
+            if (!columnas.some((c) => c.name === 'umbrales_json')) throw new Error('esquema de laboratorio no compatible');
+          } catch (err) { e.escribir(`No se puede usar la base de laboratorio: ${(err as Error).message}`); return 2; }
+          finally { db?.close(); }
+          const registro = new RegistroLab(lab);
+          try {
+            const c = buscarComponente('dosificador')!;
+            const contexto = { config: () => normalizarConfig(cfg), tareas: async () => { throw new Error('Atlas no disponible en modo local'); }, calibraciones: () => [] };
+            d = { informes: [await ejecutarLaboratorio({ id: c.id, version: paquete.version, laboratorio: c.laboratorio! }, contexto, registro, { escenario: opcion(args, 'escenario'), pasarela: null })] };
+          } finally { registro.cerrar(); }
+        } else d = (await pedir(e, '/laboratorio/ejecutar', 'POST', { componente, escenario: opcion(args, 'escenario'), proponer: !bandera(args, 'sin-borradores') })) as typeof d;
         salida(d, () => d.informes.map((i) => `${i.componente}\n${i.escenarios.map(pintarEjecucion).join('\n')}`).join('\n\n'));
         return 0;
       }
       if (sub === 'informe') {
         const componente = resto[0] ?? '';
-        const d = (await pedir(e, `/laboratorio/ejecuciones?componente=${encodeURIComponent(componente)}&limite=100`)) as Ejecucion[];
+        const local = bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'));
+        const ruta = rutaLab();
+        if (local && !ruta) { e.escribir('El historial local necesita --lab-db <laboratorio.db> o KARAJAN_LAB_DB'); return 2; }
+        const d = local ? leerEjecucionesLocal(ruta!, componente, 100) : (await pedir(e, `/laboratorio/ejecuciones?componente=${encodeURIComponent(componente)}&limite=100`)) as Ejecucion[];
         const vistos = new Set<string>();
         const ultimas = d.filter((x) => !vistos.has(x.escenario) && vistos.add(x.escenario));
         salida(ultimas, () => (ultimas.length ? `${componente} · ${ultimas[0]!.inicio.slice(0, 16).replace('T', ' ')}\n${ultimas.map(pintarEjecucion).join('\n')}` : `Sin ejecuciones de «${componente}»: kj lab run ${componente}`));
@@ -153,7 +310,10 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       }
       if (sub === 'historial') {
         const [componente = '', metrica = ''] = resto;
-        const d = ((await pedir(e, `/laboratorio/ejecuciones?componente=${encodeURIComponent(componente)}&limite=500`)) as Ejecucion[]).filter((x) => metrica in x.metricas).reverse();
+        const local = bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'));
+        const ruta = rutaLab();
+        if (local && !ruta) { e.escribir('El historial local necesita --lab-db <laboratorio.db> o KARAJAN_LAB_DB'); return 2; }
+        const d = (local ? leerEjecucionesLocal(ruta!, componente, 500) : (await pedir(e, `/laboratorio/ejecuciones?componente=${encodeURIComponent(componente)}&limite=500`)) as Ejecucion[]).filter((x) => metrica in x.metricas).reverse();
         const valores = d.map((x) => x.metricas[metrica] ?? null);
         salida(d.map((x) => ({ inicio: x.inicio, [metrica]: x.metricas[metrica] })), () => (d.length
           ? `${componente}.${metrica}  ${sparkline(valores)}  ${valores[valores.length - 1] ?? '—'}  (${d.length} ejecuciones, ${d[0]!.inicio.slice(0, 10)} → ${d[d.length - 1]!.inicio.slice(0, 10)})`
@@ -165,6 +325,23 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
     }
     case 'grafica': {
       const q = `?dias=${encodeURIComponent(opcion(args, 'dias') ?? '0')}&perfil=${encodeURIComponent(opcion(args, 'perfil') ?? 'todos')}`;
+      const local = bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'));
+      const pedirGrafica = async (ruta: string) => {
+        if (!local) return pedir(e, ruta);
+        const archivo = rutaTareas();
+        if (!archivo) throw new Error('gráfica local necesita --tasks-db <task_logs.db> o KARAJAN_TASKS_DB');
+        const almacen = new Almacen(archivo, { soloLectura: true });
+        try {
+          const url = new URL(ruta, 'http://localhost');
+          const p = produccionLocal(almacen, Object.fromEntries(url.searchParams), e.leer, rutaLayout());
+          const base = { dias: p.dias, perfil: p.perfil, agentes_perfil: p.agentes_perfil, ultima: p.ultima, kpis: p.kpis };
+          if (url.pathname === '/analytics/flujo') return { ...base, ...p.flujo };
+          if (url.pathname === '/analytics/eficiencia') return { ...base, ...p.eficiencia };
+          if (url.pathname === '/analytics/matriz-skills') return { ...base, ...p.matriz };
+          if (url.pathname === '/analytics/sugerencias') return { ...base, sugerencias: p.sugerencias };
+          throw new Error('Gráfica no disponible en modo local');
+        } finally { almacen.cerrar(); }
+      };
       // `--svg <fichero>` y `--html <fichero>` guardan la misma gráfica (por `e.guardar`); devuelve el código de salida, o null si no se pidió.
       const [svg, html] = [opcion(args, 'svg'), opcion(args, 'html')];
       const exportar = (titulo: string, filas: { etiqueta: string; valor: number | null; nota?: string }[], formato?: (x: number) => string): number | null => {
@@ -176,7 +353,7 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
         return 0;
       };
       if (sub === 'acierto' || sub === 'eficiencia') {
-        const d = (await pedir(e, `/analytics/eficiencia${q}`)) as { kpis: { tareas: number; acierto: number; retrabajo: number }; agentes: { agente: string; tareas: number; acierto: number; retrabajo: number; p50: number | null; coste_total: number }[] };
+        const d = (await pedirGrafica(`/analytics/eficiencia${q}`)) as { kpis: { tareas: number; acierto: number; retrabajo: number }; agentes: { agente: string; tareas: number; acierto: number; retrabajo: number; p50: number | null; coste_total: number }[] };
         const exp = sub === 'acierto'
           ? exportar(`Acierto por agente (global ${pct(d.kpis.acierto)}, ${d.kpis.tareas} tareas)`, d.agentes.map((a) => ({ etiqueta: a.agente, valor: a.acierto, nota: `${a.tareas} tareas` })), pct)
           : exportar('Latencia p50 por agente (s)', d.agentes.map((a) => ({ etiqueta: a.agente, valor: a.p50 === null ? null : a.p50 / 1000, nota: `coste ${a.coste_total} $` })), (x) => x.toFixed(1));
@@ -187,7 +364,7 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
         return 0;
       }
       if (sub === 'flujo') {
-        const d = (await pedir(e, `/analytics/flujo${q}`)) as { nodos: { nombre: string; capa: string; valor: number }[]; total: number };
+        const d = (await pedirGrafica(`/analytics/flujo${q}`)) as { nodos: { nombre: string; capa: string; valor: number }[]; total: number };
         const capas = [...new Set(d.nodos.map((n) => n.capa))];
         const expFlujo = exportar(`Flujo de ${d.total} tareas`, d.nodos.map((n) => ({ etiqueta: `${n.capa} · ${n.nombre}`, valor: n.valor })));
         if (expFlujo !== null) return expFlujo;
@@ -195,7 +372,7 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
         return 0;
       }
       if (sub === 'matriz-skills') {
-        const d = (await pedir(e, `/analytics/matriz-skills${q}`)) as { filas: { skill: string; usos: number; recomendada: number }[]; usadas: number; total: number };
+        const d = (await pedirGrafica(`/analytics/matriz-skills${q}`)) as { filas: { skill: string; usos: number; recomendada: number }[]; usadas: number; total: number };
         const expSkills = exportar(`Skills: ${d.usadas} usadas de ${d.total}`, d.filas.slice(0, 20).map((f) => ({ etiqueta: f.skill, valor: f.usos, nota: `recomendada ${f.recomendada}` })));
         if (expSkills !== null) return expSkills;
         salida(d, () => `Skills: ${d.usadas} usadas de ${d.total}\n${barras(d.filas.slice(0, 20).map((f) => ({ etiqueta: f.skill, valor: f.usos, nota: `recomendada ${f.recomendada}` })))}`);
@@ -203,7 +380,7 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       }
       if (sub === 'sugerencias') {
         if (exportar('', []) !== null) return 2;
-        const d = (await pedir(e, `/analytics/sugerencias${q}`)) as { sugerencias: { severidad: string; texto: string }[] };
+        const d = (await pedirGrafica(`/analytics/sugerencias${q}`)) as { sugerencias: { severidad: string; texto: string }[] };
         salida(d, () => d.sugerencias.map((s) => `[${s.severidad}] ${s.texto}`).join('\n') || 'Nada que mejorar.');
         return 0;
       }
@@ -244,7 +421,15 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
         if (nuevo === '') { e.escribir('uso: kj dosificador config [--set \'{"margenSeguridadPct": 12}\']'); return 2; }
         let parcial: unknown;
         try { parcial = nuevo === null ? undefined : JSON.parse(nuevo); } catch { e.escribir('--set: JSON no válido'); return 2; }
-        const d = (await (parcial === undefined ? pedir(e, '/dosificador/config') : pedir(e, '/dosificador/config', 'PUT', parcial))) as { config: Record<string, unknown>; fichero: string };
+        let d: { config: Record<string, unknown>; fichero: string };
+        const local = bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http') && parcial === undefined);
+        if (local) {
+          if (parcial !== undefined) { e.escribir('La modificación de configuración necesita --http y los controles de Atlas'); return 2; }
+          const fichero = rutaConfig();
+          if (!fichero || !e.leer) { e.escribir('config local necesita --config <dosificador.json>'); return 2; }
+          try { const raw = JSON.parse(e.leer(fichero)); if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(); d = { config: normalizarConfig(raw) as unknown as Record<string, unknown>, fichero }; }
+          catch { e.escribir(`No se puede leer la configuración en ${fichero}`); return 2; }
+        } else d = (await (parcial === undefined ? pedir(e, '/dosificador/config') : pedir(e, '/dosificador/config', 'PUT', parcial, opcion(args, 'tarea')))) as typeof d;
         salida(d, () => `${d.fichero}\n${JSON.stringify(d.config, null, 2)}`);
         return 0;
       }
@@ -253,13 +438,33 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
         if (!ruta || !e.leer) { e.escribir('uso: kj dosificador decidir --entrada <fichero.json> [--json]   (decide sin guardar el estado)'); return 2; }
         let cuerpo: Record<string, unknown>;
         try { cuerpo = JSON.parse(e.leer(ruta)) as Record<string, unknown>; } catch { e.escribir(`${ruta}: no es un JSON legible`); return 2; }
-        const d = (await pedir(e, '/dosificador/decidir', 'POST', { ...cuerpo, simulacro: true })) as { decisiones: { tarea: string; agente: string; equipo: string; lanzarEn: number | null; motivo: string }[]; diferidas: { tarea: string; hasta: number | null; motivo: string }[]; estado: { modo: string } };
+        let d: { decisiones: { tarea: string; agente: string; equipo: string; lanzarEn: number | null; motivo: string }[]; diferidas: { tarea: string; hasta: number | null; motivo: string }[]; estado: { modo: string } };
+        if (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'))) {
+          const cfgRuta = rutaConfig();
+          const estadoRuta = rutaEstado();
+          if (!cfgRuta || !estadoRuta) { e.escribir('decidir local necesita --config y --estado explícitos'); return 2; }
+          let cfg: unknown, estado: unknown;
+          try { cfg = JSON.parse(e.leer(cfgRuta)); estado = JSON.parse(e.leer(estadoRuta)); } catch { e.escribir('No se puede leer la configuración o el estado del dosificador'); return 2; }
+          if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg) || !estado || typeof estado !== 'object' || Array.isArray(estado)) { e.escribir('La configuración y el estado deben ser objetos JSON'); return 2; }
+          const r = decidirSolicitud({ ...cuerpo, simulacro: true }, normalizarConfig(cfg), normalizarEstado(estado));
+          if (!r.ok) { e.escribir(r.error); return 2; }
+          d = { decisiones: r.resultado.decisiones, diferidas: r.resultado.diferidas, estado: r.resultado.resumen };
+        } else d = (await pedir(e, '/dosificador/decidir', 'POST', { ...cuerpo, simulacro: true })) as typeof d;
         salida(d, () => [`Modo ${d.estado.modo}`, ...d.decisiones.map((x) => `  ✔ ${x.tarea} → ${x.agente}/${x.equipo} ${x.lanzarEn === null ? 'ya' : `a las ${hora(x.lanzarEn)}`}  ${x.motivo}`), ...d.diferidas.map((x) => `  … ${x.tarea} ${x.hasta === null ? 'sin fecha' : `hasta ${hora(x.hasta)}`}  ${x.motivo}`)].join('\n'));
         return 0;
       }
       if (sub === 'simular') {
         const num = (k: string) => { const v = opcion(args, k); return v === null || v === '' || !Number.isFinite(Number(v)) ? undefined : Number(v); };
-        const d = (await pedir(e, '/dosificador/simular', 'POST', { semanas: num('semanas'), semilla: num('semilla'), demanda: num('demanda') })) as Record<string, number | null>;
+        const entrada = { semanas: num('semanas'), semilla: num('semilla'), demanda: num('demanda') };
+        let d: Record<string, number | null>;
+        if (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'))) {
+          const ruta = rutaConfig();
+          if (!ruta || !e.leer) { e.escribir('uso: kj dosificador simular --local --config <dosificador.json>'); return 2; }
+          let config: unknown;
+          try { config = JSON.parse(e.leer(ruta)); } catch { e.escribir(`${ruta}: no es un JSON legible`); return 2; }
+          if (!config || typeof config !== 'object' || Array.isArray(config)) { e.escribir(`${ruta}: la configuración debe ser un objeto JSON`); return 2; }
+          d = simularSolicitud(normalizarConfig(config), entrada) as unknown as Record<string, number | null>;
+        } else d = (await pedir(e, '/dosificador/simular', 'POST', entrada)) as Record<string, number | null>;
         salida(d, () => [
           `Simulación sintética · ${d['semanas']} semanas · semilla ${d['semilla']} · ${d['agenteSemanas']} semanas de agente`,
           `  semanas por encima del margen ${d['semanasPorEncima']}  (objetivo 0) · límites alcanzados ${d['limitesAlcanzados']}`,
@@ -278,9 +483,17 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
       return 0;
     }
     case 'comparar': {
-      const nombre = args.slice(1).find((a, i, v) => !a.startsWith('--') && v[i - 1] !== '--grupo') ?? '';
+      const nombre = argumentosPosicionales(args.slice(1))[0] ?? '';
       const grupo = opcion(args, 'grupo');
-      const d = (await pedir(e, `/laboratorio/comparar?skill=${encodeURIComponent(nombre)}&grupo=${encodeURIComponent(grupo ?? '')}`)) as { karajan?: Comparada; pruebas?: PruebaVista[]; skills?: Comparada[] } & Partial<Comparada>;
+      let d: { karajan?: Comparada; pruebas?: PruebaVista[]; skills?: Comparada[] } & Partial<Comparada>;
+      if (bandera(args, 'local') || (e.localPorDefecto && !bandera(args, 'http'))) {
+        const archivo = rutaRecursos();
+        if (!archivo) { e.escribir('comparar local necesita --resources-db o --datos'); return 2; }
+        let bib: Biblioteca;
+        try { bib = abrirBibliotecaLocal(archivo); } catch (err) { e.escribir(`No se puede abrir resources.db: ${(err as Error).message}`); return 2; }
+        try { d = consultarComparacion(bib, nombre, grupo ?? '', descubrirSkills, COMPONENTES.map((c) => ({ id: c.id, responsabilidad: c.responsabilidad, pruebas: c.laboratorio?.escenarios.map((x) => x.tipo) ?? [] }))) as typeof d; }
+        finally { bib.cerrar(); }
+      } else d = (await pedir(e, `/laboratorio/comparar?skill=${encodeURIComponent(nombre)}&grupo=${encodeURIComponent(grupo ?? '')}`)) as typeof d;
       salida(d, () => {
         if (d.karajan) return [pintarComparada(d.karajan), ...(d.pruebas?.length ? ['', 'Pruebas con feedback humano en los pares:', ...d.pruebas.map((p) => `  • ${p.nombre}: ${p.pares.map((x) => `${x.par} (${x.estrellas}★)`).join(', ')}`)] : [])].join('\n');
         if (d.skills) {
@@ -339,7 +552,7 @@ kj componentes | lab ls|run|informe|historial | grafica <tipo> | curador [--prop
 // Solo como programa (`node kj.mjs`), no al importarlo (los tests empaquetan este módulo en el suyo).
 if (process.argv[1] && /(^|[\\/])(kj|cli)\.(mjs|js|ts)$/.test(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const api = process.env['KARAJAN_API'] ?? `${(process.env['ATLAS_DEV_API'] ?? 'http://127.0.0.1:4100').replace(/\/$/, '')}/paquetes/karajan/api`;
-  ejecutar(process.argv.slice(2), { fetch: fetch as unknown as Fetch, escribir: (s) => process.stdout.write(`${s}\n`), api, guardar: (ruta, contenido) => writeFileSync(ruta, contenido, 'utf8'), leer: (ruta) => readFileSync(ruta, 'utf8') })
+  ejecutar(process.argv.slice(2), { fetch: fetch as unknown as Fetch, escribir: (s) => process.stdout.write(`${s}\n`), api, localPorDefecto: true, guardar: (ruta, contenido) => writeFileSync(ruta, contenido, 'utf8'), leer: (ruta) => readFileSync(ruta, 'utf8') })
     .then((c) => { process.exitCode = c; })
     .catch((err: Error) => { process.stderr.write(`kj: ${err.message}\n`); process.exitCode = 1; });
 }

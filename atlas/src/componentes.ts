@@ -88,11 +88,20 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'metodo', capa: 'modificadores', responsabilidad: 'Aplicar el método de superpowers (TDD, planes, worktrees)', modulos: ['metodo'], requiere: [], laboratorio: laboratorioMetodo },
   { id: 'prompts', capa: 'modificadores', responsabilidad: 'Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)', modulos: ['prompts'], requiere: [], laboratorio: laboratorioPrompts },
   // ── Interfaz ──
-  { id: 'api', capa: 'interfaz', responsabilidad: 'Exponer Karajan a Atlas dev (rutas del paquete)', modulos: ['servidor'], requiere: 'todos', pendiente: 'cubierto por los laboratorios de cada componente' },
-  { id: 'cli', capa: 'interfaz', responsabilidad: 'Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas', modulos: ['cli'], requiere: [], pendiente: 'cubierto por atlas/tests/cli.test.ts' },
+  { id: 'api', capa: 'interfaz', responsabilidad: 'Coordinar las operaciones compartidas y exponerlas a Atlas dev', modulos: ['servidor', 'runtime', 'aplicacion', 'aplicacion-dosificador', 'aplicacion-laboratorio'], requiere: 'todos', pendiente: 'cubierto por los laboratorios de cada componente' },
+  { id: 'cli', capa: 'interfaz', responsabilidad: 'Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas', modulos: ['cli', 'cli-local'], requiere: ['almacen', 'analitica', 'biblioteca', 'clasificador', 'comparador', 'delegador', 'dosificador', 'laboratorio', 'produccion', 'proveedores', 'selector'], pendiente: 'cubierto por atlas/tests/cli.test.ts' },
 ];
 
 export const COMPONENTES: Componente[] = DEFINICION.map((c) => ({ ...c, familia: c.capa }));
+
+/** Catálogo estático compartido por la terminal y el servidor. */
+export function catalogoComponentes(ultimas: (id: string) => unknown[] = () => []) {
+  return COMPONENTES.map((c) => ({
+    id: c.id, capa: c.capa, responsabilidad: c.responsabilidad, modulos: c.modulos, pendiente: c.pendiente ?? null,
+    escenarios: c.laboratorio?.escenarios.map((e) => ({ id: e.id, tipo: e.tipo, descripcion: e.descripcion })) ?? [],
+    ultimas: c.laboratorio ? ultimas(c.id) : [],
+  }));
+}
 
 /**
  * Flujo de datos entre componentes, para las flechas de la ventana. Solo lo que el código (o, si `previsto`, el diseño de

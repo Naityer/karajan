@@ -287,7 +287,7 @@ describe('GET /laboratorio/comparar', () => {
     for (const k of ['ATLAS_KARAJAN_DATA', 'ATLAS_WORKSPACE', 'ATLAS_KARAJAN_LAYOUT', 'ATLAS_DEV_API', 'ATLAS_KARAJAN_RESOURCES', 'USERPROFILE', 'HOME']) entorno[k] = process.env[k];
     // Ni las skills ni los datos reales del equipo: todo en el temporal.
     process.env['USERPROFILE'] = casa; process.env['HOME'] = casa;
-    process.env['ATLAS_KARAJAN_DATA'] = join(dir, 'no-existe'); process.env['ATLAS_WORKSPACE'] = dir; process.env['ATLAS_DEV_API'] = 'http://127.0.0.1:4100';
+    delete process.env['ATLAS_KARAJAN_DATA']; process.env['ATLAS_WORKSPACE'] = dir; process.env['ATLAS_DEV_API'] = 'http://127.0.0.1:4100';
     delete process.env['ATLAS_KARAJAN_LAYOUT'];
     globalThis.fetch = atlasFalso().fetch as unknown as typeof fetch;
     crearDb('ruta.db', filasG1).cerrar();

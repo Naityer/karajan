@@ -1,7 +1,4 @@
-"""Small per-user config file (`~/.karajan/config.json`) so `karajan activate
---start` can locate the repo from any directory after the first successful
-activation, instead of only working from inside the Karajan repo.
-"""
+"""Read legacy per-user workspace settings from ``~/.karajan/config.json``."""
 
 from __future__ import annotations
 

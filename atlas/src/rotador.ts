@@ -1,6 +1,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Rotador de skills bajo demanda. Las skills instaladas cuestan contexto a cada agente, así que solo se dejan las que se usan;
@@ -73,8 +74,24 @@ export class Rotador {
 
   private guardarEstado(e: EstadoRotador) {
     mkdirSync(dirname(this.op.estado), { recursive: true });
-    writeFileSync(`${this.op.estado}.tmp`, `${JSON.stringify(e, null, 2)}\n`, 'utf8');
-    renameSync(`${this.op.estado}.tmp`, this.op.estado);
+    // Un nombre por escritor evita que procesos distintos se apropien del
+    // mismo temporal. El reemplazo sigue siendo atómico en el mismo volumen.
+    const temporal = `${this.op.estado}.${randomUUID()}.tmp`;
+    try {
+      writeFileSync(temporal, `${JSON.stringify(e, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+      for (let intento = 0; ; intento++) {
+        try { renameSync(temporal, this.op.estado); break; }
+        catch (err) {
+          const codigo = (err as NodeJS.ErrnoException).code;
+          // Windows puede negar temporalmente el reemplazo si otro proceso
+          // tiene abierto el archivo; no borrar el destino como alternativa.
+          if (process.platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(codigo ?? '') || intento >= 7) throw err;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(20 * 2 ** intento, 160));
+        }
+      }
+    } finally {
+      try { rmSync(temporal, { force: true }); } catch { /* conservar el error original */ }
+    }
   }
 
   private carpetas(dir: string): string[] {

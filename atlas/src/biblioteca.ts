@@ -29,13 +29,34 @@ export interface GrupoRecurso { id: string; nombre: string; descripcion: string;
 export interface FiltroRecursos { grupo?: string; tipo?: string; estado?: string; runtime?: string; origen?: string; validez?: string; q?: string; limite?: number; desplazamiento?: number }
 export interface FuenteRadar { id: string; nombre: string; url: string; proveedor: string; tipo: string; activa: boolean; disponible: boolean; requiere_credenciales: boolean; pista: string | null }
 
+/** Consultas comunes a los adaptadores HTTP y local. Nunca modifica la biblioteca. */
+export function consultarBiblioteca(biblioteca: Biblioteca, ruta: string, query: Record<string, string | undefined> = {}): unknown {
+  const error = (status: number, detail: string): never => { throw Object.assign(new Error(detail), { status }); };
+  if (!biblioteca.disponible) return error(409, 'La biblioteca necesita resources.db (ATLAS_KARAJAN_RESOURCES).');
+  const texto = (v: string | undefined) => v?.trim() ? v.trim().slice(0, 200) : undefined;
+  const entero = (v: string | undefined, def: number, min: number, max: number) => v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Math.min(max, Math.max(min, Number(v))) : def;
+  if (ruta === '/resources') return biblioteca.listar({ grupo: texto(query['group']), tipo: texto(query['kind']), estado: texto(query['status']), runtime: texto(query['runtime']), origen: texto(query['source']), validez: texto(query['validity']), q: texto(query['q']), limite: entero(query['limit'], 100, 1, 500), desplazamiento: entero(query['offset'], 0, 0, 1_000_000) });
+  if (ruta === '/resources/index') return biblioteca.recuentos();
+  if (ruta === '/resources/discovery/sources') return { fuentes: biblioteca.fuentes() };
+  if (ruta === '/resources/review') return biblioteca.listar({ validez: texto(query['state']) ?? 'pending_review', limite: 500 });
+  if (ruta === '/resources/validity-policy' || ruta === '/resources/refresh/settings') {
+    const re = ruta === '/resources/validity-policy' ? /valid|polic/i : /refresh|cadenc|schedule/i;
+    return { preferencias: Object.fromEntries(Object.entries(biblioteca.preferencias()).filter(([k]) => re.test(k))) };
+  }
+  if (ruta === '/resource-groups') return biblioteca.grupos();
+  if (ruta.startsWith('/resources/')) return biblioteca.detalle(decodeURIComponent(ruta.slice('/resources/'.length))) ?? error(404, 'recurso no encontrado');
+  return error(404, `Consulta no disponible: ${ruta}`);
+}
+
 type Fila = Record<string, unknown>;
 const json = <T,>(v: unknown, defecto: T): T => { try { return typeof v === 'string' ? (JSON.parse(v) as T) : defecto; } catch { return defecto; } };
 
 export class Biblioteca {
   private readonly db: DatabaseSync | null;
+  private readonly estricto: boolean;
 
-  constructor(ruta: string | null) {
+  constructor(ruta: string | null, opciones: { estricto?: boolean } = {}) {
+    this.estricto = opciones.estricto === true;
     this.db = ruta && existsSync(ruta) ? new DatabaseSync(ruta, { readOnly: true }) : null;
   }
 
@@ -44,7 +65,8 @@ export class Biblioteca {
 
   private todas(sql: string, ...p: (string | number)[]): Fila[] {
     if (!this.db) return [];
-    try { return this.db.prepare(sql).all(...p) as Fila[]; } catch { return []; }
+    try { return this.db.prepare(sql).all(...p) as Fila[]; }
+    catch (err) { if (this.estricto) throw err; return []; }
   }
 
   private ficha(f: Fila): FichaRecurso {

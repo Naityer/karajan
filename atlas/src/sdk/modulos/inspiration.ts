@@ -1,5 +1,5 @@
 import type { NodoArbol } from '../ascii';
-import type { Comando, Contexto } from '../comandos';
+import { argumentosPosicionales, type Comando, type Contexto } from '../comandos';
 import type { Bloque, Panel } from '../panel';
 
 /**
@@ -105,7 +105,7 @@ export function panelRefresco(pref: Record<string, unknown>): Panel {
 }
 
 export const comandosInspiration: Comando[] = [
-  { ruta: ['inspiration', 'resumen'], resumen: 'recuentos por tipo, estado, validez, origen y grupo', ejecutar: async (ctx) => panelResumen((await ctx.pedir('/resources/index')) as Recuentos, (await ctx.pedir('/resource-groups').catch(() => [])) as Grupo[]) },
+  { ruta: ['inspiration', 'resumen'], resumen: 'recuentos por tipo, estado, validez, origen y grupo', ejecutar: async (ctx) => panelResumen((await ctx.pedir('/resources/index')) as Recuentos, (await ctx.pedir('/resource-groups')) as Grupo[]) },
   { ruta: ['inspiration', 'lista'], uso: 'inspiration lista [--tipo skill|capability|reference] [--estado e] [--runtime r] [--origen o] [--validez v] [--buscar texto] [--limite N]', resumen: 'catálogo con filtros', ejecutar: async (ctx) => {
     const q = consulta(ctx, [['tipo', 'kind'], ['estado', 'status'], ['runtime', 'runtime'], ['origen', 'source'], ['validez', 'validity'], ['buscar', 'q'], ['limite', 'limit']]);
     return panelLista((await ctx.pedir(`/resources${q}`)) as Recurso[], decodeURIComponent(q.slice(1)).replace(/&/g, ' · '));
@@ -119,7 +119,7 @@ export const comandosInspiration: Comando[] = [
   } },
   { ruta: ['inspiration', 'grupos'], resumen: 'taxonomía de grupos con su número de recursos', ejecutar: async (ctx) => panelGrupos((await ctx.pedir('/resource-groups')) as Grupo[]) },
   { ruta: ['inspiration', 'ver'], uso: 'inspiration ver <id|slug>', resumen: 'ficha de un recurso: datos, componentes y operaciones', ejecutar: async (ctx, args) => {
-    const id = args.find((a) => !a.startsWith('--'));
+    const id = argumentosPosicionales(args)[0];
     if (!id) throw new Error('uso: kj inspiration ver <id|slug>');
     return panelVer((await ctx.pedir(`/resources/${encodeURIComponent(id)}`)) as Detalle);
   } },

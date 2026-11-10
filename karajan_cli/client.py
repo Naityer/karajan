@@ -1,6 +1,4 @@
-"""Shared HTTP client for the Karajan API, used by both the `karajan` CLI and
-`karajan_cli/mcp_server.py` so there is exactly one implementation of each request.
-"""
+"""Client for the Karajan API and MCP bridge."""
 
 from __future__ import annotations
 
@@ -225,16 +223,30 @@ class EmbeddedKarajanClient:
 
     def put_config(self, config: dict) -> dict:
         from app.domain.models import KarajanConfig
+        from app.application.errors import AuthorizationDeniedError
+        from fastapi import HTTPException
 
-        return self._dump(self.management.put_config(KarajanConfig.model_validate(config)))
+        try:
+            return self._dump(self.management.put_config(KarajanConfig.model_validate(config), self.identity))
+        except AuthorizationDeniedError as exc:
+            raise KarajanApiError(403, str(exc)) from exc
+        except HTTPException as exc:
+            raise KarajanApiError(exc.status_code, str(exc.detail)) from exc
 
     def get_routing_layout(self) -> dict:
         return self._dump(self.management.get_routing_layout())
 
     def put_routing_layout(self, layout: dict) -> dict:
         from app.domain.models import RoutingLayout
+        from app.application.errors import AuthorizationDeniedError
+        from fastapi import HTTPException
 
-        return self._dump(self.management.put_routing_layout(RoutingLayout.model_validate(layout)))
+        try:
+            return self._dump(self.management.put_routing_layout(RoutingLayout.model_validate(layout), self.identity))
+        except AuthorizationDeniedError as exc:
+            raise KarajanApiError(403, str(exc)) from exc
+        except HTTPException as exc:
+            raise KarajanApiError(exc.status_code, str(exc.detail)) from exc
 
     def list_catalog(self) -> list[dict]:
         return self._dump(self.management.list_catalog())

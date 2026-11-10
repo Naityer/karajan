@@ -7,6 +7,11 @@
 | | [perfiles-y-reglas.md](perfiles-y-reglas.md): perfiles de enrutado y reglas |
 | | [model-setups.md](model-setups.md): configuraciones de modelos |
 | **Arquitectura** | [laboratorio/componentes.md](laboratorio/componentes.md): la pila de componentes y sus laboratorios |
+| | [laboratorio/mapa-componentes.md](laboratorio/mapa-componentes.md): implementación, laboratorio y pruebas por componente |
+| | [arquitectura-transportes.md](arquitectura-transportes.md): motores, datos y transportes local/HTTP |
+| | [inventario-interfaces.md](inventario-interfaces.md): operaciones, dependencias y controles |
+| | [matriz-capacidades-contratos.md](matriz-capacidades-contratos.md): capacidades y rutas Python, TypeScript y MCP |
+| | [uso-local-dosificador.md](uso-local-dosificador.md): ejecución local y rutas de datos explícitas |
 | | [laboratorio/preparado-si-no.md](laboratorio/preparado-si-no.md): panel sí/no de skills |
 | | [funcionamiento-completo.md](funcionamiento-completo.md): cómo funciona de punta a punta |
 | | [agent-tools.md](agent-tools.md): herramientas del agente y su confinamiento |

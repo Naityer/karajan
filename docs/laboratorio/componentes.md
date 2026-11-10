@@ -42,7 +42,7 @@ El motor está en `atlas/src/laboratorio.ts` y los laboratorios en `atlas/src/la
 Cada escenario devuelve la muestra, si es **suficiente**, sus métricas, los umbrales y los **hallazgos**.
 
 **Reglas del laboratorio**
-- **No muta producción.**
+- **No aplica cambios de configuración a producción.** La ejecución guarda informes y puede crear borradores en Atlas; algunos escenarios requieren proveedores o repositorios temporales, según su configuración.
   - El delegador del laboratorio solo planifica, con todos los agentes «disponibles» y sin límites: se mide el perfil, no la máquina.
   - Los resultados van a `<datos del paquete>/laboratorio/laboratorio.db`, no al `task_logs.db` compartido.
 - **A ciegas y anónimo.**
@@ -84,7 +84,7 @@ Cada escenario devuelve la muestra, si es **suficiente**, sus métricas, los umb
   - en el paquete: `PUT /routing-layout`, los presets, `desde-texto` con `aplicar` y `skills/rotar` con `aplicar`;
   - en el nativo: además `PUT /config`, `setup/apply-*`, el catálogo del lienzo e `install` de skills.
 - Sin esa tarea responde **423** y el paquete deja la mutación pedida como borrador.
-- Siguen libres clasificar, planificar, delegar, el feedback y el laboratorio, porque solo proponen o registran.
+- La guarda de tarea aceptada citada arriba no se aplica a todas las demás operaciones. Clasificar y planificar son distintas de delegar: delegar puede ejecutar un proveedor y modificar un workspace. El laboratorio y el feedback pueden escribir informes o crear borradores. Los controles del host y la revisión humana que corresponda son independientes; no debe interpretarse su ausencia de esta lista como permiso general.
 
 ## 4. Pasarela de borradores
 

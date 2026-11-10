@@ -1,36 +1,11 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-
-import { construirAnaliticaSkills } from './analitica';
-import { Almacen } from './almacen';
-import { catalogoReal, listarSkills } from './catalogo';
-import { produccion } from './produccion';
-import { destinoDe, Rotador } from './rotador';
-import { Delegador } from './delegar';
-import { configDesde } from './heuristica';
-import { ErrorPerfil, Perfiles, perfilPorDefecto } from './perfiles';
-import { buscarBinario, disponibilidad, ejecutarProveedor, PROVEEDORES } from './proveedores';
-import { AtlasDev } from './atlas-dev';
-import { Pasarela } from './pasarela-borradores';
-import { Guardian } from './modo';
-import { Biblioteca } from './biblioteca';
-import { aHallazgo, curar, REGLAS_CURADOR, UMBRALES_CURADOR, type EntradaCurador } from './curador';
-import { construirArquitectura, type ContextoArquitectura } from './arquitectura';
-import { claudeExcedido, leerLimites, leerLimitesSinCaducidad, rutaLimites } from './limites';
-import { circuitoAbierto, decidir, decidirRelevo, estimar, registrarCoste, registrarLimite, validarEntrada, validarRelevo } from './dosificador';
-import { guardarConfig as guardarConfigDos, guardarEstado as guardarEstadoDos, leerConfig as leerConfigDos, leerEstado as leerEstadoDos, type EstadoDosificador } from './dosificador-config';
-import { tiempoMs } from './dosificador-cuota';
-import { simular } from './dosificador-sim';
-import { actualizarCatalogo, elegirTutores, leerCatalogo, type ProveedorTutor } from './tutor';
-import { agenteAlumno, agenteTutor, listarRepos, type PlanTarea, type PuertosExamen } from './tutoria';
-import { calificacion, type ExamenAnonimo } from './tutoria-nota';
-import { carpetaSkillForge, efectoForjadas, informeBrechas, leerSkillsForjadas } from './skillforge';
-import { CAPAS, COMPONENTES, componente } from './componentes';
-import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
-import { clasificar } from './heuristica';
-import { compararEquipo, compararKarajan, compararSkill, pruebasEnGrupos, GRUPO_KARAJAN, type CapacidadKarajan } from './comparador';
-import { descubrirSkills, puntuarSkills, type SkillDisponible } from './skills-seleccion';
+import { listarSkills } from './catalogo';
+import { crearAplicacion } from './aplicacion';
+import { crearAplicacionDosificador } from './aplicacion-dosificador';
+import { crearAplicacionLaboratorio } from './aplicacion-laboratorio';
+import { disponibilidad, PROVEEDORES } from './proveedores';
+import { crearRuntime } from './runtime';
+import { consultarTareas } from './almacen';
+import { consultarBiblioteca } from './biblioteca';
 
 /**
  * Karajan como paquete de Atlas dev: su núcleo de lectura y clasificación, en TypeScript y dentro del proceso de Atlas dev.
@@ -55,540 +30,114 @@ const NO_DISPONIBLE = 'No disponible en el paquete de Atlas dev: necesita provee
 interface Contexto { id: string; version: string; datos: string }
 type Cabeceras = Record<string, string | string[] | undefined>;
 interface AppMinima {
+  addHook?(nombre: 'onClose', fn: () => Promise<void>): void;
   get(ruta: string, fn: (req: { query: Record<string, string | undefined>; params: Record<string, string> }) => unknown): void;
   post(ruta: string, fn: (req: { body: unknown; params: Record<string, string>; headers: Cabeceras }, reply: { code(n: number): unknown }) => unknown): void;
   put(ruta: string, fn: (req: { body: unknown; headers: Cabeceras }) => unknown): void;
   setErrorHandler(fn: (e: Error & { status?: number; statusCode?: number; extra?: Record<string, unknown> }, req: unknown, reply: { code(n: number): { send(b: unknown): unknown } }) => unknown): void;
 }
 
-function importarDatos(datos: string): boolean {
-  const origen = process.env['ATLAS_KARAJAN_DATA'];
-  const destino = join(datos, 'task_logs.db');
-  if (!origen || existsSync(destino) || !existsSync(join(origen, 'task_logs.db'))) return false;
-  mkdirSync(datos, { recursive: true });
-  for (const f of ['task_logs.db', 'task_logs.db-wal', 'task_logs.db-shm', 'active_config.json']) {
-    if (existsSync(join(origen, f)) && !existsSync(join(datos, f))) copyFileSync(join(origen, f), join(datos, f));
-  }
-  return true;
-}
-
-const entero = (v: string | undefined, defecto: number, min: number, max: number) => {
-  const n = Number(v);
-  return Number.isFinite(n) && v !== undefined && v !== '' ? Math.min(max, Math.max(min, Math.trunc(n))) : defecto;
-};
 const falla = (estado: number, detail: string) => Object.assign(new Error(detail), { status: estado });
 
-/**
- * La carpeta `data/` del Karajan nativo, si la hay: `ATLAS_KARAJAN_DATA`, o `<ATLAS_WORKSPACE>/karajan/data`. Con ella el
- * paquete y el Karajan nativo comparten registro de tareas y perfiles (SQLite en WAL admite los dos procesos), así las
- * gráficas de Atlas dev y las del dashboard nativo cuentan lo mismo. `ATLAS_KARAJAN_COMPARTIR=0` vuelve a la copia propia.
- */
-function datosKarajan(): string | null {
-  const explicita = process.env['ATLAS_KARAJAN_DATA'];
-  if (explicita) return existsSync(explicita) ? explicita : null;
-  const ws = process.env['ATLAS_WORKSPACE'];
-  return ws && existsSync(join(ws, 'karajan', 'data', 'task_logs.db')) ? join(ws, 'karajan', 'data') : null;
-}
-
 export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
-  const nativo = datosKarajan();
-  const compartida = nativo !== null && process.env['ATLAS_KARAJAN_COMPARTIR'] !== '0' && existsSync(join(nativo, 'task_logs.db'));
-  const importada = compartida ? false : importarDatos(ctx.datos);
-  mkdirSync(ctx.datos, { recursive: true });
-  const dirDatos = compartida ? nativo! : ctx.datos;
-  // El paquete ES la instalación en producción: lo deja escrito para que el Karajan nativo, que lee el mismo fichero, lo respete.
-  if (!existsSync(join(dirDatos, 'modo.json'))) writeFileSync(join(dirDatos, 'modo.json'), '{"modo":"produccion"}\n', 'utf8');
-  const almacen = new Almacen(join(dirDatos, 'task_logs.db'));
-  const config = () => {
-    try { return configDesde(JSON.parse(readFileSync(join(dirDatos, 'active_config.json'), 'utf8'))); } catch { return configDesde(null); }
-  };
-
-  const rutaLayout = process.env['ATLAS_KARAJAN_LAYOUT'] ?? (nativo ? join(nativo, 'routing_layout.json') : join(ctx.datos, 'routing_layout.json'));
-  const perfiles = new Perfiles(rutaLayout);
-  // Último uso de cada skill en las ejecuciones de Karajan (para el rotador).
-  const usosKarajan = () => {
-    const r: Record<string, string> = {};
-    for (const t of almacen.tareasPlanas()) for (const s of t.ejecutadas ?? []) if (!r[s] || t.created_at > r[s]!) r[s] = t.created_at;
-    return r;
-  };
-  const historiaKarajan = () => almacen.tareasPlanas().flatMap((t) => (t.ejecutadas ?? []).map((skill) => ({ skill, cuando: t.created_at })));
-  const rotador = new Rotador({ estado: join(ctx.datos, 'rotador.json'), usosKarajan, historiaKarajan });
-  const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), rotador });
-
-  // Producción: las mutaciones necesitan una tarea aceptada; lo demás se propone como borrador (ver modo.ts).
-  const dirLab = join(ctx.datos, 'laboratorio');
-  const atlasDev = new AtlasDev();
-  const pasarela = new Pasarela(atlasDev, join(dirLab, 'borradores.json'));
-  const guardian = new Guardian(dirDatos, atlasDev, pasarela);
-  const rutaBiblioteca = process.env['ATLAS_KARAJAN_RESOURCES'] ?? join(nativo ?? ctx.datos, 'resources.db');
-  const biblioteca = new Biblioteca(rutaBiblioteca);
-  const registroLab = new RegistroLab(join(dirLab, 'laboratorio.db'));
+  const runtime = crearRuntime(ctx.datos);
+  const aplicacion = crearAplicacion(runtime);
+  const { compartida, importada, almacen, config, mutar, biblioteca } = runtime;
+  app.addHook?.('onClose', async () => { runtime.cerrar(); });
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno', ...(e.extra ?? {}) }));
 
   // ── Dosificador: cuándo, dónde y con qué agente se lanza cada tarea (ver dosificador.ts y docs/laboratorio/componentes.md) ──
   // Config y estado van en <datos>/dosificador.json y dosificador-estado.json. `decidir` solo DECIDE: no lanza ni cambia nada fuera de
   // su propio estado (histéresis, estimador, circuitos y leases); cambiar la configuración sí exige tarea aceptada en producción.
-  const rutaDosCfg = join(ctx.datos, 'dosificador.json'), rutaDosEstado = join(ctx.datos, 'dosificador-estado.json');
-  const configDos = () => leerConfigDos(rutaDosCfg);
-  const estadoDos = () => leerEstadoDos(rutaDosEstado);
-  const guardarEstadoDosSeguro = (e: EstadoDosificador) => { try { guardarEstadoDos(rutaDosEstado, e); } catch { /* sin disco no se pierde la decisión, solo el aprendizaje */ } };
-  const isoOrNull = (ms: number | null | undefined) => (typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms).toISOString() : null);
-  const malaPeticion = (reply: { code(n: number): unknown }, error: string) => { reply.code(400); return { error }; };
-
-  app.post('/dosificador/decidir', (req, reply) => {
-    try {
-      const cfg = configDos();
-      const v = validarEntrada(req.body, cfg);
-      if (!v.ok) return malaPeticion(reply, v.error);
-      const r = decidir(v.entrada, cfg, estadoDos());
-      // `simulacro: true` decide sin guardar el estado (lo usa `kj dosificador decidir`).
-      if ((req.body as { simulacro?: unknown }).simulacro !== true) guardarEstadoDosSeguro(r.estado);
-      return { decisiones: r.decisiones, diferidas: r.diferidas, estado: r.resumen };
-    } catch (e) { return malaPeticion(reply, `no se pudo decidir: ${String((e as Error).message ?? e).slice(0, 200)}`); }
-  });
-
-  /** Una tarea terminó (o topó con el límite): su coste real alimenta al estimador, su lease se libera y un límite abre el circuito del agente. */
-  app.post('/dosificador/observar', (req, reply) => {
-    const cfg = configDos(), b = (req.body ?? {}) as Record<string, unknown>;
-    const agente = typeof b['agente'] === 'string' ? b['agente'] : '';
-    if (!cfg.planes[agente]) return malaPeticion(reply, `agente: ${Object.keys(cfg.planes).join('|')}`);
-    if (typeof b['tarea'] !== 'string' || !b['tarea'] || b['tarea'].length > 80) return malaPeticion(reply, 'tarea: el id de la tarea (1 a 80 caracteres)');
-    if (b['clase'] !== undefined && b['clase'] !== null && (typeof b['clase'] !== 'string' || !b['clase'] || b['clase'].length > 120)) return malaPeticion(reply, 'clase: texto «nivel|dominio|agente» de hasta 120 caracteres');
-    const coste = b['costePct'];
-    if (coste !== undefined && coste !== null && (typeof coste !== 'number' || !Number.isFinite(coste) || coste < 0 || coste > 1000)) return malaPeticion(reply, 'costePct: porcentaje del plan semanal entre 0 y 1000');
-    const lim = b['limiteAlcanzado'];
-    if (lim !== undefined && lim !== null && lim !== false && (typeof lim !== 'object' || Array.isArray(lim))) return malaPeticion(reply, 'limiteAlcanzado: {resetsAt}');
-    let est = estadoDos();
-    const clase = typeof b['clase'] === 'string' ? b['clase'] : est.leases[b['tarea']]?.clase || null;
-    est = registrarCoste(est, cfg, { tarea: b['tarea'], agente, clase: clase ?? undefined, costePct: typeof coste === 'number' ? coste : null });
-    if (lim) est = registrarLimite(est, cfg, agente, tiempoMs((lim as { resetsAt?: unknown }).resetsAt), Date.now());
-    guardarEstadoDosSeguro(est);
-    const ahora = Date.now();
-    return {
-      ok: true, clase, aprendido: clase !== null && typeof coste === 'number', circuito_hasta: isoOrNull(circuitoAbierto(est, agente, ahora)),
-      estimacion: clase ? (({ media, sigma, p, n }) => ({ media, sigma, p80: p, n }))(estimar(est, cfg, clase)) : null,
-    };
-  });
-
-  /** Cuota de cada agente, modo, burn rate, agotamiento proyectado, circuitos, tareas en vuelo y la última decisión. Solo lectura. */
-  app.get('/dosificador/estado', () => {
-    const cfg = configDos(), est = estadoDos(), ahora = Date.now(), l = leerLimitesSinCaducidad(rutaLimites());
-    const nombres = Object.keys(cfg.planes);
-    const r = decidir({
-      ahora, tareas: [], equipos: [], agentes: Object.fromEntries(nombres.map((a) => [a, { disponible: true, enCurso: 0 }])),
-      uso: Object.fromEntries(nombres.map((a) => [a, (l as unknown as Record<string, unknown> | null)?.[a] ?? {}])), leido: l && Number.isFinite(Date.parse(l.leido)) ? l.leido : undefined,
-    }, cfg, est);
-    return {
-      ahora: new Date(ahora).toISOString(), ...r.resumen, simulacion: cfg.modoSimulacion, agentes: r.agentes,
-      cuota: { fichero: rutaLimites(), leido: l?.leido ?? null },
-      ultima_decision: est.ultima ? { en: isoOrNull(est.ultima.en), decisiones: est.ultima.decisiones, diferidas: est.ultima.diferidas } : null,
-      en_vuelo: Object.entries(est.leases).map(([tarea, x]) => ({ tarea, agente: x.agente, equipo: x.equipo, coste_p80_pct: x.costePct, lanzar_en: isoOrNull(x.lanzarEn), hasta: isoOrNull(x.hasta) })),
-      clases_aprendidas: Object.keys(est.estimador).filter((k) => !k.startsWith('*')).length,
-    };
-  });
-
-  /**
-   * Relevo entre equipos: el destino (el servidor) pregunta si toma ya una tarea que empezó otro equipo. Solo DECIDE; la anota en el
-   * registro de relevos del estado (`GET /dosificador/decisiones`). `simulacro: true` decide sin guardar.
-   */
-  app.post('/dosificador/relevo', (req, reply) => {
-    try {
-      const cfg = configDos();
-      const v = validarRelevo(req.body, cfg);
-      if (!v.ok) return malaPeticion(reply, v.error);
-      const r = decidirRelevo(v.entrada, cfg, estadoDos());
-      if ((req.body as { simulacro?: unknown }).simulacro !== true) guardarEstadoDosSeguro(r.estado);
-      return r.decision;
-    } catch (e) { return malaPeticion(reply, `no se pudo decidir el relevo: ${String((e as Error).message ?? e).slice(0, 200)}`); }
-  });
-
-  /** Las últimas decisiones de relevo (más recientes primero), con la política y los parámetros vigentes. Solo lectura. */
-  app.get('/dosificador/decisiones', () => {
-    const cfg = configDos();
-    return {
-      relevo: cfg.relevo, equipos: cfg.equipos, topes: Object.fromEntries(Object.entries(cfg.planes).map(([a, p]) => [a, { topePct: p.topePct ?? null, ritmoMaxPctHora: p.ritmoMaxPctHora ?? null }])),
-      relevos: [...estadoDos().relevos].reverse().map((x) => ({ ...x, en: isoOrNull(x.en), lanzarEn: isoOrNull(x.lanzarEn) })),
-    };
-  });
-
-  app.get('/dosificador/config', () => ({ config: configDos(), fichero: rutaDosCfg }));
-  app.put('/dosificador/config', async (req) => {
-    await guardian.exigir(req, 'PUT /dosificador/config');
-    const b = req.body;
-    if (!b || typeof b !== 'object' || Array.isArray(b)) throw falla(422, 'config: un objeto con los campos a cambiar');
-    const { tarea: _tarea, ...resto } = b as Record<string, unknown>;
-    const parcial = resto['config'] && typeof resto['config'] === 'object' ? resto['config'] : resto;
-    return { config: guardarConfigDos(rutaDosCfg, parcial), fichero: rutaDosCfg };
-  });
-
-  /** Simula semanas sintéticas con la configuración viva (solo lectura; hasta 12 semanas para no bloquear el proceso). */
-  app.post('/dosificador/simular', (req) => {
-    const b = (req.body ?? {}) as Record<string, unknown>;
-    const semanas = entero(String(b['semanas'] ?? ''), 4, 1, 12), semilla = entero(String(b['semilla'] ?? ''), 1, 1, 1_000_000);
-    const demanda = typeof b['demanda'] === 'number' && Number.isFinite(b['demanda']) ? Math.min(3, Math.max(0.1, b['demanda'])) : undefined;
-    const { metricas } = simular(configDos(), { semanas, semilla, ...(demanda !== undefined ? { demanda } : {}) });
-    return { semanas, semilla, demanda: demanda ?? null, ...metricas };
-  });
+  const dosificador = crearAplicacionDosificador(ctx.datos, mutar);
+  // Los errores de entrada históricos son HTTP 400 con {error}, no {detail}.
+  const respuestaDos = (resultado: object, reply: { code(n: number): unknown }) => {
+    if ('error' in resultado) reply.code(400);
+    return resultado;
+  };
+  app.post('/dosificador/decidir', (req, reply) => respuestaDos(dosificador.tomarDecision(req.body), reply));
+  app.post('/dosificador/observar', (req, reply) => respuestaDos(dosificador.observar(req.body), reply));
+  app.get('/dosificador/estado', () => dosificador.estado());
+  app.post('/dosificador/relevo', (req, reply) => respuestaDos(dosificador.relevo(req.body), reply));
+  app.get('/dosificador/decisiones', () => dosificador.decisiones());
+  app.get('/dosificador/config', () => dosificador.consultarConfig());
+  app.put('/dosificador/config', (req) => dosificador.cambiarConfig(req));
+  app.post('/dosificador/simular', (req) => dosificador.simular(req.body));
 
   app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
   app.get('/metrics', () => almacen.metricas());
   app.get('/agents/performance', () => almacen.rendimientoAgentes());
 
-  app.get('/analytics/skills', (req) => {
-    const dias = entero(req.query['days'], 30, 0, 3650);
-    const registros = almacen.listarTareas();
-    const runsPorTarea = Object.fromEntries(registros.filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)]));
-    const revisadas = Object.fromEntries(Object.entries(almacen.revisiones()).map(([id, campos]) => [id, campos['skills_usadas'] ?? []]));
-    return construirAnaliticaSkills(registros, { runsPorTarea, skillsRevisadasPorTarea: revisadas, skillsConocidas: listarSkills().map((s) => s.name), dias });
-  });
+  app.get('/analytics/skills', (req) => aplicacion.analiticaSkills(req.query));
 
-  app.get('/tasks', (req) => almacen.listarTareas(entero(req.query['limit'], 50, 1, 500), entero(req.query['offset'], 0, 0, 1_000_000)).map((t) => ({
-    task_id: t.task_id, prompt: t.prompt, status: t.status, created_at: t.created_at, updated_at: t.updated_at, classification: t.classification, delegation: t.delegation,
-  })));
-  app.get('/tasks/:id', (req) => { const t = almacen.tarea(req.params['id']!); if (!t) throw falla(404, 'Tarea no encontrada'); return t; });
-  app.get('/tasks/:id/runs', (req) => almacen.runs(req.params['id']!));
-  app.get('/tasks/:id/decisions', (req) => almacen.decisiones(req.params['id']!));
-  app.get('/search/tasks', (req) => {
-    const q = req.query['q'] ?? '';
-    const resultados = almacen.buscar(q, entero(req.query['limit'], 20, 1, 100));
-    return { query: q, count: resultados.length, results: resultados };
-  });
+  app.get('/tasks', (req) => consultarTareas(almacen, '/tasks', req.query));
+  app.get('/tasks/:id', (req) => consultarTareas(almacen, `/tasks/${encodeURIComponent(req.params['id']!)}`));
+  app.get('/tasks/:id/runs', (req) => consultarTareas(almacen, `/tasks/${encodeURIComponent(req.params['id']!)}/runs`));
+  app.get('/tasks/:id/decisions', (req) => consultarTareas(almacen, `/tasks/${encodeURIComponent(req.params['id']!)}/decisions`));
+  app.get('/search/tasks', (req) => aplicacion.buscarTareas(req.query));
   app.get('/skills', () => listarSkills());
   app.get('/config', () => config());
 
-  // Clasificación heurística (la misma que usa Karajan sin LLM). No se guarda: persistir tareas es del Karajan completo.
-  app.post('/classify-task', (req) => {
-    const prompt = typeof (req.body as { prompt?: unknown } | null)?.prompt === 'string' ? ((req.body as { prompt: string }).prompt).trim() : '';
-    if (!prompt) throw falla(422, 'prompt cannot be blank');
-    if (prompt.length > 20_000) throw falla(422, 'prompt demasiado largo (máx. 20000 caracteres)');
-    return delegador.planificar(prompt).clasificacion;
-  });
-
-  // ── Perfiles y reglas (compartidos con el Karajan nativo) ─────────────────
-  const conPerfil = <T,>(fn: () => T): T => { try { return fn(); } catch (e) { if (e instanceof ErrorPerfil) throw falla(422, e.message); throw e; } };
-  app.get('/routing-layout', () => ({ ...perfiles.leer(), path: rutaLayout }));
-  app.put('/routing-layout', async (req) => { await guardian.exigir(req, 'PUT /routing-layout'); return conPerfil(() => perfiles.guardar(req.body)); });
-  app.post('/routing-layout/presets/dominios', async (req) => { await guardian.exigir(req, 'POST /routing-layout/presets/dominios'); return conPerfil(() => perfiles.aplicarPresetDominio({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })); });
-  app.post('/routing-layout/presets/nivel', async (req) => { await guardian.exigir(req, 'POST /routing-layout/presets/nivel'); return conPerfil(() => perfiles.aplicarPresetNivel({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })); });
-  // Configurar un perfil con una frase: sin `aplicar` solo devuelve la propuesta (perfil y cambios); aplicarla es una mutación.
-  app.post('/routing-layout/desde-texto', async (req) => {
-    const b = (req.body ?? {}) as { texto?: unknown; perfil_id?: unknown; aplicar?: unknown };
-    const texto = typeof b.texto === 'string' ? b.texto.trim().slice(0, 2000) : '';
-    if (!texto) throw falla(422, 'Escribe cómo quieres el perfil');
-    if (b.aplicar === true) await guardian.exigir(req, 'POST /routing-layout/desde-texto');
-    return conPerfil(() => perfiles.desdeTexto(texto, { perfilId: typeof b.perfil_id === 'string' ? b.perfil_id : undefined, aplicar: b.aplicar === true }));
-  });
-
-  // ── Proveedores y delegación real ────────────────────────────────────────
+  // Los adaptadores HTTP solo traducen peticiones y respuestas; las reglas viven en la aplicación.
+  app.post('/classify-task', (req) => aplicacion.clasificar(req.body));
+  app.get('/routing-layout', () => aplicacion.leerPerfil());
+  app.put('/routing-layout', (req) => aplicacion.guardarPerfil(req));
+  app.post('/routing-layout/presets/dominios', (req) => aplicacion.presetDominios(req));
+  app.post('/routing-layout/presets/nivel', (req) => aplicacion.presetNivel(req));
+  app.post('/routing-layout/desde-texto', (req) => aplicacion.perfilDesdeTexto(req));
   app.get('/providers', () => PROVEEDORES.map((p) => disponibilidad(p)));
-  const leerPrompt = (body: unknown) => {
-    const prompt = typeof (body as { prompt?: unknown } | null)?.prompt === 'string' ? ((body as { prompt: string }).prompt).trim() : '';
-    if (!prompt) throw falla(422, 'prompt cannot be blank');
-    if (prompt.length > 20_000) throw falla(422, 'prompt demasiado largo (máx. 20000 caracteres)');
-    return prompt;
-  };
-  app.post('/routing/plan', (req) => {
-    const b = (req.body ?? {}) as { force_entity_id?: unknown };
-    return delegador.planificar(leerPrompt(req.body), typeof b.force_entity_id === 'string' ? b.force_entity_id : null);
-  });
+  app.post('/routing/plan', (req) => aplicacion.planificar(req.body));
   app.post('/delegate-task', (req, reply) => {
-    const b = (req.body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown; entry_agent?: unknown };
-    const plan = delegador.delegar(leerPrompt(req.body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true, entrada: typeof b.entry_agent === 'string' ? b.entry_agent : null });
+    const plan = aplicacion.delegar(req.body);
     reply.code(plan.bloqueada ? 200 : 202);
     return plan;
   });
 
-  // ── Producción: acierto, flujo, eficiencia, matriz de skills y «qué mejorar» (port de app/analytics/produccion.py) ──
-  // `perfil=activo` (por defecto) deja solo los agentes del perfil por defecto; `todos`, el histórico completo.
-  const calcular = (q: Record<string, string | undefined>) => {
-    const dias = entero(q['dias'], 0, 0, 3650);
-    let agentes: string[] | null = null;
-    let noDisponibles: string[] = [];
-    let sinNivel: string[] = [];
-    if (q['perfil'] !== 'todos') {
-      const layout = perfiles.leer() as { default_profile_id?: string; profiles?: { id: string; entities?: { id: string; name?: string | null; role?: string; levels?: string[]; provider?: string | null }[]; rules?: { entity_id: string; enabled?: boolean }[] }[] };
-      const p = layout.profiles?.find((x) => x.id === layout.default_profile_id);
-      agentes = [...new Set((p?.entities ?? []).map((e) => e.provider).filter((x): x is string => !!x))].sort();
-      const conRegla = new Set((p?.rules ?? []).filter((r) => r.enabled !== false).map((r) => r.entity_id));
-      sinNivel = (p?.entities ?? []).filter((e) => e.provider && e.role !== 'parent' && !(e.levels ?? []).length && !conRegla.has(e.id)).map((e) => e.name || e.id);
-      const estado = new Map(PROVEEDORES.map((pr) => [pr.nombre, disponibilidad(pr).disponible] as const));
-      noDisponibles = agentes.filter((a) => estado.has(a) && !estado.get(a));
-    }
-    return produccion(almacen.tareasPlanas(), { catalogo: catalogoReal(), agentesPerfil: agentes, dias, ahora: new Date(), noDisponibles, sinNivel });
-  };
-  const cabecera = (p: ReturnType<typeof calcular>) => ({ dias: p.dias, perfil: p.perfil, agentes_perfil: p.agentes_perfil, ultima: p.ultima, kpis: p.kpis });
-  app.get('/analytics/produccion', (req) => { const { acierto: _a, ...p } = calcular(req.query); return p; });
-  app.get('/analytics/flujo', (req) => { const p = calcular(req.query); return { ...cabecera(p), ...p.flujo }; });
-  app.get('/analytics/eficiencia', (req) => { const p = calcular(req.query); return { ...cabecera(p), ...p.eficiencia }; });
-  app.get('/analytics/matriz-skills', (req) => { const p = calcular(req.query); return { ...cabecera(p), ...p.matriz }; });
-  app.get('/analytics/sugerencias', (req) => { const p = calcular(req.query); return { ...cabecera(p), sugerencias: p.sugerencias }; });
-  app.get('/analytics/acierto', (req) => { const p = calcular(req.query); return { ...cabecera(p), tareas: p.acierto }; });
-  app.get('/skills/catalogo', (req) => { const p = calcular({ dias: req.query['dias'] ?? '90', perfil: 'todos' }); return { dias: p.dias, ...p.catalogo }; });
+  // Analítica: el adaptador deja los cálculos a la aplicación compartida.
+  app.get('/analytics/produccion', (req) => aplicacion.produccion(req.query));
+  app.get('/analytics/flujo', (req) => aplicacion.flujo(req.query));
+  app.get('/analytics/eficiencia', (req) => aplicacion.eficiencia(req.query));
+  app.get('/analytics/matriz-skills', (req) => aplicacion.matrizSkills(req.query));
+  app.get('/analytics/sugerencias', (req) => aplicacion.sugerencias(req.query));
+  app.get('/analytics/acierto', (req) => aplicacion.acierto(req.query));
+  app.get('/skills/catalogo', (req) => aplicacion.catalogoSkills(req.query));
 
   // ── Inspiration: la biblioteca de recursos en SOLO LECTURA (las altas, la revisión y el refresco son del Karajan nativo) ──
-  const conBiblioteca = <T,>(fn: () => T): T => { if (!biblioteca.disponible) throw falla(409, 'La biblioteca necesita resources.db (ATLAS_KARAJAN_RESOURCES).'); return fn(); };
-  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined);
-  app.get('/resources', (req) => conBiblioteca(() => biblioteca.listar({ grupo: texto(req.query['group']), tipo: texto(req.query['kind']), estado: texto(req.query['status']), runtime: texto(req.query['runtime']), origen: texto(req.query['source']), validez: texto(req.query['validity']), q: texto(req.query['q']), limite: entero(req.query['limit'], 100, 1, 500), desplazamiento: entero(req.query['offset'], 0, 0, 1_000_000) })));
-  app.get('/resources/index', () => conBiblioteca(() => biblioteca.recuentos()));
-  app.get('/resources/discovery/sources', () => conBiblioteca(() => ({ fuentes: biblioteca.fuentes() })));
-  app.get('/resources/review', (req) => conBiblioteca(() => biblioteca.listar({ validez: texto(req.query['state']) ?? 'pending_review', limite: 500 })));
-  app.get('/resources/validity-policy', () => conBiblioteca(() => { const pref = biblioteca.preferencias(); return { preferencias: Object.fromEntries(Object.entries(pref).filter(([k]) => /valid|polic/i.test(k))) }; }));
-  app.get('/resources/refresh/settings', () => conBiblioteca(() => { const pref = biblioteca.preferencias(); return { preferencias: Object.fromEntries(Object.entries(pref).filter(([k]) => /refresh|cadenc|schedule/i.test(k))) }; }));
-  app.get('/resource-groups', () => conBiblioteca(() => biblioteca.grupos()));
-  app.get('/resources/:id', (req) => conBiblioteca(() => biblioteca.detalle((req.params as { id: string }).id) ?? (() => { throw falla(404, 'recurso no encontrado'); })()));
+  for (const ruta of ['/resources', '/resources/index', '/resources/discovery/sources', '/resources/review', '/resources/validity-policy', '/resources/refresh/settings', '/resource-groups'])
+    app.get(ruta, (req) => consultarBiblioteca(biblioteca, ruta, req.query));
+  app.get('/resources/:id', (req) => consultarBiblioteca(biblioteca, `/resources/${encodeURIComponent(req.params['id']!)}`));
 
-  // ── Rotador de skills: núcleo (14 d), frecuentes (45 d) e instantáneas (bajo demanda, 3 d); el resto, al almacén ──
-  app.get('/skills/rotacion', () => {
-    const inventario = rotador.inventario();
-    const cuenta = (n: string) => inventario.filter((f) => f.nivel === n && f.instaladaEn.length).length;
-    return { config: rotador.leerEstado().config, resumen: { nucleo: cuenta('nucleo'), frecuente: cuenta('frecuente'), instantanea: cuenta('instantanea'), inactivas_instaladas: cuenta('inactiva'), en_almacen: inventario.filter((f) => f.enAlmacen.length && !f.instaladaEn.length).length }, plan: rotador.plan(), inventario };
-  });
-  /** Sin `aplicar`, solo el plan (simulación). Con él, mueve las carpetas (instaladas ⇄ almacén). */
-  app.post('/skills/rotar', async (req) => {
-    const aplicar = (req.body as { aplicar?: unknown } | null)?.aplicar === true;
-    if (aplicar) await guardian.exigir(req, 'POST /skills/rotar (aplicar)');
-    const plan = rotador.plan();
-    return { aplicado: aplicar, ...(aplicar ? rotador.aplicar(plan) : plan) };
-  });
+  // La aplicación centraliza la guarda al aplicar cambios.
+  app.get('/skills/rotacion', () => aplicacion.consultarRotacion());
+  app.post('/skills/rotar', (req) => aplicacion.rotar(req));
 
-  // Lo revisado por el usuario en la cabecera de agente de las notas del baúl (lo envía Atlas dev al reindexar).
-  const CAMPOS_REVISION = new Set(['agente_entrada', 'agente', 'skills_usadas', 'categoria_skill', 'nivel_tarea', 'dominio', 'intencion', 'palabras_clave']);
-  app.post('/feedback/revisiones', (req) => {
-    const lista = (req.body as { revisiones?: unknown } | null)?.revisiones;
-    if (!Array.isArray(lista) || lista.length > 5000) throw falla(422, 'revisiones: lista de hasta 5000 {task_id, campos}');
-    let guardadas = 0;
-    for (const r of lista as { task_id?: unknown; campos?: unknown; revisado_en?: unknown }[]) {
-      if (typeof r?.task_id !== 'string' || !r.task_id || r.task_id.length > 80) continue;
-      const campos: Record<string, string[]> = {};
-      for (const [k, vs] of Object.entries((r.campos ?? {}) as Record<string, unknown>)) {
-        if (CAMPOS_REVISION.has(k) && Array.isArray(vs)) campos[k] = vs.slice(0, 50).map((v) => String(v).slice(0, 120));
-      }
-      almacen.guardarRevision(r.task_id, campos, typeof r.revisado_en === 'string' ? r.revisado_en : new Date().toISOString());
-      guardadas++;
-    }
-    return { guardadas };
-  });
+  app.post('/feedback/revisiones', (req) => aplicacion.guardarRevisiones(req.body));
 
-  // ── Laboratorio: cada componente mide su función con tareas reales de Atlas dev, anonimizadas (ver laboratorio.ts) ──
-  const sal = salLocal(dirLab);
-  const skillsEquipo = (() => { let c: SkillDisponible[] | null = null; return () => (c ??= descubrirSkills()); })();
-  // El delegador del laboratorio solo planifica: todos los agentes «disponibles» (se mide el perfil, no este equipo) y sin límites.
-  const delegadorLab = new Delegador({
-    almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), skillsDisponibles: skillsEquipo, limites: () => null,
-    disponible: (p) => ({ nombre: p.nombre, etiqueta: p.nombre, gratis: false, disponible: true, ruta: null, motivo: null, login: '' }),
-    ejecutor: () => { throw new Error('El laboratorio no ejecuta agentes'); },
-  });
-  /** Lo que el curador necesita, leído ahora y en solo lectura: skills, fichas, usos, recomendaciones y protegidas. */
-  const entradaCurador = (): EntradaCurador => {
-    const skills = skillsEquipo(), tareas = almacen.tareasPlanas(), ultimos = rotador.ultimosUsos();
-    const usos: EntradaCurador['usos'] = {}, recomendadas: EntradaCurador['recomendadas'] = {};
-    const anotar = (r: Record<string, { ultimo?: string | null; ultima?: string | null; n: number }>, nombre: string, cuando: string, campo: 'ultimo' | 'ultima') => {
-      const f = (r[nombre] ??= { n: 0 }); f.n++;
-      if (!f[campo] || cuando > f[campo]!) f[campo] = cuando;
-    };
-    for (const t of tareas) {
-      for (const n of new Set([...t.ejecutadas, ...(t.revision?.['skills_usadas'] ?? [])])) anotar(usos, n, t.created_at, 'ultimo');
-      for (const n of t.recomendadas) anotar(recomendadas, n, t.created_at, 'ultima');
-    }
-    for (const [n, c] of Object.entries(ultimos)) { const f = (usos[n] ??= { ultimo: null, n: 0 }); if (!f.ultimo || c > f.ultimo) f.ultimo = c; }
-    return {
-      ahora: Date.now(), skills, fichas: Object.fromEntries(skills.map((x) => [x.name, biblioteca.fichaDe(x.name)])), usos, recomendadas,
-      registroDesde: tareas.reduce<string | null>((m, t) => (!m || t.created_at < m ? t.created_at : m), null), protegidas: rotador.leerEstado().config.protegidas,
-    };
-  };
-  /** Lo que Karajan sabe de sí mismo para el comparador: sus componentes y los tipos de escenario de cada laboratorio. */
-  const capacidadesKarajan = (): CapacidadKarajan[] => COMPONENTES.map((c) => ({ id: c.id, responsabilidad: c.responsabilidad, pruebas: c.laboratorio?.escenarios.map((e) => e.tipo) ?? [] }));
-  // ── Tutoría: el alumno local examinado con tareas ya integradas y un tutor elegido por razonamiento/precio (ver tutoria.ts, tutor.ts) ──
-  const rutaTutores = join(dirLab, 'tutores.json');
-  const seleccionTutor = () => elegirTutores(leerCatalogo(rutaTutores), {
-    disponibles: (['claude-cli', 'codex'] as ProveedorTutor[]).filter((n) => disponibilidad(PROVEEDORES.find((p) => p.nombre === n)!).disponible),
-    excluir: claudeExcedido(leerLimites()) !== null ? ['claude-cli'] : [],
-  });
-  const puertosExamen = (): PuertosExamen => {
-    const alumno = agenteAlumno();
-    const destino = 'agente' in alumno ? destinoDe(alumno.agente.proveedor.nombre) : null;
-    const rutasSkill = (n: string) => (['claude', 'codex'] as const).flatMap((d) => [join(rotador.raiz(d), n, 'SKILL.md'), join(rotador.almacen(d), n, 'SKILL.md')]);
-    return {
-      ejecutor: ejecutarProveedor,
-      planificar: (prompt, skillsHoja): PlanTarea => {
-        const c = delegadorLab.planificar(prompt).clasificacion;
-        return { dominio: c.domain[0] ?? 'general', nivel: Number(/[1-5]/.exec(c.complexity_level)?.[0] ?? 1),
-          subtareas: c.subtasks.map((st, i) => ({ nombre: st.name, validacion: st.validation, skills: i === 0 && skillsHoja?.length ? skillsHoja : st.recommended_skills ?? [] })) };
-      },
-      instaladas: () => new Set(destino ? rotador.inventario().filter((f) => f.instaladaEn.includes(destino)).map((f) => f.skill) : []),
-      textoSkill: (n) => { const r = rutasSkill(n).find((x) => existsSync(x)); return r ? readFileSync(r, 'utf8') : null; },
-    };
-  };
-  /** Las skills que SkillForge dejó activas y validadas con modelos reales para este alumno (si el laboratorio está en el Workspace). */
-  const skillsForjadas = (a: { proveedor: { nombre: string }; modelo: string }) => leerSkillsForjadas(carpetaSkillForge(), { proveedor: a.proveedor.nombre, modelo: a.modelo });
-  const examenesPrevios = (): ExamenAnonimo[] => registroLab.ejecuciones('tutoria', 500).filter((e) => e.escenario === 'examen')
-    .flatMap((e) => ((e.detalle as { nuevos?: ExamenAnonimo[] } | null)?.nuevos ?? []));
-  const actualizarTutores = async () => {
-    const r = await actualizarCatalogo(rutaTutores);
-    if (r.cambio) console.warn(`[karajan] tutor: ${r.antes ? `${r.antes.proveedor}/${r.antes.modelo}` : 'ninguno'} → ${r.despues ? `${r.despues.proveedor}/${r.despues.modelo}` : 'ninguno'}`);
-    return r;
-  };
-  const contextoDe = (id: string) => {
-    let cache: Promise<TareaAnonima[]> | null = null;
-    const base: ContextoLab = {
-      tareas: () => (cache ??= atlasDev.tareas(1000).then((t) => anonimizar(t, sal))),
-      calibraciones: (c) => registroLab.calibraciones(c),
-    };
-    switch (id) {
-      case 'delegador': return { ...base, perfil: () => perfilPorDefecto(perfiles.leer()), planificar: (p: string) => delegadorLab.planificar(p) };
-      case 'selector': return { ...base, skills: skillsEquipo, revisadas: () => almacen.tareasPlanas().filter((t) => t.revision?.['skills_usadas']?.length).map((t) => ({ id: t.task_id, prompt: t.prompt, skills: t.revision!['skills_usadas']! })) };
-      case 'clasificador': return { ...base, clasificar: (p: string) => clasificar(p, config()) };
-      case 'biblioteca': return { ...base, biblioteca, skills: skillsEquipo };
-      case 'curador': return { ...base, entrada: entradaCurador, borradores: () => pasarela.listar().then((l) => l.map((b) => ({ clave: b.clave, estado: b.estado }))).catch(() => []) };
-      case 'eficiencia': case 'metodo': case 'prompts': return { ...base, clasificar: (p: string) => { const k = clasificar(p, config()); return { nivel: Number(/[1-5]/.exec(k.complexity_level)?.[0] ?? 1), dominio: k.domain[0] ?? 'general', intencion: k.intent }; } };
-      // Ejecución y observación: leen el registro y el equipo en solo lectura; lo que reproducen lo hacen en temporales.
-      case 'almacen': return { ...base, almacen };
-      case 'proveedores': return { ...base, runs: () => almacen.tareasPlanas().flatMap((t) => t.runs ?? []), buscar: (b: string) => buscarBinario(b) };
-      case 'limites': return { ...base, ruta: rutaLimites(), ahora: () => Date.now() };
-      case 'dosificador': return { ...base, config: configDos };
-      case 'aislamiento': return { ...base, workspace: process.env['ATLAS_WORKSPACE'] ?? null };
-      case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
-      case 'produccion': return base;
-      case 'rotador': return { ...base, rotador, historial: () => rotador.historial(), ahora: () => Date.now() };
-      case 'tutor': return { ...base, catalogo: () => leerCatalogo(rutaTutores), disponibles: () => (['claude-cli', 'codex'] as ProveedorTutor[]).filter((n) => disponibilidad(PROVEEDORES.find((p) => p.nombre === n)!).disponible), excluir: () => (claudeExcedido(leerLimites()) !== null ? ['claude-cli' as ProveedorTutor] : []), ahora: () => Date.now() };
-      case 'tutoria': return {
-        ...base, tareasReales: () => atlasDev.tareas(1000), hash: (id: string) => hashTarea(sal, id), repos: () => listarRepos(process.env['ATLAS_WORKSPACE'] ?? homedir()),
-        alumno: () => agenteAlumno(), tutor: () => { const a = agenteTutor(seleccionTutor().tutor); return a ? { agente: a } : { motivo: seleccionTutor().avisos.join(' · ') || 'sin tutor' }; },
-        forjadas: () => { const a = agenteAlumno(); return 'agente' in a ? skillsForjadas(a.agente) : []; },
-        puertos: puertosExamen, previos: examenesPrevios, autorizado: () => process.env['KARAJAN_TUTORIA_EXAMENES'] === '1', maxPorEjecucion: () => Math.max(1, Number(process.env['KARAJAN_TUTORIA_MAX']) || 3),
-      };
-      case 'comparador': return { ...base, biblioteca, skills: skillsEquipo, capacidades: capacidadesKarajan };
-      default: return base;
-    }
-  };
-  const ultimas = (id: string) => {
-    const vistas = new Set<string>();
-    return registroLab.ejecuciones(id, 100).filter((e) => !vistas.has(e.escenario) && vistas.add(e.escenario))
-      .map((e) => ({ escenario: e.escenario, inicio: e.inicio, muestra: e.muestra, suficiente: e.suficiente, hallazgos: e.hallazgos.length, error: e.error, metricas: e.metricas }));
-  };
-
-  app.get('/laboratorio/componentes', () => ({
-    version: ctx.version, modo: guardian.modo(), capas: CAPAS,
-    componentes: COMPONENTES.map((c) => ({
-      id: c.id, capa: c.capa, responsabilidad: c.responsabilidad, modulos: c.modulos, pendiente: c.pendiente ?? null,
-      escenarios: c.laboratorio?.escenarios.map((e) => ({ id: e.id, tipo: e.tipo, descripcion: e.descripcion })) ?? [],
-      ultimas: c.laboratorio ? ultimas(c.id) : [],
-    })),
-  }));
-  // Datos de la ventana «Arquitectura» de Atlas dev: solo lectura (ver arquitectura.ts y docs/laboratorio/componentes.md).
-  const cacheArquitectura = new Map<string, { en: number; valor: unknown }>();
-  const contextoArquitectura = (): ContextoArquitectura => ({
-    version: ctx.version, modo: guardian.modo(), dirDatos, dirLab, config,
-    perfil: () => { try { return perfilPorDefecto(perfiles.leer()); } catch { return null; } },
-    rotador, limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
-    registro: registroLab, almacen, cache: cacheArquitectura, ttlMs: 30_000,
-  });
-  app.get('/laboratorio/arquitectura', async () => construirArquitectura(contextoArquitectura()));
-  app.get('/laboratorio/arquitectura/:id', async (req) => {
-    const c = await construirArquitectura(contextoArquitectura(), { id: req.params['id']! });
-    if (!c) throw falla(404, `No hay componente «${req.params['id']}»`);
-    return c;
-  });
-  /** Solo lectura: `?skill=<nombre>` una skill del equipo, `?skill=karajan` Karajan con las pruebas de sus pares, sin `skill` todo el equipo (`?grupo=` filtra por grupo). */
-  app.get('/laboratorio/comparar', (req) => {
-    const skill = req.query['skill'] || '', grupo = req.query['grupo'] || '';
-    if (!biblioteca.disponible) throw falla(409, 'El comparador necesita resources.db (ATLAS_KARAJAN_RESOURCES).');
-    if (skill === 'karajan') { const k = compararKarajan(biblioteca, capacidadesKarajan()); return { karajan: k, pruebas: pruebasEnGrupos(biblioteca, [GRUPO_KARAJAN]) }; }
-    if (skill) return compararSkill(biblioteca, skillsEquipo().find((s) => s.name === skill) ?? { name: skill });
-    const g = (x: string | null) => !grupo || (x ?? '') === grupo || (x ?? '').endsWith(`_${grupo}`);
-    return { skills: compararEquipo(biblioteca, skillsEquipo()).filter((c) => g(c.grupo)) };
-  });
-  app.get('/laboratorio/ejecuciones', (req) => registroLab.ejecuciones(req.query['componente'] || undefined, entero(req.query['limite'], 50, 1, 1000)));
-  // Tutores y tutoría: GET solo lee; POST actualiza el catálogo de tutores (recalcula el tutor) y no ejecuta ningún examen.
-  app.get('/laboratorio/tutores', () => ({ ...seleccionTutor(), catalogo: leerCatalogo(rutaTutores) }));
-  app.post('/laboratorio/tutores/actualizar', async () => actualizarTutores());
-  app.get('/laboratorio/tutoria', () => {
-    const alumno = agenteAlumno();
-    const todos = examenesPrevios();
-    const nombre = 'agente' in alumno ? `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}` : null;
-    return { alumno: nombre, motivo_sin_alumno: 'motivo' in alumno ? alumno.motivo : null, tutor: seleccionTutor().tutor, autorizado: process.env['KARAJAN_TUTORIA_EXAMENES'] === '1',
-      calificacion: calificacion(nombre ? todos.filter((e) => e.alumno === nombre) : todos), alumnos: [...new Set(todos.map((e) => e.alumno))],
-      skillforge: { laboratorio: carpetaSkillForge() !== null, skills: 'agente' in alumno ? skillsForjadas(alumno.agente).map((s) => ({ id: s.id, version: s.version, dominios: s.dominios })) : [], efecto: efectoForjadas(nombre ? todos.filter((e) => e.alumno === nombre) : todos) } };
-  });
-  // Brechas del alumno para la skill skillforge-lab: solo agregados anónimos. 409 si falta el alumno o el tutor (no hay a quién forjarle nada).
-  app.get('/laboratorio/tutoria/brechas', () => {
-    const alumno = agenteAlumno(), tutor = seleccionTutor().tutor;
-    if (!('agente' in alumno)) throw falla(409, `sin alumno: ${alumno.motivo}`);
-    if (!tutor) throw falla(409, 'sin tutor vigente (kj tutoria actualizar)');
-    const nombre = `${alumno.agente.proveedor.nombre}/${alumno.agente.modelo}`;
-    return informeBrechas(examenesPrevios().filter((e) => e.alumno === nombre), { proveedor: alumno.agente.proveedor.nombre, modelo: alumno.agente.modelo }, { proveedor: tutor.proveedor, modelo: tutor.modelo });
-  });
-  app.get('/laboratorio/modo', () => ({ modo: guardian.modo(), fichero: join(dirDatos, 'modo.json') }));
-  app.get('/laboratorio/propuestas', () => pasarela.listar());
-  // Curador: qué skills sobran. GET solo lee; POST manda cada propuesta como borrador (idempotente por `curador:<regla>:<skill>`), nunca retira nada.
-  app.get('/laboratorio/curador', () => ({ generado: new Date().toISOString(), umbrales: UMBRALES_CURADOR, reglas: REGLAS_CURADOR.map((r) => ({ id: r.id, accion: r.accion, umbral: r.umbral(UMBRALES_CURADOR), descripcion: r.descripcion })), propuestas: curar(entradaCurador()) }));
-  app.post('/laboratorio/curador/proponer', async () => {
-    const propuestas = curar(entradaCurador());
-    const borradores = [];
-    for (const p of propuestas) borradores.push({ ...p, borrador: await pasarela.proponer('curador', aHallazgo(p)) });
-    return { propuestas: borradores };
-  });
-  /** Ejecuta el laboratorio de un componente (o `todos`). Solo mide y propone: los hallazgos `alta|media` salen como borradores. */
-  app.post('/laboratorio/ejecutar', async (req) => {
-    const b = (req.body ?? {}) as { componente?: unknown; escenario?: unknown; proponer?: unknown };
-    const id = typeof b.componente === 'string' ? b.componente : '';
-    const elegidos = id === 'todos' ? COMPONENTES.filter((c) => c.laboratorio) : [componente(id)].filter((c) => c !== null);
-    if (!elegidos.length) throw falla(404, `No hay componente «${id}». Usa «todos» o uno de: ${COMPONENTES.filter((c) => c.laboratorio).map((c) => c.id).join(', ')}`);
-    const sinLab = elegidos.find((c) => !c.laboratorio);
-    if (sinLab) throw falla(409, `«${sinLab.id}» aún no tiene laboratorio: ${sinLab.pendiente}`);
-    const informes = [];
-    for (const c of elegidos) {
-      informes.push(await ejecutarLaboratorio({ id: c.id, version: ctx.version, laboratorio: c.laboratorio! }, contextoDe(c.id), registroLab,
-        { pasarela: b.proponer === false ? null : pasarela, escenario: typeof b.escenario === 'string' ? b.escenario : null }));
-    }
-    return { informes };
-  });
-
-  /** Para el panel sí/no de «Preparando»: sugerencias ponderadas para el prompt y búsqueda en la biblioteca, como tarjetas. */
-  app.get('/laboratorio/sugerencias-skills', (req) => {
-    const prompt = (req.query['prompt'] ?? '').slice(0, 20_000), q = (req.query['q'] ?? '').slice(0, 200);
-    const equipo = skillsEquipo();
-    const porNombre = new Map(equipo.map((s) => [s.name, s]));
-    const tarjeta = (nombre: string, puntos: number | null, descripcion = '') => {
-      const s = porNombre.get(nombre), f = biblioteca.fichaDe(nombre);
-      return { nombre, puntos, descripcion: s?.description || f?.descripcion || descripcion, estrellas: f?.estrellas ?? null, heredadas: f?.heredadas ?? false,
-        repo_url: f?.repo_url ?? null, grupo: f?.grupo ?? null, instalada: (s?.instaladaEn.length ?? 0) > 0, almacen: (s?.enAlmacen.length ?? 0) > 0 && !(s?.instaladaEn.length) };
-    };
-    const sugeridas = prompt ? puntuarSkills(prompt, equipo).slice(0, entero(req.query['limite'], 10, 1, 30)).map((x) => tarjeta(x.nombre, x.puntos)) : [];
-    const encontradas = q ? [
-      ...equipo.filter((s) => `${s.name} ${s.description}`.toLowerCase().includes(q.toLowerCase())).slice(0, 15).map((s) => tarjeta(s.name, null)),
-      ...biblioteca.buscar(q, 15).filter((f) => !porNombre.has(f.slug) && !porNombre.has(f.nombre)).map((f) => ({ ...tarjeta(f.nombre, null, f.descripcion), instalable: true })),
-    ] : [];
-    return { sugeridas, encontradas, biblioteca: biblioteca.disponible };
-  });
-  /** La respuesta de la persona al sí/no de las skills de una tarea (solo se guarda el hash de la tarea). */
-  app.post('/laboratorio/calibracion', (req) => {
-    const b = (req.body ?? {}) as { tarea?: unknown; componente?: unknown; propuesta?: unknown; respuesta?: unknown; correccion?: unknown };
-    const lista = (v: unknown) => (Array.isArray(v) ? v.slice(0, 20).map((x) => String(x).slice(0, 120)) : []);
-    if (typeof b.tarea !== 'string' || !/^[\w-]{1,40}$/.test(b.tarea)) throw falla(422, 'tarea: el id de la tarea de Atlas dev');
-    if (b.respuesta !== 'si' && b.respuesta !== 'no' && b.respuesta !== 'sin_revisar') throw falla(422, 'respuesta: si | no | sin_revisar');
-    // Solo entrena el selector lo que existe: las skills desconocidas (ni del equipo ni de la biblioteca) se descartan y se devuelven.
-    const equipo = new Set(skillsEquipo().map((s) => s.name));
-    const conocida = (n: string) => equipo.has(n) || biblioteca.fichaDe(n) !== null;
-    const correccion = lista(b.correccion).filter(conocida);
-    registroLab.guardarCalibracion({ tarea_hash: hashTarea(sal, b.tarea), componente: typeof b.componente === 'string' ? b.componente.slice(0, 40) : 'selector', propuesta: lista(b.propuesta), respuesta: b.respuesta, correccion, creada: new Date().toISOString() });
-    return { guardada: true, descartadas: lista(b.correccion).filter((n) => !conocida(n)) };
-  });
-  /** Lo último que respondió la persona para una tarea (para no volver a preguntar y precargar el panel); solo se compara por hash. */
-  app.get('/laboratorio/calibracion', (req) => {
-    const tarea = req.query['tarea'] ?? '';
-    if (!/^[\w-]{1,40}$/.test(tarea)) throw falla(422, 'tarea: el id de la tarea de Atlas dev');
-    const hash = hashTarea(sal, tarea);
-    const c = registroLab.calibraciones(req.query['componente'] || 'selector').filter((x) => x.tarea_hash === hash).at(-1);
-    return c ? { calibrada: true, respuesta: c.respuesta, propuesta: c.propuesta, correccion: c.correccion, creada: c.creada } : { calibrada: false };
-  });
+  const laboratorio = crearAplicacionLaboratorio(runtime, ctx.version, dosificador);
+  app.get('/laboratorio/componentes', laboratorio.componentes);
+  app.get('/laboratorio/arquitectura', laboratorio.arquitectura);
+  app.get('/laboratorio/arquitectura/:id', laboratorio.arquitecturaDetalle);
+  app.get('/laboratorio/comparar', laboratorio.comparar);
+  app.get('/laboratorio/ejecuciones', laboratorio.ejecuciones);
+  app.get('/laboratorio/tutores', laboratorio.tutores);
+  app.post('/laboratorio/tutores/actualizar', laboratorio.actualizar);
+  app.get('/laboratorio/tutoria', laboratorio.tutoria);
+  app.get('/laboratorio/tutoria/brechas', laboratorio.brechas);
+  app.get('/laboratorio/modo', laboratorio.modo);
+  app.get('/laboratorio/propuestas', laboratorio.propuestas);
+  app.get('/laboratorio/curador', laboratorio.curador);
+  app.post('/laboratorio/curador/proponer', laboratorio.proponerCurador);
+  app.post('/laboratorio/ejecutar', laboratorio.ejecutar);
+  app.get('/laboratorio/sugerencias-skills', laboratorio.sugerenciasSkills);
+  app.post('/laboratorio/calibracion', laboratorio.guardarCalibracion);
+  app.get('/laboratorio/calibracion', laboratorio.leerCalibracion);
 
   // Automatismo: cada día se recalcula el tutor (los modelos y precios cambian cada semana). Sin clave no hace nada y lo dice el laboratorio.
   if (process.env['KARAJAN_TUTOR_AUTO'] !== '0' && process.env['ARTIFICIAL_ANALYSIS_API_KEY']) {
-    const reloj = setInterval(() => { void actualizarTutores().catch(() => undefined); }, 24 * 3_600_000);
+    const reloj = setInterval(() => { void laboratorio.actualizar().catch(() => undefined); }, 24 * 3_600_000);
     reloj.unref?.();
-    void actualizarTutores().catch(() => undefined);
+    void laboratorio.actualizar().catch(() => undefined);
   }
 
   for (const [metodo, ruta] of [['post', '/resources/recommend'], ['post', '/resources/ingest-url'], ['post', '/executions'], ['post', '/ingest']] as const) {

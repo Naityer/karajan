@@ -361,6 +361,13 @@ function preparar(a: string, entrada: EntradaDosificador, cfg: ConfigDosificador
 const inflightDe = (est: EstadoDosificador, a: string) => Object.values(est.leases).reduce((s, l) => (l.agente === a ? s + l.costePct : s), 0);
 
 /** Decide qué tareas se lanzan, dónde y cuándo. Pura: no muta `previo`; devuelve el estado nuevo. */
+/** Valida la entrada externa antes de aplicar la misma decisión en cualquier transporte. */
+export function decidirSolicitud(entrada: unknown, cfg: ConfigDosificador, estado: EstadoDosificador) {
+  const validada = validarEntrada(entrada, cfg);
+  if (!validada.ok) return validada;
+  return { ok: true as const, resultado: decidir(validada.entrada, cfg, estado) };
+}
+
 export function decidir(entrada: EntradaDosificador, cfg: ConfigDosificador = CONFIG_BASE, previo?: EstadoDosificador | null): Resultado {
   const ahora = entrada.ahora;
   const est: EstadoDosificador = previo ? normalizarEstado(JSON.parse(JSON.stringify(previo))) : estadoInicial();

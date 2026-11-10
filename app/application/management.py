@@ -13,6 +13,9 @@ from app.execution import monitoring
 from app.application.services import domain_event
 from app.domain.models import DecisionLogEntry, KarajanConfig, RoutingLayout
 from app.resources.resource_activation import attach_resource_recommendations
+from app.configuration.modo import comprobar_tarea_aceptada
+from app.application.dto import ResolvedIdentity
+from app.application.errors import AuthorizationDeniedError
 
 
 class ManagementService:
@@ -37,13 +40,22 @@ class ManagementService:
     def get_config(self) -> KarajanConfig:
         return self.runtime.config
 
-    def put_config(self, config: KarajanConfig) -> KarajanConfig:
+    @staticmethod
+    def _require_config_write(identity: ResolvedIdentity) -> None:
+        if "karajan:config:write" not in identity.capabilities and "*" not in identity.capabilities:
+            raise AuthorizationDeniedError(f"{identity.subject} lacks karajan:config:write")
+
+    def put_config(self, config: KarajanConfig, identity: ResolvedIdentity) -> KarajanConfig:
+        self._require_config_write(identity)
+        comprobar_tarea_aceptada(self.runtime.data_dir)
         return self.runtime.set_config(config)
 
     def get_routing_layout(self) -> RoutingLayout:
         return self.runtime.routing.load()
 
-    def put_routing_layout(self, layout: RoutingLayout) -> RoutingLayout:
+    def put_routing_layout(self, layout: RoutingLayout, identity: ResolvedIdentity) -> RoutingLayout:
+        self._require_config_write(identity)
+        comprobar_tarea_aceptada(self.runtime.data_dir)
         return self.runtime.routing.save(layout)
 
     def list_catalog(self):

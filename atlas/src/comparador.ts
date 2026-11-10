@@ -161,6 +161,16 @@ export function compararSkill(bib: Biblioteca, skill: { name: string; descriptio
 
 export const compararEquipo = (bib: Biblioteca, skills: { name: string; description?: string }[]): Comparacion[] => skills.map((s) => compararSkill(bib, s));
 
+/** Selección compartida por terminal y API, siempre en solo lectura. */
+export function consultarComparacion(bib: Biblioteca, skill: string, grupo: string, obtenerSkills: () => { name: string; description?: string }[], caps: CapacidadKarajan[]) {
+  if (!bib.disponible) throw Object.assign(new Error('El comparador necesita resources.db (ATLAS_KARAJAN_RESOURCES).'), { status: 409 });
+  if (skill === 'karajan') return { karajan: compararKarajan(bib, caps), pruebas: pruebasEnGrupos(bib, [GRUPO_KARAJAN]) };
+  const skills = obtenerSkills();
+  if (skill) return compararSkill(bib, skills.find((s) => s.name === skill) ?? { name: skill });
+  const coincide = (x: string | null) => !grupo || (x ?? '') === grupo || (x ?? '').endsWith(`_${grupo}`);
+  return { skills: compararEquipo(bib, skills).filter((c) => coincide(c.grupo)) };
+}
+
 /** Karajan frente a sus pares de «Orquestación y contexto», con las capacidades declaradas de `CLAVES_KARAJAN` (solo las de los componentes que existen). */
 export function compararKarajan(bib: Biblioteca, caps: CapacidadKarajan[]): Comparacion {
   const claves = [...new Set(caps.flatMap((c) => CLAVES_KARAJAN[c.id] ?? []))];
