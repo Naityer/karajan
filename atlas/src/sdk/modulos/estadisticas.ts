@@ -1,4 +1,4 @@
-import type { Comando, Contexto } from '../comandos';
+import { argumentosPosicionales, type Comando, type Contexto } from '../comandos';
 import type { Bloque, Panel } from '../panel';
 
 /**
@@ -94,7 +94,7 @@ export const comandosEstadisticas: Comando[] = [
     return panelTareas(Array.isArray(d) ? d : d.tasks ?? d.items ?? []);
   } },
   { ruta: ['estadisticas', 'tarea'], uso: 'estadisticas tarea <id>', resumen: 'detalle de una tarea: criterios y decisiones', ejecutar: async (ctx, args) => {
-    const id = args.find((a) => !a.startsWith('--'));
+    const id = argumentosPosicionales(args)[0];
     if (!id) throw new Error('uso: kj estadisticas tarea <id>');
     const [t, d] = await Promise.all([ctx.pedir(`/tasks/${encodeURIComponent(id)}`), ctx.pedir(`/tasks/${encodeURIComponent(id)}/decisions`).catch(() => [])]);
     return panelTarea(t as Tarea, d as { phase: string; decision: string; reason?: string }[]);

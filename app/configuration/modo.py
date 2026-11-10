@@ -22,8 +22,6 @@ from pathlib import Path
 
 from fastapi import HTTPException, Request
 
-from app.application import runtime as runtime_module
-
 ACEPTADA = {"encolada", "ejecutando"}
 
 
@@ -32,8 +30,10 @@ def leer_modo(data_dir: Path | None) -> str:
         return "desarrollo"
     try:
         modo = json.loads((Path(data_dir) / "modo.json").read_text(encoding="utf-8")).get("modo")
-    except (OSError, ValueError, AttributeError):
+    except FileNotFoundError:
         return "desarrollo"
+    except (OSError, ValueError, AttributeError):
+        return "produccion"
     return "desarrollo" if modo == "desarrollo" else "produccion"
 
 
@@ -50,11 +50,11 @@ def estado_tarea_atlas(tarea: str) -> str | None:
         return None
 
 
-def require_tarea_aceptada(request: Request) -> None:
-    """Dependencia FastAPI: en producción, la mutación necesita una tarea aceptada de Atlas dev."""
-    if leer_modo(runtime_module.current().data_dir) == "desarrollo":
+def comprobar_tarea_aceptada(data_dir: Path | None, tarea: str = "") -> None:
+    """Aplica la misma política de producción a adaptadores HTTP y embebidos."""
+    if leer_modo(data_dir) == "desarrollo":
         return
-    tarea = (request.headers.get("x-karajan-tarea") or "").strip()
+    tarea = tarea.strip()
     if tarea and len(tarea) <= 40 and tarea.replace("-", "").replace("_", "").isalnum() and estado_tarea_atlas(tarea) in ACEPTADA:
         return
     raise HTTPException(
@@ -64,3 +64,10 @@ def require_tarea_aceptada(request: Request) -> None:
             "(cabecera x-karajan-tarea). Propónlo desde el paquete (se abre como borrador) o acepta la tarea que lo pide."
         ),
     )
+
+
+def require_tarea_aceptada(request: Request) -> None:
+    """Dependencia FastAPI para las operaciones protegidas."""
+    from app.application import runtime as runtime_module
+
+    comprobar_tarea_aceptada(runtime_module.current().data_dir, request.headers.get("x-karajan-tarea") or "")

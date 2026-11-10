@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { redondear } from './redondeo';
@@ -30,20 +30,51 @@ type Fila = Record<string, unknown>;
 const ESTADOS = new Set(['classified', 'delegated', 'queued', 'completed', 'failed', 'cancel_requested', 'outcome_unknown']);
 const BACKENDS = new Set(['api', 'cli']);
 
+/** Consultas comunes de tareas, sin efectos de escritura. */
+export function consultarTareas(almacen: Almacen, ruta: string, query: Record<string, string | undefined> = {}): unknown {
+  const error = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
+  const entero = (v: string | undefined, def: number, min: number, max: number) => v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Math.min(max, Math.max(min, Number(v))) : def;
+  if (ruta === '/tasks') return almacen.listarTareas(entero(query['limit'], 50, 1, 500), entero(query['offset'], 0, 0, 1_000_000)).map((t) => ({ task_id: t.task_id, prompt: t.prompt, status: t.status, created_at: t.created_at, updated_at: t.updated_at, classification: t.classification, delegation: t.delegation }));
+  const m = /^\/tasks\/([^/]+)(\/decisions|\/runs)?$/.exec(ruta);
+  if (!m) return error(404, 'Consulta no disponible');
+  const id = decodeURIComponent(m[1]!);
+  if (m[2] === '/decisions') return almacen.decisiones(id);
+  if (m[2] === '/runs') return almacen.runs(id);
+  return almacen.tarea(id) ?? error(404, 'Tarea no encontrada');
+}
+
 export class Almacen {
   private readonly db: DatabaseSync;
+  private readonly soloLectura: boolean;
 
-  constructor(ruta: string) {
-    mkdirSync(dirname(ruta), { recursive: true });
-    this.db = new DatabaseSync(ruta);
-    this.db.exec('PRAGMA journal_mode = WAL');
-    this.db.exec(ESQUEMA);
+  constructor(ruta: string, opciones: { soloLectura?: boolean } = {}) {
+    this.soloLectura = opciones.soloLectura === true;
+    if (opciones.soloLectura && !existsSync(ruta)) throw new Error(`No existe la base de tareas: ${ruta}`);
+    if (!opciones.soloLectura) mkdirSync(dirname(ruta), { recursive: true });
+    this.db = new DatabaseSync(ruta, { readOnly: opciones.soloLectura === true });
+    this.db.exec('PRAGMA busy_timeout = 5000');
+    if (opciones.soloLectura) {
+      try {
+        this.db.prepare('SELECT task_id, prompt, status, created_at, updated_at, classification_json, delegation_json FROM tasks LIMIT 0').all();
+        this.db.prepare('SELECT task_id, created_at FROM decisions LIMIT 0').all();
+      }
+      catch (err) { this.db.close(); throw new Error(`Base de tareas incompatible: ${(err as Error).message}`); }
+    } else {
+      this.db.exec('PRAGMA journal_mode = WAL');
+      this.db.exec(ESQUEMA);
+    }
   }
 
   cerrar(): void { try { this.db.close(); } catch { /* ya cerrada */ } }
 
   private todas(sql: string, ...params: (string | number)[]): Fila[] {
-    try { return this.db.prepare(sql).all(...params) as Fila[]; } catch { return []; }
+    try { return this.db.prepare(sql).all(...params) as Fila[]; }
+    catch (err) {
+      // Nunca confundir una base ocupada con una consulta sin resultados.
+      const codigo = (err as { errcode?: number }).errcode;
+      if (this.soloLectura || (typeof codigo === 'number' && [5, 6].includes(codigo & 0xff))) throw err;
+      return [];
+    }
   }
 
   private agrupar(columna: 'level' | 'model' | 'status'): Record<string, number> {

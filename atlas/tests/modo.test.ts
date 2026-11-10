@@ -55,7 +55,7 @@ describe('servidor del paquete en producción', () => {
 
   before(async () => {
     for (const k of ['ATLAS_KARAJAN_DATA', 'ATLAS_WORKSPACE', 'ATLAS_KARAJAN_LAYOUT', 'ATLAS_DEV_API', 'ATLAS_KARAJAN_RESOURCES']) entorno[k] = process.env[k];
-    process.env['ATLAS_KARAJAN_DATA'] = join(dir, 'no-existe');
+    delete process.env['ATLAS_KARAJAN_DATA'];
     process.env['ATLAS_WORKSPACE'] = dir;
     delete process.env['ATLAS_KARAJAN_LAYOUT'];
     process.env['ATLAS_DEV_API'] = 'http://127.0.0.1:4100';

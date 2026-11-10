@@ -12,7 +12,7 @@ When Karajan's `dispatch_mode` is `"queue"`, delegation is asynchronous and
 availability-driven (an agent only takes a task once it's actually free,
 regardless of arrival order) — `karajan_run` polls until the task finishes.
 
-Every tool uses the same semantic client contract as the terminal CLI. The
+Every tool uses the shared semantic client contract. The
 default transport is embedded (same process, no socket); set `KARAJAN_URL` or
 `KARAJAN_TRANSPORT=http` for an explicit HTTP boundary.
 
@@ -69,10 +69,7 @@ def _not_running_message() -> str:
     return (
         "ERROR: El servidor Karajan no está activo.\n"
         "Inícialo con:\n"
-        "  karajan activate --start\n"
-        "o manualmente:\n"
-        "  cd C:\\Users\\tiand\\Desktop\\Workspace\\karajan\n"
-        "  .venv\\Scripts\\uvicorn app.main:app --reload"
+        "  python -m uvicorn app.main:app --host 127.0.0.1 --port 8001"
     )
 
 
@@ -120,8 +117,7 @@ def karajan_run(prompt: str) -> str:
             f"[Karajan] Tarea clasificada como N5/crítica (score={score}).\n"
             f"Requiere revisión humana antes de delegar a {assigned_model}.\n"
             f"task_id={task_id}\n"
-            "Aprueba en el dashboard de Karajan o via:\n"
-            f"  karajan tasks approve {task_id}"
+            "Solicita la revisión humana en Karajan."
         )
 
     try:
@@ -226,14 +222,13 @@ def karajan_providers() -> str:
     return "\n".join(lines) if lines else "Sin proveedores"
 
 
-# --- Parity with the `karajan` CLI's mutating commands -----------------------
+# --- Explicit operations ------------------------------------------------------
 
 
 @mcp.tool()
 def karajan_assign(task_id: str, provider_or_entity: str, as_entity: bool = False) -> str:
     """Force-delegate an already-classified task to one named agent/provider,
-    bypassing the automatic tier-based routing (the same bypass `karajan assign`
-    uses from the terminal).
+    bypassing the automatic tier-based routing.
 
     Args:
         task_id: id of a task already classified via karajan_classify/karajan_run.

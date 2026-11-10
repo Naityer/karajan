@@ -2,6 +2,16 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { barras, ejecutar, graficaHtml, graficaSvg, sparkline } from '../src/cli';
+import { normalizarConfig } from '../src/dosificador-config';
+import { simularSolicitud } from '../src/dosificador-sim';
+import { decidirSolicitud } from '../src/dosificador';
+import { normalizarEstado } from '../src/dosificador-config';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { RegistroLab } from '../src/laboratorio';
+import { Almacen } from '../src/almacen';
 
 const servidor = (rutas: Record<string, unknown>) => {
   const pedidas: { url: string; metodo: string; cuerpo: unknown }[] = [];
@@ -24,6 +34,201 @@ const correr = async (args: string[], rutas: Record<string, unknown>) => {
 };
 
 describe('kj (terminal)', () => {
+  it('planifica una misión local sin ejecutar agentes ni añadir rutas al prompt', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kj-plan-'));
+    try {
+      new Almacen(join(dir, 'task_logs.db')).cerrar();
+      writeFileSync(join(dir, 'active_config.json'), '{}');
+      writeFileSync(join(dir, 'routing_layout.json'), '{"profiles":[{"id":"current","name":"Local","entities":[]}],"active_profile_id":"current","default_profile_id":"current"}');
+      let salida = '';
+      const codigo = await ejecutar(['control', 'mision', 'revisar proyecto', '--datos', dir, '--local', '--json'], {
+        fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', leer: (p) => readFileSync(p, 'utf8'), escribir: (s) => { salida = s; },
+      });
+      assert.equal(codigo, 0);
+      assert.equal(JSON.parse(salida).datos.clasificacion.original_prompt, 'revisar proyecto');
+      assert.equal(await ejecutar(['control', 'mision', 'x', '--local', '--ejecutar'], { api: 'http://k', fetch: async () => { throw new Error('red'); }, escribir: () => {} }), 2);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('consulta proveedores locales sin conectar con la API', async () => {
+    let salida = '';
+    const codigo = await ejecutar(['control', 'proveedores', '--local', '--json'], {
+      fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', escribir: (s) => { salida = s; },
+    });
+    assert.equal(codigo, 0);
+    assert.ok(JSON.parse(salida).datos.some((x: { nombre: string }) => x.nombre === 'codex'));
+  });
+  it('no crea una base si falta el historial del laboratorio', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kj-sin-lab-'));
+    const ruta = join(dir, 'ausente.db');
+    try {
+      await assert.rejects(ejecutar(['lab', 'informe', 'dosificador', '--local', '--lab-db', ruta], {
+        fetch: async () => { throw new Error('red'); }, api: 'http://k', escribir: () => {},
+      }), /No existe la base/);
+      assert.equal(existsSync(ruta), false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('rechaza bases de recursos incompatibles sin inventar un catálogo vacío', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kj-recursos-'));
+    const ruta = join(dir, 'vacia.db');
+    try {
+      new DatabaseSync(ruta).close();
+      let salida = '';
+      const codigo = await ejecutar(['inspiration', 'resumen', '--resources-db', ruta], {
+        fetch: async () => { throw new Error('red'); }, api: 'http://k', localPorDefecto: true, escribir: (s) => { salida = s; },
+      });
+      assert.equal(codigo, 2);
+      assert.match(salida, /falta la tabla resources/);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('lista tareas locales en solo lectura sin crear bases ausentes', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kj-tareas-'));
+    const ruta = join(dir, 'task_logs.db');
+    try {
+      new Almacen(ruta).cerrar();
+      let salida = '';
+      const entorno = { fetch: async () => { throw new Error('red'); }, api: 'http://k', localPorDefecto: true, escribir: (s: string) => { salida = s; } };
+      assert.equal(await ejecutar(['estadisticas', 'tareas', '--tasks-db', ruta, '--json'], entorno), 0);
+      assert.match(salida, /tareas/i);
+      assert.equal(await ejecutar(['estadisticas', 'tareas', '--datos', dir, '--json'], entorno), 0);
+      assert.equal(await ejecutar(['estadisticas', 'resumen', '--tasks-db', ruta, '--json'], entorno), 0);
+      assert.equal(JSON.parse(salida).datos.kpis.tareas, 0);
+      assert.equal(await ejecutar(['grafica', 'flujo', '--tasks-db', ruta, '--json'], entorno), 0);
+      assert.equal(JSON.parse(salida).total, 0);
+      assert.equal(await ejecutar(['estadisticas', 'tareas', '--tasks-db', join(dir, 'ausente.db')], entorno), 2);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('consulta perfiles y jerarquía locales sin conectar', async () => {
+    const datos = '{"profiles":[{"id":"current","name":"Local","entities":[]}],"active_profile_id":"current","default_profile_id":"current"}';
+    let salida = '';
+    const entorno = { fetch: async () => { throw new Error('red'); }, api: 'http://k', localPorDefecto: true, leer: () => datos, escribir: (s: string) => { salida = s; } };
+    assert.equal(await ejecutar(['control', 'perfiles', '--layout', 'perfil.json', '--json'], entorno), 0);
+    assert.match(salida, /Local/);
+    assert.equal(await ejecutar(['control', 'jerarquia', '--layout', 'perfil.json'], entorno), 0);
+  });
+  it('lee la configuración local y rechaza escritura local', async () => {
+    let salida = '';
+    const entorno = { fetch: async () => { throw new Error('red'); }, api: 'http://k', localPorDefecto: true, leer: () => '{}', escribir: (s: string) => { salida = s; } };
+    assert.equal(await ejecutar(['dosificador', 'config', '--config', 'cfg', '--json'], entorno), 0);
+    assert.equal(JSON.parse(salida).fichero, 'cfg');
+    assert.equal(await ejecutar(['dosificador', 'config', '--local', '--set', '{}'], entorno), 2);
+  });
+  it('lee el modo local sin acudir a la API y falla si falta la ruta', async () => {
+    let salida = '';
+    const entorno = { fetch: async () => { throw new Error('red'); }, api: 'http://k', localPorDefecto: true, leer: () => '{"modo":"produccion"}', escribir: (s: string) => { salida = s; } };
+    assert.equal(await ejecutar(['modo', '--datos', 'datos', '--json'], entorno), 0);
+    assert.equal(JSON.parse(salida).modo, 'produccion');
+    assert.equal(await ejecutar(['modo', '--local', '--datos', 'datos'], { ...entorno, leer: () => { throw new Error('ausente'); } }), 2);
+  });
+  it('ejecuta el laboratorio sintético local sin red ni borradores', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kj-lab-'));
+    const ruta = join(dir, 'laboratorio.db');
+    try {
+      new RegistroLab(ruta).cerrar();
+      let salida = '';
+      const codigo = await ejecutar(['lab', 'run', 'dosificador', '--local', '--sin-borradores', '--config', 'cfg', '--lab-db', ruta, '--escenario', 'contrato', '--json'], {
+        fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', leer: () => '{}', escribir: (s) => { salida = s; },
+      });
+      assert.equal(codigo, 0);
+      assert.equal(JSON.parse(salida).informes[0].escenarios[0].escenario, 'contrato');
+      const informe = await ejecutar(['lab', 'informe', 'dosificador', '--local', '--lab-db', ruta, '--json'], {
+        fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', escribir: (s) => { salida = s; },
+      });
+      assert.equal(informe, 0);
+      assert.equal(JSON.parse(salida)[0].escenario, 'contrato');
+      const db = new DatabaseSync(ruta, { readOnly: true });
+      try { assert.equal(Number(db.prepare('SELECT count(*) AS n FROM lab_ejecuciones').get()!.n), 1); } finally { db.close(); }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('decide localmente en simulacro con el mismo contrato que HTTP', async () => {
+    const entrada = { ahora: 1_700_000_000_000, tareas: [], equipos: [], agentes: {}, uso: {} };
+    const ficheros: Record<string, string> = { entrada: JSON.stringify(entrada), config: '{}', estado: '{}' };
+    let salida = '';
+    const codigo = await ejecutar(['dosificador', 'decidir', '--local', '--entrada', 'entrada', '--config', 'config', '--estado', 'estado', '--json'], {
+      fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', leer: (p) => ficheros[p]!, escribir: (s) => { salida = s; },
+    });
+    const esperado = decidirSolicitud(entrada, normalizarConfig({}), normalizarEstado({}));
+    assert.ok(esperado.ok);
+    if (!esperado.ok) throw new Error(esperado.error);
+    assert.equal(codigo, 0);
+    assert.deepEqual(JSON.parse(salida), { decisiones: esperado.resultado.decisiones, diferidas: esperado.resultado.diferidas, estado: esperado.resultado.resumen });
+    assert.equal(ficheros.estado, '{}');
+  });
+  it('rechaza modo local no implementado y la combinación de transportes', async () => {
+    const entorno = { fetch: async () => { throw new Error('red'); }, api: 'http://k', escribir: (_s: string) => {} };
+    assert.equal(await ejecutar(['lab', 'run', 'dosificador', '--local'], entorno), 2);
+    assert.equal(await ejecutar(['lab', 'ls', '--local', '--http'], entorno), 2);
+  });
+  it('lee componentes locales y su historial sin conectarse ni escribir en la base', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kj-local-'));
+    const ruta = join(dir, 'laboratorio.db');
+    try {
+      writeFileSync(join(dir, 'modo.json'), '{"modo":"produccion"}');
+      const db = new DatabaseSync(ruta);
+      db.exec("CREATE TABLE lab_ejecuciones (id INTEGER, componente TEXT, escenario TEXT, inicio TEXT, muestra INTEGER, suficiente INTEGER, hallazgos_json TEXT, error TEXT, metricas_json TEXT); INSERT INTO lab_ejecuciones VALUES (1, 'dosificador', 'contrato', '2026-01-01', 1, 1, '[]', NULL, '{}')");
+      db.close();
+      let salida = '';
+      const codigo = await ejecutar(['componentes', '--local', '--datos', dir, '--lab-db', ruta, '--json'], {
+        fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', escribir: (s) => { salida = s; },
+        leer: (p) => readFileSync(p, 'utf8'),
+      });
+      assert.equal(codigo, 0);
+      const componente = JSON.parse(salida).componentes.find((c: { id: string }) => c.id === 'dosificador');
+      assert.equal(componente.ultimas[0].escenario, 'contrato');
+      const local = await ejecutar(['lab', 'ls', '--local', '--lab-db', ruta, '--json'], {
+        fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', escribir: (s) => { salida = s; },
+      });
+      assert.equal(local, 0);
+      const listado = JSON.parse(salida);
+      assert.deepEqual(listado.find((c: { id: string }) => c.id === 'dosificador').ultimas, componente.ultimas);
+      const remoto = await correr(['lab', 'ls', '--http', '--json'], { '/laboratorio/componentes': { componentes: listado } });
+      assert.deepEqual(JSON.parse(remoto.texto), listado);
+      const inexistente = join(dir, 'ausente.db');
+      assert.equal(await ejecutar(['lab', 'ls', '--local', '--lab-db', inexistente], {
+        fetch: async () => { throw new Error('red'); }, api: 'http://k', escribir: (s) => { salida = s; },
+      }), 2);
+      assert.match(salida, /la base no existe/);
+      assert.equal(existsSync(inexistente), false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('lista laboratorios locales sin hacer peticiones', async () => {
+    let salida = '';
+    const codigo = await ejecutar(['lab', 'ls', '--json'], {
+      fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k', localPorDefecto: true,
+      escribir: (s) => { salida = s; },
+    });
+    assert.equal(codigo, 0);
+    assert.ok(JSON.parse(salida).some((c: { id: string }) => c.id === 'dosificador'));
+  });
+  it('no presenta tareas o borradores vacíos cuando Atlas falla en control estado', async () => {
+    await assert.rejects(correr(['control', 'estado', '--http'], {
+      '/laboratorio/modo': { modo: 'produccion' },
+      '/providers': [],
+      '/dosificador/estado': { modo: 'normal', agentes: {}, circuitos: {} },
+      '/tasks': [],
+    }), /No se puede consultar \/laboratorio\/propuestas: 404/);
+  });
+  it('no muestra grupos vacíos si falla su consulta en inspiration resumen', async () => {
+    await assert.rejects(correr(['inspiration', 'resumen', '--http'], { '/resources/index': {} }), /404/);
+  });
+  it('simula localmente con configuración explícita sin hacer peticiones', async () => {
+    let salida = '';
+    const codigo = await ejecutar(['dosificador', 'simular', '--local', '--config', 'config.json', '--semanas', '1', '--json'], {
+      fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k',
+      escribir: (s) => { salida = s; }, leer: () => '{}',
+    });
+    assert.equal(codigo, 0);
+    assert.deepEqual(JSON.parse(salida), simularSolicitud(normalizarConfig({}), { semanas: 1 }));
+  });
+
+  it('exige una configuración legible para simular localmente', async () => {
+    let salida = '';
+    const codigo = await ejecutar(['dosificador', 'simular', '--local', '--config', 'ausente'], {
+      fetch: async () => { throw new Error('no debe acceder a la red'); }, api: 'http://k',
+      escribir: (s) => { salida = s; }, leer: () => { throw new Error('ausente'); },
+    });
+    assert.equal(codigo, 2);
+    assert.match(salida, /no es un JSON legible/);
+  });
   it('barras y sparkline de texto', () => {
     assert.equal(sparkline([0, 0.5, 1]), '▁▅█');
     assert.equal(sparkline([null, 2, 2]), ' ▄▄');

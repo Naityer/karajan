@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
 import { registrar } from '../src/servidor';
+import { simularSolicitud } from '../src/dosificador-sim';
+import { leerConfig } from '../src/dosificador-config';
 
 /** Las rutas /dosificador/* del paquete, con un servidor falso y todo en un directorio temporal (ni ~/.atlas-dev ni datos reales). */
 type Manejador = (req: Record<string, unknown>, reply: { code(n: number): unknown }) => unknown;
@@ -38,7 +40,7 @@ describe('API del dosificador', () => {
 
   before(async () => {
     for (const k of ['ATLAS_KARAJAN_DATA', 'ATLAS_WORKSPACE', 'ATLAS_KARAJAN_LAYOUT', 'ATLAS_DEV_API', 'ATLAS_KARAJAN_RESOURCES', 'ATLAS_LIMITES_PLAN', 'KARAJAN_LIMITES_PLAN']) entorno[k] = process.env[k];
-    process.env['ATLAS_KARAJAN_DATA'] = join(dir, 'no-existe');
+    delete process.env['ATLAS_KARAJAN_DATA'];
     process.env['ATLAS_WORKSPACE'] = dir;
     delete process.env['ATLAS_KARAJAN_LAYOUT']; delete process.env['KARAJAN_LIMITES_PLAN'];
     process.env['ATLAS_DEV_API'] = 'http://127.0.0.1:1';
@@ -82,6 +84,19 @@ describe('API del dosificador', () => {
       assert.equal(r.status, 400, JSON.stringify(malo)?.slice(0, 60));
       assert.equal(typeof r.body['error'], 'string');
     }
+  });
+
+  it('informa si no puede guardar el estado en vez de confirmar una decisión no persistida', async () => {
+    const temporalBloqueado = join(datos, 'dosificador-estado.json.tmp');
+    mkdirSync(temporalBloqueado);
+    try {
+      const r = await llamar('POST /dosificador/decidir', { body: entrada() });
+      assert.equal(r.status, 503);
+      assert.match(String(r.body['detail']), /No se pudo guardar el estado del dosificador/);
+      assert.match(String(r.body['detail']), /permisos y el espacio disponible/);
+      const sim = await llamar('POST /dosificador/decidir', { body: { ...entrada(), simulacro: true } });
+      assert.equal(sim.status, 200, 'una simulación no guarda el estado');
+    } finally { rmSync(temporalBloqueado, { recursive: true, force: true }); }
   });
 
   it('observar libera el lease, aprende el coste de la clase y, si hay límite, abre el circuito hasta resets_at', async () => {
@@ -156,6 +171,7 @@ describe('API del dosificador', () => {
     assert.equal(r.status, 200);
     assert.equal(r.body['semanas'], 1);
     assert.equal(r.body['agenteSemanas'], 2);
+    assert.deepEqual(r.body, simularSolicitud(leerConfig(join(datos, 'dosificador.json')), { semanas: 1, semilla: 3 }));
     assert.equal((await llamar('POST /dosificador/simular', { body: { semanas: 500 } })).body['semanas'], 12);
   });
 

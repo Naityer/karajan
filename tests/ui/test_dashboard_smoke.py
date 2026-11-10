@@ -145,7 +145,15 @@ def test_every_view_mounts_without_console_errors(dashboard_server: str, browser
     page.wait_for_selector("#viewNav .view-tab", timeout=30_000)
 
     for view, section_id in VIEWS:
-        page.click(f'.view-tab[data-view="{view}"]')
+        if view in {"human", "decision"}:
+            # Ambos diagramas comparten Control; sus antiguas pestañas están
+            # ocultas y se alternan con el botón visible de intercambio.
+            page.click('.view-tab[data-view="control"]')
+            if page.locator(".stage").get_attribute("data-control-layout") != view:
+                page.click("#controlSwap")
+            assert page.locator(".stage").get_attribute("data-control-layout") == view
+        else:
+            page.click(f'.view-tab[data-view="{view}"]')
         page.wait_for_selector(f"#{section_id}.active", timeout=15_000)
         page.wait_for_timeout(1200)  # deja terminar el render y las peticiones de la vista
         page.screenshot(path=str(ARTIFACTS / f"{view}.png"), full_page=False)

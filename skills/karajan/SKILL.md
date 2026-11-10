@@ -1,32 +1,12 @@
 ---
 name: karajan
-description: Clasifica y registra tareas de desarrollo en el router local KARAJAN; delega a otro agente solo cuando el usuario pide ejecución real. Úsala para routing, selección de agente, trazabilidad o coordinación local.
+description: Clasifica y registra tareas de desarrollo en el router local KARAJAN; delega solo cuando el usuario lo solicita.
 ---
 
 # KARAJAN — router local de tareas
 
-Usa KARAJAN como una skill local y portable. La clasificación, la decisión y el historial permanecen en el harness local.
-No reproduzcas manualmente su clasificador ni construyas payloads `/ingest` salvo que el usuario aporte una clasificación ya hecha.
+Utiliza el servidor MCP de Karajan cuando esté disponible. `karajan_health` comprueba el servicio y `karajan_classify` clasifica y registra la tarea sin ejecutarla. Lee la clasificación y continúa localmente cuando corresponda. No fabriques clasificaciones ni registros `/ingest`.
 
-## Flujo normal
+Si el MCP no está disponible, el servidor HTTP se arranca desde el repositorio con `python -m uvicorn app.main:app --host 127.0.0.1 --port 8001`; la API `POST /classify-task` recibe `prompt` y, opcionalmente, `entry_agent`. La terminal de Atlas dev usa `kj`; consulta `docs/CLI.md` para sus comandos y su conexión.
 
-1. Comprueba el servicio con `karajan activate`. Si no responde, ejecuta una sola vez `karajan activate --start`.
-2. Para clasificar y registrar una tarea sin ejecutarla externamente: `karajan --json classify --entry <agente> "<tarea>"`, donde `<agente>` es quien recibió el prompt (`claude`, `codex`, `qwen`…). Así el Monitor de agentes sabe qué punto de entrada se usó.
-3. Lee el nivel, estrategia, skills y agente recomendados y continúa localmente cuando el entorno actual sea el ejecutor adecuado.
-
-No llames por separado a `/health`, `/ingest`, `/tasks` y `/decisions` para una operación que ya cubre el CLI.
-
-## Delegación opcional
-
-Solo cuando el usuario pida ejecutar mediante otro agente o proveedor, usa una invocación única:
-`karajan --json assign --prompt "<tarea>" --to <proveedor>`
-
-La delegación puede enviar el prompt y el contexto suministrado al proveedor elegido. Solicita autorización inmediatamente antes si implica datos locales, un proveedor externo, coste, escritura o una acción irreversible. Una clasificación local y de solo lectura no necesita esa autorización.
-
-Si Karajan devuelve `requires_human_review`, pide revisión únicamente antes de la ejecución que produzca efectos; no repitas la clasificación ni pierdas el contexto al aprobar.
-
-## Puertos y disponibilidad
-
-El servidor local usa `http://127.0.0.1:8001` por defecto. `KARAJAN_URL` permite cambiarlo. El CLI recuerda la raíz del repositorio tras el primer `activate --start`, por lo que después funciona desde cualquier carpeta.
-
-Si el CLI no está en `PATH`, usa el ejecutable del entorno virtual de Karajan o instala el paquete localmente con `pip install -e <ruta-del-repo-karajan>`. No recurras a `curl` salvo diagnóstico del propio CLI.
+Solo usa `karajan_assign` o `karajan_run` cuando el usuario solicite ejecución por otro agente o proveedor. Respeta la revisión humana y las autorizaciones necesarias para acciones externas.
