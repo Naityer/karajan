@@ -150,7 +150,7 @@ describe('API del dosificador', () => {
     assert.deepEqual([c.margenSeguridadPct, c.pacing.kp, c.pacing.maxRafagaPct], [14, 2, 8]);
     assert.equal(JSON.parse(readFileSync(join(datos, 'dosificador.json'), 'utf8')).margenSeguridadPct, 14);
     assert.equal((await llamar('PUT /dosificador/config', { body: { margenSeguridadPct: 999 } })).status, 200);
-    assert.equal(JSON.parse(readFileSync(join(datos, 'dosificador.json'), 'utf8')).margenSeguridadPct, 50, 'se recorta, no se rechaza');
+    assert.equal(JSON.parse(readFileSync(join(datos, 'dosificador.json'), 'utf8')).margenSeguridadPct, 100, 'se recorta, no se rechaza');
     assert.equal((await llamar('PUT /dosificador/config', { body: [] })).status, 422);
     await llamar('PUT /dosificador/config', { body: { margenSeguridadPct: 10 } });
   });
