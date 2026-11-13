@@ -9,7 +9,15 @@ import { delimiter, join } from 'node:path';
  */
 export type Tier = 'cheap_model' | 'cheap_or_medium_model' | 'medium_model' | 'strong_model' | 'strong_model_with_human_review';
 
-export interface Proveedor { nombre: string; etiqueta: string; binario: string; gratis: boolean; modelos: Partial<Record<Tier, string>>; args: (modelo: string) => string[]; login: string; modeloLocal?: string }
+export interface Proveedor {
+  nombre: string; etiqueta: string; binario: string; gratis: boolean; modelos: Partial<Record<Tier, string>>;
+  args: (modelo: string, instruccion?: string) => string[]; login: string; modeloLocal?: string;
+  /** La CLI no lee la instrucción de stdin: va como último argumento (sin shell, así que llega tal cual). */
+  instruccionEnArgumento?: boolean;
+}
+
+/** Límite práctico de la línea de comandos de Windows (~32 K): por encima, la tarea no se puede lanzar con esta CLI. */
+export const MAX_INSTRUCCION_ARGUMENTO = 24_000;
 
 export const PROVEEDORES: Proveedor[] = [
   {
@@ -27,6 +35,14 @@ export const PROVEEDORES: Proveedor[] = [
     nombre: 'ollama-qwen', etiqueta: 'Qwen (local)', binario: 'ollama', gratis: true, login: 'ollama serve', modeloLocal: 'qwen2.5:7b',
     modelos: { cheap_model: 'qwen2.5:7b', cheap_or_medium_model: 'qwen2.5:7b' },
     args: (m) => ['run', m, '--nowordwrap'],
+  },
+  {
+    // Antigravity CLI con la cuenta personal de Google (Free/Pro/Ultra). Su cuota la mide Atlas en limites-plan.json (`gemini`), y
+    // sin créditos comprados no cobra: si se agota, la CLI para. Ver delegar.ts (reserva y respaldo).
+    nombre: 'gemini-agy', etiqueta: 'Gemini (Antigravity CLI)', binario: 'agy', gratis: false, login: 'agy (inicia sesión con tu cuenta de Google)',
+    modelos: { cheap_model: 'gemini-3.8-flash-low', cheap_or_medium_model: 'gemini-3.8-flash-medium', medium_model: 'gemini-3.8-flash-medium', strong_model: 'gemini-3.8-flash-high', strong_model_with_human_review: 'gemini-3.8-flash-high' },
+    args: (m, instruccion) => ['-p', instruccion ?? '', '--model', m, '--output-format', 'text'],
+    instruccionEnArgumento: true,
   },
 ];
 
@@ -77,7 +93,11 @@ export const ejecutarProveedor: Ejecutor = (p, modelo, instruccion, { cwd, timeo
   const inicio = Date.now();
   const ruta = buscarBinario(p.binario);
   if (!ruta) { resolver({ salida: '', error: `«${p.binario}» no está en el PATH`, latenciaMs: 0, modelo }); return; }
-  const args = p.args(modelo);
+  if (p.instruccionEnArgumento && instruccion.length > MAX_INSTRUCCION_ARGUMENTO) {
+    resolver({ salida: '', error: `la instrucción supera ${MAX_INSTRUCCION_ARGUMENTO} caracteres: ${p.etiqueta} no la admite por la línea de comandos`, latenciaMs: 0, modelo });
+    return;
+  }
+  const args = p.args(modelo, p.instruccionEnArgumento ? instruccion : undefined);
   const esScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(ruta);
   const hijo = esScript
     ? spawn(process.env['ComSpec'] ?? 'cmd.exe', ['/d', '/s', '/c', `"${ruta}" ${args.map((a) => (/^[\w.:-]+$/.test(a) ? a : `"${a}"`)).join(' ')}`], { cwd, windowsHide: true, windowsVerbatimArguments: true })
@@ -93,5 +113,5 @@ export const ejecutarProveedor: Ejecutor = (p, modelo, instruccion, { cwd, timeo
     // Algunos CLI (claude) escriben el motivo del fallo en stdout: si stderr viene vacío, ese es el error.
     resolver({ salida: limpia, error: codigo === 0 && limpia ? null : (motivoFallo(error.replace(ANSI, '')) || limpia || `terminó con código ${codigo}`).slice(0, 2000), latenciaMs: Date.now() - inicio, modelo });
   });
-  hijo.stdin.end(instruccion, 'utf8');
+  hijo.stdin.end(p.instruccionEnArgumento ? '' : instruccion, 'utf8');
 });

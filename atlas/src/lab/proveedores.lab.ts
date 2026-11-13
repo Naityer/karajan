@@ -26,7 +26,8 @@ function contrato(ctx: ContextoProveedores): Resultado {
   const sinBinario: string[] = [];
   for (const p of PROVEEDORES) {
     const modelos = NIVELES.map((n) => modeloPara(p, n));
-    const args = p.args(modelos[0]!);
+    // Los que reciben la instrucción como argumento se comprueban con una instrucción de prueba (si no, su argumento sería vacío).
+    const args = p.args(modelos[0]!, p.instruccionEnArgumento ? 'prueba de contrato' : undefined);
     if (!p.nombre || !p.binario || !modelos.every(Boolean) || !args.length || !args.every((a) => typeof a === 'string' && a)) incompletos.push(p.nombre || '(sin nombre)');
     if (!ctx.buscar(p.binario)) sinBinario.push(`${p.nombre} («${p.binario}»)`);
   }

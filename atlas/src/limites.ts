@@ -14,7 +14,7 @@ import { join } from 'node:path';
 const MAX_EDAD_MS = 2 * 3600_000;
 
 export interface UsoPlan { semanal?: number | null; sesion?: number | null; reinicio?: string | null; reinicioSesion?: string | null; plan?: string | null; fuente?: string | null }
-export interface Limites { claude?: UsoPlan; codex?: UsoPlan; leido: string }
+export interface Limites { claude?: UsoPlan; codex?: UsoPlan; /** Gemini (Antigravity CLI): solo la cuota semanal, sin créditos. */ gemini?: UsoPlan; leido: string }
 
 export const rutaLimites = () => process.env['KARAJAN_LIMITES_PLAN'] ?? process.env['ATLAS_LIMITES_PLAN'] ?? join(process.env['ATLAS_DEV_DATA'] ?? join(homedir(), '.atlas-dev'), 'limites-plan.json');
 export const umbralClaude = () => { const n = Number(process.env['KARAJAN_LIMITE_CLAUDE'] ?? '50'); return Number.isFinite(n) ? n : 50; };
@@ -39,4 +39,13 @@ export function leerLimitesSinCaducidad(ruta = rutaLimites()): Limites | null {
 export function claudeExcedido(l: Limites | null = leerLimites()): number | null {
   const pct = Number(l?.claude?.semanal);
   return l?.claude?.semanal !== undefined && l?.claude?.semanal !== null && Number.isFinite(pct) && pct > umbralClaude() ? pct : null;
+}
+
+/** Uso semanal de Gemini (% usado) a partir del cual no se elige Gemini (`KARAJAN_LIMITE_GEMINI`, 90 % por defecto: el 10 % restante es la reserva). */
+export const umbralGemini = () => { const n = Number(process.env['KARAJAN_LIMITE_GEMINI'] ?? '90'); return Number.isFinite(n) ? n : 90; };
+
+/** Gemini solo se elige con un dato reciente y con uso semanal por debajo del máximo. Sin dato, no: así nunca se gasta cuota sin control. */
+export function geminiDisponible(l: Limites | null = leerLimites()): boolean {
+  const pct = Number(l?.gemini?.semanal);
+  return l?.gemini?.semanal !== undefined && l?.gemini?.semanal !== null && Number.isFinite(pct) && pct < umbralGemini();
 }
