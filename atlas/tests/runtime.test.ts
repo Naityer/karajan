@@ -2,13 +2,28 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { afterEach, beforeEach, test } from 'node:test';
 import { crearRuntime } from '../src/runtime';
 import { DatabaseSync } from 'node:sqlite';
 import { calcularProduccion, produccion } from '../src/produccion';
 import { Almacen } from '../src/almacen';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+
+// El runner hereda el entorno del equipo. Ninguna prueba debe abrir las bases
+// reales por autodetección del Workspace ni por rutas de biblioteca/layout.
+const variables = ['ATLAS_WORKSPACE', 'ATLAS_KARAJAN_DATA', 'ATLAS_KARAJAN_COMPARTIR', 'ATLAS_KARAJAN_RESOURCES', 'ATLAS_KARAJAN_LAYOUT'];
+let entorno: Record<string, string | undefined>;
+beforeEach(() => {
+  entorno = Object.fromEntries(variables.map((nombre) => [nombre, process.env[nombre]]));
+  for (const nombre of variables) delete process.env[nombre];
+});
+afterEach(() => {
+  for (const nombre of variables) {
+    if (entorno[nombre] === undefined) delete process.env[nombre];
+    else process.env[nombre] = entorno[nombre];
+  }
+});
 
 test('el runtime se construye sin HTTP y cierra sus bases', () => {
   const dir = mkdtempSync(join(tmpdir(), 'kj-runtime-'));
