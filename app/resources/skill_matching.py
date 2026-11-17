@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 ALIASES: dict[str, tuple[str, ...]] = {
+    "modern-web-guidance": ("modernizacion web", "web modernization", "browser compatibility", "compatibilidad web", "web accessibility", "accesibilidad web", "web performance", "rendimiento web"),
     "repo-analyzer": ("repositorio", "repository", "codebase"),
     "frontend-builder": ("frontend", "interfaz", "dashboard", "react", "css"),
     "backend-builder": ("backend", "endpoint", "api", "base de datos"),

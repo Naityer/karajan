@@ -38,6 +38,7 @@ TAXONOMY_NODES = (
 )
 
 _SLUG_GROUPS = {
+    "modern-web-guidance": "rgrp_dev_interfaces",
     "aider": "rgrp_dev_implementation", "backend-builder": "rgrp_dev_implementation", "bun": "rgrp_dev_implementation",
     "frontend-builder": "rgrp_dev_interfaces", "web-artifacts-builder": "rgrp_dev_interfaces", "mapcn": "rgrp_dev_interfaces", "tanstack-charts": "rgrp_dev_interfaces",
     "ponytail": "rgrp_dev_architecture", "refactoring-guru": "rgrp_dev_architecture", "repo-analyzer": "rgrp_dev_architecture", "witr": "rgrp_dev_architecture",
