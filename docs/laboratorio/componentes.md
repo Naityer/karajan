@@ -212,3 +212,6 @@ Cada componente (`atlas/src/componentes.ts`) declara, además de su responsabili
 - **Módulos compartidos** (`COMPARTIDOS`: `redondeo`, `estadistica`): utilidades puras que no son de ningún componente y cualquiera puede importar.
 
 Ver el mapa con `kj componentes dependencias`.
+## Especialistas (t3kn)
+
+Componente de Decisión: `especialistas`, `especialistas-config` y `especialistas-catalogo`. Añade categoría, modelo y paquete opcional al delegador sin sustituir selector ni rotador. Su laboratorio contiene contratos de composición y ausencia de cobertura; las pruebas de delegación, API y cola comprueban la preparación y el respaldo. Los contratos no acreditan una mejora de desempeño sin resultados revisados de producción. Detalles en [especialistas](../especialistas.md).

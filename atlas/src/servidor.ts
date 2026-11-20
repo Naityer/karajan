@@ -30,7 +30,9 @@ import { CAPAS, COMPONENTES, componente } from './componentes';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
 import { compararEquipo, compararKarajan, compararSkill, pruebasEnGrupos, GRUPO_KARAJAN, type CapacidadKarajan } from './comparador';
-import { descubrirSkills, puntuarSkills, type SkillDisponible } from './skills-seleccion';
+import { descubrirSkills, puntuarSkills, seleccionarSkills, type SkillDisponible } from './skills-seleccion';
+import { componerSkills, cobertura, elegirEspecialista, inventarioConCache, prepararEspecialista } from './especialistas';
+import { ConfiguracionEspecialistas } from './especialistas-config';
 
 /**
  * Karajan como paquete de Atlas dev: su núcleo de lectura y clasificación, en TypeScript y dentro del proceso de Atlas dev.
@@ -113,7 +115,9 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   };
   const historiaKarajan = () => almacen.tareasPlanas().flatMap((t) => (t.ejecutadas ?? []).map((skill) => ({ skill, cuando: t.created_at })));
   const rotador = new Rotador({ estado: join(ctx.datos, 'rotador.json'), usosKarajan, historiaKarajan });
-  const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), rotador });
+  const especialistas = new ConfiguracionEspecialistas(join(dirDatos, 'especialistas.json'));
+  const inventario = inventarioConCache(() => descubrirSkills());
+  const delegador = new Delegador({ almacen, perfiles, config, raiz: process.env['ATLAS_WORKSPACE'] ?? homedir(), rotador, skillsDisponibles: inventario.leer, especialistas: () => especialistas.leer() });
 
   // Producción: las mutaciones necesitan una tarea aceptada; lo demás se propone como borrador (ver modo.ts).
   const dirLab = join(ctx.datos, 'laboratorio');
@@ -289,14 +293,42 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     return prompt;
   };
   app.post('/routing/plan', (req) => {
-    const b = (req.body ?? {}) as { force_entity_id?: unknown };
-    return delegador.planificar(leerPrompt(req.body), typeof b.force_entity_id === 'string' ? b.force_entity_id : null);
+    const b = (req.body ?? {}) as { force_entity_id?: unknown; especialista?: unknown };
+    return delegador.planificar(leerPrompt(req.body), typeof b.force_entity_id === 'string' ? b.force_entity_id : null, typeof b.especialista === 'string' ? b.especialista : null);
   });
   app.post('/delegate-task', (req, reply) => {
-    const b = (req.body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown; entry_agent?: unknown };
-    const plan = delegador.delegar(leerPrompt(req.body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true, entrada: typeof b.entry_agent === 'string' ? b.entry_agent : null });
+    const b = (req.body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown; entry_agent?: unknown; especialista?: unknown };
+    const plan = delegador.delegar(leerPrompt(req.body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true, entrada: typeof b.entry_agent === 'string' ? b.entry_agent : null, especialista: typeof b.especialista === 'string' ? b.especialista : null });
     reply.code(plan.bloqueada ? 200 : 202);
     return plan;
+  });
+
+  app.get('/especialistas/config', () => especialistas.leer());
+  app.put('/especialistas/config', async (req) => { await guardian.exigir(req, 'PUT /especialistas/config'); const c = especialistas.guardar(req.body); inventario.invalidar(); return c; });
+  app.get('/especialistas', () => {
+    const cfg = especialistas.leer(), cat = inventario.leer();
+    return { activo: cfg.activo, automatico: cfg.automatico, agentes: cfg.agentes.map((a) => ({ ...a, ...cobertura(a, cat) })) };
+  });
+  // Cola de Atlas dev: mantiene el proveedor ya resuelto y prepara únicamente el paquete opcional.
+  app.post('/especialistas/resolver', async (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const prompt = leerPrompt(b);
+    const p = b['proveedor'] === 'claude' ? 'claude-cli' : b['proveedor'];
+    if (p !== 'claude-cli' && p !== 'codex') return { especialista: null, motivo: 'proveedor sin skills' };
+    const cat = inventario.leer(), sugerencias = seleccionarSkills(prompt, cat);
+    const e = elegirEspecialista(prompt, p, cat, especialistas.leer(), typeof b['especialista'] === 'string' ? b['especialista'] : null);
+    if (!e) return { especialista: null, motivo: 'sin especialista viable' };
+    if (b['preparar'] === true) {
+      await guardian.exigir(req, 'POST /especialistas/resolver (preparar)');
+      const destino = destinoDe(p)!;
+      if (!prepararEspecialista(e, (n) => rotador.asegurar(n, destino))) return { especialista: null, motivo: 'paquete no preparado; conserva asignación y sugerencias originales' };
+      // Las sugerencias externas al paquete también se preparan; un fallo conserva las que ya tenía la cola.
+      for (const n of sugerencias.filter((n) => !e.skills.includes(n))) try { if (!rotador.asegurar(n, destino).disponible) sugerencias.splice(sugerencias.indexOf(n), 1); } catch { sugerencias.splice(sugerencias.indexOf(n), 1); }
+      inventario.invalidar();
+    }
+    const manuales = Array.isArray(b['skills']) ? b['skills'].filter((s): s is string => typeof s === 'string').slice(0, 100) : [];
+    const composicion = componerSkills(manuales, sugerencias, e.skills);
+    return { especialista: e, ...composicion, skills_sugeridas: sugerencias };
   });
 
   // ── Producción: acierto, flujo, eficiencia, matriz de skills y «qué mejorar» (port de app/analytics/produccion.py) ──
@@ -349,7 +381,9 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const aplicar = (req.body as { aplicar?: unknown } | null)?.aplicar === true;
     if (aplicar) await guardian.exigir(req, 'POST /skills/rotar (aplicar)');
     const plan = rotador.plan();
-    return { aplicado: aplicar, ...(aplicar ? rotador.aplicar(plan) : plan) };
+    const resultado = aplicar ? rotador.aplicar(plan) : plan;
+    if (aplicar) inventario.invalidar();
+    return { aplicado: aplicar, ...resultado };
   });
 
   // Lo revisado por el usuario en la cabecera de agente de las notas del baúl (lo envía Atlas dev al reindexar).
@@ -481,7 +515,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const contextoArquitectura = (): ContextoArquitectura => ({
     version: ctx.version, modo: guardian.modo(), dirDatos, dirLab, config,
     perfil: () => { try { return perfilPorDefecto(perfiles.leer()); } catch { return null; } },
-    rotador, limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
+    rotador, especialistas: () => especialistas.leer(), limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
     registro: registroLab, almacen, cache: cacheArquitectura, ttlMs: 30_000,
   });
   app.get('/laboratorio/arquitectura', async () => construirArquitectura(contextoArquitectura()));

@@ -302,3 +302,6 @@ o directamente desde Python dentro del repo:
 
 Hace falta reiniciar la sesión de Claude Code para que la skill nueva
 aparezca en la lista de skills disponibles.
+## Especialistas y sugerencias
+
+`kj control especialistas` muestra las especialidades y su cobertura local. `kj control mision "<tarea>" --especialista <id|ninguno>` permite una elección explícita; solo `--ejecutar` delega de verdad. `kj especialistas describe|config|salud|metricas` usa los comandos genéricos del componente. Véase [el contrato completo](especialistas.md).

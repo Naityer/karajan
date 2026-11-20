@@ -401,3 +401,6 @@ Good next steps after the MVP is validated:
 - The attached ZIP prototype was used as visual reference only.
 - No paid provider is used unless you configure one; auto-detect prefers free local CLIs.
 - Human review is required for critical tasks or high operational risk.
+## Componente de especialistas
+
+El paquete TypeScript expone `GET /especialistas`, `GET|PUT /especialistas/config` y `POST /especialistas/resolver`. `POST /routing/plan` y `POST /delegate-task` admiten `especialista` como id o `ninguno`. La preparación y los cambios de configuración mantienen el guardián de producción. El contrato y los fallos están documentados en [especialistas.md](especialistas.md). El servidor Python independiente conserva sus rutas y no incorpora este componente en esta versión.

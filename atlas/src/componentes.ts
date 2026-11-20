@@ -16,6 +16,7 @@ import { laboratorioProduccion } from './lab/produccion.lab';
 import { laboratorioProveedores } from './lab/proveedores.lab';
 import { laboratorioRotador } from './lab/rotador.lab';
 import { laboratorioSelector } from './lab/selector.lab';
+import { laboratorioEspecialistas } from './lab/especialistas.lab';
 import { laboratorioTutor } from './lab/tutor.lab';
 import { laboratorioTutoria } from './lab/tutoria.lab';
 
@@ -67,7 +68,8 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'laboratorio', capa: 'base', responsabilidad: 'Ejecutar los laboratorios sobre tareas anonimizadas y guardar sus resultados', modulos: ['laboratorio', 'ab', 'componentes', 'arquitectura', 'fichas-componentes'], requiere: 'todos', pendiente: 'es el propio motor (atlas/tests/laboratorio.test.ts)' },
   // ── Decisión ──
   { id: 'clasificador', capa: 'decision', responsabilidad: 'Dar nivel, dominio, intención y subtareas a un prompt', modulos: ['heuristica'], requiere: [], laboratorio: laboratorioClasificador },
-  { id: 'delegador', capa: 'decision', responsabilidad: 'Elegir el agente de cada subtarea según el perfil y sus reglas', modulos: ['delegar', 'perfiles', 'reglas', 'perfil-texto'], requiere: ['aislamiento', 'clasificador', 'limites', 'proveedores', 'rotador', 'selector'], config: { lectura: '/routing-layout' }, laboratorio: laboratorioDelegador },
+  { id: 'delegador', capa: 'decision', responsabilidad: 'Elegir el agente de cada subtarea según el perfil y sus reglas', modulos: ['delegar', 'perfiles', 'reglas', 'perfil-texto'], requiere: ['aislamiento', 'clasificador', 'especialistas', 'limites', 'proveedores', 'rotador', 'selector'], config: { lectura: '/routing-layout' }, laboratorio: laboratorioDelegador },
+  { id: 'especialistas', capa: 'decision', responsabilidad: 'Categorizar tareas con paquetes de skills complementarios a las sugerencias sueltas', modulos: ['especialistas', 'especialistas-config', 'especialistas-catalogo'], requiere: [], config: { lectura: '/especialistas/config', escritura: '/especialistas/config' }, laboratorio: laboratorioEspecialistas },
   { id: 'dosificador', capa: 'decision', responsabilidad: 'Decidir cuándo, dónde y con qué agente se lanza cada tarea para llegar a la renovación del plan con margen', modulos: ['dosificador', 'dosificador-config', 'dosificador-cuota', 'dosificador-sim'], requiere: [], config: { lectura: '/dosificador/config', escritura: '/dosificador/config' }, laboratorio: laboratorioDosificador },
   { id: 'selector', capa: 'decision', responsabilidad: 'Elegir las skills que necesita un prompt', modulos: ['skills-seleccion'], requiere: [], laboratorio: laboratorioSelector },
   { id: 'rotador', capa: 'decision', responsabilidad: 'Dejar instaladas solo las skills que se usan y guardar el resto en el almacén', modulos: ['rotador'], requiere: [], laboratorio: laboratorioRotador },
@@ -103,6 +105,7 @@ export interface Enlace { de: string; a: string; etiqueta?: string; /** Aún no 
 export const ENLACES: Enlace[] = [
   { de: 'clasificador', a: 'delegador', etiqueta: 'nivel, dominio, intención y subtareas' },
   { de: 'selector', a: 'delegador', etiqueta: 'skills recomendadas' },
+  { de: 'especialistas', a: 'delegador', etiqueta: 'categoría, modelo y paquete opcional; conserva sugerencias' },
   { de: 'clasificador', a: 'dosificador', etiqueta: 'nivel y dominio: coste esperado de la tarea' },
   { de: 'limites', a: 'dosificador', etiqueta: '% usado y reinicio de cada ventana de cada agente' },
   { de: 'almacen', a: 'dosificador', etiqueta: 'coste real de las tareas terminadas (aprende el estimador)' },
