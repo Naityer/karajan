@@ -8,11 +8,13 @@ módulo `main`.
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.providers import catalog
 from app.execution import events
-from app.routing import routing_rules
+from app.routing import evolucion, perfil_base, routing_rules
 from app.application import runtime as runtime_module
 from app.security.atlas_auth import require_atlas_token
 from app.security.auth import require_token
@@ -59,6 +61,51 @@ def apply_level_preset(
     preset = RoutingProfile.model_validate(routing_rules.level_preset_profile())
     profiles = [p for p in layout.profiles if p.id != preset.id] + [preset]
     saved = store.save(layout.model_copy(update={"profiles": profiles, "active_profile_id": preset.id, "default_profile_id": preset.id}))
+    events.publish("layout_changed")
+    return saved
+
+
+@router.post("/routing-layout/presets/base", response_model=RoutingLayout, dependencies=[Depends(require_tarea_aceptada)])
+def apply_base_preset(
+    _: None = Depends(require_token),
+    __: dict | None = Depends(require_atlas_token),
+) -> RoutingLayout:
+    """Añade (o rehace) el perfil base «base-2026-11-12» y lo deja como perfil por defecto."""
+    store = runtime_module.current().routing
+    layout = store.load()
+    preset = RoutingProfile.model_validate(perfil_base.base_profile())
+    profiles = [p for p in layout.profiles if p.id != preset.id] + [preset]
+    saved = store.save(layout.model_copy(update={"profiles": profiles, "active_profile_id": preset.id, "default_profile_id": preset.id}))
+    events.publish("layout_changed")
+    return saved
+
+
+@router.get("/routing-layout/evolucion/fitness")
+def get_evolution_fitness() -> dict:
+    """Evidencia por entidad del perfil por defecto y necesidades detectadas (solo lectura)."""
+    runtime = runtime_module.current()
+    profile = runtime.routing.load().default_profile()
+    muestras = evolucion.cargar_muestras(runtime.tasks)
+    return {
+        "profile_id": profile.id,
+        "min_muestras": evolucion.MIN_MUESTRAS,
+        "fitness": [asdict(f) for f in evolucion.fitness_perfil(profile, muestras)],
+        "necesidades": [{**asdict(n), "explicacion": n.explicacion()} for n in evolucion.detectar_necesidades(profile, muestras)],
+    }
+
+
+@router.post("/routing-layout/evolucion/proponer", response_model=RoutingLayout, dependencies=[Depends(require_tarea_aceptada)])
+def propose_evolution(
+    _: None = Depends(require_token),
+    __: dict | None = Depends(require_atlas_token),
+) -> RoutingLayout:
+    """Guarda como perfiles NUEVOS e inactivos los hijos propuestos; no cambia el perfil activo ni el por defecto."""
+    runtime = runtime_module.current()
+    layout = runtime.routing.load()
+    hijos = evolucion.proponer_generacion(layout, evolucion.cargar_muestras(runtime.tasks))
+    if not hijos:
+        return layout
+    saved = runtime.routing.save(layout.model_copy(update={"profiles": [*layout.profiles, *hijos]}))
     events.publish("layout_changed")
     return saved
 

@@ -135,9 +135,14 @@ def resolve_entity(entity: RoutingEntity, tier: RecommendedModel) -> Resolution 
     if not entity.provider:
         return None
     info = catalog.get_provider(entity.provider)
-    if info is None or tier not in info.tiers:
+    if info is None:
         return None
-    model_id = info.tiers[tier]
+    if entity.model:
+        model_id = entity.model  # entidad por modelo: el modelo fijado manda sobre el tier
+    elif tier in info.tiers:
+        model_id = info.tiers[tier]
+    else:
+        return None
     if info.backend == Backend.API:
         return Resolution(ApiModelProvider(info), Backend.API, model_id, info.name)
     if info.backend == Backend.CLI:

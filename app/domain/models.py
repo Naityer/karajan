@@ -726,12 +726,62 @@ class CanvasPoint(BaseModel):
     y: float = 0
 
 
+class Aptitud(BaseModel):
+    """Ficha de aptitud de una entidad: con qué puntuación continua (0–5) rinde y en qué.
+
+    Sustituye a los 5 niveles como criterio fino de reparto: `rango_complejidad`/`optimo` sobre el
+    `complexity_score` real, afinidades por área y por criterio, coste, duración y fiabilidad.
+    `medido=False` marca cifras que son hipótesis del perfil base, aún sin laboratorio.
+    """
+
+    rango_complejidad: tuple[float, float] = (0.0, 5.0)
+    optimo: float = Field(default=2.5, ge=0, le=5)
+    afinidad_dominio: dict[str, float] = Field(default_factory=dict)
+    afinidad_criterio: dict[str, float] = Field(default_factory=dict)
+    coste_relativo: float = Field(default=0.5, ge=0, le=1)
+    duracion_max_min: float | None = Field(default=None, gt=0)  # None = sin tope
+    fiabilidad_prior: float = Field(default=0.5, ge=0, le=1)
+    medido: bool = False
+
+    @field_validator("rango_complejidad")
+    @classmethod
+    def _range_ordered(cls, value: tuple[float, float]) -> tuple[float, float]:
+        low, high = value
+        if not (0 <= low <= high <= 5):
+            raise ValueError("rango_complejidad debe cumplir 0 <= min <= max <= 5")
+        return value
+
+    @field_validator("afinidad_dominio", "afinidad_criterio")
+    @classmethod
+    def _affinity_unit(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(not 0 <= v <= 1 for v in value.values()):
+            raise ValueError("las afinidades van de 0 a 1")
+        return value
+
+
+class ScoringConfig(BaseModel):
+    """Pesos de la puntuación 0–100 de un perfil y estimación de duración (genes del perfil)."""
+
+    w_complejidad: float = Field(default=35, ge=0, le=100)
+    w_dominio: float = Field(default=25, ge=0, le=100)
+    w_criterios: float = Field(default=15, ge=0, le=100)
+    w_coste: float = Field(default=15, ge=0, le=100)  # resta, atenuado por el riesgo operativo
+    w_fiabilidad: float = Field(default=10, ge=0, le=100)
+    # Duración estimada = base + por_complejidad·score + por_contexto·context_required (min).
+    min_base: float = Field(default=1.0, ge=0)
+    min_por_complejidad: float = Field(default=3.0, ge=0)
+    min_por_contexto: float = Field(default=2.0, ge=0)
+
+
 class RoutingEntity(BaseModel):
     id: str
     name: str | None = None
     role: str
     role_tags: list[str] = Field(default_factory=list)
     provider: str | None = None
+    # Modelo concreto dentro del proveedor (p. ej. "haiku"); None = el que dé el tier.
+    model: str | None = None
+    aptitud: Aptitud | None = None
     parentId: str | None = ""
     target_ids: list[str] = Field(default_factory=list)  # guardian/validator: the entities it supervises/validates
     levels: list[str] = Field(default_factory=list)
@@ -805,7 +855,7 @@ class RoutingRule(BaseModel):
     enabled: bool = True
 
 
-_CANVAS_FIELD_NAMES = ("entities", "groups", "zoom", "drawer_width", "openclaw_pos", "rules")
+_CANVAS_FIELD_NAMES = ("entities", "groups", "zoom", "drawer_width", "openclaw_pos", "rules", "scoring")
 
 
 def _reject_duplicate_group_prio(entities: list[RoutingEntity]) -> None:
@@ -834,6 +884,13 @@ class RoutingProfile(BaseModel):
     drawer_width: int = Field(default=320, ge=220, le=680)
     openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
     rules: list[RoutingRule] = Field(default_factory=list)
+    # Puntuación continua por agente (None = enrutado clásico por reglas/niveles).
+    scoring: ScoringConfig | None = None
+    # Linaje evolutivo: de qué perfiles nace y por qué.
+    generation: int = Field(default=0, ge=0)
+    parents: list[str] = Field(default_factory=list)
+    origin: str = Field(default="manual", max_length=20)  # manual | base | mutacion | cruce
+    mutation_note: str = Field(default="", max_length=600)
 
     @field_validator("id", "name")
     @classmethod
@@ -856,6 +913,7 @@ class RoutingLayout(BaseModel):
     drawer_width: int = Field(default=320, ge=220, le=680)
     openclaw_pos: CanvasPoint = Field(default_factory=CanvasPoint)
     rules: list[RoutingRule] = Field(default_factory=list)
+    scoring: ScoringConfig | None = None
     active_profile_id: str = "current"
     default_profile_id: str = "current"
     profiles: list[RoutingProfile] = Field(min_length=1)
