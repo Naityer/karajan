@@ -233,7 +233,7 @@ Responsabilidad: construir el plan de cada tarea —modo, actores, pasos con ent
 | milestone | Hitos secuenciales con objetivo, entregable y validación; entre hitos, síntesis (compactar y recapitular) |
 | checker | Revisor ligero al final: errores, bugs y trabajo pendiente |
 
-**Restricciones** (se validan y se explican en `POST /planificador/validar`): classic no admite subagentes; single-agent, solo uno; co-work necesita al menos dos especialistas y no se combina con lazy-agent (necesita modelos fuertes). El resto de combinaciones son válidas.
+**Restricciones** (se validan y se explican en `POST /planificador/validar`): classic no admite subagentes; single-agent, solo uno; co-work no se combina con lazy-agent (necesita modelos fuertes); el principal es el primer especialista y siempre hay al menos otro (los pedidos o los del ámbito por defecto). El resto de combinaciones son válidas.
 
 **Modelos.** Un actor lleva `nivel` (superior, medio, bajo) y una lista de `preferencia` (fragmentos del nombre del modelo); no hay identificadores fijos. Atlas dev los resuelve contra los modelos que ofrece cada agente en ese momento. Los modelos frontera de referencia del jefe (Opus, Fable, Asura, Sol) son **referencia, no identificadores garantizados**: si no hay ninguno disponible, la intervención del jefe falla con ese motivo.
 

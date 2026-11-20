@@ -72,7 +72,7 @@ export function casosContrato(config: ConfigPlanificador): Caso[] {
   caso('modificador dado como modo: se acepta y se explica', validarCombinacion({ modo: 'lazy-agent' }).ok && validarCombinacion({ modo: 'lazy-agent' }).modificadores[0] === 'lazy-agent', '');
   const malas: [string, Parameters<typeof validarCombinacion>[0]][] = [
     ['classic con subagentes', { modo: 'classic', subagentes: [{ agente: 'codex' }] }], ['single-agent con 2 subagentes', { modo: 'single-agent', subagentes: [{}, {}] }],
-    ['co-work con lazy-agent', { modo: 'co-work', modificadores: ['lazy-agent'] }], ['co-work con un solo especialista', { modo: 'co-work', subagentes: [{}] }], ['modo desconocido', { modo: 'turbo' }], ['modificador desconocido', { modificadores: ['x'] }],
+    ['co-work con lazy-agent', { modo: 'co-work', modificadores: ['lazy-agent'] }], ['modo desconocido', { modo: 'turbo' }], ['modificador desconocido', { modificadores: ['x'] }],
   ];
   for (const [n, s] of malas) { const v = validarCombinacion(s); caso(`rechaza: ${n}`, !v.ok && v.errores.every((x) => x.length > 20), v.errores.join(' · ')); }
   const rechazado = plan({ solicitud: { modo: 'co-work', modificadores: ['lazy-agent'] } });

@@ -25,7 +25,8 @@ describe('validación de modos', () => {
     assert.match(v.errores[0]!, /lazy-agent/);
     assert.equal(validarCombinacion({ modo: 'classic', subagentes: [{}] }).ok, false);
     assert.equal(validarCombinacion({ modo: 'single-agent', subagentes: [{}, {}] }).ok, false);
-    assert.equal(validarCombinacion({ modo: 'co-work', subagentes: [{}] }).ok, false);
+    // El principal es el primer especialista: con un solo subagente ya son dos.
+    assert.equal(validarCombinacion({ modo: 'co-work', subagentes: [{}] }).ok, true);
     assert.equal(validarCombinacion({ modo: 'turbo' }).ok, false);
   });
   it('un modificador puesto como modo pasa a ser modificador de classic, con aviso', () => {

@@ -207,7 +207,7 @@ export const FICHAS: Record<string, FichaComponente> = {
       'Los modelos no se fijan: un actor lleva nivel y preferencias, y quien ejecuta las resuelve contra los modelos que de verdad hay disponibles.',
       'Donde falta una métrica observada se usa un prior y el plan lo dice; auto no presenta una estimación como medición.',
       'Un checker que falla no cuenta como revisión limpia: deja el plan bloqueado y el fallo visible.',
-      'co-work no se combina con lazy-agent y exige al menos dos especialistas; classic no admite subagentes y single-agent solo uno.',
+      'co-work no se combina con lazy-agent y siempre reúne al menos dos especialistas (el principal y otro); classic no admite subagentes y single-agent solo uno.',
       'Es puro y no ejecuta nada: el mismo contexto da el mismo plan. Su laboratorio es sintético.',
     ],
     configuracion: (c) => {
