@@ -63,3 +63,6 @@ Si no encaja, está desactivado, falla o no puede preparar su paquete, se conser
 El inventario se reutiliza durante 15 segundos y se invalida al guardar configuración o preparar un paquete. La planificación recorre 40 definiciones pequeñas; no lee el inventario JSON documental, no consulta toda Biblioteca, no introduce llamadas LLM ni hace peticiones de red para seleccionar. Los paquetes no cargan todos sus cuerpos en el prompt; el agente recibe los nombres y consulta SKILL.md cuando corresponde.
 
 Esta versión implementa especialistas en el paquete TypeScript y en Atlas dev. El servidor Python independiente conserva su comportamiento anterior; no se presenta como una implementación con paridad. No se instala ni activa el paquete sobre la aplicación en producción como parte de esta tarea.
+## Verificación de cierre
+
+La [verificación final de t3kn](especialistas-verificacion.md) registra las suites completas, la reposición con el rotador real y los límites de las pruebas simuladas.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -11,6 +11,8 @@ import { Delegador } from '../src/delegar';
 import { Perfiles } from '../src/perfiles';
 import { proveedor } from '../src/proveedores';
 import { ejecutar } from '../src/cli';
+import { Rotador } from '../src/rotador';
+import { descubrirSkills } from '../src/skills-seleccion';
 
 const dir = mkdtempSync(join(tmpdir(), 'karajan-especialistas-'));
 after(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* SQLite en Windows */ } });
@@ -83,6 +85,37 @@ describe('especialistas: selección y composición', () => {
 });
 
 describe('delegación especializada conserva la base', () => {
+  it('repone el paquete y una sugerencia suelta con el rotador real antes de ejecutar', async () => {
+    const casa = mkdtempSync(join(dir, 'rotador-real-'));
+    for (const nombre of ['graphify', 'networkx', 'pdf']) {
+      const ruta = join(casa, '.karajan', 'skills-almacen', 'agents', nombre);
+      mkdirSync(ruta, { recursive: true });
+      writeFileSync(join(ruta, 'SKILL.md'), `---\nname: ${nombre}\ndescription: ${nombre}\n---\nInstrucciones de prueba.`);
+    }
+    const rotador = new Rotador({ casa, estado: join(casa, 'rotador.json') });
+    const almacen = new Almacen(join(casa, 'tasks.db')), perfiles = new Perfiles(join(casa, 'layout.json'));
+    after(() => almacen.cerrar());
+    perfiles.aplicarPresetDominio();
+    let ejecutadas = 0;
+    const delegador = new Delegador({ almacen, perfiles, config: () => null as never, raiz: casa, aislarGit: false, limites: () => null, rotador, skillsDisponibles: () => descubrirSkills(casa), especialistas: config,
+      ejecutor: async (_p, modelo, texto) => {
+        ejecutadas++;
+        assert.equal(modelo, ejecutadas === 1 ? 'modelo-grafos' : 'default');
+        for (const nombre of ['pdf', 'graphify', 'networkx']) {
+          assert.ok(existsSync(join(casa, '.codex', 'skills', nombre, 'SKILL.md')), nombre);
+          if (ejecutadas === 1) assert.ok(texto.includes(nombre), nombre);
+        }
+        return { salida: 'ok', error: null, latenciaMs: 1, modelo };
+      },
+    });
+    const p = delegador.delegar('Analiza grafos usando pdf', { forzarEntidad: 'dominio-codex', especialista: 'grafos', aprobada: true });
+    await Promise.all([...delegador.pendientes]);
+    assert.equal(ejecutadas, p.asignaciones.length);
+    assert.ok(ejecutadas >= 1);
+    assert.equal(almacen.tarea(p.task_id)!.status, 'completed');
+    assert.deepEqual(Object.keys(rotador.leerEstado().repuestas).sort(), ['graphify', 'networkx', 'pdf']);
+    assert.deepEqual(rotador.leerEstado().usos, {}); // preparar no acredita uso confirmado
+  });
   function montar(fallar?: string, excepcion = false) {
     const d = mkdtempSync(join(dir, 'deleg-')), almacen = new Almacen(join(d, 'tasks.db')), perfiles = new Perfiles(join(d, 'layout.json'));
     perfiles.aplicarPresetDominio(); after(() => almacen.cerrar());
