@@ -1,7 +1,7 @@
 {
-  "version": "0.11.0",
+  "version": "0.13.0",
   "modo": "desarrollo",
-  "generado": "2026-11-03T07:21:48Z",
+  "generado": "2026-11-20T11:09:10Z",
   "familias": [
     {
       "id": "interfaz",
@@ -30,7 +30,8 @@
       "orden": 3,
       "componentes": [
         "analitica",
-        "produccion"
+        "produccion",
+        "tutoria"
       ]
     },
     {
@@ -51,8 +52,10 @@
         "clasificador",
         "delegador",
         "dosificador",
+        "planificador",
         "selector",
         "rotador",
+        "tutor",
         "etiquetas"
       ]
     },
@@ -75,8 +78,7 @@
       "familia": "base",
       "responsabilidad": "Guardar y leer el registro de tareas, decisiones, runs y revisiones",
       "modulos": [
-        "almacen",
-        "redondeo"
+        "almacen"
       ],
       "pendiente": null,
       "ficha": {
@@ -1216,6 +1218,98 @@
       "operacion": null
     },
     {
+      "id": "planificador",
+      "familia": "decision",
+      "responsabilidad": "Construir el plan de cada tarea (modo, actores, pasos, hitos y checker) y elegir el formato en auto según coste, tiempo y acierto",
+      "modulos": [
+        "planificador",
+        "planificador-modos",
+        "planificador-registro"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Construye SIEMPRE un plan para la tarea —modo, actores, pasos con entregable y validación, hitos y checker— y, en auto, elige el formato (classic, single-agent, master-slave o co-work) comparando coste, tiempo y riesgo con las métricas disponibles. Solo decide: la cola de Atlas dev ejecuta el plan.",
+        "como_funciona": {
+          "entradas": [
+            "Prompt ya clasificado (nivel, dominio, subtareas) y el agente que eligió el delegador",
+            "Modo base (classic, single-agent, master-slave, co-work, auto) y modificadores (lazy-agent, milestone, checker), con principal y subagentes opcionales",
+            "Coste esperado (dosificador), acierto por agente (producción) y modo de la cuota"
+          ],
+          "pasos": [
+            "Valida la combinación de modos y explica por qué una no es posible (planificador-modos.ts · validarCombinacion)",
+            "Elige el agente principal: el pedido, el del delegador o el primero activo y disponible (planificador.ts · planificar)",
+            "Auto: arma un plan por formato candidato con el agente elegido (planificador.ts · armar)",
+            "Estima de cada candidato el coste (% del plan por nivel de modelo), el tiempo (camino crítico) y el riesgo (1 − acierto), con prior donde falta dato (planificador.ts · estimarPlan)",
+            "Auto: puntúa con los pesos configurados (el coste pesa el doble con la cuota frenada) y elige; guarda la comparación, el motivo y la procedencia de los datos",
+            "Master-slave y single-agent: sugiere subagentes de la misma familia que el principal, o avisa de que no la hay (planificador.ts · sugerirSubagente)",
+            "Milestone: agrupa el trabajo en hitos con objetivo, entregable y validación, con un paso de síntesis entre hitos; co-work añade el jefe frontera bajo demanda con intervenciones de 5 min",
+            "Checker: añade al final un paso de revisión con un actor ligero y los criterios errores, bugs y trabajo pendiente",
+            "Guarda el plan y, después, los eventos y el resultado del checker que manda Atlas dev; un fallo queda como fallo (planificador-registro.ts · guardarPlan, anotarEvento, guardarChecker)",
+            "Laboratorio · contrato: cada modo y combinación válida da un plan coherente y las incompatibles se rechazan (lab/planificador.lab.ts · contrato)",
+            "Laboratorio · replay: auto en tareas sintéticas de nivel 1 a 5 con y sin presión de cuota (lab/planificador.lab.ts · replay)"
+          ],
+          "salidas": [
+            "Plan: modo resuelto, actores (agente, nivel, modelo preferido, esfuerzo), pasos con dependencias, hitos, checker y jefe",
+            "Motivo, alternativas comparadas y avisos",
+            "Registro por tarea: estado, eventos y hallazgos del checker (planificador-planes.json)"
+          ]
+        },
+        "reglas": [
+          "Siempre hay plan: una combinación imposible da un plan rechazado, sin pasos y con el motivo, nunca una ejecución a medias.",
+          "Los modelos no se fijan: un actor lleva nivel y preferencias, y quien ejecuta las resuelve contra los modelos que de verdad hay disponibles.",
+          "Donde falta una métrica observada se usa un prior y el plan lo dice; auto no presenta una estimación como medición.",
+          "Un checker que falla no cuenta como revisión limpia: deja el plan bloqueado y el fallo visible.",
+          "co-work no se combina con lazy-agent y exige al menos dos especialistas; classic no admite subagentes y single-agent solo uno.",
+          "Es puro y no ejecuta nada: el mismo contexto da el mismo plan. Su laboratorio es sintético."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {
+        "agentes": [
+          "claude: activo · superior opus/fable · medio sonnet · bajo haiku",
+          "codex: activo · superior sol/astra · medio terra · bajo luna",
+          "gemini: activo · superior pro · medio flash · bajo flash-lite/flash"
+        ],
+        "peso_coste": 0.4,
+        "peso_tiempo": 0.25,
+        "peso_riesgo": 0.35,
+        "coste_por_nivel": [
+          "superior: 1",
+          "medio: 0.45",
+          "bajo: 0.12"
+        ],
+        "jefe_intervencion_min": 5,
+        "jefe_referencia": [
+          "opus",
+          "fable",
+          "asura",
+          "sol"
+        ],
+        "hitos_desde_nivel": 4,
+        "max_subagentes": 4,
+        "planes_guardados": 0
+      },
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "Cada modo y cada combinación válida da un plan coherente; las incompatibles se rechazan con motivo",
+          "umbrales": {}
+        },
+        {
+          "id": "replay",
+          "tipo": "replay",
+          "descripcion": "Auto en tareas sintéticas de nivel 1 a 5, con y sin presión de cuota: elige lo barato para lo simple y justifica la decisión",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
       "id": "selector",
       "familia": "decision",
       "responsabilidad": "Elegir las skills que necesita un prompt",
@@ -1736,6 +1830,61 @@
       "operacion": null
     },
     {
+      "id": "tutor",
+      "familia": "decision",
+      "responsabilidad": "Elegir con datos de cada semana el modelo tutor de mejor relación razonamiento/precio",
+      "modulos": [
+        "tutor"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Decide qué modelo hace de tutor con datos de cada semana: razonamiento (Artificial Analysis) entre precio mezclado (OpenRouter) de los modelos de Claude Code y Codex. Nada del tutor está escrito a mano.",
+        "como_funciona": {
+          "entradas": [
+            "API de Artificial Analysis (ARTIFICIAL_ANALYSIS_API_KEY): índice de inteligencia por modelo",
+            "API pública de OpenRouter: precio de entrada y salida por modelo",
+            "tutores.json: el último catálogo bueno",
+            "Qué proveedores están disponibles y si Claude pasó su umbral semanal"
+          ],
+          "pasos": [
+            "Lee las dos fuentes y las une por el nombre normalizado del modelo (tutor.ts · leerArtificialAnalysis, leerOpenRouter, combinar)",
+            "Si una fuente falla, o no hay clave, el catálogo anterior NO se toca y el error se devuelve (tutor.ts · actualizarCatalogo)",
+            "Por proveedor, descarta los que razonan menos del 75 % del mejor y se queda con el de más razonamiento por dólar mezclado 3:1 (tutor.ts · elegirTutores)",
+            "Entre proveedores usables (disponibles y sin pasar su umbral) elige el de mejor valor; desempata por razonamiento y nombre (tutor.ts · elegirTutores)",
+            "El servidor repite la actualización cada día y avisa si el tutor cambia (servidor.ts · actualización diaria)",
+            "Laboratorio · seleccion: catálogo presente y de ≤ 7 días, elección determinista con el catálogo en cualquier orden y tutor que razona lo exigido (lab/tutor.lab.ts · seleccion)"
+          ],
+          "salidas": [
+            "Tutor vigente (proveedor, modelo, razonamiento, precio, valor)",
+            "Mejor de cada proveedor",
+            "tutores.json actualizado",
+            "Informe del laboratorio"
+          ]
+        },
+        "reglas": [
+          "Sin razonamiento medido un modelo no entra: no se adivina.",
+          "Un tutor barato pero torpe no gana: el filtro de razonamiento va antes que la relación.",
+          "Los candidatos son solo los que se pueden lanzar por CLI (Claude Code y Codex).",
+          "El tutor no se cambia a mano: se recalcula."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {},
+      "escenarios": [
+        {
+          "id": "seleccion",
+          "tipo": "contrato",
+          "descripcion": "Catálogo fresco, elección determinista y con el razonamiento exigido",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
       "id": "etiquetas",
       "familia": "decision",
       "responsabilidad": "Poner la cabecera «Atlas dev · tarea <id>» y el glosario de etiquetas al agente",
@@ -2022,6 +2171,89 @@
           "id": "concordancia",
           "tipo": "replay",
           "descripcion": "El acierto y el re-trabajo de produccion.ts frente al estado final y la revisión de la persona en Atlas dev",
+          "umbrales": {}
+        }
+      ],
+      "ultimas": [],
+      "historial": {},
+      "detalle": {},
+      "hallazgos": [],
+      "operacion": null
+    },
+    {
+      "id": "tutoria",
+      "familia": "observacion",
+      "responsabilidad": "Calificar al agente local con tareas ya integradas y un tutor que no da la solución",
+      "modulos": [
+        "tutoria",
+        "tutoria-nota",
+        "skillforge"
+      ],
+      "pendiente": null,
+      "ficha": {
+        "resumen": "Pone nota al agente local: rehace tareas que ya se integraron bien, con la misma instrucción y skills de producción, con un tutor que lo desbloquea sin darle la solución y que compara el resultado con el commit registrado como correcto.",
+        "como_funciona": {
+          "entradas": [
+            "Tareas completadas de Atlas dev con su prompt",
+            "El commit con el trailer «Karajan-Tarea: <id>» ya en main (la referencia)",
+            "El plan del delegador para ese prompt (nivel, dominio, skills)",
+            "El alumno (KARAJAN_ALUMNO, por defecto ollama-qwen) y el tutor vigente",
+            "Las skills que la skill skillforge-lab dejó activas y validadas con modelos reales para ese alumno (skillforge.ts · leerSkillsForjadas)"
+          ],
+          "pasos": [
+            "Elige tareas completadas, no examinadas ya con este alumno, y busca su referencia en los repos del Workspace (tutoria.ts · buscarReferencia)",
+            "Crea un worktree temporal desnudo en el estado justo anterior a la integración (tutoria.ts · examinar)",
+            "Lanza al alumno con la MISMA instrucción de producción (delegar.ts · construirInstruccion); sin las skills que pedía, es un obstáculo, como en producción",
+            "Si falla (permisos, comando, skill, tiempo), el tutor lo desbloquea SIN ver la referencia: una pista o instalar la skill que faltaba; el filtro rechaza código y líneas de la solución (tutoria.ts · promptTutor; tutoria-nota.ts · filtrarPista)",
+            "Con hasta 3 ayudas, el alumno reintenta; al final el tutor, esta vez con la referencia, da cumple, equivalencia y regresiones (tutoria.ts · promptEvaluador)",
+            "Nota = 70 % veredicto + 30 % solape de ficheros, menos 10 % por ayuda (tutoria-nota.ts · calificar)",
+            "Agrega por nivel y por dominio×nivel, con IC95 de Wilson sobre aprobar (≥ 70) y calcula el nivel máximo delegable (tutoria-nota.ts · calificacion)",
+            "Si hay skills forjadas para el dominio de la tarea, la repite con ellas en el prompt del alumno y empareja las dos notas (skillforge.ts · efectoForjadas)",
+            "Borra el worktree: sin ramas, commits ni cambios en el repo (tutoria.ts · examinar)"
+          ],
+          "salidas": [
+            "Nota porcentual del alumno",
+            "Mapa de qué niveles y dominios se le pueden delegar",
+            "Obstáculos más repetidos",
+            "Borrador «delegar hasta N<k>» cuando hay muestra",
+            "Brechas anónimas por dominio y nivel para skillforge-lab (kj tutoria brechas)",
+            "Efecto emparejado de cada skill forjada en tareas reales, y borradores «forjar» o «instalar»"
+          ]
+        },
+        "reglas": [
+          "El tutor que desbloquea nunca ve la referencia ni da código; quien la ve es el evaluador, que no habla con el alumno.",
+          "Sin veredicto del tutor la nota queda sin calificar, no en 0.",
+          "Los exámenes cuestan tokens: solo corren con KARAJAN_TUTORIA_EXAMENES=1 y con máximo por ejecución.",
+          "Solo propone: delegarle algo al alumno lo decide la persona.",
+          "Con un alumno que solo contesta texto (ollama run) se juzga la respuesta, no cambios en ficheros.",
+          "La nota del alumno es la de los exámenes SIN skills forjadas: un examen con skill mide la skill, no al alumno.",
+          "Una skill forjada solo entra en el prompt del alumno dentro del sandbox; no se instala, y al tutor que desbloquea nunca se le da. Que pase la validación de SkillForge no basta: se propone instalarla solo si mejora ≥ 5 puntos de media en ≥ 5 tareas reales sin empeorar más del 20 %.",
+          "A SkillForge solo salen agregados anónimos (dominio, nivel, nota, obstáculos): nunca prompts, ids de tarea ni commits."
+        ]
+      },
+      "estado": "sin_ejecutar",
+      "configuracion": {
+        "alumno": "ollama-qwen",
+        "autorizado": false,
+        "maximo_por_ejecucion": 3,
+        "skillforge": "C:\\Users\\tiand\\Desktop\\Workspace\\skills-package\\skillforge-lab",
+        "mejora_forjada": 5,
+        "max_ayudas": 3,
+        "penalizacion_ayuda": 0.1,
+        "aprobado": 70,
+        "muestra_segmento": 5
+      },
+      "escenarios": [
+        {
+          "id": "contrato",
+          "tipo": "contrato",
+          "descripcion": "Filtro de pistas, nota monótona, tutor sin ver la referencia y sandbox sin huella (con agentes de mentira)",
+          "umbrales": {}
+        },
+        {
+          "id": "examen",
+          "tipo": "replay",
+          "descripcion": "Rehace tareas ya integradas con el alumno local y un tutor, y las compara con el commit registrado como correcto",
           "umbrales": {}
         }
       ],
@@ -2331,9 +2563,14 @@
     {
       "id": "api",
       "familia": "interfaz",
-      "responsabilidad": "Exponer Karajan a Atlas dev (rutas del paquete)",
+      "responsabilidad": "Coordinar las operaciones compartidas y exponerlas a Atlas dev",
       "modulos": [
-        "servidor"
+        "servidor",
+        "runtime",
+        "aplicacion",
+        "aplicacion-dosificador",
+        "aplicacion-planificador",
+        "aplicacion-laboratorio"
       ],
       "pendiente": "cubierto por los laboratorios de cada componente",
       "ficha": {
@@ -2371,7 +2608,8 @@
       "familia": "interfaz",
       "responsabilidad": "Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas",
       "modulos": [
-        "cli"
+        "cli",
+        "cli-local"
       ],
       "pendiente": "cubierto por atlas/tests/cli.test.ts",
       "ficha": {
@@ -2428,6 +2666,26 @@
       "de": "almacen",
       "a": "dosificador",
       "etiqueta": "coste real de las tareas terminadas (aprende el estimador)"
+    },
+    {
+      "de": "clasificador",
+      "a": "planificador",
+      "etiqueta": "nivel, dominio y subtareas de la tarea"
+    },
+    {
+      "de": "delegador",
+      "a": "planificador",
+      "etiqueta": "agente elegido para la tarea"
+    },
+    {
+      "de": "dosificador",
+      "a": "planificador",
+      "etiqueta": "coste esperado y modo de la cuota"
+    },
+    {
+      "de": "produccion",
+      "a": "planificador",
+      "etiqueta": "acierto observado de cada agente"
     },
     {
       "de": "dosificador",
@@ -2513,6 +2771,31 @@
       "de": "biblioteca",
       "a": "curador",
       "etiqueta": "datos de las skills"
+    },
+    {
+      "de": "tutor",
+      "a": "tutoria",
+      "etiqueta": "modelo tutor vigente"
+    },
+    {
+      "de": "almacen",
+      "a": "tutoria",
+      "etiqueta": "tareas integradas y su commit de referencia"
+    },
+    {
+      "de": "delegador",
+      "a": "tutoria",
+      "etiqueta": "misma instrucción y skills que en producción"
+    },
+    {
+      "de": "proveedores",
+      "a": "tutoria",
+      "etiqueta": "ejecuta alumno y tutor"
+    },
+    {
+      "de": "rotador",
+      "a": "tutoria",
+      "etiqueta": "skills instaladas del alumno"
     },
     {
       "de": "biblioteca",

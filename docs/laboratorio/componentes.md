@@ -132,6 +132,9 @@ Estrellas: «propias» si la ficha es del repo; «heredadas» si la skill está 
 
 ## 7. Lo que queda (borradores en Atlas dev)
 
+Hecho en 0.13.0 (tarea cndi): el componente `planificador` (capa Decisión, §10) con sus modos de ejecución, laboratorio, ficha, rutas `/planificador/*` y su integración en la cola de Atlas dev. No sustituye al dosificador: el dosificador decide cuándo, dónde y con qué agente; el planificador decide **cómo** se ejecuta la tarea (modo, actores, pasos).
+
+
 Hecho en 0.11.0 (tarea 2hbf): tope y ritmo por agente, equipos dormidos y relevo entre equipos (`decidirRelevo`, §9 «Tope, ritmo, equipos dormidos y relevo»).
 
 Hecho en 0.10.0 (dosificador): el componente `dosificador` (§9) con su laboratorio, ficha, rutas `/dosificador/*`, `kj dosificador` y la lectura del reinicio, plan y fuente también de Codex en `limites-plan.json`. Cierra el borrador «Planificador como componente de karajan»: el planificador de la cola de Atlas dev no es un componente aparte, es el `dosificador` que decide y la cola de Atlas dev (lado Atlas dev) quien ejecuta lo decidido; el nombre «planificador» queda para el `Planificador` de rutinas de Atlas dev.
@@ -212,3 +215,28 @@ Cada componente (`atlas/src/componentes.ts`) declara, además de su responsabili
 - **Módulos compartidos** (`COMPARTIDOS`: `redondeo`, `estadistica`): utilidades puras que no son de ningún componente y cualquiera puede importar.
 
 Ver el mapa con `kj componentes dependencias`.
+
+## 10. Planificador (0.13.0, tarea cndi)
+
+Responsabilidad: construir el plan de cada tarea —modo, actores, pasos con entregable y validación, hitos y checker— y, en `auto`, elegir el formato. **Solo decide y registra**: la cola de Atlas dev lee el plan y lo ejecuta (subtareas encoladas en el mismo repositorio). No se confunde con el `Planificador` de rutinas de Atlas dev ni con `proyectos/planificacion/planificador.ts`; usa el clasificador, el delegador (agente elegido), el dosificador (coste esperado y modo de la cuota) y producción (acierto por agente) como entradas.
+
+**Modos.** Un modo base —`classic`, `single-agent`, `master-slave`, `co-work`, `auto`— más modificadores —`lazy-agent`, `milestone`, `checker`—.
+
+| Modo | Qué hace |
+| --- | --- |
+| classic | Un único agente ejecuta la tarea completa |
+| single-agent | Hilo principal; como mucho un subagente de nivel y esfuerzo bajos, solo para algo complementario y sencillo |
+| master-slave | Principal de nivel superior; subagentes configurables, de su misma familia si la hay (Codex, Gemini o Claude); el principal integra al final |
+| co-work | Especialistas por ámbito en paralelo sobre el mismo repositorio; un jefe frontera interviene puntualmente (5 min) ante conflictos o bloqueos |
+| auto | Crea siempre un plan con el agente elegido y escoge el formato por coste, tiempo y riesgo |
+| lazy-agent | Prioriza nivel bajo; con milestone, plan troceado en tareas pequeñas |
+| milestone | Hitos secuenciales con objetivo, entregable y validación; entre hitos, síntesis (compactar y recapitular) |
+| checker | Revisor ligero al final: errores, bugs y trabajo pendiente |
+
+**Restricciones** (se validan y se explican en `POST /planificador/validar`): classic no admite subagentes; single-agent, solo uno; co-work necesita al menos dos especialistas y no se combina con lazy-agent (necesita modelos fuertes). El resto de combinaciones son válidas.
+
+**Modelos.** Un actor lleva `nivel` (superior, medio, bajo) y una lista de `preferencia` (fragmentos del nombre del modelo); no hay identificadores fijos. Atlas dev los resuelve contra los modelos que ofrece cada agente en ese momento. Los modelos frontera de referencia del jefe (Opus, Fable, Asura, Sol) son **referencia, no identificadores garantizados**: si no hay ninguno disponible, la intervención del jefe falla con ese motivo.
+
+**Auto.** Arma un plan por formato candidato y puntúa `coste·w + tiempo·w + riesgo·w` (el coste pesa el doble con la cuota frenada). El coste sale del estimador del dosificador por clase nivel×dominio×agente; el riesgo, del acierto observado por agente (producción). Donde no hay dato observado usa un prior y lo dice (`metricas.coste/acierto`, avisos). Limitación: aún no hay histórico por modo, así que la comparación entre modos es una estimación y no una medición; con las ejecuciones que registre Atlas dev podrá calibrarse (lo recoge el algoritmo genético de la tarea dpw7, no este componente).
+
+**API.** `POST /planificador/plan` (`{prompt, modo, modificadores, principal, subagentes, checker, tarea, simulacro}`), `POST /planificador/validar`, `GET /planificador/modos`, `GET|PUT /planificador/config`, `GET /planificador/planes[/:tarea]`, `POST /planificador/evento` y `POST /planificador/checker`. Los planes, sus eventos y los hallazgos del checker van en `<datos>/planificador-planes.json`; un checker fallido deja el plan en `bloqueado`, nunca como revisado.

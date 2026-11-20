@@ -1,6 +1,7 @@
 import { listarSkills } from './catalogo';
 import { crearAplicacion } from './aplicacion';
 import { crearAplicacionDosificador } from './aplicacion-dosificador';
+import { crearAplicacionPlanificador } from './aplicacion-planificador';
 import { crearAplicacionLaboratorio } from './aplicacion-laboratorio';
 import { disponibilidad, PROVEEDORES } from './proveedores';
 import { crearRuntime } from './runtime';
@@ -65,6 +66,18 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.put('/dosificador/config', (req) => dosificador.cambiarConfig(req));
   app.post('/dosificador/simular', (req) => dosificador.simular(req.body));
 
+  // ── Planificador: el plan de cada tarea (modo, actores, pasos, hitos, checker). Solo DECIDE y registra: lo ejecuta la cola de Atlas dev ──
+  const planificador = crearAplicacionPlanificador(runtime, dosificador);
+  app.post('/planificador/plan', (req, reply) => { const r = planificador.crearPlan(req.body); reply.code(r.plan.errores.length ? 422 : 200); return r; });
+  app.post('/planificador/validar', (req) => planificador.validar(req.body));
+  app.get('/planificador/modos', () => planificador.modos());
+  app.get('/planificador/config', () => planificador.consultarConfig());
+  app.put('/planificador/config', (req) => planificador.cambiarConfig(req));
+  app.get('/planificador/planes', () => planificador.planes());
+  app.get('/planificador/planes/:tarea', (req) => planificador.plan(req.params['tarea']!));
+  app.post('/planificador/evento', (req) => planificador.evento(req.body));
+  app.post('/planificador/checker', (req) => planificador.checker(req.body));
+
   app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
   app.get('/metrics', () => almacen.metricas());
   app.get('/agents/performance', () => almacen.rendimientoAgentes());
@@ -114,7 +127,7 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
 
   app.post('/feedback/revisiones', (req) => aplicacion.guardarRevisiones(req.body));
 
-  const laboratorio = crearAplicacionLaboratorio(runtime, ctx.version, dosificador);
+  const laboratorio = crearAplicacionLaboratorio(runtime, ctx.version, dosificador, planificador);
   app.get('/laboratorio/componentes', laboratorio.componentes);
   app.get('/laboratorio/arquitectura', laboratorio.arquitectura);
   app.get('/laboratorio/arquitectura/:id', laboratorio.arquitecturaDetalle);

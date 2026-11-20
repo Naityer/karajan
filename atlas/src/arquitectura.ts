@@ -171,6 +171,9 @@ function operaciones(ctx: ContextoArquitectura, avisar: (id: string, fuente: str
     };
   }
 
+  const planes = intentar('planificador', 'planificador-planes.json', () => ctx.planificador?.planes?.() ?? null);
+  if (planes) salida['planificador'] = { ...SIN_OPERACION, tareas: planes.length, ultima_actividad: maximo(...planes.map((x) => x.actualizado)), extra: { planes: planes.length, fallidos: planes.filter((x) => x.estado === 'fallido' || x.estado === 'bloqueado').length } };
+
   const reg = intentar('pasarela', 'borradores.json', () => ctx.pasarela.leer() as Record<string, { creada?: string }>);
   if (reg) salida['pasarela'] = { ...SIN_OPERACION, tareas: Object.keys(reg).length, ultima_actividad: maximo(...Object.values(reg).map((v) => v.creada)), extra: { borradores: Object.keys(reg).length } };
 

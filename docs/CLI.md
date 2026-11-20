@@ -42,6 +42,7 @@ interfaz web lo dibuje con los mismos datos. Código en `atlas/src/sdk/` (`ascii
 | Comando | Qué muestra |
 |---|---|
 | `kj <componente> describe` | Ficha: qué hace, entradas, pasos, salidas, reglas y su laboratorio |
+| `kj planificador describe\|config\|salud\|metricas` | El planificador como cualquier componente (modos, plan y checker por la API `/planificador/*`, ver [componentes.md §10](laboratorio/componentes.md)) |
 | `kj <componente> config [--set '<json>'] [--tarea <id>]` | Configuración viva; con `--set` la escribe por PUT en la ruta de escritura que el componente declara (hoy solo el dosificador; en producción necesita `--tarea` o `KARAJAN_TAREA`, la tarea aceptada de Atlas dev) |
 | `kj componentes dependencias` | Mapa de dependencias entre componentes (de los imports reales), quién usa a quién, los independientes y las raíces de composición |
 | `kj <componente> salud` | Estado de su laboratorio, último resultado por escenario y hallazgos con su borrador |

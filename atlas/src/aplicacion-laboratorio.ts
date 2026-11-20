@@ -19,11 +19,12 @@ import { clasificar } from './heuristica';
 import { consultarComparacion, type CapacidadKarajan } from './comparador';
 import { descubrirSkills, puntuarSkills, type SkillDisponible } from './skills-seleccion';
 import { type crearAplicacionDosificador } from './aplicacion-dosificador';
+import { type crearAplicacionPlanificador } from './aplicacion-planificador';
 
 const falla = (estado: number, detail: string) => Object.assign(new Error(detail), { status: estado });
 const entero = (v: string | undefined, defecto: number, min: number, max: number) => { const n = Number(v); return Number.isFinite(n) && v !== undefined && v !== '' ? Math.min(max, Math.max(min, Math.trunc(n))) : defecto; };
 
-export function crearAplicacionLaboratorio(runtime: ReturnType<typeof crearRuntime>, version: string, dosificador: ReturnType<typeof crearAplicacionDosificador>) {
+export function crearAplicacionLaboratorio(runtime: ReturnType<typeof crearRuntime>, version: string, dosificador: ReturnType<typeof crearAplicacionDosificador>, planificador: ReturnType<typeof crearAplicacionPlanificador>) {
   const { dirDatos, almacen, config, perfiles, rotador, dirLab, atlasDev, pasarela, guardian, rutaBiblioteca, biblioteca, registroLab } = runtime;
   const { configDos, estadoDos } = dosificador;
   // ── Laboratorio: cada componente mide su función con tareas reales de Atlas dev, anonimizadas (ver laboratorio.ts) ──
@@ -103,6 +104,7 @@ export function crearAplicacionLaboratorio(runtime: ReturnType<typeof crearRunti
       case 'proveedores': return { ...base, runs: () => almacen.tareasPlanas().flatMap((t) => t.runs ?? []), buscar: (b: string) => buscarBinario(b) };
       case 'limites': return { ...base, ruta: rutaLimites(), ahora: () => Date.now() };
       case 'dosificador': return { ...base, config: configDos };
+      case 'planificador': return { ...base, config: planificador.config };
       case 'aislamiento': return { ...base, workspace: process.env['ATLAS_WORKSPACE'] ?? null };
       case 'analitica': return { ...base, registros: () => almacen.listarTareas(), runsPorTarea: () => Object.fromEntries(almacen.listarTareas().filter((r) => r.delegation).map((r) => [r.task_id, almacen.runs(r.task_id)])), metricas: () => almacen.metricas() };
       case 'produccion': return base;
@@ -133,7 +135,7 @@ export function crearAplicacionLaboratorio(runtime: ReturnType<typeof crearRunti
   const contextoArquitectura = (): ContextoArquitectura => ({
     version: version, modo: guardian.modo(), dirDatos, dirLab, config,
     perfil: () => { try { return perfilPorDefecto(perfiles.leer()); } catch { return null; } },
-    rotador, limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
+    rotador, limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, planificador: { config: planificador.config, planes: planificador.listaPlanes }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
     registro: registroLab, almacen, cache: cacheArquitectura, ttlMs: 30_000,
   });
   const arquitectura = async () => construirArquitectura(contextoArquitectura());
