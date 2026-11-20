@@ -27,6 +27,7 @@ import { agenteAlumno, agenteTutor, listarRepos, type PlanTarea, type PuertosExa
 import { calificacion, type ExamenAnonimo } from './tutoria-nota';
 import { carpetaSkillForge, efectoForjadas, informeBrechas, leerSkillsForjadas } from './skillforge';
 import { CAPAS, COMPONENTES, componente } from './componentes';
+import { ErrorServicio, ServicioAnalisis } from './analisis/servicio';
 import { anonimizar, ejecutarLaboratorio, hashTarea, RegistroLab, salLocal, type ContextoLab, type TareaAnonima } from './laboratorio';
 import { clasificar } from './heuristica';
 import { compararEquipo, compararKarajan, compararSkill, pruebasEnGrupos, GRUPO_KARAJAN, type CapacidadKarajan } from './comparador';
@@ -229,6 +230,33 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     const demanda = typeof b['demanda'] === 'number' && Number.isFinite(b['demanda']) ? Math.min(3, Math.max(0.1, b['demanda'])) : undefined;
     const { metricas } = simular(configDos(), { semanas, semilla, ...(demanda !== undefined ? { demanda } : {}) });
     return { semanas, semilla, demanda: demanda ?? null, ...metricas };
+  });
+
+  // ── Análisis de tareas (hsr2): etiqueta y puntúa el histórico del registro de Atlas dev; ver docs/analisis-tareas.md ──
+  // Escribe `analisis.json` junto a cada tarea del registro y nada más. Procesar es operativo (lo lanza la rutina de Atlas dev) y no
+  // exige tarea aceptada; cambiar la configuración sí.
+  const analisis = new ServicioAnalisis({ datos: ctx.datos, atlasDev, pasarela });
+  const deAnalisis = async <T>(f: () => Promise<T> | T): Promise<T> => {
+    try { return await f(); } catch (e) { throw e instanceof ErrorServicio ? falla(e.estado, e.message) : e; }
+  };
+  app.post('/analisis/procesar', (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    return deAnalisis(() => analisis.procesar({
+      ...(typeof b['limite'] === 'number' ? { limite: Math.min(1000, Math.max(1, Math.trunc(b['limite']))) } : {}), forzar: b['forzar'] === true, soloRegistro: b['solo_registro'] === true,
+    }));
+  });
+  app.get('/analisis/estado', () => deAnalisis(() => analisis.estado()));
+  app.get('/analisis/tarea/:id', (req) => deAnalisis(() => analisis.tarea(req.params['id']!)));
+  app.get('/analisis/taxonomia', () => analisis.taxonomia());
+  app.get('/analisis/export', () => deAnalisis(() => analisis.exportar()));
+  app.post('/analisis/destilar', () => deAnalisis(() => analisis.destilar()));
+  app.get('/analisis/config', () => ({ config: analisis.config(), fichero: analisis.rutaConfig }));
+  app.put('/analisis/config', async (req) => {
+    await guardian.exigir(req, 'PUT /analisis/config');
+    const b = req.body;
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw falla(422, 'config: un objeto con los campos a cambiar');
+    const { tarea: _tarea, ...resto } = b as Record<string, unknown>;
+    return { config: analisis.guardarConfig(resto['config'] && typeof resto['config'] === 'object' ? resto['config'] : resto), fichero: analisis.rutaConfig };
   });
 
   app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
