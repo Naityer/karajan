@@ -82,10 +82,11 @@ describe('API del planificador', () => {
     assert.equal((await llamar('GET /planificador/planes/:tarea', { params: { tarea: 'tsk_b' } })).status, 404);
   });
 
-  it('plan: una combinación imposible responde 422 con un plan rechazado y sin pasos', async () => {
+  it('plan: una combinación imposible responde con un plan rechazado, sin pasos y con los errores', async () => {
     const r = await llamar('POST /planificador/plan', { body: { prompt: 'x tarea', modo: 'co-work', modificadores: ['lazy-agent'], tarea: 'tsk_c' } });
-    assert.equal(r.status, 422);
+    assert.equal(r.status, 200);
     assert.ok(plan(r).errores.length > 0 && plan(r).pasos.length === 0);
+    assert.equal(r.body['guardado'], false);
     assert.equal((await llamar('POST /planificador/plan', { body: { prompt: '  ' } })).status, 422);
   });
 

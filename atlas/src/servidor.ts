@@ -68,7 +68,8 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
 
   // ── Planificador: el plan de cada tarea (modo, actores, pasos, hitos, checker). Solo DECIDE y registra: lo ejecuta la cola de Atlas dev ──
   const planificador = crearAplicacionPlanificador(runtime, dosificador);
-  app.post('/planificador/plan', (req, reply) => { const r = planificador.crearPlan(req.body); reply.code(r.plan.errores.length ? 422 : 200); return r; });
+  // Siempre 200: una combinación imposible vuelve como plan rechazado (`plan.errores`, sin pasos), con el cuerpo íntegro para quien lo pinta.
+  app.post('/planificador/plan', (req) => planificador.crearPlan(req.body));
   app.post('/planificador/validar', (req) => planificador.validar(req.body));
   app.get('/planificador/modos', () => planificador.modos());
   app.get('/planificador/config', () => planificador.consultarConfig());
