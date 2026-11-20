@@ -10,6 +10,7 @@ import { destinoDe, Rotador } from './rotador';
 import { Delegador } from './delegar';
 import { configDesde } from './heuristica';
 import { ErrorPerfil, Perfiles, perfilPorDefecto } from './perfiles';
+import { detectarNecesidades, explicacion, fitnessPerfil, MIN_MUESTRAS, muestrasDeFilas, proponerGeneracion } from './evolucion';
 import { buscarBinario, disponibilidad, ejecutarProveedor, PROVEEDORES } from './proveedores';
 import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
@@ -271,6 +272,20 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.put('/routing-layout', async (req) => { await guardian.exigir(req, 'PUT /routing-layout'); return conPerfil(() => perfiles.guardar(req.body)); });
   app.post('/routing-layout/presets/dominios', async (req) => { await guardian.exigir(req, 'POST /routing-layout/presets/dominios'); return conPerfil(() => perfiles.aplicarPresetDominio({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })); });
   app.post('/routing-layout/presets/nivel', async (req) => { await guardian.exigir(req, 'POST /routing-layout/presets/nivel'); return conPerfil(() => perfiles.aplicarPresetNivel({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })); });
+  // Perfil base (puntuación continua por agente) y evolución de perfiles: la evolución solo PROPONE (hijos inactivos con linaje).
+  app.post('/routing-layout/presets/base', async (req) => { await guardian.exigir(req, 'POST /routing-layout/presets/base'); return conPerfil(() => perfiles.aplicarPresetBase({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false })); });
+  app.get('/routing-layout/evolucion/fitness', () => {
+    const perfil = perfilPorDefecto(perfiles.leer());
+    const muestras = muestrasDeFilas(almacen.filasEvolucion());
+    return { profile_id: perfil.id, min_muestras: MIN_MUESTRAS, fitness: fitnessPerfil(perfil, muestras), necesidades: detectarNecesidades(perfil, muestras).map((n) => ({ ...n, explicacion: explicacion(n) })) };
+  });
+  app.post('/routing-layout/evolucion/proponer', async (req) => {
+    await guardian.exigir(req, 'POST /routing-layout/evolucion/proponer');
+    return conPerfil(() => {
+      const l = perfiles.leer();
+      return perfiles.guardarHijos(proponerGeneracion(l.profiles, l.default_profile_id, muestrasDeFilas(almacen.filasEvolucion())));
+    });
+  });
   // Configurar un perfil con una frase: sin `aplicar` solo devuelve la propuesta (perfil y cambios); aplicarla es una mutación.
   app.post('/routing-layout/desde-texto', async (req) => {
     const b = (req.body ?? {}) as { texto?: unknown; perfil_id?: unknown; aplicar?: unknown };

@@ -29,7 +29,7 @@ export const AREAS: Record<string, string[]> = {
 
 const escapar = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Igual que `re.search(r"(?<!\w)term(?!\w)")` de Python con Unicode: \w incluye letras con tilde. */
-const contiene = (texto: string, termino: string) => new RegExp(`(?<![\\p{L}\\p{N}_])${escapar(termino)}(?![\\p{L}\\p{N}_])`, 'u').test(texto);
+export const contiene = (texto: string, termino: string) => new RegExp(`(?<![\\p{L}\\p{N}_])${escapar(termino)}(?![\\p{L}\\p{N}_])`, 'u').test(texto);
 
 export function detectarAreas(prompt: string): string[] {
   const texto = prompt.toLowerCase();

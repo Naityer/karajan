@@ -1,6 +1,6 @@
 """Evolución de perfiles: solo propone, solo con evidencia y sin tocar el perfil por defecto."""
 
-import random
+
 
 from app.domain.models import RoutingLayout, RoutingProfile
 from app.routing import evolucion, perfil_base
@@ -87,7 +87,7 @@ def test_el_cruce_hereda_la_ficha_del_padre_con_mejor_evidencia() -> None:
 
 
 def test_las_mutaciones_son_acotadas() -> None:
-    rng = random.Random(0)
+    rng = evolucion.Azar(0)
     muestras = _muestras("base-luna", 20, 0)
     necesidad = next(n for n in evolucion.detectar_necesidades(_layout().default_profile(), muestras) if n.tipo == "fracaso_dominio")
     for _ in range(30):

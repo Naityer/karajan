@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 
 import { perfilDesdeTexto, type Propuesta } from './perfil-texto';
 import { ID_PRESET_DOMINIO, ID_PRESET_NIVEL, presetDominio, presetNivel, type Perfil, type Regla } from './reglas';
+import { ID_PRESET_BASE, presetBase } from './perfil-base';
 
 /**
  * Perfiles de enrutado (`routing_layout.json`, el mismo fichero y esquema que `app/routing/routing_layout.py`). Se comparte con el
@@ -16,7 +17,7 @@ export interface Layout {
   active_profile_id: string; default_profile_id: string; profiles: Perfil[]; updated_at: string;
 }
 
-const CAMPOS_LIENZO = ['entities', 'groups', 'zoom', 'drawer_width', 'openclaw_pos', 'rules'] as const;
+const CAMPOS_LIENZO = ['entities', 'groups', 'zoom', 'drawer_width', 'openclaw_pos', 'rules', 'scoring'] as const;
 const ID_PERFIL = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const NIVELES = new Set(['level_1_simple', 'level_2_moderate', 'level_3_intermediate', 'level_4_complex', 'level_5_critical', 'N1', 'N2', 'N3', 'N4', 'N5']);
 
@@ -24,7 +25,7 @@ export class ErrorPerfil extends Error { status = 422; }
 const falla = (m: string): never => { throw new ErrorPerfil(m); };
 
 const copia = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const lienzoVacio = () => ({ entities: [], groups: [], zoom: 1, drawer_width: 320, openclaw_pos: { x: 0, y: 0 }, rules: [] as Regla[] });
+const lienzoVacio = () => ({ entities: [], groups: [], zoom: 1, drawer_width: 320, openclaw_pos: { x: 0, y: 0 }, rules: [] as Regla[], scoring: null as unknown });
 
 function validarRegla(r: unknown, donde: string): Regla {
   const x = r as Regla;
@@ -158,6 +159,20 @@ export class Perfiles {
   }
 
   /** Añade (o rehace) el perfil predefinido por dominio y lo deja activo y, si se pide, por defecto (el que ejecuta). */
+  aplicarPresetBase({ porDefecto = true }: { porDefecto?: boolean } = {}): Layout {
+    const l = this.leer();
+    const preset = presetBase();
+    const perfiles = [...l.profiles.filter((p) => p.id !== ID_PRESET_BASE), preset];
+    return this.guardar({ profiles: perfiles, active_profile_id: preset.id, default_profile_id: porDefecto ? preset.id : l.default_profile_id });
+  }
+
+  /** Guarda como perfiles NUEVOS e inactivos los hijos propuestos: no cambia el perfil activo ni el por defecto. */
+  guardarHijos(hijos: Perfil[]): Layout {
+    const l = this.leer();
+    if (!hijos.length) return l;
+    return this.guardar({ profiles: [...l.profiles, ...hijos], active_profile_id: l.active_profile_id, default_profile_id: l.default_profile_id });
+  }
+
   aplicarPresetDominio({ porDefecto = true }: { porDefecto?: boolean } = {}): Layout {
     const l = this.leer();
     const preset = presetDominio();

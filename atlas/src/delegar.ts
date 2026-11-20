@@ -6,6 +6,7 @@ import { perfilPorDefecto, type Perfiles } from './perfiles';
 import { disponibilidad, ejecutarProveedor, modeloPara, proveedor, type Disponibilidad, type Ejecutor, type Proveedor, type Tier } from './proveedores';
 import { claudeExcedido, leerLimites, umbralClaude, type Limites } from './limites';
 import { elegirRegla, nivelRegla, type Entidad, type Regla } from './reglas';
+import { ranking, tareaDesdeClasificacion, type EntidadConFicha } from './puntuacion';
 import { aislar, aislarActivo, cerrar, type Aislamiento } from './aislar-git';
 import { destinoDe, type Rotador } from './rotador';
 import { descubrirSkills, seleccionarSkills, type SkillDisponible } from './skills-seleccion';
@@ -28,7 +29,7 @@ export function construirInstruccion(prompt: string, st: Pick<Subtarea, 'name' |
   return instruccion;
 }
 
-export interface Asignacion { subtarea: string; nombre: string; entidad: string | null; entidad_nombre: string | null; proveedor: string; modelo: string; regla: string | null; motivo: string; /** % semanal de Claude si pasó a Codex por el límite. */ limite?: number }
+export interface Asignacion { subtarea: string; nombre: string; entidad: string | null; entidad_nombre: string | null; proveedor: string; modelo: string; regla: string | null; motivo: string; /** Puntuación 0–100 con la que el perfil eligió a este agente (perfiles con fichas de aptitud). */ puntos?: number; /** % semanal de Claude si pasó a Codex por el límite. */ limite?: number }
 export interface Plan { task_id: string; status: string; clasificacion: Clasificacion; asignaciones: Asignacion[]; bloqueada: string | null }
 
 interface Opciones {
@@ -85,7 +86,9 @@ export class Delegador {
     const conEntidad = (e: Entidad, regla: Regla | null, motivo: string): Asignacion | null => {
       const p = proveedor(e.provider);
       if (!p) return null;
-      return { ...base, entidad: e.id, entidad_nombre: e.name ?? e.id, proveedor: p.nombre, modelo: modeloPara(p, tier), regla: regla?.id ?? null, motivo };
+      // Entidad por modelo: el modelo fijado en la entidad manda sobre el del nivel.
+      const fijado = typeof e['model'] === 'string' && e['model'] ? (e['model'] as string) : null;
+      return { ...base, entidad: e.id, entidad_nombre: e.name ?? e.id, proveedor: p.nombre, modelo: fijado ?? modeloPara(p, tier), regla: regla?.id ?? null, motivo };
     };
     if (forzar) {
       const e = perfil.entities.find((x) => x.id === forzar);
@@ -95,6 +98,15 @@ export class Delegador {
     }
     const m = elegirRegla(perfil, { dominios: c.domain, intencion: c.intent, nivel: nivelRegla(c.complexity_level, st.complexity), prompt: c.original_prompt });
     let a = m ? conEntidad(m.entidad, m.regla, `regla «${m.regla.name || m.regla.id}»`) : null;
+    // Puntuación continua: con fichas de aptitud gana el agente (ejecutable aquí) que más puntúa.
+    if (!a) {
+      const nivelTarea = nivelRegla(c.complexity_level, 0);
+      const tarea = tareaDesdeClasificacion(c.complexity_score, c.criteria as unknown as Record<string, number>, c.original_prompt, c.domain, 0.5 * (st.complexity - nivelTarea));
+      for (const { entidad, puntos } of ranking(perfil.entities as EntidadConFicha[], tarea, (perfil as { scoring?: never }).scoring)) {
+        const candidata = conEntidad(entidad, null, `puntuación ${puntos.toFixed(1)}/100`);
+        if (candidata) { a = { ...candidata, puntos }; break; }
+      }
+    }
     if (!a) {
       // El nivel que manda es el de la tarea o el de la subtarea si es mayor (el mismo que ven las reglas).
       const n = nivelRegla(c.complexity_level, st.complexity);
@@ -153,7 +165,7 @@ export class Delegador {
       return { ...plan, bloqueada: 'La tarea exige revisión humana antes de ejecutarse.' };
     }
     for (const a of plan.asignaciones) {
-      almacen.registrarDecision({ task_id: c.task_id, phase: 'assign', decision: a.regla ? `rule:${a.regla}->${a.entidad}:${a.proveedor}` : `${a.subtarea}->${a.entidad ?? '-'}:${a.proveedor}`, reason: a.motivo });
+      almacen.registrarDecision({ task_id: c.task_id, phase: 'assign', decision: a.puntos !== undefined ? `score:${a.puntos.toFixed(1)}->${a.entidad}:${a.proveedor}` : a.regla ? `rule:${a.regla}->${a.entidad}:${a.proveedor}` : `${a.subtarea}->${a.entidad ?? '-'}:${a.proveedor}`, reason: a.motivo });
       if (a.limite !== undefined) almacen.registrarDecision({ task_id: c.task_id, phase: 'fallback', decision: 'limite_semanal:claude->codex', reason: a.motivo });
     }
     almacen.actualizarTarea(c.task_id, 'delegated', null);
@@ -211,7 +223,7 @@ export class Delegador {
       const tokensEntrada = Math.ceil(instruccion.length / 4), tokensSalida = Math.ceil(r.salida.length / 4);
       almacen.registrarRun({
         task_id: c.task_id, provider_name: p.nombre, routing_entity_id: a.entidad, routing_entity_name_snapshot: a.entidad_nombre, model_id: r.modelo, backend: 'cli', status: estado,
-        started_at: inicio, completed_at: new Date().toISOString(), latency_ms: r.latenciaMs, input_tokens: tokensEntrada, output_tokens: tokensSalida, estimated_cost_usd: 0, error: r.error,
+        started_at: inicio, completed_at: new Date().toISOString(), latency_ms: r.latenciaMs, input_tokens: tokensEntrada, output_tokens: tokensSalida, estimated_cost_usd: 0, error: r.error, profile_id: perfil.id,
       });
       almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `${st.id}:${st.recommended_model}->cli:${p.nombre}`, score: st.complexity, backend: 'cli', reason: r.error ?? `executed '${st.name}'` });
       ejecuciones.push({

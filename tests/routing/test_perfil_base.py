@@ -93,3 +93,13 @@ def test_el_reparto_real_usa_la_puntuacion_y_lo_registra(monkeypatch) -> None:
     puntuadas = [d for d in decisiones if d.decision.startswith("score:")]
     assert len(puntuadas) == len(clasificacion.subtasks)
     assert all("/100" in d.reason for d in puntuadas)
+
+
+def test_el_json_del_paquete_atlas_es_el_perfil_base_de_python() -> None:
+    import json
+    from pathlib import Path
+
+    ruta = Path(__file__).resolve().parents[2] / "atlas" / "src" / "perfil-base.json"
+    assert json.loads(ruta.read_text(encoding="utf-8")) == json.loads(json.dumps(perfil_base.base_profile())), (
+        "regenera atlas/src/perfil-base.json desde app.routing.perfil_base.base_profile()"
+    )

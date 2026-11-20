@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import math
-import random
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,6 +30,17 @@ EXITO_SOBRESALIENTE = 0.90  # IC95 inferior por encima de esto = refuerzo
 MAX_HIJOS = 4
 PASO_BASE = 0.10
 PASO_ALEATORIO = 0.10
+
+
+class Azar:
+    """Generador congruencial lineal (Numerical Recipes) idéntico al del puerto TypeScript: misma semilla, mismos hijos."""
+
+    def __init__(self, semilla: int = 0) -> None:
+        self._estado = semilla & 0xFFFFFFFF
+
+    def random(self) -> float:
+        self._estado = (self._estado * 1664525 + 1013904223) & 0xFFFFFFFF
+        return self._estado / 4294967296
 
 
 @dataclass(frozen=True)
@@ -187,7 +198,7 @@ def _hijo(padre: RoutingProfile, hijo_id: str, origen: str, nota: str, padres: l
     return hijo
 
 
-def mutar(perfil: RoutingProfile, necesidad: Necesidad, rng: random.Random, hijo_id: str) -> RoutingProfile | None:
+def mutar(perfil: RoutingProfile, necesidad: Necesidad, rng: "Azar", hijo_id: str) -> RoutingProfile | None:
     """Un hijo que cambia un único gen en respuesta a la necesidad, o None si no procede."""
     hijo = _hijo(perfil, hijo_id, "mutacion", "", [perfil.id], perfil.generation + 1)
     entidad = next((e for e in hijo.entities if e.id == necesidad.entidad_id and e.aptitud), None)
@@ -248,7 +259,7 @@ def proponer_generacion(layout: RoutingLayout, muestras: list[Muestra], *, semil
     """Perfiles hijo propuestos (inactivos) a partir del perfil por defecto y, si hay, de otros con evidencia.
 
     No modifica `layout`: el llamador decide si los guarda. Determinista para una semilla dada."""
-    rng = random.Random(semilla)
+    rng = Azar(semilla)
     base = layout.default_profile()
     hijos: list[RoutingProfile] = []
     nuevos_ids = {p.id for p in layout.profiles}
@@ -258,21 +269,20 @@ def proponer_generacion(layout: RoutingLayout, muestras: list[Muestra], *, semil
         n = 1
         while f"{raiz}-g{n}" in nuevos_ids:
             n += 1
-        nuevo = f"{raiz}-g{n}"
-        nuevos_ids.add(nuevo)
-        return nuevo
+        return f"{raiz}-g{n}"
+
+    def aceptar(hijo: RoutingProfile | None) -> None:
+        if hijo is not None:  # el id solo se gasta si nace un hijo
+            nuevos_ids.add(hijo.id)
+            hijos.append(hijo)
 
     for necesidad in detectar_necesidades(base, muestras):
         if len(hijos) >= MAX_HIJOS:
             break
-        hijo = mutar(base, necesidad, rng, siguiente_id(base))
-        if hijo is not None:
-            hijos.append(hijo)
+        aceptar(mutar(base, necesidad, rng, siguiente_id(base)))
     otros = [p for p in layout.profiles if p.id != base.id and p.entities]
     for otro in otros:
         if len(hijos) >= MAX_HIJOS:
             break
-        hijo = cruzar(base, otro, muestras, siguiente_id(base))
-        if hijo is not None:
-            hijos.append(hijo)
+        aceptar(cruzar(base, otro, muestras, siguiente_id(base)))
     return hijos

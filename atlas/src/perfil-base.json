@@ -1,0 +1,460 @@
+{
+  "id": "base-2026-11-12",
+  "name": "Perfil base · 2026-11-12",
+  "description": "Perfil base de partida (12/11/2026): una entidad por modelo y puntuación continua 0–5 por agente (Claude Haiku/Sonnet/Opus/Fable, Codex Terra/Luna/Sol/Astra, Gemini y local). Cifras iniciales = hipótesis sin medir; los perfiles nuevos nacen de aquí por mutación y cruce según métricas.",
+  "entities": [
+    {
+      "id": "base-haiku",
+      "name": "Claude Haiku 5.5",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "claude-cli",
+      "model": "haiku",
+      "tier": 1,
+      "levels": [
+        "level_1_simple",
+        "level_2_moderate",
+        "level_3_intermediate"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          0.0,
+          2.4
+        ],
+        "optimo": 1.0,
+        "afinidad_dominio": {
+          "general": 0.6,
+          "redaccion": 0.5,
+          "academico": 0.5,
+          "backend": 0.45,
+          "oficina": 0.4,
+          "data": 0.45,
+          "frontend": 0.3,
+          "planificacion": 0.3,
+          "grafico": 0.2
+        },
+        "afinidad_criterio": {
+          "autonomy_required": 0.35,
+          "reasoning_depth": 0.3,
+          "validation_difficulty": 0.5,
+          "context_required": 0.35
+        },
+        "coste_relativo": 0.1,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.7,
+        "medido": false
+      },
+      "x": 120,
+      "y": 200
+    },
+    {
+      "id": "base-sonnet",
+      "name": "Claude Sonnet 5.5",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "claude-cli",
+      "model": "sonnet",
+      "tier": 1,
+      "levels": [
+        "level_2_moderate",
+        "level_3_intermediate",
+        "level_4_complex",
+        "level_5_critical"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          1.6,
+          4.2
+        ],
+        "optimo": 3.0,
+        "afinidad_dominio": {
+          "frontend": 0.85,
+          "grafico": 0.85,
+          "backend": 0.65,
+          "data": 0.6,
+          "planificacion": 0.6,
+          "redaccion": 0.6,
+          "academico": 0.55,
+          "oficina": 0.5,
+          "general": 0.65
+        },
+        "afinidad_criterio": {
+          "autonomy_required": 0.9,
+          "context_required": 0.8,
+          "reasoning_depth": 0.7,
+          "validation_difficulty": 0.7,
+          "ambiguity": 0.6
+        },
+        "coste_relativo": 0.45,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.85,
+        "medido": false
+      },
+      "x": 360,
+      "y": 200
+    },
+    {
+      "id": "base-opus",
+      "name": "Claude Opus 5.5",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "claude-cli",
+      "model": "opus",
+      "tier": 1,
+      "levels": [
+        "level_4_complex",
+        "level_5_critical"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          3.2,
+          5.0
+        ],
+        "optimo": 4.4,
+        "afinidad_dominio": {
+          "grafico": 0.95,
+          "frontend": 0.9,
+          "planificacion": 0.9,
+          "backend": 0.6,
+          "general": 0.6
+        },
+        "afinidad_criterio": {
+          "reasoning_depth": 0.95,
+          "ambiguity": 0.9,
+          "context_required": 0.85,
+          "autonomy_required": 0.8
+        },
+        "coste_relativo": 0.9,
+        "duracion_max_min": 5.0,
+        "fiabilidad_prior": 0.9,
+        "medido": false
+      },
+      "x": 600,
+      "y": 200
+    },
+    {
+      "id": "base-fable",
+      "name": "Claude Fable 5.2",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "claude-cli",
+      "model": "claude-fable-5-2",
+      "tier": 1,
+      "levels": [
+        "level_4_complex",
+        "level_5_critical"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          3.4,
+          5.0
+        ],
+        "optimo": 4.7,
+        "afinidad_dominio": {
+          "grafico": 0.95,
+          "frontend": 0.9,
+          "planificacion": 0.9,
+          "general": 0.55
+        },
+        "afinidad_criterio": {
+          "reasoning_depth": 0.95,
+          "ambiguity": 0.9,
+          "context_required": 0.9,
+          "autonomy_required": 0.8
+        },
+        "coste_relativo": 1.0,
+        "duracion_max_min": 5.0,
+        "fiabilidad_prior": 0.9,
+        "medido": false
+      },
+      "x": 840,
+      "y": 200
+    },
+    {
+      "id": "base-terra",
+      "name": "Codex Terra",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "codex",
+      "model": "terra",
+      "tier": 1,
+      "levels": [
+        "level_2_moderate",
+        "level_3_intermediate",
+        "level_4_complex",
+        "level_5_critical"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          1.5,
+          4.4
+        ],
+        "optimo": 3.0,
+        "afinidad_dominio": {
+          "backend": 0.95,
+          "oficina": 0.95,
+          "data": 0.8,
+          "general": 0.6,
+          "redaccion": 0.5,
+          "academico": 0.5,
+          "frontend": 0.35,
+          "grafico": 0.2,
+          "planificacion": 0.45
+        },
+        "afinidad_criterio": {
+          "autonomy_required": 0.6,
+          "reasoning_depth": 0.45,
+          "validation_difficulty": 0.6,
+          "context_required": 0.6
+        },
+        "coste_relativo": 0.4,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.8,
+        "medido": false
+      },
+      "x": 1080,
+      "y": 200
+    },
+    {
+      "id": "base-luna",
+      "name": "Codex Luna",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "codex",
+      "model": "luna",
+      "tier": 1,
+      "levels": [
+        "level_1_simple",
+        "level_2_moderate",
+        "level_3_intermediate"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          0.0,
+          2.8
+        ],
+        "optimo": 1.2,
+        "afinidad_dominio": {
+          "redaccion": 0.95,
+          "academico": 0.6,
+          "oficina": 0.5,
+          "general": 0.4,
+          "backend": 0.15,
+          "frontend": 0.1,
+          "grafico": 0.05,
+          "data": 0.15
+        },
+        "afinidad_criterio": {
+          "ambiguity": 0.5,
+          "reasoning_depth": 0.3,
+          "autonomy_required": 0.2,
+          "context_required": 0.4
+        },
+        "coste_relativo": 0.15,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.6,
+        "medido": false
+      },
+      "x": 120,
+      "y": 420
+    },
+    {
+      "id": "base-sol",
+      "name": "Codex Sol",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "codex",
+      "model": "sol",
+      "tier": 1,
+      "levels": [
+        "level_4_complex",
+        "level_5_critical"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          3.5,
+          5.0
+        ],
+        "optimo": 4.5,
+        "afinidad_dominio": {
+          "backend": 0.85,
+          "oficina": 0.85,
+          "planificacion": 0.8,
+          "data": 0.8,
+          "general": 0.55
+        },
+        "afinidad_criterio": {
+          "reasoning_depth": 0.85,
+          "context_required": 0.8,
+          "autonomy_required": 0.7
+        },
+        "coste_relativo": 0.85,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.85,
+        "medido": false
+      },
+      "x": 360,
+      "y": 420
+    },
+    {
+      "id": "base-astra",
+      "name": "Codex Astra",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "codex",
+      "model": "astra",
+      "tier": 1,
+      "levels": [
+        "level_2_moderate",
+        "level_3_intermediate",
+        "level_4_complex"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          1.2,
+          4.0
+        ],
+        "optimo": 2.6,
+        "afinidad_dominio": {
+          "planificacion": 0.95,
+          "academico": 0.9,
+          "redaccion": 0.8,
+          "general": 0.6,
+          "backend": 0.45,
+          "oficina": 0.5,
+          "frontend": 0.25
+        },
+        "afinidad_criterio": {
+          "reasoning_depth": 0.8,
+          "ambiguity": 0.7,
+          "context_required": 0.7,
+          "autonomy_required": 0.5
+        },
+        "coste_relativo": 0.35,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.75,
+        "medido": false
+      },
+      "x": 600,
+      "y": 420
+    },
+    {
+      "id": "base-gemini",
+      "name": "Gemini (lazy-agent)",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "google",
+      "model": "gemini-2.0-flash",
+      "tier": 1,
+      "levels": [
+        "level_1_simple",
+        "level_2_moderate",
+        "level_3_intermediate"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          0.0,
+          2.2
+        ],
+        "optimo": 1.0,
+        "afinidad_dominio": {
+          "academico": 0.75,
+          "redaccion": 0.75,
+          "general": 0.5,
+          "backend": 0.3,
+          "frontend": 0.2,
+          "grafico": 0.2,
+          "oficina": 0.35
+        },
+        "afinidad_criterio": {
+          "ambiguity": 0.4,
+          "reasoning_depth": 0.35,
+          "autonomy_required": 0.25
+        },
+        "coste_relativo": 0.05,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.45,
+        "medido": false
+      },
+      "x": 840,
+      "y": 420
+    },
+    {
+      "id": "base-local",
+      "name": "Agente local (Qwen)",
+      "role": "worker",
+      "role_tags": [
+        "worker"
+      ],
+      "provider": "ollama-qwen",
+      "model": "qwen2.5:7b",
+      "tier": 1,
+      "levels": [
+        "level_1_simple",
+        "level_2_moderate"
+      ],
+      "max_concurrent": 1,
+      "aptitud": {
+        "rango_complejidad": [
+          0.0,
+          1.8
+        ],
+        "optimo": 0.8,
+        "afinidad_dominio": {
+          "academico": 0.65,
+          "redaccion": 0.65,
+          "general": 0.45,
+          "backend": 0.3,
+          "frontend": 0.15,
+          "grafico": 0.1,
+          "oficina": 0.3
+        },
+        "afinidad_criterio": {
+          "ambiguity": 0.35,
+          "reasoning_depth": 0.3,
+          "autonomy_required": 0.2
+        },
+        "coste_relativo": 0.0,
+        "duracion_max_min": null,
+        "fiabilidad_prior": 0.38,
+        "medido": false
+      },
+      "x": 1080,
+      "y": 420
+    }
+  ],
+  "groups": [],
+  "rules": [],
+  "scoring": {},
+  "generation": 0,
+  "parents": [],
+  "origin": "base",
+  "mutation_note": ""
+}
