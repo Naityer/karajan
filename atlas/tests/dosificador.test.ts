@@ -118,7 +118,7 @@ describe('configuración', () => {
     }
     assert.deepEqual(normalizarConfig(null), CONFIG_BASE);
     const c = normalizarConfig({ margenSeguridadPct: 500, margen5hPct: -4, pacing: { kp: 99, retrasoMaxMin: -1, histeresisCiclos: 0 }, reserva: { modo: 'perfil', percentil: 7 }, estimador: { percentil: 0.1 }, modoSimulacion: 'si' });
-    assert.equal(c.margenSeguridadPct, 50);
+    assert.equal(c.margenSeguridadPct, 100);
     assert.equal(c.margen5hPct, 0);
     assert.deepEqual([c.pacing.kp, c.pacing.retrasoMaxMin, c.pacing.histeresisCiclos], [20, 0, 1]);
     assert.equal(c.reserva.modo, 'perfil');

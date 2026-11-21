@@ -26,6 +26,20 @@ export interface EscenarioSim {
   /** Para depurar: se llama tras cada decisión con el instante, el uso de cada agente y el resultado. */
   traza?: (t: number, uso: Record<string, number>, r: ReturnType<typeof decidir>, cola: number) => void;
 }
+
+/** Entrada compartida por la API y la terminal local. */
+export function simularSolicitud(cfg: ConfigDosificador, entrada: Record<string, unknown>) {
+  const entero = (v: unknown, defecto: number, min: number, max: number) => {
+    const n = Number(v);
+    return v !== undefined && v !== null && v !== '' && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : defecto;
+  };
+  const semanas = entero(entrada['semanas'], 4, 1, 12);
+  const semilla = entero(entrada['semilla'], 1, 1, 1_000_000);
+  const valor = entrada['demanda'];
+  const demanda = typeof valor === 'number' && Number.isFinite(valor) ? Math.min(3, Math.max(0.1, valor)) : undefined;
+  const { metricas } = simular(cfg, { semanas, semilla, ...(demanda !== undefined ? { demanda } : {}) });
+  return { semanas, semilla, demanda: demanda ?? null, ...metricas };
+}
 export const ESCENARIO_BASE: EscenarioSim = {
   semanas: 8, semilla: 1, cicloMin: 15, demanda: 1.3, personal: { medianaPct: { claude: 10, codex: 5 }, sigma: 0.4 }, sesgoClase: 0.5, sigmaTarea: 0.35,
   agentes: ['claude', 'codex'], equipos: ['pc', 'servidor'], inicio: Date.UTC(2026, 0, 5), fracFijas: 0.3,

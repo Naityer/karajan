@@ -25,6 +25,7 @@ _SKILLS: tuple[dict, ...] = (
 # agente; se documentan aquí para poder asignarlas a un agente compatible
 # desde el panel de Agentes). `repo_url` apunta al repositorio de origen.
 _GITHUB_SKILLS: tuple[dict, ...] = (
+    {"name": "modern-web-guidance", "description": "Modernización web: HTML, CSS, JavaScript del navegador, accesibilidad, rendimiento y compatibilidad. GoogleChrome Modern Web Guidance.", "applies_to": ["claude", "codex"], "repo_url": "https://github.com/GoogleChrome/modern-web-guidance", "repo_path": "skills/modern-web-guidance"},
     {"name": "docx", "description": "Crear, leer y editar documentos Word (.docx).", "applies_to": ["claude", "codex"], "repo_url": "https://github.com/anthropics/skills"},
     {"name": "pptx", "description": "Crear y editar presentaciones PowerPoint (.pptx).", "applies_to": ["claude", "codex"], "repo_url": "https://github.com/anthropics/skills"},
     {"name": "xlsx", "description": "Crear, leer y editar hojas de cálculo (.xlsx/.csv).", "applies_to": ["claude", "codex"], "repo_url": "https://github.com/anthropics/skills"},
@@ -141,10 +142,10 @@ def install_skill(name: str) -> SkillInstallResult:
         if clone.returncode != 0:
             return SkillInstallResult(ok=False, detail=clone.stderr.strip() or f"git clone falló para '{name}'.")
         subprocess.run(
-            ["git", "sparse-checkout", "set", name],
+            ["git", "sparse-checkout", "set", entry.get("repo_path", name)],
             cwd=tmp, capture_output=True, text=True, timeout=30, check=False,
         )
-        source = Path(tmp) / name
+        source = Path(tmp) / entry.get("repo_path", name)
         if not source.is_dir():
             return SkillInstallResult(ok=False, detail=f"No se encontró la carpeta '{name}' en {repo_url}.")
         shutil.copytree(source, target)

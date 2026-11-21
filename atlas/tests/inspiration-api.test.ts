@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { after, describe, it } from 'node:test';
 
 import { registrar } from '../src/servidor';
+import { ejecutar } from '../src/cli';
 
 /** Las rutas /resources/* y /resource-groups del paquete (solo lectura), con un servidor falso y todo en un directorio temporal. */
 type Manejador = (req: Record<string, unknown>, reply: { code(n: number): unknown }) => unknown;
@@ -39,7 +40,7 @@ async function montar(subdir: string, resources: string) {
   const datos = join(dir, subdir, 'paquete');
   mkdirSync(datos, { recursive: true });
   writeFileSync(join(datos, 'modo.json'), '{"modo":"desarrollo"}\n');
-  process.env['ATLAS_KARAJAN_DATA'] = join(dir, subdir, 'no-existe');
+  delete process.env['ATLAS_KARAJAN_DATA'];
   process.env['ATLAS_WORKSPACE'] = join(dir, subdir);
   delete process.env['ATLAS_KARAJAN_LAYOUT']; delete process.env['KARAJAN_LIMITES_PLAN'];
   process.env['ATLAS_DEV_API'] = 'http://127.0.0.1:1';
@@ -90,6 +91,19 @@ describe('API de Inspiration (solo lectura)', () => {
     assert.deepEqual(((await llamar('GET /resources/discovery/sources')).body['fuentes'] as { nombre: string }[]).map((f) => f.nombre), ['GitHub']);
     assert.equal(((await llamar('GET /resources/review')).body as unknown[]).length, 1);
     assert.deepEqual(Object.keys((await llamar('GET /resources/validity-policy')).body['preferencias'] as object), ['artifact_validity_policy']);
+    let salida = '';
+    const local = await ejecutar(['inspiration', 'lista', '--resources-db', join(dir, 'a', 'resources.db'), '--buscar', 'PONY', '--json'], {
+      api: 'http://k', localPorDefecto: true, fetch: async () => { throw new Error('red'); }, escribir: (s) => { salida = s; },
+    });
+    assert.equal(local, 0);
+    assert.match(salida, /ponytail/);
+    assert.deepEqual(JSON.parse(salida).datos, lista.body);
+    const comparada = await llamar('GET /laboratorio/comparar', { query: { skill: 'ponytail' } });
+    const comparar = await ejecutar(['comparar', 'ponytail', '--resources-db', join(dir, 'a', 'resources.db'), '--json'], {
+      api: 'http://k', localPorDefecto: true, fetch: async () => { throw new Error('red'); }, escribir: (s) => { salida = s; },
+    });
+    assert.equal(comparar, 0);
+    assert.deepEqual(JSON.parse(salida), comparada.body);
   });
 
   it('sin resources.db responde 409 con el motivo, sin romper el resto del paquete', async () => {

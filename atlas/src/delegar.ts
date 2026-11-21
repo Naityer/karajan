@@ -4,7 +4,7 @@ import type { Almacen } from './almacen';
 import { clasificar, type Clasificacion, type Configuracion, type Subtarea } from './heuristica';
 import { perfilPorDefecto, type Perfiles } from './perfiles';
 import { disponibilidad, ejecutarProveedor, modeloPara, proveedor, type Disponibilidad, type Ejecutor, type Proveedor, type Tier } from './proveedores';
-import { claudeExcedido, leerLimites, umbralClaude, type Limites } from './limites';
+import { claudeExcedido, geminiDisponible, leerLimites, umbralClaude, type Limites } from './limites';
 import { elegirRegla, nivelRegla, type Entidad, type Regla } from './reglas';
 import { aislar, aislarActivo, cerrar, type Aislamiento } from './aislar-git';
 import { destinoDe, type Rotador } from './rotador';
@@ -19,7 +19,7 @@ import { descubrirSkills, seleccionarSkills, type SkillDisponible } from './skil
 const NIVEL_NOMBRE = ['level_1_simple', 'level_2_moderate', 'level_3_intermediate', 'level_4_complex', 'level_5_critical'];
 const TIMEOUT_MS = 15 * 60_000;
 /** Orden de respaldo cuando el agente elegido no está disponible en este equipo. */
-const RESPALDO = ['codex', 'claude-cli', 'ollama-qwen'];
+const RESPALDO = ['codex', 'claude-cli', 'ollama-qwen', 'gemini-agy'];
 
 /** La instrucción que recibe un agente: prompt, subtarea y, si las hay, las skills preparadas. La usa también la tutoría para examinar con la MISMA instrucción. */
 export function construirInstruccion(prompt: string, st: Pick<Subtarea, 'name' | 'validation'>, preparadas: string[]): string {
@@ -46,6 +46,14 @@ interface Opciones {
 export class Delegador {
   private readonly ejecutor: Ejecutor;
   private readonly disponible: (p: Proveedor) => Disponibilidad;
+
+  /** Disponible de verdad: la CLI está en el equipo y, para Gemini, su cuota semanal tiene margen con un dato reciente (nunca sin dato). */
+  private puede(p: Proveedor): Disponibilidad {
+    const d = this.disponible(p);
+    if (!d.disponible || p.nombre !== 'gemini-agy') return d;
+    if (geminiDisponible((this.op.limites ?? leerLimites)())) return d;
+    return { ...d, disponible: false, motivo: 'cuota semanal de Gemini agotada, sin dato reciente o por encima del máximo' };
+  }
   private readonly enCurso = new Map<string, number>();
   private readonly esperas = new Map<string, (() => void)[]>();
   readonly pendientes = new Set<Promise<void>>();
@@ -103,12 +111,12 @@ export class Delegador {
       a = e ? conEntidad(e, null, `nivel ${n}`) : null;
     }
     // Si el agente elegido no puede ejecutarse aquí, el primero disponible del respaldo (queda anotado en el motivo).
-    if (!a || !this.disponible(proveedor(a.proveedor)!).disponible) {
-      const motivo = a ? `${a.proveedor} no disponible (${this.disponible(proveedor(a.proveedor)!).motivo})` : 'ningún agente del perfil se puede ejecutar';
+    if (!a || !this.puede(proveedor(a.proveedor)!).disponible) {
+      const motivo = a ? `${a.proveedor} no disponible (${this.puede(proveedor(a.proveedor)!).motivo})` : 'ningún agente del perfil se puede ejecutar';
       const respaldo = (st.recommended_skills?.length ?? 0) > 0 ? ['codex', 'claude-cli'] : RESPALDO;
       for (const nombre of respaldo) {
         const p = proveedor(nombre)!;
-        if (!this.disponible(p).disponible) continue;
+        if (!this.puede(p).disponible) continue;
         const e = perfil.entities.find((x) => x.provider === nombre);
         return { ...base, entidad: e?.id ?? null, entidad_nombre: e?.name ?? null, proveedor: nombre, modelo: modeloPara(p, tier), regla: null, motivo: `${motivo}; respaldo ${nombre}` };
       }
@@ -118,7 +126,7 @@ export class Delegador {
     if (a.proveedor === 'ollama-qwen' && (st.recommended_skills?.length ?? 0) > 0) {
       for (const nombre of ['codex', 'claude-cli']) {
         const p = proveedor(nombre)!;
-        if (!this.disponible(p).disponible) continue;
+        if (!this.puede(p).disponible) continue;
         const e = perfil.entities.find((x) => x.provider === nombre);
         return { ...base, entidad: e?.id ?? null, entidad_nombre: e?.name ?? nombre, proveedor: nombre,
           modelo: modeloPara(p, tier), regla: a.regla, motivo: `${a.motivo}; ${nombre} admite skills` };
@@ -129,10 +137,17 @@ export class Delegador {
     if (a.proveedor === 'claude-cli') {
       const pct = claudeExcedido((this.op.limites ?? leerLimites)());
       const codex = proveedor('codex');
-      if (pct !== null && codex && this.disponible(codex).disponible) {
+      if (pct !== null && codex && this.puede(codex).disponible) {
         const e = perfil.entities.find((x) => x.provider === 'codex');
         return { ...base, entidad: e?.id ?? null, entidad_nombre: e?.name ?? 'Codex', proveedor: 'codex', modelo: modeloPara(codex, tier), regla: a.regla, limite: pct,
           motivo: `Claude al ${Math.round(pct)} % de su uso semanal (> ${umbralClaude()} %): pasa a Codex` };
+      }
+      // Sin Codex disponible, el desborde va a Gemini, solo si su cuota semanal tiene margen (ver `puede`).
+      const gemini = proveedor('gemini-agy');
+      if (pct !== null && gemini && this.puede(gemini).disponible) {
+        const e = perfil.entities.find((x) => x.provider === 'gemini-agy');
+        return { ...base, entidad: e?.id ?? null, entidad_nombre: e?.name ?? 'Gemini', proveedor: 'gemini-agy', modelo: modeloPara(gemini, tier), regla: a.regla, limite: pct,
+          motivo: `Claude al ${Math.round(pct)} % de su uso semanal (> ${umbralClaude()} %) y sin Codex: pasa a Gemini (cuota sin coste)` };
       }
     }
     return a;

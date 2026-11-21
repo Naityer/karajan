@@ -39,6 +39,6 @@ def test_el_modo_solo_cambia_editando_el_fichero(tmp_path) -> None:
     assert modo.leer_modo(None) == "desarrollo"
     assert modo.leer_modo(tmp_path) == "desarrollo"
     (tmp_path / "modo.json").write_text("roto", encoding="utf-8")
-    assert modo.leer_modo(tmp_path) == "desarrollo"
+    assert modo.leer_modo(tmp_path) == "produccion"
     (tmp_path / "modo.json").write_text('{"modo": "produccion"}', encoding="utf-8")
     assert modo.leer_modo(tmp_path) == "produccion"

@@ -1184,6 +1184,7 @@ def seed_resource_library(
     from app.resources.resource_intelligence import extract_resource_signals
 
     skill_capabilities = {
+        "modern-web-guidance": ["frontend-development", "web-modernization", "web-accessibility", "web-performance", "browser-compatibility"],
         "repo-analyzer": ["repository-audit", "code-review", "dependency-analysis"],
         "security-review": ["security-audit"],
         "aegis-secops": ["security-audit", "application-security", "vulnerability-triage", "secrets-detection", "ai-agent-security"],
@@ -1215,7 +1216,8 @@ def seed_resource_library(
             compatible_runtimes=skill.applies_to,
             install_strategy="github_skill" if skill.repo_url else "catalog",
             status="installed" if skill.installed else "available",
-            metadata={"seed": "app.resources.skills_catalog", "intelligence": intelligence},
+            metadata={"seed": "app.resources.skills_catalog", "intelligence": intelligence,
+                      **({"skill_path": "skills/modern-web-guidance"} if skill.name == "modern-web-guidance" else {})},
         )
         try:
             old = store.get_by_slug(item.slug, ResourceKind.SKILL)

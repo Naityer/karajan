@@ -164,6 +164,10 @@ _CAPABILITIES: dict[str, tuple[str, ...]] = {
     "financial-analysis": ("financial analysis", "stock market", "portfolio risk", "market data", "analisis financiero", "bolsa", "cotizaciones bursatiles", "acciones bursatiles", "mercado de acciones"),
     "spreadsheet-analysis": ("spreadsheet analysis", "spreadsheet", "excel analysis", "analisis de hojas de calculo", "hoja de calculo"),
     "frontend-development": ("frontend development", "frontend", "user interface development", "desarrollo frontend"),
+    "web-modernization": ("web modernization", "modernizacion web", "legacy web", "modern-web-guidance"),
+    "web-accessibility": ("web accessibility", "accesibilidad web", "accessible html"),
+    "web-performance": ("web performance", "rendimiento web", "core web vitals"),
+    "browser-compatibility": ("browser compatibility", "compatibilidad web", "compatibilidad de navegadores"),
     "map-markers": ("map markers", "markers", "marcadores"),
     "map-routes": ("map routes", "routes on a map", "rutas", "rutas en mapa"),
 }
@@ -204,6 +208,10 @@ _TAXONOMY_BY_CAPABILITY: dict[str, str] = {
     "financial-analysis": "finance",
     "spreadsheet-analysis": "data",
     "frontend-development": "software-development",
+    "web-modernization": "web",
+    "web-accessibility": "web",
+    "web-performance": "web",
+    "browser-compatibility": "web",
     "map-markers": "web",
     "map-routes": "web",
 }

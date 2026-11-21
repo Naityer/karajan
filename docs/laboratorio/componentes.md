@@ -42,7 +42,7 @@ El motor está en `atlas/src/laboratorio.ts` y los laboratorios en `atlas/src/la
 Cada escenario devuelve la muestra, si es **suficiente**, sus métricas, los umbrales y los **hallazgos**.
 
 **Reglas del laboratorio**
-- **No muta producción.**
+- **No aplica cambios de configuración a producción.** La ejecución guarda informes y puede crear borradores en Atlas; algunos escenarios requieren proveedores o repositorios temporales, según su configuración.
   - El delegador del laboratorio solo planifica, con todos los agentes «disponibles» y sin límites: se mide el perfil, no la máquina.
   - Los resultados van a `<datos del paquete>/laboratorio/laboratorio.db`, no al `task_logs.db` compartido.
 - **A ciegas y anónimo.**
@@ -84,7 +84,7 @@ Cada escenario devuelve la muestra, si es **suficiente**, sus métricas, los umb
   - en el paquete: `PUT /routing-layout`, los presets, `desde-texto` con `aplicar` y `skills/rotar` con `aplicar`;
   - en el nativo: además `PUT /config`, `setup/apply-*`, el catálogo del lienzo e `install` de skills.
 - Sin esa tarea responde **423** y el paquete deja la mutación pedida como borrador.
-- Siguen libres clasificar, planificar, delegar, el feedback y el laboratorio, porque solo proponen o registran.
+- La guarda de tarea aceptada citada arriba no se aplica a todas las demás operaciones. Clasificar y planificar son distintas de delegar: delegar puede ejecutar un proveedor y modificar un workspace. El laboratorio y el feedback pueden escribir informes o crear borradores. Los controles del host y la revisión humana que corresponda son independientes; no debe interpretarse su ausencia de esta lista como permiso general.
 
 ## 4. Pasarela de borradores
 
@@ -131,6 +131,9 @@ Estrellas: «propias» si la ficha es del repo; «heredadas» si la skill está 
 - El laboratorio `biblioteca` lo mide, y el borrador del comparador incluye arreglarlo antes de decidir con esos datos.
 
 ## 7. Lo que queda (borradores en Atlas dev)
+
+Hecho en 0.13.0 (tarea cndi): el componente `planificador` (capa Decisión, §10) con sus modos de ejecución, laboratorio, ficha, rutas `/planificador/*` y su integración en la cola de Atlas dev. No sustituye al dosificador: el dosificador decide cuándo, dónde y con qué agente; el planificador decide **cómo** se ejecuta la tarea (modo, actores, pasos).
+
 
 Hecho en 0.11.0 (tarea 2hbf): tope y ritmo por agente, equipos dormidos y relevo entre equipos (`decidirRelevo`, §9 «Tope, ritmo, equipos dormidos y relevo»).
 
@@ -212,3 +215,28 @@ Cada componente (`atlas/src/componentes.ts`) declara, además de su responsabili
 - **Módulos compartidos** (`COMPARTIDOS`: `redondeo`, `estadistica`): utilidades puras que no son de ningún componente y cualquiera puede importar.
 
 Ver el mapa con `kj componentes dependencias`.
+
+## 10. Planificador (0.13.0, tarea cndi)
+
+Responsabilidad: construir el plan de cada tarea —modo, actores, pasos con entregable y validación, hitos y checker— y, en `auto`, elegir el formato. **Solo decide y registra**: la cola de Atlas dev lee el plan y lo ejecuta (subtareas encoladas en el mismo repositorio). No se confunde con el `Planificador` de rutinas de Atlas dev ni con `proyectos/planificacion/planificador.ts`; usa el clasificador, el delegador (agente elegido), el dosificador (coste esperado y modo de la cuota) y producción (acierto por agente) como entradas.
+
+**Modos.** Un modo base —`classic`, `single-agent`, `master-slave`, `co-work`, `auto`— más modificadores —`lazy-agent`, `milestone`, `checker`—.
+
+| Modo | Qué hace |
+| --- | --- |
+| classic | Un único agente ejecuta la tarea completa |
+| single-agent | Hilo principal; como mucho un subagente de nivel y esfuerzo bajos, solo para algo complementario y sencillo |
+| master-slave | Principal de nivel superior; subagentes configurables, de su misma familia si la hay (Codex, Gemini o Claude); el principal integra al final |
+| co-work | Especialistas por ámbito en paralelo sobre el mismo repositorio; un jefe frontera interviene puntualmente (5 min) ante conflictos o bloqueos |
+| auto | Crea siempre un plan con el agente elegido y escoge el formato por coste, tiempo y riesgo |
+| lazy-agent | Prioriza nivel bajo; con milestone, plan troceado en tareas pequeñas |
+| milestone | Hitos secuenciales con objetivo, entregable y validación; entre hitos, síntesis (compactar y recapitular) |
+| checker | Revisor ligero al final: errores, bugs y trabajo pendiente |
+
+**Restricciones** (se validan y se explican en `POST /planificador/validar`): classic no admite subagentes; single-agent, solo uno; co-work no se combina con lazy-agent (necesita modelos fuertes); el principal es el primer especialista y siempre hay al menos otro (los pedidos o los del ámbito por defecto). El resto de combinaciones son válidas.
+
+**Modelos.** Un actor lleva `nivel` (superior, medio, bajo) y una lista de `preferencia` (fragmentos del nombre del modelo); no hay identificadores fijos. Atlas dev los resuelve contra los modelos que ofrece cada agente en ese momento. Los modelos frontera de referencia del jefe (Opus, Fable, Asura, Sol) son **referencia, no identificadores garantizados**: si no hay ninguno disponible, la intervención del jefe falla con ese motivo.
+
+**Auto.** Arma un plan por formato candidato y puntúa `coste·w + tiempo·w + riesgo·w` (el coste pesa el doble con la cuota frenada). El coste sale del estimador del dosificador por clase nivel×dominio×agente; el riesgo, del acierto observado por agente (producción). Donde no hay dato observado usa un prior y lo dice (`metricas.coste/acierto`, avisos). Limitación: aún no hay histórico por modo, así que la comparación entre modos es una estimación y no una medición; con las ejecuciones que registre Atlas dev podrá calibrarse (lo recoge el algoritmo genético de la tarea dpw7, no este componente).
+
+**API.** `POST /planificador/plan` (`{prompt, modo, modificadores, principal, subagentes, checker, tarea, simulacro}`; siempre 200: una combinación imposible vuelve como plan rechazado en `plan.errores`), `POST /planificador/validar`, `GET /planificador/modos`, `GET|PUT /planificador/config`, `GET /planificador/planes[/:tarea]`, `POST /planificador/evento` y `POST /planificador/checker`. Los planes, sus eventos y los hallazgos del checker van en `<datos>/planificador-planes.json`; un checker fallido deja el plan en `bloqueado`, nunca como revisado.

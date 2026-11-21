@@ -1,89 +1,99 @@
-"""Kit de comandos CLI de Karajan: activación, asignación forzada a un agente,
-configuración de la arquitectura de Decisión, estadísticas y gestión de
-agentes/proveedores. Funciona igual desde una terminal normal que desde
-cualquier agente de IA con acceso a shell (Claude Code, aider, etc.).
-"""
+"""Small compatibility adapter for the historical ``karajan`` entry point.
 
+The former interactive CLI is not recreated here.  These commands reuse the
+same embedded/HTTP client as MCP; unsupported legacy commands fail explicitly.
+"""
 from __future__ import annotations
 
+import argparse
+import json
+import os
 import sys
+from pathlib import Path
 
-import typer
-
-from karajan_cli import repl as repl_module
-from karajan_cli.client import DEFAULT_URL, KarajanApiError, build_client
-from karajan_cli.commands import activate as activate_cmd
-from karajan_cli.commands import agents as agents_cmd
-from karajan_cli.commands import assign as assign_cmd
-from karajan_cli.commands import config as config_cmd
-from karajan_cli.commands import layout as layout_cmd
-from karajan_cli.commands import stats as stats_cmd
-from karajan_cli.commands import tasks as tasks_cmd
-
-app = typer.Typer(
-    no_args_is_help=False,
-    add_completion=False,
-    help=(
-        "CLI de Karajan: activación del harness, asignación de tareas a un agente "
-        "concreto, configuración de la arquitectura de Decisión, estadísticas y "
-        "gestión de agentes/proveedores. Sin subcomando, entra en modo interactivo."
-    ),
-)
+from fastapi.encoders import jsonable_encoder
+from karajan_cli.client import KarajanApiError, build_client
 
 
-@app.callback(invoke_without_command=True)
-def main(
-    ctx: typer.Context,
-    url: str = typer.Option(None, "--url", envvar="KARAJAN_URL", help=f"URL del servidor Karajan (default {DEFAULT_URL})."),
-    transport: str = typer.Option(None, "--transport", envvar="KARAJAN_TRANSPORT", help="embedded (default) o http."),
-    data_dir: str = typer.Option("data", "--data-dir", envvar="KARAJAN_DATA_DIR", help="Almacenamiento local para embedded."),
-    token: str = typer.Option(None, "--token", envvar="KARAJAN_TOKEN", help="Token de mutación (X-Karajan-Token)."),
-    json_output: bool = typer.Option(False, "--json", help="Salida en JSON crudo en vez de tablas."),
-) -> None:
-    selected = transport or ("http" if url else "embedded")
-    if selected == "embedded" and url:
-        raise typer.BadParameter("--url/KARAJAN_URL conflicts with --transport embedded")
-    ctx.obj = {
-        "client": build_client(
-            transport=selected, url=url, token=token, data_dir=data_dir
-        ),
-        "json": json_output,
-        "transport": selected,
-    }
-    if ctx.invoked_subcommand is None:
-        repl_module.run(ctx.obj["client"], ctx.obj["json"])
-        raise typer.Exit()
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="karajan", description="Adaptador de compatibilidad; para la terminal completa usa kj.")
+    parser.add_argument("--json", action="store_true", help="Salida JSON")
+    parser.add_argument("--transport", choices=("embedded", "http"), default=os.environ.get("KARAJAN_TRANSPORT"))
+    parser.add_argument("--url", default=os.environ.get("KARAJAN_URL"))
+    parser.add_argument("--data-dir", default=os.environ.get("KARAJAN_DATA_DIR"))
+    parser.add_argument("--token", default=os.environ.get("KARAJAN_TOKEN"))
+    commands = parser.add_subparsers(dest="command", required=True)
+    activate = commands.add_parser("activate", help="Comprueba el transporte configurado")
+    activate.add_argument("--start", action="store_true", help="Comprueba el motor embebido; no inicia un servidor HTTP")
+    classify = commands.add_parser("classify", help="Clasifica y registra una tarea")
+    classify.add_argument("--entry", default=os.environ.get("KARAJAN_ENTRY_AGENT"))
+    classify.add_argument("prompt")
+    assign = commands.add_parser("assign", help="Delega una tarea a un proveedor o entidad")
+    assign.add_argument("task_id", nargs="?")
+    assign.add_argument("--prompt")
+    assign.add_argument("--to", required=True)
+    assign.add_argument("--entity", action="store_true")
+    return parser
 
 
-# Comandos de nivel superior (sin subgrupo)
-app.command(name="activate")(activate_cmd.activate)
-app.command(name="classify")(tasks_cmd.classify)
-app.command(name="ingest")(tasks_cmd.ingest)
-app.command(name="assign")(assign_cmd.assign)
+def _data_dir(configured: str | None) -> str:
+    # Do not initialise an alternative empty installation just because a CLI
+    # is invoked from a different directory.
+    if configured:
+        path = Path(configured).expanduser().resolve()
+    else:
+        from karajan_cli.userconfig import get_repo_root
+
+        root = get_repo_root() or Path(__file__).resolve().parents[1]
+        path = root / "data"
+    if not path.is_dir() or not (path / "task_logs.db").is_file():
+        raise ValueError(f"No hay una instalación Karajan existente en {path}. Indica --data-dir o KARAJAN_DATA_DIR con su task_logs.db.")
+    return str(path)
 
 
-@app.command(name="repl", help="Entra en modo interactivo explícitamente (igual que ejecutar `karajan` sin argumentos).")
-def repl_command(ctx: typer.Context) -> None:
-    repl_module.run(ctx.obj["client"], ctx.obj["json"])
-
-
-# Grupos de subcomandos
-app.add_typer(tasks_cmd.app, name="tasks", help="Listar/consultar tareas y su historial de decisiones.")
-app.add_typer(config_cmd.app, name="config", help="Configuración de KarajanConfig (pesos, umbrales, modo de despacho).")
-app.add_typer(layout_cmd.app, name="layout", help="Arquitectura de Decisión: jerarquía de agentes, grupos y Prio.")
-app.add_typer(stats_cmd.app, name="stats", help="Estadísticas y analítica del harness.")
-app.add_typer(agents_cmd.app, name="agents", help="Catálogo y activación/conexión de proveedores.")
+def main(argv: list[str] | None = None) -> int:
+    parser = _parser()
+    args = parser.parse_args(argv)
+    transport = args.transport or ("http" if args.url else "embedded")
+    if transport == "embedded" and args.url:
+        parser.error("--url/KARAJAN_URL no es compatible con --transport embedded")
+    if args.command == "assign" and bool(args.task_id) == bool(args.prompt):
+        parser.error("assign requiere exactamente uno de task_id o --prompt")
+    client = None
+    try:
+        data_dir = _data_dir(args.data_dir) if transport == "embedded" else "data"
+        client = build_client(transport=transport, url=args.url, token=args.token, data_dir=data_dir)
+        if args.command == "activate":
+            if args.start and transport == "http" and not client.is_running():
+                raise ValueError("El adaptador no inicia servidores HTTP. Arranca uvicorn o selecciona el transporte embebido.")
+            if not client.is_running():
+                raise ValueError("El servidor Karajan HTTP no está disponible.")
+            result = client.health()
+            if not args.json:
+                print(f"Karajan disponible ({transport}): {result.get('status', 'desconocido')}. "
+                      + ("El motor embebido se cierra al terminar el comando." if transport == "embedded" else ""))
+                return 0
+        elif args.command == "classify":
+            result = client.classify(args.prompt, args.entry)
+        else:
+            task_id = args.task_id
+            if args.prompt:
+                task_id = client.classify(args.prompt, os.environ.get("KARAJAN_ENTRY_AGENT") or None)["task_id"]
+            result = client.delegate(task_id, force_entity_id=args.to if args.entity else None,
+                                     force_provider=None if args.entity else args.to)
+        print(json.dumps(jsonable_encoder(result), ensure_ascii=False, indent=2))
+        return 0
+    except (KarajanApiError, ValueError, OSError, RuntimeError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        close = getattr(client, "close", None)
+        if close is not None:
+            close()
 
 
 def run() -> None:
-    """Console-script entry point: catches `KarajanApiError` for a clean
-    one-line message instead of a full traceback (Typer's default pretty-print
-    still applies to genuine bugs)."""
-    try:
-        app()
-    except KarajanApiError as exc:
-        typer.echo(f"ERROR: {exc}", err=True)
-        sys.exit(1)
+    raise SystemExit(main())
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import type { Comando, Contexto } from '../comandos';
+import { argumentosPosicionales, type Comando, type Contexto } from '../comandos';
 import type { Bloque, Panel } from '../panel';
 import type { NodoArbol } from '../ascii';
 
@@ -23,7 +23,10 @@ const perfilDefecto = (l: Layout): { id: string; name: string; entidades: Entida
   return p ? { id: p.id, name: p.name, entidades: p.entities ?? [], reglas: p.rules ?? [] } : { id: '(lienzo)', name: 'sin perfiles', entidades: l.entities ?? [], reglas: l.rules ?? [] };
 };
 const nombreDe = (e: Entidad) => e.name || e.id;
-const cola = <T,>(ctx: Contexto, ruta: string, defecto: T): Promise<T> => ctx.pedir(ruta).then((x) => x as T, () => defecto);
+const consultar = async <T,>(ctx: Contexto, ruta: string): Promise<T> => {
+  try { return await ctx.pedir(ruta) as T; }
+  catch (error) { throw new Error(`No se puede consultar ${ruta}: ${(error as Error).message}`); }
+};
 
 export function panelMapa(layout: Layout, rendimiento: Rendimiento[], dosificador: EstadoDosificador | null, tareas: Tarea[]): Panel {
   const perfil = perfilDefecto(layout);
@@ -113,11 +116,12 @@ export function panelMision(prompt: string, plan: Plan, ejecutada: boolean): Pan
 
 export const comandosControl: Comando[] = [
   { ruta: ['control', 'estado'], resumen: 'modo, proveedores, cuota, borradores y revisiones de un vistazo', ejecutar: async (ctx) => {
-    const [modo, ps, d, b, t] = await Promise.all([ctx.pedir('/laboratorio/modo') as Promise<{ modo: string }>, cola<Proveedor[]>(ctx, '/providers', []), cola<EstadoDosificador | null>(ctx, '/dosificador/estado', null), cola<unknown[]>(ctx, '/laboratorio/propuestas', []), cola<Tarea[]>(ctx, '/tasks?limit=100', [])]);
-    return panelEstado(modo, ps, d, Array.isArray(b) ? b : [], t);
+    const [modo, ps, d, b, t] = await Promise.all([ctx.pedir('/laboratorio/modo') as Promise<{ modo: string }>, consultar<Proveedor[]>(ctx, '/providers'), consultar<EstadoDosificador | null>(ctx, '/dosificador/estado'), consultar<unknown[]>(ctx, '/laboratorio/propuestas'), consultar<Tarea[]>(ctx, '/tasks?limit=100')]);
+    if (!Array.isArray(b)) throw new Error('Respuesta no válida de /laboratorio/propuestas');
+    return panelEstado(modo, ps, d, b, t);
   } },
   { ruta: ['control', 'mapa'], resumen: 'equipos por zona con su carga, cuota y actividad reciente', ejecutar: async (ctx) => {
-    const [l, r, d, t] = await Promise.all([ctx.pedir('/routing-layout') as Promise<Layout>, cola<Rendimiento[]>(ctx, '/agents/performance', []), cola<EstadoDosificador | null>(ctx, '/dosificador/estado', null), cola<Tarea[]>(ctx, '/tasks?limit=8', [])]);
+    const [l, r, d, t] = await Promise.all([ctx.pedir('/routing-layout') as Promise<Layout>, consultar<Rendimiento[]>(ctx, '/agents/performance'), consultar<EstadoDosificador | null>(ctx, '/dosificador/estado'), consultar<Tarea[]>(ctx, '/tasks?limit=8')]);
     return panelMapa(l, r, d, t);
   } },
   { ruta: ['control', 'jerarquia'], uso: 'control jerarquia [--perfil <id>]', resumen: 'árbol de agentes y reglas de enrutado', ejecutar: async (ctx) => panelJerarquia((await ctx.pedir('/routing-layout')) as Layout, ctx.opcion('perfil')) },
@@ -126,7 +130,7 @@ export const comandosControl: Comando[] = [
   { ruta: ['control', 'revisiones'], resumen: 'tareas que esperan revisión humana', ejecutar: async (ctx) => panelRevisiones((await ctx.pedir('/tasks?limit=200')) as Tarea[]) },
   { ruta: ['control', 'cuota'], resumen: 'cuota de cada agente y modo del dosificador', ejecutar: async (ctx) => panelCuota((await ctx.pedir('/dosificador/estado')) as EstadoDosificador) },
   { ruta: ['control', 'mision'], uso: 'control mision "<texto>" [--ejecutar]', resumen: 'clasifica y planifica una tarea; con --ejecutar la delega de verdad', ejecutar: async (ctx, args) => {
-    const prompt = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--perfil').join(' ').trim();
+    const prompt = argumentosPosicionales(args).join(' ').trim();
     if (!prompt) throw new Error('uso: kj control mision "<texto>" [--ejecutar]');
     const ejecutar = ctx.bandera('ejecutar');
     return panelMision(prompt, (await ctx.pedir(ejecutar ? '/delegate-task' : '/routing/plan', 'POST', { prompt })) as Plan, ejecutar);

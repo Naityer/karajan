@@ -114,7 +114,7 @@ export async function ejecutar(componente: string | 'todos'): Promise<void> {
 export const componentePorId = (d: Arquitectura | null, id: string | null): Componente | null => (d && id ? d.componentes.find((c) => c.id === id) ?? null : null);
 
 /** La métrica que resume a cada componente en su caja. */
-const CLAVE: Record<string, string> = { delegador: 'concordancia', selector: 'f1', clasificador: 'nivel_exacto', biblioteca: 'con_ficha', dosificador: 'sin_usar' };
+const CLAVE: Record<string, string> = { delegador: 'concordancia', selector: 'f1', clasificador: 'nivel_exacto', biblioteca: 'con_ficha', dosificador: 'sin_usar', planificador: 'fallidas' };
 export function metricaClave(c: Componente): string | null {
   const k = CLAVE[c.id];
   if (k && (c.historial[k]?.length || c.ultimas.some((u) => k in u.metricas))) return k;

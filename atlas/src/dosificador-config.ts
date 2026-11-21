@@ -175,8 +175,8 @@ export function normalizarConfig(crudo: unknown): ConfigDosificador {
     const rl = obj(o['relevo']);
     return {
       planes,
-      margenSeguridadPct: num(o['margenSeguridadPct'], B.margenSeguridadPct, 0, 50),
-      margen5hPct: num(o['margen5hPct'], B.margen5hPct, 0, 50),
+      margenSeguridadPct: num(o['margenSeguridadPct'], B.margenSeguridadPct, 0, 100),
+      margen5hPct: num(o['margen5hPct'], B.margen5hPct, 0, 100),
       reserva: { modo: elegir(r['modo'], ['fijo', 'perfil'] as const, B.reserva.modo), fijaPct: num(r['fijaPct'], B.reserva.fijaPct, 0, 60), percentil: num(r['percentil'], B.reserva.percentil, 0.5, 0.99), minimoPctDia: num(r['minimoPctDia'], B.reserva.minimoPctDia, 0, 20), alfa: num(r['alfa'], B.reserva.alfa, 0.01, 1) },
       horario: { zona, silencio, trabajo },
       pacing: {

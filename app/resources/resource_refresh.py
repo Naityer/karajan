@@ -464,6 +464,27 @@ def _process_exists(value: object) -> bool:
         process_id = int(value)
         if process_id <= 0:
             return False
+        if os.name == "nt":
+            # En Windows la señal 0 es CTRL_C_EVENT, no una consulta de
+            # existencia: os.kill(pid, 0) puede interrumpir el proceso actual.
+            import ctypes
+            from ctypes import wintypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+            kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+            kernel32.WaitForSingleObject.restype = wintypes.DWORD
+            kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+            kernel32.CloseHandle.restype = wintypes.BOOL
+            handle = kernel32.OpenProcess(0x00100000, False, process_id)  # SYNCHRONIZE
+            if not handle:
+                # Acceso denegado no demuestra que el proceso haya terminado.
+                return ctypes.get_last_error() == 5
+            try:
+                return kernel32.WaitForSingleObject(handle, 0) == 0x00000102  # WAIT_TIMEOUT
+            finally:
+                kernel32.CloseHandle(handle)
         os.kill(process_id, 0)
         return True
     except (OSError, TypeError, ValueError):

@@ -377,6 +377,27 @@ export function catalogoAgrupado(matriz: Matriz, top = 10) {
   };
 }
 
+/** Prepara la misma analítica para cualquier transporte a partir de dependencias explícitas. */
+export function calcularProduccion(tareas: TareaAnalitica[], q: Record<string, string | undefined>, deps: {
+  catalogo(): SkillCatalogo[];
+  perfil(): { entities?: { id: string; name?: string | null; role?: string; levels?: string[]; provider?: string | null }[]; rules?: { entity_id: string; enabled?: boolean }[] } | null;
+  disponibles(): Map<string, boolean>;
+  ahora(): Date;
+}) {
+  const n = Number(q['dias']);
+  const dias = q['dias'] !== undefined && q['dias'] !== '' && Number.isFinite(n) ? Math.min(3650, Math.max(0, n)) : 0;
+  let agentes: string[] | null = null, noDisponibles: string[] = [], sinNivel: string[] = [];
+  if (q['perfil'] !== 'todos') {
+    const p = deps.perfil();
+    agentes = [...new Set((p?.entities ?? []).map((e) => e.provider).filter((x): x is string => !!x))].sort();
+    const conRegla = new Set((p?.rules ?? []).filter((r) => r.enabled !== false).map((r) => r.entity_id));
+    sinNivel = (p?.entities ?? []).filter((e) => e.provider && e.role !== 'parent' && !(e.levels ?? []).length && !conRegla.has(e.id)).map((e) => e.name || e.id);
+    const estado = deps.disponibles();
+    noDisponibles = agentes.filter((a) => estado.has(a) && !estado.get(a));
+  }
+  return produccion(tareas, { catalogo: deps.catalogo(), agentesPerfil: agentes, dias, ahora: deps.ahora(), noDisponibles, sinNivel });
+}
+
 export function produccion(tareas: TareaAnalitica[], o: { catalogo: SkillCatalogo[]; agentesPerfil: string[] | null; dias: number; ahora: Date; noDisponibles?: string[]; sinNivel?: string[] }) {
   const seleccion = filtrar(tareas, { agentes: o.agentesPerfil, dias: o.dias, ahora: o.ahora });
   // El re-trabajo mira el siguiente prompt aunque sea de otro agente o de fuera del periodo: se calcula sobre todas.

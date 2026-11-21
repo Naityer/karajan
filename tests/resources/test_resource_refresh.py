@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import threading
 import time
 
@@ -6,8 +7,18 @@ import pytest
 
 from app.domain.models import AnalyzeResult, ResourceCreateRequest, ResourceKind, ResourceRefreshSettingsUpdate, ResourceUpdateRequest
 from app.resources.resource_library import ResourceStore
-from app.resources.resource_refresh import ResourceRefreshCoordinator
+from app.resources.resource_refresh import ResourceRefreshCoordinator, _process_exists
 from app.resources.local_resources import LocalResourceAnalyzer
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows usa CTRL_C_EVENT para la señal 0")
+def test_process_exists_on_windows_does_not_send_signal(monkeypatch):
+    def forbidden(*_args):
+        raise AssertionError("no se debe enviar una señal para comprobar el proceso")
+
+    monkeypatch.setattr(os, "kill", forbidden)
+    assert _process_exists(os.getpid()) is True
+    assert _process_exists(0) is False
 
 
 class FakeAnalyzer:

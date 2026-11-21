@@ -126,6 +126,15 @@ class SkillRepositoryManager:
         try:
             selected_targets = self._validate_targets(targets)
             skills = self._discover_skills(Path(source_root), fallback_name=item.slug)
+            # A catalog skill may select one manifest inside a multi-skill repository.
+            skill_path = item.metadata.get("skill_path")
+            if skill_path:
+                selected = Path(source_root) / str(skill_path)
+                if selected.resolve().is_relative_to(Path(source_root).resolve()) is False:
+                    raise ValueError("Skill path is outside the repository")
+                skills = [(name, path) for name, path in skills if path.resolve() == selected.resolve()]
+                if len(skills) != 1:
+                    raise ValueError("Selected skill manifest is missing")
             planned: list[tuple[str, Path, Path, str, str, Path | None]] = []
             for target in selected_targets:
                 root = self.target_roots[target]

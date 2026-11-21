@@ -21,6 +21,7 @@ const ROUTER: Entrada[] = [
 ];
 const ANTHROPIC = 'https://github.com/anthropics/skills';
 const GITHUB: Entrada[] = [
+  { name: 'modern-web-guidance', description: 'Modernización web: HTML, CSS, JavaScript del navegador, accesibilidad, rendimiento y compatibilidad. GoogleChrome Modern Web Guidance.', applies_to: ['claude', 'codex'], repo_url: 'https://github.com/GoogleChrome/modern-web-guidance' },
   { name: 'docx', description: 'Crear, leer y editar documentos Word (.docx).', applies_to: ['claude', 'codex'], repo_url: ANTHROPIC },
   { name: 'pptx', description: 'Crear y editar presentaciones PowerPoint (.pptx).', applies_to: ['claude', 'codex'], repo_url: ANTHROPIC },
   { name: 'xlsx', description: 'Crear, leer y editar hojas de cálculo (.xlsx/.csv).', applies_to: ['claude', 'codex'], repo_url: ANTHROPIC },

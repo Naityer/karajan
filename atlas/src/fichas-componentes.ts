@@ -9,6 +9,7 @@ import { MAX_SOBRECOSTE_PROMPTS, SKILLS_PROMPTS } from './prompts';
 import type { Configuracion } from './heuristica';
 import { CONFIG_BASE as CONFIG_DOSIFICADOR_BASE, type ConfigDosificador } from './dosificador-config';
 import { rutaLimites, umbralClaude, type Limites } from './limites';
+import { CONFIG_POR_DEFECTO as CONFIG_PLANIFICADOR_BASE, type ConfigPlanificador } from './planificador-registro';
 import { ESTADOS_ACEPTADA, type Modo } from './modo';
 import { PESOS as PESOS_ACIERTO, VENTANA_MS } from './produccion';
 import { buscarBinario, PROVEEDORES } from './proveedores';
@@ -40,6 +41,8 @@ export interface ContextoFicha {
   limites(): Limites | null;
   /** El dosificador: su configuración viva (sin él, la de fábrica) y, si se sabe, su estado persistido. */
   dosificador?: { config(): ConfigDosificador; estado?(): { ultima: { en: number; decisiones: number; diferidas: number } | null; leases: Record<string, unknown>; estimador: Record<string, unknown>; circuitos: Record<string, { abiertoHasta: number | null }> } | null };
+  /** El planificador: su configuración viva (sin él, la de fábrica) y los planes guardados. */
+  planificador?: { config(): ConfigPlanificador; planes?(): { actualizado: string; estado: string }[] };
   pasarela: { leer(): Record<string, unknown> };
   biblioteca: { disponible: boolean; ruta: string | null };
 }
@@ -176,6 +179,43 @@ export const FICHAS: Record<string, FichaComponente> = {
         topes: Object.entries(d.planes).map(([a, p]) => `${a}: ${p.topePct ?? 'sin tope'} % · ${p.ritmoMaxPctHora ?? 'sin límite'} %/h`),
         equipos_dormidos: Object.entries(d.equipos).map(([e, x]) => `${e}: ${x.dormido ? `${x.dormido.desde}-${x.dormido.hasta}` : 'siempre'}`),
         relevo_politica: d.relevo.politicaDefecto, relevo_silencio_min: d.relevo.tomarSiSilencio ? d.relevo.silencioMin : 'apagado', relevo_gracia_min: d.relevo.graciaMin, relevo_max_intentos: d.relevo.maxIntentos,
+      };
+    },
+  },
+  planificador: {
+    especificado: true,
+    resumen: 'Construye SIEMPRE un plan para la tarea —modo, actores, pasos con entregable y validación, hitos y checker— y, en auto, elige el formato (classic, single-agent, master-slave o co-work) comparando coste, tiempo y riesgo con las métricas disponibles. Solo decide: la cola de Atlas dev ejecuta el plan.',
+    como_funciona: {
+      entradas: ['Prompt ya clasificado (nivel, dominio, subtareas) y el agente que eligió el delegador', 'Modo base (classic, single-agent, master-slave, co-work, auto) y modificadores (lazy-agent, milestone, checker), con principal y subagentes opcionales', 'Coste esperado (dosificador), acierto por agente (producción) y modo de la cuota'],
+      pasos: [
+        'Valida la combinación de modos y explica por qué una no es posible (planificador-modos.ts · validarCombinacion)',
+        'Elige el agente principal: el pedido, el del delegador o el primero activo y disponible (planificador.ts · planificar)',
+        'Auto: arma un plan por formato candidato con el agente elegido (planificador.ts · armar)',
+        'Estima de cada candidato el coste (% del plan por nivel de modelo), el tiempo (camino crítico) y el riesgo (1 − acierto), con prior donde falta dato (planificador.ts · estimarPlan)',
+        'Auto: puntúa con los pesos configurados (el coste pesa el doble con la cuota frenada) y elige; guarda la comparación, el motivo y la procedencia de los datos',
+        'Master-slave y single-agent: sugiere subagentes de la misma familia que el principal, o avisa de que no la hay (planificador.ts · sugerirSubagente)',
+        'Milestone: agrupa el trabajo en hitos con objetivo, entregable y validación, con un paso de síntesis entre hitos; co-work añade el jefe frontera bajo demanda con intervenciones de 5 min',
+        'Checker: añade al final un paso de revisión con un actor ligero y los criterios errores, bugs y trabajo pendiente',
+        'Guarda el plan y, después, los eventos y el resultado del checker que manda Atlas dev; un fallo queda como fallo (planificador-registro.ts · guardarPlan, anotarEvento, guardarChecker)',
+        'Laboratorio · contrato: cada modo y combinación válida da un plan coherente y las incompatibles se rechazan (lab/planificador.lab.ts · contrato)',
+        'Laboratorio · replay: auto en tareas sintéticas de nivel 1 a 5 con y sin presión de cuota (lab/planificador.lab.ts · replay)',
+      ],
+      salidas: ['Plan: modo resuelto, actores (agente, nivel, modelo preferido, esfuerzo), pasos con dependencias, hitos, checker y jefe', 'Motivo, alternativas comparadas y avisos', 'Registro por tarea: estado, eventos y hallazgos del checker (planificador-planes.json)'],
+    },
+    reglas: [
+      'Siempre hay plan: una combinación imposible da un plan rechazado, sin pasos y con el motivo, nunca una ejecución a medias.',
+      'Los modelos no se fijan: un actor lleva nivel y preferencias, y quien ejecuta las resuelve contra los modelos que de verdad hay disponibles.',
+      'Donde falta una métrica observada se usa un prior y el plan lo dice; auto no presenta una estimación como medición.',
+      'Un checker que falla no cuenta como revisión limpia: deja el plan bloqueado y el fallo visible.',
+      'co-work no se combina con lazy-agent y siempre reúne al menos dos especialistas (el principal y otro); classic no admite subagentes y single-agent solo uno.',
+      'Es puro y no ejecuta nada: el mismo contexto da el mismo plan. Su laboratorio es sintético.',
+    ],
+    configuracion: (c) => {
+      const d = c.planificador?.config() ?? CONFIG_PLANIFICADOR_BASE, planes = c.planificador?.planes?.() ?? [];
+      return {
+        agentes: Object.entries(d.agentes).map(([a, x]) => `${a}: ${x.activo ? 'activo' : 'apagado'} · superior ${x.niveles.superior.join('/') || '—'} · medio ${x.niveles.medio.join('/') || '—'} · bajo ${x.niveles.bajo.join('/') || '—'}`),
+        peso_coste: d.pesos.coste, peso_tiempo: d.pesos.tiempo, peso_riesgo: d.pesos.riesgo, coste_por_nivel: Object.entries(d.pesoNivel).map(([n, v]) => `${n}: ${v}`),
+        jefe_intervencion_min: d.jefe.intervencionMin, jefe_referencia: d.jefe.referencia, hitos_desde_nivel: d.hitosDesdeNivel, max_subagentes: d.maxSubagentes, planes_guardados: planes.length,
       };
     },
   },

@@ -53,6 +53,14 @@ describe('aislamiento git de las tareas de agente', () => {
     assert.equal(git(clon, 'branch', '--list', 'agente/tsk_dos'), '');
     const suelta = join(raiz, 'suelta');
     mkdirSync(suelta);
-    assert.equal(aislar(suelta, 'tsk_tres'), null);
+    // TEMP puede estar dentro de un repo real. Limitar el descubrimiento evita
+    // que la prueba opere sobre el padre en lugar de una carpeta sin repositorio.
+    const limitePrevio = process.env['GIT_CEILING_DIRECTORIES'];
+    process.env['GIT_CEILING_DIRECTORIES'] = raiz;
+    try { assert.equal(aislar(suelta, 'tsk_tres'), null); }
+    finally {
+      if (limitePrevio === undefined) delete process.env['GIT_CEILING_DIRECTORIES'];
+      else process.env['GIT_CEILING_DIRECTORIES'] = limitePrevio;
+    }
   });
 });

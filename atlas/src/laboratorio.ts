@@ -104,6 +104,7 @@ export class RegistroLab {
   constructor(ruta: string) {
     mkdirSync(dirname(ruta), { recursive: true });
     this.db = new DatabaseSync(ruta);
+    this.db.exec('PRAGMA busy_timeout = 5000');
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec(ESQUEMA);
     // Migración: los umbrales de cada ejecución se guardan desde que la ventana de arquitectura los muestra.
@@ -143,6 +144,23 @@ export class RegistroLab {
 }
 
 export interface InformeLab { componente: string; version: string; escenarios: (Omit<Ejecucion, 'id' | 'componente' | 'version'> & { propuestas: Propuesto[] })[] }
+
+/** Consulta el historial existente sin crear ni migrar la base. */
+export function leerEjecucionesDe(db: DatabaseSync, componente: string, limite: number): Ejecucion[] {
+    const filas = db.prepare('SELECT * FROM lab_ejecuciones WHERE componente = ? ORDER BY id DESC LIMIT ?').all(componente, limite) as Record<string, unknown>[];
+    return filas.map((f) => ({
+      id: Number(f['id']), componente: String(f['componente']), escenario: String(f['escenario']), tipo: String(f['tipo']), version: String(f['version']), inicio: String(f['inicio']),
+      ms: Number(f['ms']), muestra: Number(f['muestra']), suficiente: f['suficiente'] === 1, metricas: JSON.parse(String(f['metricas_json'])),
+      hallazgos: JSON.parse(String(f['hallazgos_json'])), detalle: f['detalle_json'] ? JSON.parse(String(f['detalle_json'])) : null,
+      error: (f['error'] as string | null) ?? null, umbrales: f['umbrales_json'] ? JSON.parse(String(f['umbrales_json'])) : null,
+    }));
+}
+
+export function leerEjecucionesLocal(ruta: string, componente: string, limite: number): Ejecucion[] {
+  if (!existsSync(ruta)) throw new Error(`No existe la base del laboratorio: ${ruta}`);
+  const db = new DatabaseSync(ruta, { readOnly: true });
+  try { return leerEjecucionesDe(db, componente, limite); } finally { db.close(); }
+}
 
 /** Ejecuta todos los escenarios de un laboratorio (o uno), guarda cada resultado y propone sus hallazgos por la pasarela. */
 export async function ejecutarLaboratorio<C>(componente: { id: string; version: string; laboratorio: Laboratorio<C> }, ctx: C, registro: RegistroLab,

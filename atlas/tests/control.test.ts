@@ -71,12 +71,16 @@ describe('kj control (módulo)', () => {
     assert.match(c.texto, /1 tareas en vuelo/);
   });
 
-  it('estado resume modo, proveedores, dosificador, borradores y revisiones; tolera fuentes caídas', async () => {
-    const r = await correr(['control', 'estado'], { '/laboratorio/modo': { modo: 'produccion' }, '/providers': [{ nombre: 'codex', etiqueta: 'Codex', gratis: false, disponible: true, motivo: null }], '/laboratorio/propuestas': [{}, {}], '/tasks': TAREAS });
+  it('estado resume modo, proveedores, dosificador, borradores y revisiones', async () => {
+    const r = await correr(['control', 'estado'], { '/laboratorio/modo': { modo: 'produccion' }, '/providers': [{ nombre: 'codex', etiqueta: 'Codex', gratis: false, disponible: true, motivo: null }], '/dosificador/estado': DOS, '/laboratorio/propuestas': [{}, {}], '/tasks': TAREAS });
     assert.match(r.texto, /Karajan en PRODUCCION/);
     assert.match(r.texto, /proveedores listos +│ 1\/1/);
-    assert.match(r.texto, /dosificador +│ sin dato/);
+    assert.match(r.texto, /dosificador +│ normal/);
     assert.match(r.texto, /borradores abiertos +│ +2/);
+  });
+
+  it('estado comunica el fallo de una fuente en vez de inventar su valor', async () => {
+    await assert.rejects(correr(['control', 'estado'], { '/laboratorio/modo': { modo: 'produccion' }, '/providers': [], '/laboratorio/propuestas': [], '/tasks': TAREAS }), /No se puede consultar \/dosificador\/estado: 404/);
   });
 
   it('mision planifica sin ejecutar; con --ejecutar delega; sin texto es error de uso', async () => {

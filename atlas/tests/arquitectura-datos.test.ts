@@ -71,11 +71,11 @@ describe('arquitectura: contrato de datos', () => {
     assert.deepEqual(a.familias.map((f) => f.nombre), ['Interfaz', 'Modificadores', 'Observación', 'Ejecución', 'Decisión', 'Base']);
     assert.deepEqual(a.familias.flatMap((f) => f.componentes).sort(), COMPONENTES.map((c) => c.id).sort());
     assert.deepEqual(a.enlaces, ENLACES);
-    assert.deepEqual(a.familias.find((f) => f.id === 'decision')!.componentes, ['clasificador', 'delegador', 'dosificador', 'selector', 'rotador', 'tutor', 'etiquetas']);
+    assert.deepEqual(a.familias.find((f) => f.id === 'decision')!.componentes, ['clasificador', 'delegador', 'dosificador', 'planificador', 'selector', 'rotador', 'tutor', 'etiquetas']);
   });
 
   it('los 25 componentes traen todos los campos del contrato', () => {
-    assert.equal(a.componentes.length, 25);
+    assert.equal(a.componentes.length, 26);
     for (const c of a.componentes) {
       assert.ok(['ok', 'hallazgos', 'sin_ejecutar', 'pendiente', 'error'].includes(c.estado), c.id);
       assert.ok(c.familia && c.responsabilidad && Array.isArray(c.modulos), c.id);
@@ -241,7 +241,7 @@ describe('arquitectura: nunca lanza', () => {
       pasarela: { leer: () => { throw new Error('borradores rotos'); } },
     };
     const v = await todo(roto);
-    assert.equal(v.componentes.length, 25);
+    assert.equal(v.componentes.length, 26);
     const c = porId(v, 'clasificador');
     assert.equal(c.configuracion, null);
     assert.equal(c.estado, 'sin_ejecutar');
@@ -266,7 +266,7 @@ describe('GET /laboratorio/arquitectura', () => {
 
   before(async () => {
     for (const k of ['ATLAS_KARAJAN_DATA', 'ATLAS_WORKSPACE', 'ATLAS_KARAJAN_LAYOUT', 'ATLAS_DEV_API', 'ATLAS_KARAJAN_RESOURCES']) entorno[k] = process.env[k];
-    process.env['ATLAS_KARAJAN_DATA'] = join(dir, 'no-existe');
+    delete process.env['ATLAS_KARAJAN_DATA'];
     process.env['ATLAS_WORKSPACE'] = dir;
     delete process.env['ATLAS_KARAJAN_LAYOUT'];
     process.env['ATLAS_DEV_API'] = 'http://127.0.0.1:4100';
@@ -303,13 +303,13 @@ describe('GET /laboratorio/arquitectura', () => {
     return salida;
   };
 
-  it('devuelve los 23 componentes con el contrato', async () => {
+  it('devuelve los 26 componentes con el contrato', async () => {
     const r = await llamar('GET /laboratorio/arquitectura');
     assert.equal(r.status, 200);
     const v = r.body as unknown as Arquitectura;
     assert.equal(v.version, '0.8.0');
     assert.equal(v.modo, 'produccion');
-    assert.equal(v.componentes.length, 25);
+    assert.equal(v.componentes.length, 26);
     assert.equal(porId(v, 'delegador').estado, 'sin_ejecutar');
     assert.equal(porId(v, 'rotador').estado, 'sin_ejecutar');
     assert.ok(Object.keys(porId(v, 'delegador').configuracion!).length);

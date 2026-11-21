@@ -10,6 +10,7 @@ import { laboratorioDelegador } from './lab/delegador.lab';
 import { laboratorioDosificador } from './lab/dosificador.lab';
 import { laboratorioEficiencia } from './lab/eficiencia.lab';
 import { laboratorioMetodo } from './lab/metodo.lab';
+import { laboratorioPlanificador } from './lab/planificador.lab';
 import { laboratorioPrompts } from './lab/prompts.lab';
 import { laboratorioLimites } from './lab/limites.lab';
 import { laboratorioProduccion } from './lab/produccion.lab';
@@ -69,6 +70,7 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'clasificador', capa: 'decision', responsabilidad: 'Dar nivel, dominio, intención y subtareas a un prompt', modulos: ['heuristica'], requiere: [], laboratorio: laboratorioClasificador },
   { id: 'delegador', capa: 'decision', responsabilidad: 'Elegir el agente de cada subtarea según el perfil y sus reglas', modulos: ['delegar', 'perfiles', 'reglas', 'perfil-texto'], requiere: ['aislamiento', 'clasificador', 'limites', 'proveedores', 'rotador', 'selector'], config: { lectura: '/routing-layout' }, laboratorio: laboratorioDelegador },
   { id: 'dosificador', capa: 'decision', responsabilidad: 'Decidir cuándo, dónde y con qué agente se lanza cada tarea para llegar a la renovación del plan con margen', modulos: ['dosificador', 'dosificador-config', 'dosificador-cuota', 'dosificador-sim'], requiere: [], config: { lectura: '/dosificador/config', escritura: '/dosificador/config' }, laboratorio: laboratorioDosificador },
+  { id: 'planificador', capa: 'decision', responsabilidad: 'Construir el plan de cada tarea (modo, actores, pasos, hitos y checker) y elegir el formato en auto según coste, tiempo y acierto', modulos: ['planificador', 'planificador-modos', 'planificador-registro'], requiere: [], config: { lectura: '/planificador/config', escritura: '/planificador/config' }, laboratorio: laboratorioPlanificador },
   { id: 'selector', capa: 'decision', responsabilidad: 'Elegir las skills que necesita un prompt', modulos: ['skills-seleccion'], requiere: [], laboratorio: laboratorioSelector },
   { id: 'rotador', capa: 'decision', responsabilidad: 'Dejar instaladas solo las skills que se usan y guardar el resto en el almacén', modulos: ['rotador'], requiere: [], laboratorio: laboratorioRotador },
   { id: 'tutor', capa: 'decision', responsabilidad: 'Elegir con datos de cada semana el modelo tutor de mejor relación razonamiento/precio', modulos: ['tutor'], requiere: [], laboratorio: laboratorioTutor },
@@ -88,11 +90,20 @@ const DEFINICION: Omit<Componente, 'familia'>[] = [
   { id: 'metodo', capa: 'modificadores', responsabilidad: 'Aplicar el método de superpowers (TDD, planes, worktrees)', modulos: ['metodo'], requiere: [], laboratorio: laboratorioMetodo },
   { id: 'prompts', capa: 'modificadores', responsabilidad: 'Optimizar el prompt que recibe el agente (karpathy-skills, dspy, promptfoo)', modulos: ['prompts'], requiere: [], laboratorio: laboratorioPrompts },
   // ── Interfaz ──
-  { id: 'api', capa: 'interfaz', responsabilidad: 'Exponer Karajan a Atlas dev (rutas del paquete)', modulos: ['servidor'], requiere: 'todos', pendiente: 'cubierto por los laboratorios de cada componente' },
-  { id: 'cli', capa: 'interfaz', responsabilidad: 'Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas', modulos: ['cli'], requiere: [], pendiente: 'cubierto por atlas/tests/cli.test.ts' },
+  { id: 'api', capa: 'interfaz', responsabilidad: 'Coordinar las operaciones compartidas y exponerlas a Atlas dev', modulos: ['servidor', 'runtime', 'aplicacion', 'aplicacion-dosificador', 'aplicacion-planificador', 'aplicacion-laboratorio'], requiere: 'todos', pendiente: 'cubierto por los laboratorios de cada componente' },
+  { id: 'cli', capa: 'interfaz', responsabilidad: 'Manejar Karajan desde la terminal: laboratorios, gráficas y propuestas', modulos: ['cli', 'cli-local'], requiere: ['almacen', 'analitica', 'biblioteca', 'clasificador', 'comparador', 'delegador', 'dosificador', 'laboratorio', 'produccion', 'proveedores', 'selector'], pendiente: 'cubierto por atlas/tests/cli.test.ts' },
 ];
 
 export const COMPONENTES: Componente[] = DEFINICION.map((c) => ({ ...c, familia: c.capa }));
+
+/** Catálogo estático compartido por la terminal y el servidor. */
+export function catalogoComponentes(ultimas: (id: string) => unknown[] = () => []) {
+  return COMPONENTES.map((c) => ({
+    id: c.id, capa: c.capa, responsabilidad: c.responsabilidad, modulos: c.modulos, pendiente: c.pendiente ?? null,
+    escenarios: c.laboratorio?.escenarios.map((e) => ({ id: e.id, tipo: e.tipo, descripcion: e.descripcion })) ?? [],
+    ultimas: c.laboratorio ? ultimas(c.id) : [],
+  }));
+}
 
 /**
  * Flujo de datos entre componentes, para las flechas de la ventana. Solo lo que el código (o, si `previsto`, el diseño de
@@ -106,6 +117,10 @@ export const ENLACES: Enlace[] = [
   { de: 'clasificador', a: 'dosificador', etiqueta: 'nivel y dominio: coste esperado de la tarea' },
   { de: 'limites', a: 'dosificador', etiqueta: '% usado y reinicio de cada ventana de cada agente' },
   { de: 'almacen', a: 'dosificador', etiqueta: 'coste real de las tareas terminadas (aprende el estimador)' },
+  { de: 'clasificador', a: 'planificador', etiqueta: 'nivel, dominio y subtareas de la tarea' },
+  { de: 'delegador', a: 'planificador', etiqueta: 'agente elegido para la tarea' },
+  { de: 'dosificador', a: 'planificador', etiqueta: 'coste esperado y modo de la cuota' },
+  { de: 'produccion', a: 'planificador', etiqueta: 'acierto observado de cada agente' },
   { de: 'dosificador', a: 'delegador', etiqueta: 'cuándo, en qué equipo y con qué agente lanzar' },
   { de: 'delegador', a: 'proveedores', etiqueta: 'agente y modelo de cada subtarea' },
   { de: 'delegador', a: 'limites', etiqueta: '¿Claude pasó su umbral semanal?' },
