@@ -5,6 +5,7 @@
 | **Uso** | [CLI.md](CLI.md): `kj`, el SDK de componentes y los módulos Estadísticas, Control e Inspiration |
 | | [TUTORIAL_NAVEGACION.md](TUTORIAL_NAVEGACION.md): primeros pasos |
 | | [perfiles-y-reglas.md](perfiles-y-reglas.md): perfiles de enrutado y reglas |
+| | [analisis-tareas.md](analisis-tareas.md): histórico de tareas etiquetado, taxonomía y datos para dpw7 |
 | | [model-setups.md](model-setups.md): configuraciones de modelos |
 | **Arquitectura** | [laboratorio/componentes.md](laboratorio/componentes.md): la pila de componentes y sus laboratorios |
 | | [laboratorio/mapa-componentes.md](laboratorio/mapa-componentes.md): implementación, laboratorio y pruebas por componente |

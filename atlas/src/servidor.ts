@@ -7,6 +7,7 @@ import { disponibilidad, PROVEEDORES } from './proveedores';
 import { crearRuntime } from './runtime';
 import { consultarTareas } from './almacen';
 import { consultarBiblioteca } from './biblioteca';
+import { ErrorServicio, ServicioAnalisis } from './analisis/servicio';
 
 /**
  * Karajan como paquete de Atlas dev: su núcleo de lectura y clasificación, en TypeScript y dentro del proceso de Atlas dev.
@@ -43,7 +44,7 @@ const falla = (estado: number, detail: string) => Object.assign(new Error(detail
 export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   const runtime = crearRuntime(ctx.datos);
   const aplicacion = crearAplicacion(runtime);
-  const { compartida, importada, almacen, config, mutar, biblioteca } = runtime;
+  const { compartida, importada, almacen, config, mutar, biblioteca, atlasDev, pasarela, guardian } = runtime;
   app.addHook?.('onClose', async () => { runtime.cerrar(); });
 
   app.setErrorHandler((e, _req, reply) => reply.code(e.status ?? e.statusCode ?? 500).send({ detail: e.message || 'Error interno', ...(e.extra ?? {}) }));
@@ -78,6 +79,33 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.get('/planificador/planes/:tarea', (req) => planificador.plan(req.params['tarea']!));
   app.post('/planificador/evento', (req) => planificador.evento(req.body));
   app.post('/planificador/checker', (req) => planificador.checker(req.body));
+
+  // ── Análisis de tareas (hsr2): etiqueta y puntúa el histórico del registro de Atlas dev; ver docs/analisis-tareas.md ──
+  // Escribe `analisis.json` junto a cada tarea del registro y nada más. Procesar es operativo (lo lanza la rutina de Atlas dev) y no
+  // exige tarea aceptada; cambiar la configuración sí.
+  const analisis = new ServicioAnalisis({ datos: ctx.datos, atlasDev, pasarela });
+  const deAnalisis = async <T>(f: () => Promise<T> | T): Promise<T> => {
+    try { return await f(); } catch (e) { throw e instanceof ErrorServicio ? falla(e.estado, e.message) : e; }
+  };
+  app.post('/analisis/procesar', (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    return deAnalisis(() => analisis.procesar({
+      ...(typeof b['limite'] === 'number' ? { limite: Math.min(1000, Math.max(1, Math.trunc(b['limite']))) } : {}), forzar: b['forzar'] === true, soloRegistro: b['solo_registro'] === true,
+    }));
+  });
+  app.get('/analisis/estado', () => deAnalisis(() => analisis.estado()));
+  app.get('/analisis/tarea/:id', (req) => deAnalisis(() => analisis.tarea(req.params['id']!)));
+  app.get('/analisis/taxonomia', () => analisis.taxonomia());
+  app.get('/analisis/export', () => deAnalisis(() => analisis.exportar()));
+  app.post('/analisis/destilar', () => deAnalisis(() => analisis.destilar()));
+  app.get('/analisis/config', () => ({ config: analisis.config(), fichero: analisis.rutaConfig }));
+  app.put('/analisis/config', async (req) => {
+    await guardian.exigir(req, 'PUT /analisis/config');
+    const b = req.body;
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw falla(422, 'config: un objeto con los campos a cambiar');
+    const { tarea: _tarea, ...resto } = b as Record<string, unknown>;
+    return { config: analisis.guardarConfig(resto['config'] && typeof resto['config'] === 'object' ? resto['config'] : resto), fichero: analisis.rutaConfig };
+  });
 
   app.get('/health', () => ({ status: 'ok', paquete: ctx.id, version: ctx.version, importada, compartida, tareas: almacen.contar() }));
   app.get('/metrics', () => almacen.metricas());

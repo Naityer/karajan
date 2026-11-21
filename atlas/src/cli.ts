@@ -37,7 +37,8 @@ import { ejecutarLaboratorio, leerEjecucionesDe, leerEjecucionesLocal, RegistroL
  *   kj curador [--proponer]                 skills que sobran, por regla; --proponer las abre como borradores
  *   kj comparar [<skill>|karajan] [--grupo g]  cada skill (o Karajan) frente a las mejores de su grupo, con estrellas propias
  *   kj dosificador estado|config|decidir|simular   cuándo, dónde y con qué agente se lanza cada tarea (cuota por agente, circuitos, simulación)
- *   kj propuestas                           borradores abiertos por Karajan y su estado
+ *   kj analisis estado|procesar|reintentar|tarea|taxonomia|exportar|destilar|config   histórico de tareas etiquetado (docs/analisis-tareas.md)
+ *   kj propuestas                          borradores abiertos por Karajan y su estado
  *   kj modo                                 producción o desarrollo
  */
 type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
@@ -475,6 +476,39 @@ export async function ejecutar(args: string[], e: Entorno): Promise<number> {
         return 0;
       }
       e.escribir('uso: kj dosificador estado | config [--set <json>] | decidir --entrada <fichero> | simular [--semanas N] [--semilla S] [--demanda X]   (--json en todos)');
+      return 2;
+    }
+    case 'analisis': {
+      // kj analisis estado | procesar [--limite N] [--forzar] [--solo-registro] | reintentar | tarea <id> | taxonomia | exportar | destilar | config [--set '<json>']
+      if (sub === 'estado') {
+        const d = (await pedir(e, '/analisis/estado')) as { total: number; version_actual: number; taxonomia_version: number; por_estado: Record<string, number>; por_version: Record<string, number>; en_curso: boolean; con_error: { id: string; estado: string; intentos: number; error: string }[] };
+        salida(d, () => [`Análisis v${d.version_actual} · taxonomía v${d.taxonomia_version} · ${d.total} tareas${d.en_curso ? ' · EN CURSO' : ''}`, `por estado: ${JSON.stringify(d.por_estado)}`, `por versión: ${JSON.stringify(d.por_version)}`, ...d.con_error.map((c) => `  ${c.id} ${c.estado} (${c.intentos} intentos): ${c.error}`)].join('\n'));
+        return 0;
+      }
+      if (sub === 'procesar' || sub === 'reintentar') {
+        const limite = Number(opcion(args, 'limite'));
+        const d = (await pedir(e, '/analisis/procesar', 'POST', { ...(limite > 0 ? { limite } : {}), forzar: bandera(args, 'forzar'), solo_registro: bandera(args, 'solo-registro') })) as { contadores: Record<string, number>; fuentes: { registro: { ok: boolean; error: string | null }; cola: { ok: boolean; error: string | null } | null } };
+        salida(d, () => [`analizadas ${d.contadores['analizada']} · omitidas ${d.contadores['omitida']} · pendientes ${d.contadores['pendiente']} · fallidas ${d.contadores['fallida']} · agotadas ${d.contadores['agotada']}`, ...(d.fuentes.registro.ok ? [] : [`registro: ${d.fuentes.registro.error}`]), ...(d.fuentes.cola && !d.fuentes.cola.ok ? [`cola: ${d.fuentes.cola.error}`] : [])].join('\n'));
+        return 0;
+      }
+      if (sub === 'tarea') {
+        const id = resto[0];
+        if (!id) { e.escribir('uso: kj analisis tarea <id>'); return 2; }
+        e.escribir(JSON.stringify(await pedir(e, `/analisis/tarea/${encodeURIComponent(id)}`), null, 2));
+        return 0;
+      }
+      if (sub === 'taxonomia' || sub === 'exportar' || sub === 'destilar') {
+        e.escribir(JSON.stringify(await pedir(e, `/analisis/${sub === 'exportar' ? 'export' : sub}`, sub === 'destilar' ? 'POST' : 'GET', sub === 'destilar' ? {} : undefined), null, 2));
+        return 0;
+      }
+      if (sub === 'config') {
+        const nuevo = opcion(args, 'set');
+        let parcial: unknown;
+        try { parcial = nuevo ? JSON.parse(nuevo) : undefined; } catch { e.escribir('--set espera un JSON válido'); return 2; }
+        e.escribir(JSON.stringify(await (parcial === undefined ? pedir(e, '/analisis/config') : pedir(e, '/analisis/config', 'PUT', parcial, opcion(args, 'tarea'))), null, 2));
+        return 0;
+      }
+      e.escribir('uso: kj analisis estado | procesar [--limite N] [--forzar] [--solo-registro] | reintentar | tarea <id> | taxonomia | exportar | destilar | config [--set <json>]');
       return 2;
     }
     case 'propuestas': {
