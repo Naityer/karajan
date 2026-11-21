@@ -85,6 +85,7 @@ class RunsMixin:
         output_tokens: int | None,
         estimated_cost_usd: float | None,
         error: str | None,
+        profile_id: str | None = None,
     ) -> str:
         """Persist one real run and return its id.
 
@@ -111,15 +112,15 @@ class RunsMixin:
                     id, task_id, run_index, provider_name, routing_entity_id,
                     routing_entity_name_snapshot, model_id, backend, status,
                     started_at, completed_at, latency_ms, input_tokens, output_tokens,
-                    estimated_cost_usd, error
+                    estimated_cost_usd, error, profile_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id, task_id, run_index, provider_name, routing_entity_id,
                     routing_entity_name_snapshot, model_id, backend, status,
                     started_at, completed_at, latency_ms, input_tokens, output_tokens,
-                    estimated_cost_usd, error,
+                    estimated_cost_usd, error, profile_id,
                 ),
             )
             conn.execute("COMMIT")
@@ -148,6 +149,7 @@ class RunsMixin:
         routing_entity_name_snapshot: str | None,
         model_id: str | None,
         backend: str | None,
+        profile_id: str | None = None,
     ) -> str:
         """Insert a `running` run up front and return its id.
 
@@ -170,13 +172,13 @@ class RunsMixin:
                 """
                 INSERT INTO runs (
                     id, task_id, run_index, provider_name, routing_entity_id,
-                    routing_entity_name_snapshot, model_id, backend, status, started_at
+                    routing_entity_name_snapshot, model_id, backend, status, started_at, profile_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)
                 """,
                 (
                     run_id, task_id, row["next_index"], provider_name, routing_entity_id,
-                    routing_entity_name_snapshot, model_id, backend, _now_iso(),
+                    routing_entity_name_snapshot, model_id, backend, _now_iso(), profile_id,
                 ),
             )
             conn.execute("COMMIT")

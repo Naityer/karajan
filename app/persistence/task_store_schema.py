@@ -213,6 +213,9 @@ class SchemaMixin:
             )
             """
         )
+        # Perfil de enrutado que decidió la ejecución: atribuye el fitness evolutivo a cada perfil.
+        if "profile_id" not in {row["name"] for row in conn.execute("PRAGMA table_info(runs)")}:
+            conn.execute("ALTER TABLE runs ADD COLUMN profile_id TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_provider ON runs(provider_name)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_task ON runs(task_id)")
         # `run_events` and `artifacts` were shipped empty as Fase-1 groundwork;
