@@ -5,6 +5,9 @@ import { construirAnaliticaSkills } from './analitica';
 import { catalogoReal, listarSkills } from './catalogo';
 import { calcularProduccion } from './produccion';
 import { perfilPorDefecto } from './perfiles';
+import { destinoDe } from './rotador';
+import { componerSkills, cobertura, elegirEspecialista, prepararEspecialista } from './especialistas';
+import { seleccionarSkills } from './skills-seleccion';
 import { detectarNecesidades, explicacion, fitnessPerfil, MIN_MUESTRAS, muestrasDeFilas, proponerGeneracion } from './evolucion';
 import { disponibilidad, PROVEEDORES } from './proveedores';
 
@@ -13,7 +16,7 @@ const CAMPOS_REVISION = new Set(['agente_entrada', 'agente', 'skills_usadas', 'c
 
 /** Operaciones compartidas entre adaptadores; no conocen rutas ni respuestas HTTP. */
 export function crearAplicacion(runtime: ReturnType<typeof crearRuntime>) {
-  const { perfiles, rutaLayout, delegador, rotador, mutar, almacen } = runtime;
+  const { perfiles, rutaLayout, delegador, rotador, mutar, almacen, especialistas, inventario } = runtime;
   const conPerfil = <T,>(fn: () => T): T => {
     try { return fn(); } catch (e) { if (e instanceof ErrorPerfil) throw falla(422, e.message); throw e; }
   };
@@ -71,12 +74,12 @@ export function crearAplicacion(runtime: ReturnType<typeof crearRuntime>) {
     catalogoSkills: (q: Record<string, string | undefined>) => { const p = calcular({ dias: q['dias'] ?? '90', perfil: 'todos' }); return { dias: p.dias, ...p.catalogo }; },
     clasificar: (body: unknown) => delegador.planificar(leerPrompt(body)).clasificacion,
     planificar: (body: unknown) => {
-      const b = (body ?? {}) as { force_entity_id?: unknown };
-      return delegador.planificar(leerPrompt(body), typeof b.force_entity_id === 'string' ? b.force_entity_id : null);
+      const b = (body ?? {}) as { force_entity_id?: unknown; especialista?: unknown };
+      return delegador.planificar(leerPrompt(body), typeof b.force_entity_id === 'string' ? b.force_entity_id : null, typeof b.especialista === 'string' ? b.especialista : null);
     },
     delegar: (body: unknown) => {
-      const b = (body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown; entry_agent?: unknown };
-      return delegador.delegar(leerPrompt(body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true, entrada: typeof b.entry_agent === 'string' ? b.entry_agent : null });
+      const b = (body ?? {}) as { force_entity_id?: unknown; cwd?: unknown; human_approved?: unknown; entry_agent?: unknown; especialista?: unknown };
+      return delegador.delegar(leerPrompt(body), { forzarEntidad: typeof b.force_entity_id === 'string' ? b.force_entity_id : null, cwd: b.cwd, aprobada: b.human_approved === true, entrada: typeof b.entry_agent === 'string' ? b.entry_agent : null, especialista: typeof b.especialista === 'string' ? b.especialista : null });
     },
     leerPerfil: () => ({ ...perfiles.leer(), path: rutaLayout }),
     guardarPerfil: (req: PeticionMutacion & { body: unknown }) => mutar(req, 'PUT /routing-layout', () => conPerfil(() => perfiles.guardar(req.body))),
@@ -104,9 +107,36 @@ export function crearAplicacion(runtime: ReturnType<typeof crearRuntime>) {
       const cuenta = (n: string) => inventario.filter((f) => f.nivel === n && f.instaladaEn.length).length;
       return { config: rotador.leerEstado().config, resumen: { nucleo: cuenta('nucleo'), frecuente: cuenta('frecuente'), instantanea: cuenta('instantanea'), inactivas_instaladas: cuenta('inactiva'), en_almacen: inventario.filter((f) => f.enAlmacen.length && !f.instaladaEn.length).length }, plan: rotador.plan(), inventario };
     },
+    especialistasConfig: () => especialistas.leer(),
+    guardarEspecialistasConfig: (req: PeticionMutacion & { body: unknown }) => mutar(req, 'PUT /especialistas/config', () => { const c = especialistas.guardar(req.body); inventario.invalidar(); return c; }),
+    listarEspecialistas: () => {
+      const cfg = especialistas.leer(), cat = inventario.leer();
+      return { activo: cfg.activo, automatico: cfg.automatico, agentes: cfg.agentes.map((a) => ({ ...a, ...cobertura(a, cat) })) };
+    },
+    // Cola de Atlas dev: mantiene el proveedor ya resuelto y prepara únicamente el paquete opcional.
+    resolverEspecialista: async (req: PeticionMutacion & { body: unknown }) => {
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      const prompt = leerPrompt(b);
+      const p = b['proveedor'] === 'claude' ? 'claude-cli' : b['proveedor'];
+      if (p !== 'claude-cli' && p !== 'codex') return { especialista: null, motivo: 'proveedor sin skills' };
+      const cat = inventario.leer(), sugerencias = seleccionarSkills(prompt, cat);
+      const e = elegirEspecialista(prompt, p, cat, especialistas.leer(), typeof b['especialista'] === 'string' ? b['especialista'] : null);
+      if (!e) return { especialista: null, motivo: 'sin especialista viable' };
+      if (b['preparar'] === true) {
+        await runtime.guardian.exigir(req, 'POST /especialistas/resolver (preparar)');
+        const destino = destinoDe(p)!;
+        if (!prepararEspecialista(e, (nombre) => rotador.asegurar(nombre, destino))) return { especialista: null, motivo: 'paquete no preparado; conserva asignación y sugerencias originales' };
+        // Las sugerencias externas al paquete también se preparan; un fallo conserva las que ya tenía la cola.
+        for (const nombre of sugerencias.filter((x) => !e.skills.includes(x))) try { if (!rotador.asegurar(nombre, destino).disponible) sugerencias.splice(sugerencias.indexOf(nombre), 1); } catch { sugerencias.splice(sugerencias.indexOf(nombre), 1); }
+        inventario.invalidar();
+      }
+      const manuales = Array.isArray(b['skills']) ? b['skills'].filter((x): x is string => typeof x === 'string').slice(0, 100) : [];
+      const composicion = componerSkills(manuales, sugerencias, e.skills);
+      return { especialista: e, ...composicion, skills_sugeridas: sugerencias };
+    },
     rotar: (req: PeticionMutacion & { body: unknown }) => {
       const aplicar = (req.body as { aplicar?: unknown } | null)?.aplicar === true;
-      const operacion = () => { const plan = rotador.plan(); return { aplicado: aplicar, ...(aplicar ? rotador.aplicar(plan) : plan) }; };
+      const operacion = () => { const plan = rotador.plan(); const resultado = aplicar ? rotador.aplicar(plan) : plan; if (aplicar) inventario.invalidar(); return { aplicado: aplicar, ...resultado }; };
       return aplicar ? mutar(req, 'POST /skills/rotar (aplicar)', operacion) : operacion();
     },
   };

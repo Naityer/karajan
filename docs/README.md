@@ -24,3 +24,7 @@
 | | [reports/](reports/): informes puntuales |
 
 El despliegue en contenedor está en [`../deploy/`](../deploy/) y los scripts de operación en [`../scripts/`](../scripts/).
+## Especialistas
+
+- [Especialistas y skills sueltas](especialistas.md): contrato, uso y continuidad.
+- [Análisis de biblioteca](especialistas-analisis.md): paquetes justificados y cribado completo.

@@ -10,6 +10,7 @@ import { ranking, tareaDesdeClasificacion, type EntidadConFicha } from './puntua
 import { aislar, aislarActivo, cerrar, type Aislamiento } from './aislar-git';
 import { destinoDe, type Rotador } from './rotador';
 import { descubrirSkills, seleccionarSkills, type SkillDisponible } from './skills-seleccion';
+import { componerSkills, elegirEspecialista, type ConfigEspecialistas, type EleccionEspecialista } from './especialistas';
 
 /**
  * Delegación real desde el paquete: clasifica el prompt (heurística), elige el agente de cada subtarea con el perfil POR DEFECTO
@@ -29,7 +30,7 @@ export function construirInstruccion(prompt: string, st: Pick<Subtarea, 'name' |
   return instruccion;
 }
 
-export interface Asignacion { subtarea: string; nombre: string; entidad: string | null; entidad_nombre: string | null; proveedor: string; modelo: string; regla: string | null; motivo: string; /** Puntuación 0–100 con la que el perfil eligió a este agente (perfiles con fichas de aptitud). */ puntos?: number; /** % semanal de Claude si pasó a Codex por el límite. */ limite?: number }
+export interface Asignacion { subtarea: string; nombre: string; entidad: string | null; entidad_nombre: string | null; proveedor: string; modelo: string; regla: string | null; motivo: string; /** Puntuación 0–100 con la que el perfil eligió a este agente (perfiles con fichas de aptitud). */ puntos?: number; /** % semanal de Claude si pasó a Codex por el límite. */ limite?: number; especialista?: EleccionEspecialista; base?: Asignacion; skills_sugeridas?: string[]; procedencias?: ReturnType<typeof componerSkills>['procedencias'] }
 export interface Plan { task_id: string; status: string; clasificacion: Clasificacion; asignaciones: Asignacion[]; bloqueada: string | null }
 
 interface Opciones {
@@ -40,6 +41,7 @@ interface Opciones {
   /** Rotador de skills: repone la skill recomendada antes de ejecutar si estaba en el almacén. */
   rotador?: Rotador;
   skillsDisponibles?: () => SkillDisponible[];
+  especialistas?: () => ConfigEspecialistas;
   /** Trabajar en un worktree con rama `agente/<task_id>` (por defecto, `KARAJAN_AISLAR_GIT=1`). */
   aislarGit?: boolean;
 }
@@ -76,15 +78,29 @@ export class Delegador {
   }
 
   /** Qué agente haría cada subtarea, sin ejecutar nada (el probador del panel de perfiles). */
-  planificar(prompt: string, forzarEntidad?: string | null): Plan {
+  planificar(prompt: string, forzarEntidad?: string | null, especialista?: string | null): Plan {
     const c = clasificar(prompt, this.op.config());
-    const elegidas = seleccionarSkills(prompt, (this.op.skillsDisponibles ?? descubrirSkills)());
+    const catalogo = (this.op.skillsDisponibles ?? descubrirSkills)();
+    const elegidas = seleccionarSkills(prompt, catalogo);
     c.recommended_skills = elegidas;
     c.subtasks.forEach((s, i) => {
       s.recommended_skills = i === 0 ? elegidas : [];
       s.recommended_skill = i === 0 ? (elegidas[0] ?? null) : null;
     });
-    return { task_id: c.task_id, status: 'classified', clasificacion: c, asignaciones: c.subtasks.map((st) => this.asignar(c, st, forzarEntidad ?? null)), bloqueada: null };
+    const asignaciones = c.subtasks.map((st) => this.asignar(c, st, forzarEntidad ?? null));
+    // La primera subtarea recibe las skills, igual que en el selector anterior. Nunca cambia el proveedor del perfil.
+    const a = asignaciones[0];
+    if (a && this.op.especialistas && (!forzarEntidad || especialista)) try {
+      const e = elegirEspecialista(prompt, a.proveedor, catalogo, this.op.especialistas(), especialista);
+      if (e) {
+        const union = componerSkills([], elegidas, e.skills);
+        asignaciones[0] = { ...a, base: a, especialista: e, modelo: e.modelo, motivo: `${a.motivo}; ${e.motivo}`, skills_sugeridas: elegidas, procedencias: union.procedencias };
+        c.recommended_skills = union.skills;
+        c.subtasks[0]!.recommended_skills = union.skills;
+        c.subtasks[0]!.recommended_skill = union.skills[0] ?? null;
+      }
+    } catch { /* el componente opcional nunca impide planificar */ }
+    return { task_id: c.task_id, status: 'classified', clasificacion: c, asignaciones, bloqueada: null };
   }
 
   private asignar(c: Clasificacion, st: Subtarea, forzar: string | null): Asignacion {
@@ -166,9 +182,9 @@ export class Delegador {
   }
 
   /** Clasifica, registra y lanza la ejecución en segundo plano. */
-  delegar(prompt: string, { forzarEntidad = null, cwd, aprobada = false, entrada = null }: { forzarEntidad?: string | null; cwd?: unknown; aprobada?: boolean; entrada?: string | null } = {}): Plan {
+  delegar(prompt: string, { forzarEntidad = null, cwd, aprobada = false, entrada = null, especialista = null }: { forzarEntidad?: string | null; cwd?: unknown; aprobada?: boolean; entrada?: string | null; especialista?: string | null } = {}): Plan {
     const carpeta = this.carpeta(cwd);
-    const plan = this.planificar(prompt, forzarEntidad);
+    const plan = this.planificar(prompt, forzarEntidad, especialista);
     const c = plan.clasificacion;
     // Agente que recibió el prompt (punto de entrada), como `ClassificationResult.entry_agent` en Python.
     if (entrada) Object.assign(c, { entry_agent: entrada.slice(0, 60) });
@@ -180,6 +196,7 @@ export class Delegador {
       return { ...plan, bloqueada: 'La tarea exige revisión humana antes de ejecutarse.' };
     }
     for (const a of plan.asignaciones) {
+      if (a.especialista) almacen.registrarDecision({ task_id: c.task_id, phase: 'assign', decision: `especialista:${a.especialista.id}`, reason: JSON.stringify({ modelo: a.modelo, procedencias: a.procedencias }) });
       almacen.registrarDecision({ task_id: c.task_id, phase: 'assign', decision: a.puntos !== undefined ? `score:${a.puntos.toFixed(1)}->${a.entidad}:${a.proveedor}` : a.regla ? `rule:${a.regla}->${a.entidad}:${a.proveedor}` : `${a.subtarea}->${a.entidad ?? '-'}:${a.proveedor}`, reason: a.motivo });
       if (a.limite !== undefined) almacen.registrarDecision({ task_id: c.task_id, phase: 'fallback', decision: 'limite_semanal:claude->codex', reason: a.motivo });
     }
@@ -211,27 +228,37 @@ export class Delegador {
     }
     const cwd = ais?.carpeta ?? carpeta;
     for (const [i, st] of c.subtasks.entries()) {
-      const a = asignaciones[i]!;
+      let a = asignaciones[i]!;
       const p = proveedor(a.proveedor)!;
       const max = perfil.entities.find((e) => e.id === a.entidad)?.max_concurrent ?? 1;
-      const liberar = await this.turno(a.entidad ?? a.proveedor, max);
       const inicio = new Date().toISOString();
       // Skill recomendada: se deja instalada para el agente que ejecuta (desde el almacén si hace falta) y se le pide usarla.
       const destino = destinoDe(p.nombre);
       const preparadas: string[] = [];
       if (destino && this.op.rotador) for (const nombre of st.recommended_skills ?? (st.recommended_skill ? [st.recommended_skill] : [])) {
-        const s = this.op.rotador.asegurar(nombre, destino);
+        let s;
+        try { s = this.op.rotador.asegurar(nombre, destino); }
+        catch (e) { s = { disponible: false, repuesta: false, motivo: `preparación fallida: ${(e as Error).message}` }; }
         if (s.disponible) preparadas.push(nombre);
         almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:${s.disponible ? 'preparada' : 'no-disponible'}:${nombre}->${destino}`, reason: s.motivo });
         if (s.repuesta) almacen.registrarDecision({ task_id: c.task_id, phase: 'delegate', decision: `skill:repuesta:${nombre}->${destino}`, reason: s.motivo });
       }
+      if (a.especialista && a.base && a.especialista.skills.some((n) => !preparadas.includes(n))) {
+        almacen.registrarDecision({ task_id: c.task_id, phase: 'fallback', decision: `especialista:respaldo:${a.especialista.id}`, reason: 'No se preparó el paquete; conserva modelo y sugerencias originales.' });
+        st.recommended_skills = a.skills_sugeridas ?? [];
+        a = a.base;
+        preparadas.splice(0, preparadas.length, ...preparadas.filter((n) => st.recommended_skills!.includes(n)));
+      }
       const instruccion = construirInstruccion(c.original_prompt, st, preparadas);
       let r;
       const skillsRequeridas = st.recommended_skills ?? (st.recommended_skill ? [st.recommended_skill] : []);
+      const liberar = await this.turno(a.entidad ?? a.proveedor, max);
       try {
         r = skillsRequeridas.some((nombre) => !preparadas.includes(nombre))
           ? { salida: '', error: 'No se pudieron preparar todas las skills recomendadas para el agente seleccionado.', latenciaMs: 0, modelo: a.modelo }
-          : await this.ejecutor(p, a.modelo, instruccion, { cwd, timeoutMs: TIMEOUT_MS });
+          : await this.ejecutor(p, a.modelo, `${a.especialista ? `Especialidad: ${a.especialista.nombre}. ${a.especialista.motivo}.\n\n` : ''}${instruccion}`, { cwd, timeoutMs: TIMEOUT_MS });
+      } catch (e) {
+        r = { salida: '', error: (e as Error).message, latenciaMs: 0, modelo: a.modelo };
       } finally { liberar(); }
       total += r.latenciaMs;
       const estado = r.error ? 'failed' : 'completed';
@@ -244,6 +271,7 @@ export class Delegador {
       ejecuciones.push({
         subtask_id: st.id, status: estado, backend: 'cli', model_used: r.modelo, latency_ms: r.latenciaMs, estimated_cost_usd: 0, output: r.salida || (r.error ?? ''), error: r.error,
         input_tokens: tokensEntrada, output_tokens: tokensSalida, validation_iterations: 0, context_paths: [], prepared_skills: preparadas, used_skills: [],
+        specialist: a.especialista?.id ?? null, skill_provenance: a.procedencias ?? [],
       });
     }
     const fallo = ejecuciones.some((e) => e['status'] === 'failed');

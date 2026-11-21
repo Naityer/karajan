@@ -112,6 +112,15 @@ describe('API de Inspiration (solo lectura)', () => {
     assert.equal(r.status, 409);
     assert.match(String(r.body['error'] ?? r.body['detail'] ?? JSON.stringify(r.body)), /resources\.db/);
     assert.equal((await llamar('GET /resource-groups')).status, 409);
+    const especialistas = await llamar('GET /especialistas');
+    assert.equal(especialistas.status, 200);
+    assert.equal((especialistas.body['agentes'] as unknown[]).length, 40);
+    const cfg = (await llamar('GET /especialistas/config')).body;
+    assert.equal((await llamar('PUT /especialistas/config', { body: { ...cfg, activo: false } })).status, 200);
+    assert.equal((await llamar('GET /especialistas')).body['activo'], false);
+    const sin = await llamar('POST /especialistas/resolver', { body: { prompt: 'grafos', proveedor: 'codex' } });
+    assert.equal(sin.body['especialista'], null);
+    assert.equal((await llamar('PUT /especialistas/config', { body: { activo: 'si' } })).status, 422);
   });
 
   it('las altas y el recomendador siguen siendo del Karajan nativo: 501', async () => {

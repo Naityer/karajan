@@ -140,6 +140,11 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
     return plan;
   });
 
+  app.get('/especialistas/config', () => aplicacion.especialistasConfig());
+  app.put('/especialistas/config', (req) => aplicacion.guardarEspecialistasConfig(req));
+  app.get('/especialistas', () => aplicacion.listarEspecialistas());
+  app.post('/especialistas/resolver', (req) => aplicacion.resolverEspecialista(req));
+
   // Analítica: el adaptador deja los cálculos a la aplicación compartida.
   app.get('/analytics/produccion', (req) => aplicacion.produccion(req.query));
   app.get('/analytics/flujo', (req) => aplicacion.flujo(req.query));

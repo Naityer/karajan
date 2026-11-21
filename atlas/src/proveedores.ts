@@ -29,7 +29,7 @@ export const PROVEEDORES: Proveedor[] = [
     nombre: 'codex', etiqueta: 'OpenAI Codex CLI (local)', binario: 'codex', gratis: false, login: 'codex login',
     modelos: { cheap_model: 'default', cheap_or_medium_model: 'default', medium_model: 'default', strong_model: 'default', strong_model_with_human_review: 'default' },
     // `--skip-git-repo-check`: desde Atlas dev la carpeta de trabajo puede ser el Workspace, que no es un repo (el nativo corre en el suyo).
-    args: () => ['exec', '--ephemeral', '--color', 'never', '--skip-git-repo-check', '-'],
+    args: (m) => ['exec', '--ephemeral', '--color', 'never', '--skip-git-repo-check', ...(m && m !== 'default' ? ['--model', m] : []), '-'],
   },
   {
     nombre: 'ollama-qwen', etiqueta: 'Qwen (local)', binario: 'ollama', gratis: true, login: 'ollama serve', modeloLocal: 'qwen2.5:7b',

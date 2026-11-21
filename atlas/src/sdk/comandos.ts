@@ -14,7 +14,7 @@ export interface Contexto {
 
 /** Argumentos posicionales: no confundir el valor de una opción con el prompt o id. */
 export function argumentosPosicionales(args: string[]): string[] {
-  const conValor = new Set(['--perfil', '--layout', '--datos', '--datos-atlas', '--tasks-db', '--resources-db', '--config', '--estado', '--lab-db', '--dias', '--limite', '--tarea', '--grupo']);
+  const conValor = new Set(['--perfil', '--especialista', '--layout', '--datos', '--datos-atlas', '--tasks-db', '--resources-db', '--config', '--estado', '--lab-db', '--dias', '--limite', '--tarea', '--grupo']);
   const salida: string[] = [];
   for (let i = 0; i < args.length; i++) {
     if (conValor.has(args[i]!)) { i++; continue; }

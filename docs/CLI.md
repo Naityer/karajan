@@ -75,3 +75,7 @@ La CLI Python `karajan` se ha retirado. Para operar el paquete de Atlas dev se u
 El servidor MCP requiere el extra `pip install -e ".[mcp]"` y se inicia con `python -m karajan_cli.mcp_server`; expone, entre otras herramientas, `karajan_health`, `karajan_classify` y `karajan_assign`. Usa transporte embebido por defecto. Para HTTP, configura `KARAJAN_URL` o `KARAJAN_TRANSPORT=http` y arranca el servidor nativo con `python -m uvicorn app.main:app --host 127.0.0.1 --port 8001`.
 
 La skill local se instala copiando `skills/karajan/` al directorio de skills del agente o mediante el instalador del catálogo. Reinicia la sesión del agente para cargarla.
+
+## Especialistas y sugerencias
+
+`kj control especialistas` muestra las especialidades y su cobertura local. `kj control mision "<tarea>" --especialista <id|ninguno>` permite una elección explícita; solo `--ejecutar` delega de verdad. `kj especialistas describe|config|salud|metricas` usa los comandos genéricos del componente. Véase [el contrato completo](especialistas.md).

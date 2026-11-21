@@ -16,6 +16,7 @@ import { buscarBinario, PROVEEDORES } from './proveedores';
 import type { Perfil } from './reglas';
 import type { EstadoRotador } from './rotador';
 import { PESOS_SELECTOR } from './skills-seleccion';
+import type { ConfigEspecialistas } from './especialistas';
 import { UMBRALES_TUTOR, MEZCLA_ENTRADA, elegirTutores, leerCatalogo } from './tutor';
 import { UMBRALES_TUTORIA } from './tutoria-nota';
 import { carpetaSkillForge } from './skillforge';
@@ -45,6 +46,7 @@ export interface ContextoFicha {
   planificador?: { config(): ConfigPlanificador; planes?(): { actualizado: string; estado: string }[] };
   pasarela: { leer(): Record<string, unknown> };
   biblioteca: { disponible: boolean; ruta: string | null };
+  especialistas?(): ConfigEspecialistas;
 }
 
 export interface FichaComponente {
@@ -63,6 +65,18 @@ const borrador = (nombre: string, resumen: string, entradas: string[], salidas: 
 });
 
 export const FICHAS: Record<string, FichaComponente> = {
+  especialistas: {
+    especificado: true, resumen: 'Categoriza por ámbito con un modelo configurable y un paquete de skills; conserva las sugerencias independientes y permite recuperar la asignación original.',
+    como_funciona: { entradas: ['Prompt, proveedor resuelto y elección explícita opcional', 'Catálogo local y especialistas.json'], pasos: [
+      'Lee configuración validada o respaldo; ante corrupción sin respaldo desactiva el componente (especialistas-config.ts).',
+      'Exige al menos dos skills distintas y todo el paquete local o recuperable (especialistas.ts · cobertura).',
+      'Selecciona por términos completos; ante empate o falta de cobertura conserva el flujo base (especialistas.ts · elegirEspecialista).',
+      'Compone skills manuales, sugerencias y paquete sin duplicados y conserva sus procedencias (especialistas.ts · componerSkills).',
+      'El delegador o la cola prepara el paquete con el rotador; si falla conserva modelo y sugerencias originales.',
+    ], salidas: ['Especialista, modelo, skills y procedencias, o ausencia de especialista con continuidad del flujo original'] },
+    reglas: ['No crea skills ni instala recursos de red.', 'No acredita uso confirmado por preparar una skill.', 'No cambia el proveedor fijado por la persona o las políticas existentes.'],
+    configuracion: (ctx) => { const c = ctx.especialistas?.(); return { activo: c?.activo ?? false, automatico: c?.automatico ?? false, agentes: c?.agentes.map((a) => a.id) ?? [] }; },
+  },
   // ── Decisión ──
   clasificador: {
     especificado: true,

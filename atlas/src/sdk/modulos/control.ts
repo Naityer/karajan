@@ -102,7 +102,7 @@ export function panelEstado(modo: { modo: string }, ps: Proveedor[], d: EstadoDo
 }
 
 interface Clasif { complexity_level?: number | string; domain?: string[]; intent?: string; complexity_score?: number; recommended_model?: string; recommended_skills?: string[]; requires_human_review?: boolean; reason?: string; criteria?: Record<string, number>; subtasks?: { title?: string; name?: string }[] }
-interface Plan { task_id?: string; status?: string; clasificacion: Clasif; asignaciones?: { subtarea: string; nombre: string; proveedor: string; modelo: string; regla: string | null; motivo: string }[]; bloqueada?: string | null }
+interface Plan { task_id?: string; status?: string; clasificacion: Clasif; asignaciones?: { subtarea: string; nombre: string; proveedor: string; modelo: string; regla: string | null; motivo: string; especialista?: { nombre: string } }[]; bloqueada?: string | null }
 
 export function panelMision(prompt: string, plan: Plan, ejecutada: boolean): Panel {
   const c = plan.clasificacion;
@@ -110,11 +110,16 @@ export function panelMision(prompt: string, plan: Plan, ejecutada: boolean): Pan
     { tipo: 'texto', titulo: 'Entrada', lineas: [prompt.slice(0, 300)] },
     { tipo: 'barras', titulo: 'Criterios (0-5)', filas: Object.entries(c.criteria ?? {}).map(([k, v]) => ({ etiqueta: k, valor: v })) },
     { tipo: 'tabla', titulo: 'Asignación', columnas: ['subtarea', 'agente', 'modelo', 'regla', 'motivo'], filas: (plan.asignaciones ?? []).map((a) => [a.nombre || a.subtarea, a.proveedor, a.modelo, a.regla, a.motivo]) },
+    ...((plan.asignaciones ?? []).some((a) => a.especialista) ? [{ tipo: 'texto' as const, titulo: 'Especialidades', lineas: (plan.asignaciones ?? []).filter((a) => a.especialista).map((a) => `${a.nombre}: ${a.especialista!.nombre}`) }] : []),
     { tipo: 'texto', lineas: [`Skills: ${(c.recommended_skills ?? []).join(', ') || '—'}`, `Revisión humana: ${c.requires_human_review ? 'SÍ' : 'no'}`, ...(plan.bloqueada ? [`BLOQUEADA: ${plan.bloqueada}`] : []), ...(c.reason ? [c.reason] : [])] },
   ] };
 }
 
 export const comandosControl: Comando[] = [
+  { ruta: ['control', 'especialistas'], resumen: 'catálogo de ámbitos con cobertura local y skills que faltan', ejecutar: async (ctx) => {
+    const datos = await ctx.pedir('/especialistas') as { agentes: { id: string; nombre: string; viable: boolean; faltan: string[]; skills: string[] }[] };
+    return { origen: 'control', titulo: 'Control · especialistas', datos, bloques: [{ tipo: 'tabla', columnas: ['id', 'nombre', 'cobertura local', 'skills'], filas: datos.agentes.map((a) => [a.id, a.nombre, a.viable ? 'disponible' : `faltan: ${a.faltan.join(', ')}`, a.skills.join(', ')]) }] };
+  } },
   { ruta: ['control', 'estado'], resumen: 'modo, proveedores, cuota, borradores y revisiones de un vistazo', ejecutar: async (ctx) => {
     const [modo, ps, d, b, t] = await Promise.all([ctx.pedir('/laboratorio/modo') as Promise<{ modo: string }>, consultar<Proveedor[]>(ctx, '/providers'), consultar<EstadoDosificador | null>(ctx, '/dosificador/estado'), consultar<unknown[]>(ctx, '/laboratorio/propuestas'), consultar<Tarea[]>(ctx, '/tasks?limit=100')]);
     if (!Array.isArray(b)) throw new Error('Respuesta no válida de /laboratorio/propuestas');
@@ -129,10 +134,10 @@ export const comandosControl: Comando[] = [
   { ruta: ['control', 'proveedores'], resumen: 'Claude Code, Codex, Qwen…: cuáles están listos', ejecutar: async (ctx) => panelProveedores((await ctx.pedir('/providers')) as Proveedor[]) },
   { ruta: ['control', 'revisiones'], resumen: 'tareas que esperan revisión humana', ejecutar: async (ctx) => panelRevisiones((await ctx.pedir('/tasks?limit=200')) as Tarea[]) },
   { ruta: ['control', 'cuota'], resumen: 'cuota de cada agente y modo del dosificador', ejecutar: async (ctx) => panelCuota((await ctx.pedir('/dosificador/estado')) as EstadoDosificador) },
-  { ruta: ['control', 'mision'], uso: 'control mision "<texto>" [--ejecutar]', resumen: 'clasifica y planifica una tarea; con --ejecutar la delega de verdad', ejecutar: async (ctx, args) => {
+  { ruta: ['control', 'mision'], uso: 'control mision "<texto>" [--especialista <id|ninguno>] [--ejecutar]', resumen: 'clasifica y planifica una tarea; con --ejecutar la delega de verdad', ejecutar: async (ctx, args) => {
     const prompt = argumentosPosicionales(args).join(' ').trim();
     if (!prompt) throw new Error('uso: kj control mision "<texto>" [--ejecutar]');
     const ejecutar = ctx.bandera('ejecutar');
-    return panelMision(prompt, (await ctx.pedir(ejecutar ? '/delegate-task' : '/routing/plan', 'POST', { prompt })) as Plan, ejecutar);
+    return panelMision(prompt, (await ctx.pedir(ejecutar ? '/delegate-task' : '/routing/plan', 'POST', { prompt, ...(ctx.opcion('especialista') ? { especialista: ctx.opcion('especialista') } : {}) })) as Plan, ejecutar);
   } },
 ];

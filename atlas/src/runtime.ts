@@ -10,6 +10,9 @@ import { configDesde } from './heuristica';
 import { Perfiles } from './perfiles';
 import { AtlasDev } from './atlas-dev';
 import { Pasarela } from './pasarela-borradores';
+import { inventarioConCache } from './especialistas';
+import { ConfiguracionEspecialistas } from './especialistas-config';
+import { descubrirSkills } from './skills-seleccion';
 import { Guardian, type PeticionMutacion } from './modo';
 import { Biblioteca } from './biblioteca';
 import { RegistroLab } from './laboratorio';
@@ -68,7 +71,9 @@ export function crearRuntime(datos: string) {
   };
   const historiaKarajan = () => almacen.tareasPlanas().flatMap((t) => (t.ejecutadas ?? []).map((skill) => ({ skill, cuando: t.created_at })));
   const rotador = new Rotador({ estado: join(datos, 'rotador.json'), usosKarajan, historiaKarajan });
-  const delegador = new Delegador({ almacen, perfiles, config, raiz: ws ?? homedir(), rotador });
+  const especialistas = new ConfiguracionEspecialistas(join(dirDatos, 'especialistas.json'));
+  const inventario = inventarioConCache(() => descubrirSkills());
+  const delegador = new Delegador({ almacen, perfiles, config, raiz: ws ?? homedir(), rotador, skillsDisponibles: inventario.leer, especialistas: () => especialistas.leer() });
   const dirLab = join(datos, 'laboratorio');
   const atlasDev = new AtlasDev();
   const pasarela = new Pasarela(atlasDev, join(dirLab, 'borradores.json'));
@@ -88,6 +93,6 @@ export function crearRuntime(datos: string) {
     almacen.cerrar();
     throw err;
   }
-  return { nativo, compartida, importada, dirDatos, almacen, config, rutaLayout, perfiles, rotador, delegador, dirLab, atlasDev, pasarela, guardian, mutar, rutaBiblioteca, biblioteca, registroLab,
+  return { nativo, compartida, importada, dirDatos, almacen, config, rutaLayout, perfiles, rotador, especialistas, inventario, delegador, dirLab, atlasDev, pasarela, guardian, mutar, rutaBiblioteca, biblioteca, registroLab,
     cerrar: () => { registroLab.cerrar(); biblioteca.cerrar(); almacen.cerrar(); } };
 }

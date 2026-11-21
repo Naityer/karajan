@@ -135,7 +135,7 @@ export function crearAplicacionLaboratorio(runtime: ReturnType<typeof crearRunti
   const contextoArquitectura = (): ContextoArquitectura => ({
     version: version, modo: guardian.modo(), dirDatos, dirLab, config,
     perfil: () => { try { return perfilPorDefecto(perfiles.leer()); } catch { return null; } },
-    rotador, limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, planificador: { config: planificador.config, planes: planificador.listaPlanes }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
+    rotador, especialistas: () => runtime.especialistas.leer(), limites: () => leerLimites(), dosificador: { config: configDos, estado: estadoDos }, planificador: { config: planificador.config, planes: planificador.listaPlanes }, pasarela, biblioteca: { disponible: biblioteca.disponible, ruta: biblioteca.disponible ? rutaBiblioteca : null },
     registro: registroLab, almacen, cache: cacheArquitectura, ttlMs: 30_000,
   });
   const arquitectura = async () => construirArquitectura(contextoArquitectura());
