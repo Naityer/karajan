@@ -25,7 +25,7 @@ from app.domain.models import (
 from app.providers import resolve
 from app.providers.registry import Resolution, fallback_resolutions, resolve_by_name, resolve_entity
 from app.configuration import limites_plan
-from app.routing import routing_rules
+from app.routing import routing_rules, puntuacion
 from app.resources.resource_activation import build_resource_context
 from app.resources.skill_matching import prepare_skills
 
@@ -211,6 +211,7 @@ def _persist_run(
     resolution: Resolution,
     subtask_execution: SubtaskExecution,
     started_at: str,
+    profile_id: str | None = None,
 ) -> None:
     """Persist a `runs` row for this subtask's execution and emit its SSE
     lifecycle events. A store/SSE failure must never break delegation, so the
@@ -232,6 +233,7 @@ def _persist_run(
             output_tokens=subtask_execution.output_tokens,
             estimated_cost_usd=subtask_execution.estimated_cost_usd,
             error=subtask_execution.error,
+            profile_id=profile_id,
         )
         events.publish("run_started", task_id=classification.task_id, run_id=run_id)
         events.publish(
@@ -252,6 +254,7 @@ def _open_agent_run(
     classification: ClassificationResult,
     assignment: flow_policy.FlowAssignment,
     resolution: Resolution,
+    profile_id: str | None = None,
 ) -> str | None:
     """Reserve the `runs` row an agent session will write its trace against.
 
@@ -267,6 +270,7 @@ def _open_agent_run(
             routing_entity_name_snapshot=assignment.owner.name if assignment.owner else None,
             model_id=resolution.model_id,
             backend=resolution.backend.value,
+            profile_id=profile_id,
         )
     except Exception:  # noqa: BLE001
         log_event(logger, logging.WARNING, "open_run_failed", task_id=classification.task_id)
@@ -314,6 +318,7 @@ def run_subtask(
     stable catalog identity that fixes the old fuzzy `_execution_owner()`
     attribution. `None` (used by every pre-existing caller) is a no-op."""
     started_at = datetime.now(timezone.utc).isoformat()
+    profile_id = layout.default_profile_id if layout is not None else None
     assignment = flow_policy.assign_subtask(classification, subtask, layout)
     # Domain rules of the (default) profile pick the entity before the tier-pinned
     # resolution; an explicit force (`preresolved`) always wins over them.
@@ -337,6 +342,20 @@ def run_subtask(
             if resolution is None:
                 rule_match = None  # the rule's agent can't run this tier: fall back to normal routing
     # No rule: the profile's levels pick the agent (as in the TS port); `provider_preferences` only if none serves it.
+    # Puntuación continua: si el perfil trae fichas de aptitud, gana el agente que más puntúa.
+    scored_entity = None
+    scored_points = 0.0
+    if resolution is None and layout is not None:
+        level_no = routing_rules.LEVEL_NUMBER[classification.complexity_level.value]
+        task = puntuacion.tarea_desde_clasificacion(
+            classification.complexity_score, classification.criteria, classification.original_prompt,
+            classification.domain, desplazamiento=0.5 * (subtask.complexity - level_no),
+        )
+        for candidate, points in puntuacion.ranking(layout.entities, task, layout.scoring):
+            resolution = resolve_entity(candidate, subtask.recommended_model)
+            if resolution is not None:
+                scored_entity, scored_points = candidate, points
+                break
     level_entity = None
     if resolution is None:
         level_entity = routing_rules.entity_for_level(
@@ -400,7 +419,7 @@ def run_subtask(
         # The run row is opened *before* the session, because tool events happen
         # during it and need a `run_id` to point at. `_persist_run` is skipped
         # for this path and `close_run` finalizes the same row.
-        agent_run_id = _open_agent_run(store, classification, assignment, resolution)
+        agent_run_id = _open_agent_run(store, classification, assignment, resolution, profile_id)
         agent_classification = (
             classification.model_copy(update={"original_prompt": prompt_for_execution})
             if resource_context
@@ -442,6 +461,17 @@ def run_subtask(
                 score=float(subtask.complexity),
                 backend=resolution.backend,
                 reason=f"Claude al {weekly_limit:.0f} % de su uso semanal (> {limites_plan.umbral_claude():.0f} %): pasa a Codex.",
+            )
+        )
+    if scored_entity is not None and rule_match is None:
+        decisions.append(
+            DecisionLogEntry(
+                task_id=classification.task_id,
+                phase="assign",
+                decision=f"score:{scored_points:.1f}->{scored_entity.id}:{resolution.provider_name}",
+                score=scored_points,
+                backend=resolution.backend,
+                reason=f"Puntuación continua del perfil: «{scored_entity.name or scored_entity.id}» rinde {scored_points:.1f}/100 para «{subtask.name}».",
             )
         )
     if level_entity is not None and rule_match is None:
@@ -555,7 +585,7 @@ def run_subtask(
         _close_agent_run(store, agent_run_id, subtask_execution)
     elif store is not None:
         _persist_run(
-            store, classification, subtask, assignment, resolution, subtask_execution, started_at
+            store, classification, subtask, assignment, resolution, subtask_execution, started_at, profile_id
         )
 
     return subtask_execution, decisions

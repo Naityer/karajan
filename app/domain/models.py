@@ -74,6 +74,8 @@ from .model_parts.routing import (
     GroupMembership,
     HierarchyGroup,
     CanvasPoint,
+    Aptitud,
+    ScoringConfig,
     RoutingEntity,
     RoutingRule,
     _reject_duplicate_group_prio,

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS tasks (task_id TEXT PRIMARY KEY, prompt TEXT NOT NULL
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, level TEXT, model TEXT, score REAL, requires_review INTEGER, subtask_count INTEGER, est_cost REAL, schema_version INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS decisions (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, phase TEXT NOT NULL, decision TEXT NOT NULL, score REAL, backend TEXT, reason TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, run_index INTEGER NOT NULL, provider_name TEXT, routing_entity_id TEXT, routing_entity_name_snapshot TEXT,
-  model_id TEXT, backend TEXT, status TEXT NOT NULL, started_at TEXT, completed_at TEXT, latency_ms INTEGER, input_tokens INTEGER, output_tokens INTEGER, estimated_cost_usd REAL, error TEXT);
+  model_id TEXT, backend TEXT, status TEXT NOT NULL, started_at TEXT, completed_at TEXT, latency_ms INTEGER, input_tokens INTEGER, output_tokens INTEGER, estimated_cost_usd REAL, error TEXT, profile_id TEXT);
 CREATE INDEX IF NOT EXISTS idx_decisions_task ON decisions(task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
 CREATE INDEX IF NOT EXISTS idx_runs_provider ON runs(provider_name);
@@ -62,7 +62,15 @@ export class Almacen {
     } else {
       this.db.exec('PRAGMA journal_mode = WAL');
       this.db.exec(ESQUEMA);
+      // Bases anteriores a la evolución de perfiles: `profile_id` atribuye cada run al perfil que decidió.
+      if (!this.todas('PRAGMA table_info(runs)').some((c) => c['name'] === 'profile_id')) this.db.exec('ALTER TABLE runs ADD COLUMN profile_id TEXT');
     }
+  }
+
+  /** Runs terminados con la puntuación y el prompt de su tarea: la materia prima del fitness de `evolucion.ts`. */
+  filasEvolucion(): Fila[] {
+    return this.todas(`SELECT r.profile_id, r.provider_name, r.model_id, r.status, r.estimated_cost_usd, r.latency_ms, t.score, t.prompt, t.classification_json
+      FROM runs r JOIN tasks t ON t.task_id = r.task_id WHERE r.status IN ('completed', 'failed') AND r.provider_name IS NOT NULL AND t.score IS NOT NULL`);
   }
 
   cerrar(): void { try { this.db.close(); } catch { /* ya cerrada */ } }
@@ -166,13 +174,13 @@ export class Almacen {
   }
 
   registrarRun(r: { task_id: string; provider_name: string; routing_entity_id: string | null; routing_entity_name_snapshot: string | null; model_id: string; backend: string; status: string;
-    started_at: string; completed_at: string | null; latency_ms: number | null; input_tokens: number; output_tokens: number; estimated_cost_usd: number; error: string | null }): string {
+    started_at: string; completed_at: string | null; latency_ms: number | null; input_tokens: number; output_tokens: number; estimated_cost_usd: number; error: string | null; profile_id?: string | null }): string {
     const id = `run_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
     const indice = Number(this.todas('SELECT COALESCE(MAX(run_index), -1) + 1 AS n FROM runs WHERE task_id = ?', r.task_id)[0]?.['n'] ?? 0);
     this.db.prepare(`INSERT INTO runs (id, task_id, run_index, provider_name, routing_entity_id, routing_entity_name_snapshot, model_id, backend, status, started_at, completed_at,
-      latency_ms, input_tokens, output_tokens, estimated_cost_usd, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      latency_ms, input_tokens, output_tokens, estimated_cost_usd, error, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, r.task_id, indice, r.provider_name, r.routing_entity_id, r.routing_entity_name_snapshot, r.model_id, r.backend, r.status, r.started_at, r.completed_at,
-        r.latency_ms, r.input_tokens, r.output_tokens, r.estimated_cost_usd, r.error);
+        r.latency_ms, r.input_tokens, r.output_tokens, r.estimated_cost_usd, r.error, r.profile_id ?? null);
     return id;
   }
 

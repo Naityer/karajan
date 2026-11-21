@@ -99,6 +99,10 @@ export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
   app.put('/routing-layout', (req) => aplicacion.guardarPerfil(req));
   app.post('/routing-layout/presets/dominios', (req) => aplicacion.presetDominios(req));
   app.post('/routing-layout/presets/nivel', (req) => aplicacion.presetNivel(req));
+  // Perfil base (puntuación continua por agente) y evolución de perfiles: la evolución solo PROPONE (hijos inactivos con linaje).
+  app.post('/routing-layout/presets/base', (req) => aplicacion.presetBase(req));
+  app.get('/routing-layout/evolucion/fitness', () => aplicacion.fitnessEvolucion());
+  app.post('/routing-layout/evolucion/proponer', (req) => aplicacion.proponerEvolucion(req));
   app.post('/routing-layout/desde-texto', (req) => aplicacion.perfilDesdeTexto(req));
   app.get('/providers', () => PROVEEDORES.map((p) => disponibilidad(p)));
   app.post('/routing/plan', (req) => aplicacion.planificar(req.body));

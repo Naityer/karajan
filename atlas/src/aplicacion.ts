@@ -5,6 +5,7 @@ import { construirAnaliticaSkills } from './analitica';
 import { catalogoReal, listarSkills } from './catalogo';
 import { calcularProduccion } from './produccion';
 import { perfilPorDefecto } from './perfiles';
+import { detectarNecesidades, explicacion, fitnessPerfil, MIN_MUESTRAS, muestrasDeFilas, proponerGeneracion } from './evolucion';
 import { disponibilidad, PROVEEDORES } from './proveedores';
 
 const falla = (estado: number, detail: string) => Object.assign(new Error(detail), { status: estado });
@@ -81,6 +82,16 @@ export function crearAplicacion(runtime: ReturnType<typeof crearRuntime>) {
     guardarPerfil: (req: PeticionMutacion & { body: unknown }) => mutar(req, 'PUT /routing-layout', () => conPerfil(() => perfiles.guardar(req.body))),
     presetDominios: (req: PeticionMutacion & { body: unknown }) => mutar(req, 'POST /routing-layout/presets/dominios', () => conPerfil(() => perfiles.aplicarPresetDominio({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false }))),
     presetNivel: (req: PeticionMutacion & { body: unknown }) => mutar(req, 'POST /routing-layout/presets/nivel', () => conPerfil(() => perfiles.aplicarPresetNivel({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false }))),
+    presetBase: (req: PeticionMutacion & { body: unknown }) => mutar(req, 'POST /routing-layout/presets/base', () => conPerfil(() => perfiles.aplicarPresetBase({ porDefecto: (req.body as { por_defecto?: unknown } | null)?.por_defecto !== false }))),
+    fitnessEvolucion: () => {
+      const perfil = perfilPorDefecto(perfiles.leer());
+      const muestras = muestrasDeFilas(almacen.filasEvolucion());
+      return { profile_id: perfil.id, min_muestras: MIN_MUESTRAS, fitness: fitnessPerfil(perfil, muestras), necesidades: detectarNecesidades(perfil, muestras).map((n) => ({ ...n, explicacion: explicacion(n) })) };
+    },
+    proponerEvolucion: (req: PeticionMutacion & { body: unknown }) => mutar(req, 'POST /routing-layout/evolucion/proponer', () => conPerfil(() => {
+      const l = perfiles.leer();
+      return perfiles.guardarHijos(proponerGeneracion(l.profiles, l.default_profile_id, muestrasDeFilas(almacen.filasEvolucion())));
+    })),
     perfilDesdeTexto: (req: PeticionMutacion & { body: unknown }) => {
       const b = (req.body ?? {}) as { texto?: unknown; perfil_id?: unknown; aplicar?: unknown };
       const texto = typeof b.texto === 'string' ? b.texto.trim().slice(0, 2000) : '';

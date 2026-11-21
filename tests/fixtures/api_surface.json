@@ -701,6 +701,30 @@
   },
   {
     "kind": "route",
+    "path": "/routing-layout/evolucion/fitness",
+    "methods": [
+      "GET"
+    ],
+    "response_model": "dict"
+  },
+  {
+    "kind": "route",
+    "path": "/routing-layout/evolucion/proponer",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "RoutingLayout"
+  },
+  {
+    "kind": "route",
+    "path": "/routing-layout/presets/base",
+    "methods": [
+      "POST"
+    ],
+    "response_model": "RoutingLayout"
+  },
+  {
+    "kind": "route",
     "path": "/routing-layout/presets/nivel",
     "methods": [
       "POST"
