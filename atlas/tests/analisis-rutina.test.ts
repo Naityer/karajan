@@ -144,7 +144,7 @@ describe('rutina: fallos sin perder el estado', () => {
     }
     assert.deepEqual(leer(carpeta).actual, previo, 'el análisis anterior sigue ahí');
     const inf = await procesarPendientes(fuentes(), cadena(malo.backend), op({ maxIntentos: 3 }));
-    assert.equal(inf.contadores.agotada, 1); assert.equal(malo.llamadas.length, 3);
+    assert.equal(inf.contadores.agotada, 1); assert.equal(malo.llamadas.length, 6, '3 pasadas × (intento + 1 repetición)');
     const forzado = await procesarPendientes(fuentes(), cadena(bueno.backend), op({ maxIntentos: 3, forzar: true }));
     assert.equal(forzado.contadores.analizada, 1); assert.equal(leer(carpeta).proceso.intentos, 0);
   });

@@ -48,6 +48,7 @@ Cada término lleva definición y alias; un test comprueba que no haya alias rep
 
 - Clave: `(tarea, version_analisis)` más la **huella del origen**. Procesar de nuevo una tarea ya analizada con la misma versión y el mismo contenido se omite (sin llamar al modelo). Si cambia el contenido (p. ej. se rechaza la validación) o la versión, se rehace; el análisis de otra versión pasa a `historial`. `--forzar` sustituye el de la misma versión sin duplicarlo.
 - **Fallos**: registro inaccesible, cola caída, `tarea.json` corrupto, modelo caído o respuesta inválida, escritura fallida. Cada uno se anota en la bitácora (`<datos>/analisis/bitacora.jsonl`) y en `proceso` de la tarea, sin tocar su análisis previo. Sin ningún modelo disponible la tarea queda `pendiente` (no cuenta como intento). Un modelo que responde basura cuenta intentos y, al llegar a `maxIntentos`, se deja de reintentar hasta subir la versión o forzar.
+- Una respuesta del modelo que no es el JSON pedido se repite **una vez** con el mismo proveedor antes de pasar al siguiente (los modelos locales fallan de forma intermitente: en la prueba con el baúl, 2 de 26 tareas fallaron a la primera y acabaron bien al reintentar).
 - `kj analisis reintentar` (o «Procesar» en Atlas dev) vuelve a pasar por lo pendiente y lo fallido.
 
 ## Modelos: orden y condiciones (verificado en este equipo, 2026-11-20)

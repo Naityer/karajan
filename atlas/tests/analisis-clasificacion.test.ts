@@ -101,7 +101,7 @@ describe('clasificación', () => {
     const { backend, llamadas } = falso({ ollama: OK, agy: OK }, { ollama: 'no sé qué decirte', agy: '{"nivel":"simple","dominio":"frontend","tipo":"mejora"}' });
     const e = entrada();
     const r = await clasificar(e, observadoDe(e), cadena(backend));
-    assert.deepEqual(llamadas, ['ollama', 'agy']); assert.equal(r.proveedor, 'agy');
+    assert.deepEqual(llamadas, ['ollama', 'ollama', 'agy'], 'la respuesta inválida se repite una vez con el mismo proveedor'); assert.equal(r.proveedor, 'agy');
     assert.deepEqual(r.intentos.map((i) => [i.proveedor, i.resultado]), [['ollama', 'error'], ['agy', 'usado']]);
   });
   it('Gemini no se usa si no está permitido ni pasado el tope por ejecución', async () => {

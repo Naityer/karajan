@@ -103,10 +103,15 @@ export class Cadena {
       const s = await this.sonda(e);
       if (!s.ok) { intentos.push({ ...base, resultado: 'no_disponible', detalle: s.motivo }); continue; }
       if (e.id === 'agy') this.geminiUsado++;
-      const r = await this.backend.generar(e.id, e.modelo, prompt, this.opciones.timeoutMs).catch((err: Error) => ({ salida: '', error: err.message, latenciaMs: 0, modelo: e.modelo }));
-      alguienRespondio = true;
-      if (r.error && !r.salida) { intentos.push({ ...base, resultado: 'error', detalle: r.error.slice(0, 300) }); continue; }
-      const valor = valida(r.salida);
+      // Un modelo local a veces responde algo que no es el JSON pedido y a la siguiente sí: se repite UNA vez antes de pasar al siguiente proveedor.
+      let r: Respuesta = { salida: '', error: null, latenciaMs: 0, modelo: e.modelo }, valor: T | null = null, sinSalida = false;
+      for (let vuelta = 0; vuelta < 2 && valor === null && !sinSalida; vuelta++) {
+        r = await this.backend.generar(e.id, e.modelo, prompt, this.opciones.timeoutMs).catch((err: Error) => ({ salida: '', error: err.message, latenciaMs: 0, modelo: e.modelo }));
+        alguienRespondio = true;
+        if (r.error && !r.salida) { sinSalida = true; break; }
+        valor = valida(r.salida);
+      }
+      if (sinSalida) { intentos.push({ ...base, resultado: 'error', detalle: (r.error ?? '').slice(0, 300) }); continue; }
       if (valor === null) { intentos.push({ ...base, resultado: 'error', detalle: 'respuesta no válida (no es el JSON esperado)' }); continue; }
       intentos.push({ ...base, resultado: 'usado', detalle: null });
       return { valor, proveedor: e.id, modelo: r.modelo ?? e.modelo, intentos, alguienRespondio };
