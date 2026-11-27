@@ -69,13 +69,12 @@ Rutas nuevas: `POST /dosificador/decidir`, `POST /dosificador/observar`, `POST /
 
 ## Datos
 
-`<datos del paquete>/task_logs.db` y `active_config.json`. Si no existen y `ATLAS_KARAJAN_DATA` apunta a la carpeta `data/` de un
-Karajan, se **copian** al arrancar (no se comparte fichero con el Karajan nativo). El esquema es el de Karajan, de modo que la
-copia es compatible en los dos sentidos.
-
-Los **perfiles** sí se comparten con el Karajan nativo: `ATLAS_KARAJAN_LAYOUT`, o `<ATLAS_KARAJAN_DATA>/routing_layout.json`, o
-`<datos>/routing_layout.json` si no hay Karajan. Las tareas que delega el paquete se registran en su copia de `task_logs.db`
-(tablas `tasks`, `decisions` y `runs`; no en `tasks_v2` ni en FTS), así que el Karajan nativo no las ve.
+El servidor del paquete usa sus propias bases y configuraciones en `<datos del paquete>`. En el primer arranque, si falta la
+base de destino, importa una instantánea coherente de `ATLAS_KARAJAN_DATA` o de `karajan/data` en el Workspace; nunca sustituye
+una base existente. Copia la configuración, perfiles y especialistas disponibles, y crea una instantánea de la biblioteca de
+recursos si existe. Una ruta explícita de biblioteca o perfiles se importa si todavía no hay una copia propia. Los cambios
+posteriores del paquete y del Karajan nativo son independientes; no hay sincronización automática. Un bloqueo de importación
+interrumpida exige revisión antes de continuar. El proceso del paquete todavía no tiene aislamiento del sistema operativo.
 
 ## Todavía no (responden 501)
 

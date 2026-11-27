@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
@@ -37,6 +37,34 @@ test('el runtime se construye sin HTTP y cierra sus bases', () => {
     if (anterior === undefined) delete process.env['ATLAS_KARAJAN_DATA']; else process.env['ATLAS_KARAJAN_DATA'] = anterior;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('el paquete migra una instantánea propia y no escribe en los datos nativos', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'kj-datos-propios-'));
+  const origen = join(dir, 'karajan', 'data'), destino = join(dir, 'paquete');
+  mkdirSync(origen, { recursive: true });
+  new Almacen(join(origen, 'task_logs.db')).cerrar();
+  const base = new DatabaseSync(join(origen, 'task_logs.db'));
+  base.exec("INSERT INTO tasks(task_id,prompt,status,classification_json,created_at,updated_at) VALUES('origen','prueba','classified','{}','2026-01-01','2026-01-01')");
+  writeFileSync(join(origen, 'routing_layout.json'), '{}');
+  process.env['ATLAS_WORKSPACE'] = dir;
+  try {
+    const runtime = crearRuntime(destino, { datosPropios: true });
+    try {
+      assert.equal(runtime.compartida, false);
+      assert.equal(runtime.importada, true);
+      assert.equal(runtime.dirDatos, destino);
+      assert.equal(runtime.rutaLayout, join(destino, 'routing_layout.json'));
+      assert.equal(runtime.rutaBiblioteca, join(destino, 'resources.db'));
+      assert.equal(runtime.almacen.contar(), 1);
+      assert.equal(readFileSync(join(destino, 'routing_layout.json'), 'utf8'), '{}');
+      const propia = new DatabaseSync(join(destino, 'task_logs.db'));
+      try { propia.exec('DELETE FROM tasks'); } finally { propia.close(); }
+      assert.equal(Number(base.prepare('SELECT count(*) AS n FROM tasks').get()!.n), 1);
+    } finally { runtime.cerrar(); }
+    const otra = crearRuntime(destino, { datosPropios: true });
+    try { assert.equal(otra.importada, false); assert.equal(otra.almacen.contar(), 0); } finally { otra.cerrar(); }
+  } finally { base.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('la preparación compartida de analítica conserva el cálculo existente', () => {
