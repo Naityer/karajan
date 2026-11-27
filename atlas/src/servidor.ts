@@ -21,11 +21,10 @@ import { ErrorServicio, ServicioAnalisis } from './analisis/servicio';
  * ejecuta de verdad Claude Code, Codex o Qwen (ollama) según las reglas del perfil por defecto. Qué no (ver PORTE.md): el
  * recomendador y la biblioteca de recursos, el scheduler en modo cola y el SSE: responden 501.
  *
- * Datos: con un Karajan nativo en el Workspace (`ATLAS_KARAJAN_DATA` o `<ATLAS_WORKSPACE>/karajan/data`) se COMPARTEN su
- * `task_logs.db`, su `active_config.json` y sus perfiles, para que las gráficas de Atlas dev y las del dashboard nativo
- * cuenten lo mismo (ver `datosKarajan`). Sin él, o con `ATLAS_KARAJAN_COMPARTIR=0`, se usan `<datos>/task_logs.db` y
- * `<datos>/routing_layout.json` (copiando antes el registro de `ATLAS_KARAJAN_DATA` si lo hay). Las carpetas de trabajo de `/delegate-task` deben estar dentro de
- * `ATLAS_WORKSPACE` (o de la carpeta de usuario).
+ * Datos: el paquete usa sus propias bases y configuración en `ctx.datos`. En la primera ejecución importa una instantánea
+ * de la base nativa detectada o indicada en `ATLAS_KARAJAN_DATA`, sin sobrescribir una base de destino existente. La biblioteca
+ * configurada explícitamente también se importa una vez. Las carpetas de trabajo de `/delegate-task` deben estar dentro de
+ * `ATLAS_WORKSPACE` (o de la carpeta de usuario). Esto no aísla el proceso ni restringe sus permisos de sistema operativo.
  */
 const NO_DISPONIBLE = 'No disponible en el paquete de Atlas dev: necesita proveedores o la biblioteca de recursos (ver PORTE.md).';
 
@@ -42,7 +41,7 @@ interface AppMinima {
 const falla = (estado: number, detail: string) => Object.assign(new Error(detail), { status: estado });
 
 export async function registrar(app: AppMinima, ctx: Contexto): Promise<void> {
-  const runtime = crearRuntime(ctx.datos);
+  const runtime = crearRuntime(ctx.datos, { datosPropios: true });
   const aplicacion = crearAplicacion(runtime);
   const { compartida, importada, almacen, config, mutar, biblioteca, atlasDev, pasarela, guardian } = runtime;
   app.addHook?.('onClose', async () => { runtime.cerrar(); });
